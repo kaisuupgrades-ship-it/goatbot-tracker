@@ -4,7 +4,11 @@ import { addPick } from '@/lib/supabase';
 import { saveDemoPicks, demoId } from '@/lib/demoData';
 import { useVoiceInput } from '@/components/VoiceInput';
 
-// ── Sport-aware bet type lists ─────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
+const BOOKS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'ESPN Bet', 'Hard Rock', 'PointsBet', 'Bet365', 'Pinnacle', 'Other'];
+const SPORT_LABELS = { mlb: 'MLB', nfl: 'NFL', nba: 'NBA', nhl: 'NHL', ncaaf: 'NCAAF', ncaab: 'NCAAB', mls: 'MLS', wnba: 'WNBA' };
+const SPORT_EMOJI  = { mlb: '⚾', nfl: '🏈', nba: '🏀', nhl: '🏒', ncaaf: '🏈', ncaab: '🏀', mls: '⚽', wnba: '🏀' };
+
 const SPORT_BET_TYPES = {
   mlb:   ['Moneyline', 'Run Line', 'Total (Over)', 'Total (Under)', 'F5 Moneyline', 'F5 Total (Over)', 'F5 Total (Under)', 'Prop', 'Parlay'],
   nfl:   ['Moneyline', 'Spread', 'Total (Over)', 'Total (Under)', '1H Spread', '1H Total (Over)', '1H Total (Under)', 'Prop', 'Parlay'],
@@ -17,273 +21,437 @@ const SPORT_BET_TYPES = {
 };
 const DEFAULT_BET_TYPES = ['Moneyline', 'Spread', 'Total (Over)', 'Total (Under)', 'Prop', 'Parlay'];
 
-const BOOKS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'ESPN Bet', 'Hard Rock', 'PointsBet', 'Bet365', 'Pinnacle', 'Other'];
-
-const SPORT_LABELS = { mlb: 'MLB', nfl: 'NFL', nba: 'NBA', nhl: 'NHL', ncaaf: 'NCAAF', ncaab: 'NCAAB', mls: 'MLS', wnba: 'WNBA' };
-const SPORT_EMOJI  = { mlb: '⚾', nfl: '🏈', nba: '🏀', nhl: '🏒', ncaaf: '🏈', ncaab: '🏀', mls: '⚽', wnba: '🏀' };
-
-function buildPickOptions(betType, awayAbbr, homeName, awayName, awayOdds, homeOdds, spread, total) {
-  const isML       = betType === 'Moneyline' || betType === 'F5 Moneyline';
-  const isRunLine  = betType === 'Run Line' || betType === 'Puck Line' || betType === 'Spread' || betType === '1H Spread' || betType === '1Q Spread';
-  const isOver     = betType.includes('Over');
-  const isUnder    = betType.includes('Under');
-  const isDraw     = betType === 'Draw';
-
-  if (isDraw) return [
-    { label: `${awayName} ML`, team: awayName, odds: awayOdds },
-    { label: 'Draw',           team: 'Draw',   odds: null },
-    { label: `${homeName} ML`, team: homeName, odds: homeOdds },
-  ];
-
-  if (isML) return [
-    { label: `${awayName} ML${awayOdds != null ? ' (' + fmtOdds(awayOdds) + ')' : ''}`, team: awayName, odds: awayOdds },
-    { label: `${homeName} ML${homeOdds != null ? ' (' + fmtOdds(homeOdds) + ')' : ''}`, team: homeName, odds: homeOdds },
-  ];
-
-  if (isRunLine) {
-    const suffix = betType === 'Run Line' ? 'RL' : betType === 'Puck Line' ? 'PL' : 'ATS';
-    return [
-      { label: `${awayName} ${suffix}`, team: `${awayName} ${suffix}`, odds: null },
-      { label: `${homeName} ${suffix}`, team: `${homeName} ${suffix}`, odds: null },
-    ];
-  }
-
-  if (isOver) { const t = total != null ? total : ''; return [{ label: `Over${t ? ' ' + t : ''}`, team: `Over${t ? ' ' + t : ''}`, odds: null }]; }
-  if (isUnder) { const t = total != null ? total : ''; return [{ label: `Under${t ? ' ' + t : ''}`, team: `Under${t ? ' ' + t : ''}`, odds: null }]; }
-
-  return [];
+function fmtOdds(n) {
+  if (n == null || n === '') return null;
+  const num = parseInt(n);
+  if (isNaN(num)) return null;
+  return num > 0 ? `+${num}` : `${num}`;
 }
-
-function fmtOdds(n) { if (n == null) return ''; return n > 0 ? `+${n}` : `${n}`; }
 function toLocalDateStr(d) {
   const dt = new Date(d);
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 }
 
-// ── Pulsing dots indicator ─────────────────────────────────────────────────────
+// Parse spread string like "DET -1.5" → { awayLine, homeLine }
+function parseSpread(spreadStr, awayAbbr, homeAbbr) {
+  if (!spreadStr) return null;
+  // ESPN odds.details is usually like "DET -1.5" (the favored team with negative line)
+  const match = spreadStr.match(/([A-Z]+)\s*([-+]?\d+\.?\d*)/);
+  if (!match) return null;
+  const team = match[1];
+  const line = parseFloat(match[2]);
+  if (isNaN(line)) return null;
+  // The team in the string is the one getting that spread; other team gets opposite
+  const isAway = team === awayAbbr;
+  return {
+    awayLine: isAway ? line : -line,
+    homeLine: isAway ? -line : line,
+  };
+}
+
+// ── Pulsing dots ───────────────────────────────────────────────────────────────
 function PulsingDots({ color = 'var(--gold)' }) {
   return (
     <span style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
       {[0, 1, 2].map(i => (
         <span key={i} style={{
           width: '5px', height: '5px', borderRadius: '50%', background: color,
-          animation: `pulse-dot 1.2s ${i * 0.2}s ease-in-out infinite`,
-          display: 'inline-block',
+          animation: `pulse-dot 1.2s ${i * 0.2}s ease-in-out infinite`, display: 'inline-block',
         }} />
       ))}
-      <style>{`
-        @keyframes pulse-dot {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-          40%            { transform: scale(1);   opacity: 1; }
-        }
-      `}</style>
+      <style>{`@keyframes pulse-dot { 0%,80%,100% { transform:scale(0.6);opacity:0.4; } 40% { transform:scale(1);opacity:1; } }`}</style>
     </span>
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+// ── Quick-select bet button ────────────────────────────────────────────────────
+function QuickBetBtn({ label, sublabel, odds, selected, onClick }) {
+  const oddsColor = odds > 0 ? '#4ade80' : odds < 0 ? 'var(--text-secondary)' : 'var(--text-muted)';
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        padding: '0.6rem 0.5rem',
+        borderRadius: '10px',
+        border: selected
+          ? '2px solid var(--gold)'
+          : '1px solid var(--border)',
+        background: selected
+          ? 'linear-gradient(135deg, rgba(255,184,0,0.15) 0%, rgba(255,149,0,0.08) 100%)'
+          : 'var(--bg-elevated)',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        textAlign: 'center',
+        position: 'relative',
+        outline: 'none',
+      }}
+      onMouseEnter={e => { if (!selected) { e.currentTarget.style.borderColor = 'rgba(255,184,0,0.4)'; e.currentTarget.style.background = 'var(--bg-overlay)'; } }}
+      onMouseLeave={e => { if (!selected) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-elevated)'; } }}
+    >
+      {selected && (
+        <span style={{
+          position: 'absolute', top: '-8px', right: '-6px',
+          width: '16px', height: '16px', borderRadius: '50%',
+          background: 'var(--gold)', color: '#000',
+          fontSize: '0.6rem', fontWeight: 900,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>✓</span>
+      )}
+      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: selected ? 'var(--gold)' : 'var(--text-secondary)', marginBottom: '2px', lineHeight: 1.2 }}>
+        {label}
+      </div>
+      {sublabel && (
+        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '3px' }}>{sublabel}</div>
+      )}
+      {odds != null ? (
+        <div style={{
+          fontSize: '0.82rem', fontWeight: 800,
+          fontFamily: 'IBM Plex Mono, monospace',
+          color: selected ? 'var(--gold)' : oddsColor,
+        }}>
+          {fmtOdds(odds)}
+        </div>
+      ) : (
+        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>odds TBD</div>
+      )}
+    </button>
+  );
+}
+
+// ── Units quick-chip row ───────────────────────────────────────────────────────
+function UnitsChips({ value, onChange }) {
+  const presets = ['0.5', '1', '2', '3', '5'];
+  const isCustom = !presets.includes(value);
+  return (
+    <div style={{ display: 'flex', gap: '5px', alignItems: 'center', flexWrap: 'wrap' }}>
+      {presets.map(u => (
+        <button
+          key={u}
+          onClick={() => onChange(u)}
+          style={{
+            padding: '3px 10px', borderRadius: '20px', cursor: 'pointer',
+            fontSize: '0.75rem', fontWeight: 700,
+            border: value === u ? '1px solid var(--gold)' : '1px solid var(--border)',
+            background: value === u ? 'rgba(255,184,0,0.12)' : 'var(--bg-elevated)',
+            color: value === u ? 'var(--gold)' : 'var(--text-muted)',
+            fontFamily: 'IBM Plex Mono, monospace',
+            transition: 'all 0.12s',
+          }}
+        >{u}u</button>
+      ))}
+      <input
+        type="number"
+        value={isCustom ? value : ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder="custom"
+        min="0.1" step="0.5"
+        style={{
+          width: '58px', padding: '3px 7px', borderRadius: '6px', fontSize: '0.73rem',
+          background: 'var(--bg-elevated)', border: `1px solid ${isCustom ? 'var(--gold)' : 'var(--border)'}`,
+          color: isCustom ? 'var(--gold)' : 'var(--text-muted)',
+          fontFamily: 'IBM Plex Mono, monospace', outline: 'none',
+          MozAppearance: 'textfield',
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Contest eligibility badge ──────────────────────────────────────────────────
+function ContestBadge({ result }) {
+  if (!result) return null;
+  const ok = result.eligible;
+  return (
+    <div style={{
+      padding: '0.55rem 0.75rem',
+      borderRadius: '8px',
+      background: ok ? 'rgba(74,222,128,0.07)' : 'rgba(255,69,96,0.07)',
+      border: `1px solid ${ok ? 'rgba(74,222,128,0.25)' : 'rgba(255,69,96,0.25)'}`,
+      fontSize: '0.75rem',
+    }}>
+      <div style={{ fontWeight: 700, color: ok ? '#4ade80' : '#ff4560', marginBottom: result.issues?.length || result.warnings?.length ? '4px' : 0 }}>
+        {ok ? '✅ Contest eligible' : '❌ Not contest eligible'}
+      </div>
+      {result.issues?.map((i, idx) => (
+        <div key={idx} style={{ color: '#ff6b7a', marginTop: '2px' }}>⚠ {i}</div>
+      ))}
+      {result.warnings?.map((w, idx) => (
+        <div key={idx} style={{ color: '#FFB800', marginTop: '2px' }}>⚡ {w}</div>
+      ))}
+      {ok && (
+        <div style={{ color: 'rgba(74,222,128,0.7)', marginTop: '2px', fontSize: '0.68rem' }}>
+          This pick will be locked once saved — no edits or deletes allowed.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main BetSlipModal ──────────────────────────────────────────────────────────
 export default function BetSlipModal({ game, sport, user, picks, setPicks, isDemo, onClose }) {
   const { away, home, odds, date } = game;
   const awayName  = away.team?.displayName || away.team?.name || 'Away';
   const homeName  = home.team?.displayName || home.team?.name || 'Home';
   const awayAbbr  = away.team?.abbreviation || 'AWY';
   const homeAbbr  = home.team?.abbreviation || 'HME';
+  const awayLogo  = away.team?.logo || null;
+  const homeLogo  = home.team?.logo || null;
   const gameDate  = date ? toLocalDateStr(date) : toLocalDateStr(new Date());
   const betTypes  = SPORT_BET_TYPES[sport] || DEFAULT_BET_TYPES;
 
-  // Form state
-  const [betType,    setBetType]    = useState('Moneyline');
-  const [pickOpts,   setPickOpts]   = useState([]);
-  const [pickIdx,    setPickIdx]    = useState(0);
-  const [manualPick, setManualPick] = useState('');
-  const [oddsVal,    setOddsVal]    = useState('');
-  const [units,      setUnits]      = useState('1');
-  const [book,       setBook]       = useState('DraftKings');
-  const [notes,      setNotes]      = useState('');
-  const [saving,     setSaving]     = useState(false);
-  const [saved,      setSaved]      = useState(false);
-  const [saveError,  setSaveError]  = useState('');
+  // ── Parse available lines from odds ────────────────────────────────────────
+  const spreadData = odds?.spread ? parseSpread(odds.spread, awayAbbr, homeAbbr) : null;
 
-  // Voice / AI parse state
-  const [voiceState,      setVoiceState]      = useState('idle'); // idle | listening | parsing | done | error
+  // Build the quick-bet options from real odds data
+  const quickBets = [
+    // ── Moneyline ──────────────────────────────────────────────────────────
+    {
+      section: 'Moneyline',
+      bets: [
+        { id: 'away-ml', label: awayAbbr, sublabel: 'Moneyline', bet_type: 'Moneyline', team: awayName, odds: odds?.awayOdds ?? null, defaultOdds: odds?.awayOdds },
+        { id: 'home-ml', label: homeAbbr, sublabel: 'Moneyline', bet_type: 'Moneyline', team: homeName, odds: odds?.homeOdds ?? null, defaultOdds: odds?.homeOdds },
+      ],
+    },
+    // ── Spread (only if data available) ───────────────────────────────────
+    ...(spreadData ? [{
+      section: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+      bets: [
+        {
+          id: 'away-spread',
+          label: awayAbbr,
+          sublabel: `${spreadData.awayLine > 0 ? '+' : ''}${spreadData.awayLine}`,
+          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+          team: `${awayName} ${spreadData.awayLine > 0 ? '+' : ''}${spreadData.awayLine}`,
+          odds: null,   // spread price not usually in this feed
+          defaultOdds: -110,
+        },
+        {
+          id: 'home-spread',
+          label: homeAbbr,
+          sublabel: `${spreadData.homeLine > 0 ? '+' : ''}${spreadData.homeLine}`,
+          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+          team: `${homeName} ${spreadData.homeLine > 0 ? '+' : ''}${spreadData.homeLine}`,
+          odds: null,
+          defaultOdds: -110,
+        },
+      ],
+    }] : []),
+    // ── Total (only if data available) ─────────────────────────────────────
+    ...(odds?.total != null ? [{
+      section: `Total (${odds.total})`,
+      bets: [
+        { id: 'over', label: 'Over', sublabel: `${odds.total}`, bet_type: 'Total (Over)', team: `Over ${odds.total}`, odds: null, defaultOdds: -110 },
+        { id: 'under', label: 'Under', sublabel: `${odds.total}`, bet_type: 'Total (Under)', team: `Under ${odds.total}`, odds: null, defaultOdds: -110 },
+      ],
+    }] : []),
+  ];
+
+  // ── Selected quick bet ──────────────────────────────────────────────────────
+  const [selectedId,  setSelectedId]  = useState(null);
+  const [oddsVal,     setOddsVal]     = useState('');
+  const [units,       setUnits]       = useState('1');
+  const [book,        setBook]        = useState('DraftKings');
+  const [notes,       setNotes]       = useState('');
+  const [isContest,   setIsContest]   = useState(false);
+  const [contestResult, setContestResult] = useState(null); // result from verify-pick API
+  const [verifying,   setVerifying]   = useState(false);
+
+  // Custom bet section
+  const [showCustom,  setShowCustom]  = useState(false);
+  const [customBetType, setCustomBetType] = useState('Moneyline');
+  const [customTeam,  setCustomTeam]  = useState('');
+  const [customOdds,  setCustomOdds]  = useState('');
+  const [voiceState,  setVoiceState]  = useState('idle');
   const [voiceTranscript, setVoiceTranscript] = useState('');
-  const [voiceError,      setVoiceError]      = useState('');
-  const [voiceFlash,      setVoiceFlash]      = useState(false);
-  const [textInput,       setTextInput]       = useState('');   // natural language text input
+  const [voiceError,  setVoiceError]  = useState('');
+  const [textInput,   setTextInput]   = useState('');
   const partialRef = useRef('');
 
-  const isOpenPick = betType === 'Prop' || betType === 'Parlay' || betType === 'Futures';
+  const [saving,      setSaving]      = useState(false);
+  const [saved,       setSaved]       = useState(false);
+  const [saveError,   setSaveError]   = useState('');
 
-  // Rebuild pick options when bet type changes
-  useEffect(() => {
-    const opts = buildPickOptions(betType, awayAbbr, homeName, awayName, odds?.awayOdds, odds?.homeOdds, odds?.spread, odds?.total);
-    setPickOpts(opts);
-    setPickIdx(0);
-    if (opts.length > 0 && opts[0].odds != null) setOddsVal(String(opts[0].odds));
-    else setOddsVal('');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [betType]);
+  // Derived selected bet object
+  const selectedBet = quickBets.flatMap(s => s.bets).find(b => b.id === selectedId) || null;
+  const isCustomActive = showCustom && !selectedId;
 
-  // Auto-fill odds when pick changes
-  useEffect(() => {
-    if (pickOpts[pickIdx]?.odds != null) setOddsVal(String(pickOpts[pickIdx].odds));
-  }, [pickIdx, pickOpts]);
-
-  // ── Normalize bet type string to match our dropdown options ──────────────
-  function normalizeBetType(raw, allTypes) {
-    if (!raw) return null;
-    const r = raw.toLowerCase().trim();
-    // Exact match first
-    const exact = allTypes.find(t => t.toLowerCase() === r);
-    if (exact) return exact;
-    // Fuzzy keyword matches
-    if (/money.?line|^ml$/.test(r))               return allTypes.find(t => t === 'Moneyline')        || null;
-    if (/run.?line|^rl$/.test(r))                 return allTypes.find(t => t === 'Run Line')         || null;
-    if (/puck.?line|^pl$/.test(r))                return allTypes.find(t => t === 'Puck Line')        || null;
-    if (/\bover\b/.test(r))                        return allTypes.find(t => t.includes('Over'))       || null;
-    if (/\bunder\b/.test(r))                       return allTypes.find(t => t.includes('Under'))      || null;
-    if (/spread|ats/.test(r))                      return allTypes.find(t => t === 'Spread')           || null;
-    if (/prop/.test(r))                            return allTypes.find(t => t === 'Prop')             || null;
-    if (/parlay/.test(r))                          return allTypes.find(t => t === 'Parlay')           || null;
-    // Partial match fallback
-    return allTypes.find(t => r.includes(t.toLowerCase().split(' ')[0])) || null;
+  // ── When a quick bet is selected → pre-fill odds ───────────────────────────
+  function selectQuickBet(bet) {
+    if (selectedId === bet.id) {
+      // Deselect
+      setSelectedId(null);
+      setOddsVal('');
+      setContestResult(null);
+      return;
+    }
+    setSelectedId(bet.id);
+    setShowCustom(false);
+    // Pre-fill odds if available, else default
+    setOddsVal(bet.odds != null ? String(bet.odds) : bet.defaultOdds != null ? String(bet.defaultOdds) : '');
+    setContestResult(null);
+    setSaveError('');
   }
 
-  // ── Apply parsed AI result to form fields ──────────────────────────────────
+  // ── When contest toggle changes → run eligibility check ────────────────────
+  async function handleContestToggle() {
+    const next = !isContest;
+    setIsContest(next);
+    setContestResult(null);
+    if (!next) return;
+
+    const teamValue = selectedBet ? selectedBet.team : customTeam.trim();
+    const betTypeValue = selectedBet ? selectedBet.bet_type : customBetType;
+    const oddsValue = selectedBet ? oddsVal : customOdds;
+    if (!teamValue || !oddsValue) return;
+
+    setVerifying(true);
+    try {
+      const res = await fetch('/api/verify-pick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pick: { team: teamValue, bet_type: betTypeValue, odds: oddsValue, units: parseFloat(units) || 1, date: gameDate },
+          userId: user?.id,
+          contestEntry: true,
+        }),
+      });
+      const data = await res.json();
+      setContestResult(data);
+    } catch {
+      setContestResult({ eligible: false, issues: ['Could not verify — check connection.'] });
+    }
+    setVerifying(false);
+  }
+
+  // ── Re-run contest check when key values change (if contest is on) ──────────
+  useEffect(() => {
+    if (!isContest) return;
+    const teamValue = selectedBet ? selectedBet.team : customTeam.trim();
+    const oddsValue = selectedBet ? oddsVal : customOdds;
+    if (!teamValue || !oddsValue) return;
+
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/verify-pick', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pick: { team: teamValue, bet_type: selectedBet ? selectedBet.bet_type : customBetType, odds: oddsValue, units: parseFloat(units) || 1, date: gameDate },
+            userId: user?.id,
+            contestEntry: true,
+          }),
+        });
+        const data = await res.json();
+        setContestResult(data);
+      } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oddsVal, customOdds, selectedId, customTeam, units, isContest]);
+
+  // ── Voice / AI parse for custom section ────────────────────────────────────
   const applyParsed = useCallback((parsed) => {
     const allTypes = SPORT_BET_TYPES[sport] || DEFAULT_BET_TYPES;
-
-    // Bet type — use normalizer so "money line", "ML", "moneyline" all work
-    const matchedType = normalizeBetType(parsed.bet_type, allTypes) || betType;
-    setBetType(matchedType);
-
-    // Odds
-    if (parsed.odds != null && !isNaN(parseInt(parsed.odds))) {
-      setOddsVal(String(parseInt(parsed.odds)));
+    if (parsed.bet_type) {
+      const match = allTypes.find(t => t.toLowerCase() === parsed.bet_type.toLowerCase()) || allTypes[0];
+      setCustomBetType(match);
     }
-
-    // Units — AI now returns this from "2u", "2 units" etc.
-    if (parsed.units != null && !isNaN(parseFloat(parsed.units))) {
-      setUnits(String(parseFloat(parsed.units)));
-    }
-
-    // Book
+    if (parsed.team) setCustomTeam(parsed.team);
+    if (parsed.odds != null) setCustomOdds(String(parseInt(parsed.odds)));
+    if (parsed.units != null) setUnits(String(parseFloat(parsed.units)));
     if (parsed.book) {
-      const bookLower = (parsed.book || '').toLowerCase();
-      const matchedBook = BOOKS.find(b => b.toLowerCase().includes(bookLower.split(' ')[0]));
-      if (matchedBook) setBook(matchedBook);
+      const m = BOOKS.find(b => b.toLowerCase().includes((parsed.book || '').toLowerCase().split(' ')[0]));
+      if (m) setBook(m);
     }
-
-    // Notes
     if (parsed.notes) setNotes(parsed.notes);
+  }, [sport]);
 
-    // Pick — match against pickOpts using team name keywords
-    if (parsed.team) {
-      setTimeout(() => {
-        setPickOpts(currentOpts => {
-          if (currentOpts.length > 0) {
-            const teamWords = (parsed.team || '').toLowerCase().split(/\s+/);
-            // Try: any word in parsed.team appears in option team name
-            const matchIdx = currentOpts.findIndex(o => {
-              const optLower = o.team.toLowerCase();
-              return teamWords.some(w => w.length > 2 && optLower.includes(w));
-            });
-            if (matchIdx >= 0) {
-              setPickIdx(matchIdx);
-            } else {
-              // Fallback: set as manual pick (handles props, exotic picks)
-              setManualPick(parsed.team);
-            }
-          } else {
-            setManualPick(parsed.team);
-          }
-          return currentOpts;
-        });
-      }, 100);
-    }
-  }, [betType, sport]);
-
-  // ── Shared AI parse function ───────────────────────────────────────────────
-  const parseWithAI = useCallback(async (text, source = 'voice') => {
+  const parseWithAI = useCallback(async (text, source = 'text') => {
     if (!text.trim()) return;
     setVoiceTranscript(text.trim());
     setVoiceState('parsing');
     setVoiceError('');
-
     try {
-      const gameContext = `Game: ${awayName} @ ${homeName} (${SPORT_LABELS[sport] || sport?.toUpperCase()}) on ${gameDate}.`;
       const res = await fetch('/api/parse-slip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'text',
-          text: `${gameContext}\n\n${source === 'voice' ? 'Voice' : 'Text'} bet input: "${text.trim()}"`,
+          text: `Game: ${awayName} @ ${homeName} (${SPORT_LABELS[sport] || sport?.toUpperCase()}) on ${gameDate}.\n\n${source === 'voice' ? 'Voice' : 'Text'} bet input: "${text.trim()}"`,
         }),
       });
-
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (!data.parsed) throw new Error('No bet data returned');
-
       applyParsed(data.parsed);
       setVoiceState('done');
-      setVoiceFlash(true);
       if (source === 'text') setTextInput('');
-      setTimeout(() => setVoiceFlash(false), 1200);
-      setTimeout(() => setVoiceState('idle'), 4000);
+      setTimeout(() => setVoiceState('idle'), 3000);
     } catch (err) {
-      setVoiceError(err.message || 'Could not parse. Try again or fill manually.');
+      setVoiceError(err.message || 'Could not parse.');
       setVoiceState('error');
-      setTimeout(() => setVoiceState('idle'), 5000);
+      setTimeout(() => setVoiceState('idle'), 4000);
     }
   }, [awayName, homeName, sport, gameDate, applyParsed]);
 
-  // ── Voice recognition → AI parsing ────────────────────────────────────────
   const { listening, supported, start, stop } = useVoiceInput({
-    onPartial: (text) => { partialRef.current = text; setVoiceTranscript(text); },
-    onResult: (finalText) => parseWithAI(finalText, 'voice'),
+    onPartial: (t) => { partialRef.current = t; setVoiceTranscript(t); },
+    onResult: (t) => parseWithAI(t, 'voice'),
   });
-
-  // Start/stop voice
   function handleVoiceClick() {
-    if (voiceState === 'listening') {
-      stop();
-      setVoiceState('idle');
-      return;
-    }
-    if (voiceState === 'parsing') return; // wait
-    setVoiceTranscript('');
-    setVoiceError('');
-    partialRef.current = '';
-    setVoiceState('listening');
-    start();
+    if (voiceState === 'listening') { stop(); setVoiceState('idle'); return; }
+    if (voiceState === 'parsing') return;
+    setVoiceTranscript(''); setVoiceError(''); partialRef.current = '';
+    setVoiceState('listening'); start();
   }
 
-  // Sync listening state
+  // ── Escape key ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!listening && voiceState === 'listening') {
-      // Recognition ended naturally (not stopped manually) → result fires above
-    }
-  }, [listening, voiceState]);
+    const h = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
 
+  // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    const teamValue = isOpenPick ? manualPick.trim() : (pickOpts[pickIdx]?.team || '');
-    if (!teamValue) { setSaveError('Please enter your pick.'); return; }
-    const oddsNum = parseInt(oddsVal);
-    if (!oddsVal || isNaN(oddsNum)) { setSaveError('Enter valid American odds (e.g. -110 or +133).'); return; }
+    // Determine values from either quick-select or custom
+    let teamValue, betTypeValue, oddsValue;
+    if (selectedBet) {
+      teamValue    = selectedBet.team;
+      betTypeValue = selectedBet.bet_type;
+      oddsValue    = oddsVal;
+    } else {
+      teamValue    = customTeam.trim();
+      betTypeValue = customBetType;
+      oddsValue    = customOdds;
+    }
+
+    if (!teamValue) { setSaveError('Select or enter a pick.'); return; }
+    const oddsNum = parseInt(oddsValue);
+    if (!oddsValue || isNaN(oddsNum)) { setSaveError('Enter valid American odds (e.g. -110 or +133).'); return; }
+
+    // Contest check — must be eligible if marking as contest pick
+    if (isContest && contestResult && !contestResult.eligible) {
+      // Still allow save — but not as contest entry. Warn the user.
+      setSaveError('Pick has contest issues — saving as personal pick only (not contest entry).');
+    }
 
     setSaving(true); setSaveError('');
     const payload = {
-      user_id:  user?.id || 'demo',
-      date:     gameDate,
-      sport:    (SPORT_LABELS[sport] || sport?.toUpperCase() || 'Other'),
-      team:     teamValue,
-      bet_type: betType,
-      odds:     oddsNum,
-      units:    parseFloat(units) || 1,
-      result:   null, profit: null,
-      notes:    notes.trim() || null,
-      book:     book,
+      user_id:       user?.id || 'demo',
+      date:          gameDate,
+      sport:         (SPORT_LABELS[sport] || sport?.toUpperCase() || 'Other'),
+      team:          teamValue,
+      bet_type:      betTypeValue,
+      odds:          oddsNum,
+      units:         parseFloat(units) || 1,
+      result:        null,
+      profit:        null,
+      notes:         notes.trim() || null,
+      book:          book,
+      matchup:       `${awayAbbr} @ ${homeAbbr}`,
+      // Contest entry only if user opted in AND pick is eligible (or at least attempted)
+      contest_entry: isContest && (contestResult?.eligible !== false),
     };
 
     try {
@@ -296,7 +464,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
         if (error) throw new Error(error.message || 'Save failed');
         if (data) {
           setPicks(prev => [...prev, data]);
-          // Fire-and-forget: auto-analyze this pick in background
+          // Background auto-analysis (always fires, silent)
           fetch('/api/auto-analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -305,45 +473,32 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               bet_type: payload.bet_type, odds: payload.odds, units: payload.units,
               date: payload.date, notes: payload.notes,
             }),
-          }).catch(() => {}); // silent — don't block the user
+          }).catch(() => {});
         }
       }
       setSaved(true);
-      setTimeout(onClose, 1200);
+      setTimeout(onClose, 1100);
     } catch (e) {
       setSaveError(e.message || 'Save failed. Try again.');
     }
     setSaving(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpenPick, manualPick, pickOpts, pickIdx, oddsVal, units, betType, book, notes, user?.id, gameDate, sport, isDemo, picks, setPicks, onClose]);
+  }, [selectedBet, oddsVal, customTeam, customBetType, customOdds, isContest, contestResult, units, notes, book, user?.id, gameDate, sport, isDemo, picks, setPicks, onClose, awayAbbr, homeAbbr]);
 
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
-
+  // ── Input styles ──────────────────────────────────────────────────────────
   const inputStyle = {
     background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-    borderRadius: '7px', padding: '0.5rem 0.7rem',
-    color: 'var(--text-primary)', fontSize: '0.84rem',
+    borderRadius: '7px', padding: '0.45rem 0.7rem',
+    color: 'var(--text-primary)', fontSize: '0.82rem',
     fontFamily: 'inherit', outline: 'none', width: '100%',
     transition: 'border-color 0.12s',
   };
   const labelStyle = {
-    fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-muted)',
-    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px', display: 'block',
+    fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)',
+    textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px', display: 'block',
   };
 
-  // Voice button appearance by state
-  const voiceColors = {
-    idle:     { bg: 'rgba(255,184,0,0.08)', border: 'rgba(255,184,0,0.2)', color: '#FFB800', label: 'Add Bet by Voice', icon: '🎤' },
-    listening:{ bg: 'rgba(255,69,96,0.12)', border: 'rgba(255,69,96,0.4)', color: '#FF4560', label: 'Listening… tap to stop', icon: '⏹' },
-    parsing:  { bg: 'rgba(78,155,245,0.10)', border: 'rgba(78,155,245,0.35)', color: '#4E9BF5', label: 'AI is parsing your bet', icon: null },
-    done:     { bg: 'rgba(0,212,139,0.10)', border: 'rgba(0,212,139,0.35)', color: '#00D48B', label: 'Bet loaded! Review below ↓', icon: '✓' },
-    error:    { bg: 'rgba(255,69,96,0.08)', border: 'rgba(255,69,96,0.25)', color: '#FF4560', label: voiceError || 'Could not parse. Try again.', icon: '⚠' },
-  };
-  const vc = voiceColors[voiceState];
+  const hasSelection = !!selectedId || (showCustom && customTeam.trim() && customOdds);
 
   return (
     <>
@@ -357,273 +512,416 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       <div style={{
         position: 'fixed', top: '50%', left: '50%', zIndex: 8001,
         transform: 'translate(-50%, -50%)',
-        background: voiceFlash ? 'rgba(0,212,139,0.04)' : 'var(--bg-surface)',
-        border: voiceFlash ? '1px solid rgba(0,212,139,0.4)' : '1px solid rgba(255,184,0,0.3)',
-        borderRadius: '14px', width: 'calc(100% - 24px)', maxWidth: '460px',
-        maxHeight: 'calc(100vh - 40px)',
-        overflowY: 'auto',
-        boxShadow: '0 24px 80px rgba(0,0,0,0.7), 0 0 40px rgba(255,184,0,0.06)',
+        background: 'var(--bg-surface)',
+        border: saved ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,184,0,0.25)',
+        borderRadius: '16px',
+        width: 'calc(100% - 24px)', maxWidth: '480px',
+        maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.7), 0 0 40px rgba(255,184,0,0.05)',
         animation: 'fade-in 0.18s cubic-bezier(0.34,1.56,0.64,1)',
-        transition: 'border-color 0.3s, background 0.3s',
+        transition: 'border-color 0.3s',
       }}>
 
-        {/* Header */}
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <div style={{
-          padding: '1rem 1.2rem 0.85rem',
+          padding: '0.9rem 1.1rem 0.75rem',
           borderBottom: '1px solid var(--border)',
-          background: 'linear-gradient(135deg, rgba(255,184,0,0.08) 0%, transparent 60%)',
+          background: 'linear-gradient(135deg, rgba(255,184,0,0.06) 0%, transparent 60%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '4px' }}>
-                <span style={{ fontSize: '1.1rem' }}>{SPORT_EMOJI[sport] || '🎯'}</span>
-                <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--gold)', letterSpacing: '-0.01em' }}>Add Bet</span>
-                <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '1px 7px', borderRadius: '20px', background: 'rgba(255,184,0,0.12)', color: 'var(--gold)', border: '1px solid rgba(255,184,0,0.25)' }}>
-                  {SPORT_LABELS[sport] || sport?.toUpperCase()}
-                </span>
-              </div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                {awayAbbr} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>@</span> {homeAbbr}
-                <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '8px', fontSize: '0.72rem' }}>
-                  {new Date(gameDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+            {/* Away logo/abbr */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              {awayLogo
+                ? <img src={awayLogo} alt="" width={20} height={20} style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />
+                : null}
+              <span style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{awayAbbr}</span>
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.2rem', lineHeight: 1, padding: '2px 4px', transition: 'color 0.12s' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-            >✕</button>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>@</span>
+            {/* Home logo/abbr */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              {homeLogo
+                ? <img src={homeLogo} alt="" width={20} height={20} style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />
+                : null}
+              <span style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{homeAbbr}</span>
+            </div>
+            <span style={{ fontSize: '0.65rem', padding: '1px 7px', borderRadius: '20px', background: 'rgba(255,184,0,0.1)', color: 'var(--gold)', border: '1px solid rgba(255,184,0,0.2)', fontWeight: 700, flexShrink: 0 }}>
+              {SPORT_EMOJI[sport]} {SPORT_LABELS[sport] || sport?.toUpperCase()}
+            </span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+              {new Date(gameDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
           </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem', lineHeight: 1, padding: '4px', flexShrink: 0, transition: 'color 0.12s' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >✕</button>
         </div>
 
-        {/* ── AI Bet Entry Strip (Voice + Text) ────────────────────────────── */}
-        <div style={{
-          margin: '0.85rem 1.2rem 0',
-          border: `1px solid ${vc.border}`,
-          borderRadius: '10px',
-          background: vc.bg,
-          overflow: 'hidden',
-          transition: 'all 0.25s',
-        }}>
-          {/* Status banner — shown when parsing/done/error */}
-          {voiceState !== 'idle' && (
-            <div style={{
-              padding: '0.55rem 1rem',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', gap: '8px',
-            }}>
-              <div style={{
-                width: '26px', height: '26px', borderRadius: '50%',
-                background: vc.bg, border: `1.5px solid ${vc.border}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, fontSize: '0.82rem',
-                animation: voiceState === 'listening' ? 'live-pulse 1.2s infinite' : 'none',
-              }}>
-                {voiceState === 'parsing' ? <PulsingDots color={vc.color} /> : <span>{vc.icon}</span>}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: vc.color }}>
-                  {vc.label}
-                  {voiceState === 'parsing' && <span style={{ marginLeft: '6px' }}><PulsingDots color={vc.color} /></span>}
-                </div>
-                {voiceTranscript && (voiceState === 'parsing' || voiceState === 'done') && (
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '1px', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '260px' }}>
-                    "{voiceTranscript}"
-                  </div>
-                )}
-              </div>
-              {voiceState === 'listening' && (
-                <div style={{ fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: '20px', background: 'rgba(255,69,96,0.15)', color: '#FF4560', border: '1px solid rgba(255,69,96,0.3)', letterSpacing: '0.06em', flexShrink: 0 }}>
-                  LIVE
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Input row: text field + mic button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0', padding: '0.5rem 0.6rem' }}>
-            {/* Natural language text input */}
-            <input
-              type="text"
-              value={textInput}
-              onChange={e => setTextInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && textInput.trim() && voiceState === 'idle') parseWithAI(textInput, 'text'); }}
-              placeholder='Type bet: "Yankees ML -150 2u DK" or tap mic'
-              disabled={voiceState === 'parsing' || voiceState === 'listening'}
-              style={{
-                flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                color: 'var(--text-primary)', fontSize: '0.82rem', fontFamily: 'inherit',
-                padding: '0.25rem 0.4rem',
-                opacity: (voiceState === 'parsing' || voiceState === 'listening') ? 0.4 : 1,
-              }}
-            />
-
-            {/* Parse button (text) */}
-            {textInput.trim() && voiceState === 'idle' && (
-              <button
-                type="button"
-                onClick={() => parseWithAI(textInput, 'text')}
-                style={{
-                  padding: '4px 10px', borderRadius: '6px', border: 'none',
-                  background: 'rgba(255,184,0,0.15)', color: '#FFB800',
-                  fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                  flexShrink: 0, marginRight: '4px',
-                }}
-              >
-                Parse ↵
-              </button>
-            )}
-
-            {/* Mic button */}
-            {supported && (
-              <button
-                type="button"
-                onClick={handleVoiceClick}
-                disabled={voiceState === 'parsing'}
-                title={voiceState === 'listening' ? 'Stop' : 'Speak your bet'}
-                style={{
-                  width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
-                  border: `1.5px solid ${voiceState === 'listening' ? 'rgba(255,69,96,0.5)' : 'rgba(255,184,0,0.25)'}`,
-                  background: voiceState === 'listening' ? 'rgba(255,69,96,0.12)' : 'rgba(255,184,0,0.08)',
-                  color: voiceState === 'listening' ? '#FF4560' : '#FFB800',
-                  cursor: voiceState === 'parsing' ? 'wait' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.88rem', transition: 'all 0.15s',
-                  animation: voiceState === 'listening' ? 'live-pulse 1.2s infinite' : 'none',
-                }}
-              >
-                {voiceState === 'listening' ? '⏹' : '🎤'}
-              </button>
-            )}
+        {/* ── Quick-Select Grid ───────────────────────────────────────────── */}
+        <div style={{ padding: '0.85rem 1.1rem 0' }}>
+          <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+            Select your bet
           </div>
 
-          {/* Error */}
-          {voiceState === 'error' && voiceError && (
-            <div style={{ padding: '0 0.8rem 0.5rem', fontSize: '0.7rem', color: '#FF4560' }}>
-              {voiceError}
+          {quickBets.map(section => (
+            <div key={section.section} style={{ marginBottom: '0.65rem' }}>
+              <div style={{ fontSize: '0.58rem', fontWeight: 700, color: 'rgba(255,184,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '5px' }}>
+                {section.section}
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {section.bets.map(bet => (
+                  <QuickBetBtn
+                    key={bet.id}
+                    label={bet.label}
+                    sublabel={bet.sublabel}
+                    odds={bet.odds}
+                    selected={selectedId === bet.id}
+                    onClick={() => selectQuickBet(bet)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* No odds available message */}
+          {quickBets.length === 0 && (
+            <div style={{ padding: '0.75rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.65rem' }}>
+              No lines available — use Custom Bet below
             </div>
           )}
         </div>
 
-        {/* Divider */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1.2rem 0' }}>
-          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>or fill manually</span>
-          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-        </div>
+        {/* ── Inline Details Panel (shown when a quick bet is selected) ───── */}
+        {selectedBet && (
+          <div style={{
+            margin: '0.7rem 1.1rem 0',
+            padding: '0.85rem',
+            background: 'linear-gradient(135deg, rgba(255,184,0,0.06) 0%, rgba(255,149,0,0.02) 100%)',
+            border: '1px solid rgba(255,184,0,0.2)',
+            borderRadius: '12px',
+            display: 'flex', flexDirection: 'column', gap: '0.7rem',
+          }}>
+            {/* Selected summary */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--gold)' }}>
+                {selectedBet.bet_type}: {selectedBet.team}
+              </span>
+            </div>
 
-        {/* Body */}
-        <div style={{ padding: '0.85rem 1.2rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-
-          {/* Row 1: Bet Type + Pick */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {/* Odds (editable) */}
             <div>
-              <label style={labelStyle}>Bet Type</label>
-              <select value={betType} onChange={e => setBetType(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
+              <label style={labelStyle}>Odds (American) — edit if different</label>
+              <input
+                value={oddsVal}
+                onChange={e => setOddsVal(e.target.value)}
+                placeholder="-110 or +133"
+                style={{
+                  ...inputStyle,
+                  fontFamily: 'IBM Plex Mono, monospace',
+                  color: parseInt(oddsVal) > 0 ? 'var(--green)' : parseInt(oddsVal) < 0 ? 'var(--text-secondary)' : 'var(--text-primary)',
+                  maxWidth: '140px',
+                }}
+                onFocus={e => e.target.style.borderColor = 'var(--gold)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+              />
+            </div>
+
+            {/* Units */}
+            <div>
+              <label style={labelStyle}>Units</label>
+              <UnitsChips value={units} onChange={setUnits} />
+            </div>
+
+            {/* Book */}
+            <div>
+              <label style={labelStyle}>Sportsbook</label>
+              <select
+                value={book}
+                onChange={e => setBook(e.target.value)}
+                style={{ ...inputStyle, cursor: 'pointer', maxWidth: '200px' }}
                 onFocus={e => e.target.style.borderColor = 'var(--gold)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               >
-                {betTypes.map(bt => <option key={bt} value={bt}>{bt}</option>)}
+                {BOOKS.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
+
+            {/* Notes */}
             <div>
-              <label style={labelStyle}>Pick</label>
-              {isOpenPick ? (
-                <input value={manualPick} onChange={e => setManualPick(e.target.value)}
-                  placeholder={betType === 'Parlay' ? 'e.g. LAD ML + Over 8' : 'Describe your prop…'}
-                  style={inputStyle}
-                  onFocus={e => e.target.style.borderColor = 'var(--gold)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+              <label style={labelStyle}>Notes <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Sharp money, weather, injury angle…"
+                rows={2}
+                style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
+                onFocus={e => e.target.style.borderColor = 'var(--gold)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+              />
+            </div>
+
+            {/* Contest toggle */}
+            <div
+              onClick={handleContestToggle}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                padding: '0.5rem 0.75rem', borderRadius: '8px',
+                background: isContest ? 'rgba(255,184,0,0.08)' : 'var(--bg-elevated)',
+                border: `1px solid ${isContest ? 'rgba(255,184,0,0.3)' : 'var(--border)'}`,
+                transition: 'all 0.15s',
+                userSelect: 'none',
+              }}
+            >
+              <div style={{
+                width: '18px', height: '18px', borderRadius: '4px', flexShrink: 0,
+                border: `2px solid ${isContest ? 'var(--gold)' : 'var(--border)'}`,
+                background: isContest ? 'var(--gold)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s',
+              }}>
+                {isContest && <span style={{ color: '#000', fontSize: '0.65rem', fontWeight: 900, lineHeight: 1 }}>✓</span>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>
+                  🏆 Enter as Contest Pick
+                </div>
+                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                  {isContest ? 'Will be locked & audited — no edits allowed' : 'Personal pick only (no contest audit)'}
+                </div>
+              </div>
+              {verifying && <PulsingDots />}
+            </div>
+
+            {/* Contest eligibility result */}
+            {isContest && contestResult && <ContestBadge result={contestResult} />}
+          </div>
+        )}
+
+        {/* ── Divider + Custom Bet accordion ─────────────────────────────── */}
+        <div style={{ padding: '0.75rem 1.1rem 0' }}>
+          <button
+            onClick={() => { setShowCustom(v => !v); if (!showCustom) setSelectedId(null); }}
+            style={{
+              width: '100%', padding: '0.55rem 0.9rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: showCustom ? 'rgba(255,184,0,0.06)' : 'var(--bg-elevated)',
+              border: `1px solid ${showCustom ? 'rgba(255,184,0,0.25)' : 'var(--border)'}`,
+              borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit',
+              color: showCustom ? 'var(--gold)' : 'var(--text-muted)',
+              fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s',
+            }}
+          >
+            <span>✏️ Custom Bet — props, parlays, F5s & more</span>
+            <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', display: 'inline-block', transform: showCustom ? 'rotate(180deg)' : 'none' }}>▼</span>
+          </button>
+        </div>
+
+        {/* ── Custom Bet form (expandable) ─────────────────────────────────── */}
+        {showCustom && (
+          <div style={{ padding: '0.75rem 1.1rem 0', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+
+            {/* AI/Voice input strip */}
+            <div style={{
+              border: '1px solid var(--border)', borderRadius: '9px',
+              background: 'var(--bg-elevated)', overflow: 'hidden',
+            }}>
+              {/* Status banner */}
+              {voiceState !== 'idle' && (
+                <div style={{
+                  padding: '0.45rem 0.85rem', borderBottom: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem',
+                  color: voiceState === 'parsing' ? '#4E9BF5' : voiceState === 'done' ? '#00D48B' : voiceState === 'error' ? '#FF4560' : '#FF4560',
+                  fontWeight: 700,
+                }}>
+                  {voiceState === 'parsing' && <><PulsingDots color="#4E9BF5" /> Parsing…</>}
+                  {voiceState === 'done' && '✓ Bet loaded — review below'}
+                  {voiceState === 'error' && `⚠ ${voiceError || 'Parse failed'}`}
+                  {voiceState === 'listening' && '🔴 Listening…'}
+                  {voiceTranscript && (voiceState === 'parsing' || voiceState === 'done') && (
+                    <span style={{ fontSize: '0.65rem', fontStyle: 'italic', color: 'var(--text-muted)', marginLeft: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+                      "{voiceTranscript}"
+                    </span>
+                  )}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0.4rem 0.6rem' }}>
+                <input
+                  type="text"
+                  value={textInput}
+                  onChange={e => setTextInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && textInput.trim() && voiceState === 'idle') parseWithAI(textInput); }}
+                  placeholder='"Yankees ML -150 2u DK" or tap mic…'
+                  disabled={voiceState === 'parsing' || voiceState === 'listening'}
+                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '0.8rem', fontFamily: 'inherit', padding: '0.2rem 0.3rem', opacity: voiceState !== 'idle' ? 0.5 : 1 }}
                 />
-              ) : (
-                <select value={pickIdx} onChange={e => setPickIdx(Number(e.target.value))} style={{ ...inputStyle, cursor: 'pointer' }}
+                {textInput.trim() && voiceState === 'idle' && (
+                  <button onClick={() => parseWithAI(textInput)} style={{ padding: '3px 9px', borderRadius: '5px', border: 'none', background: 'rgba(255,184,0,0.15)', color: '#FFB800', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>
+                    Parse ↵
+                  </button>
+                )}
+                {supported && (
+                  <button
+                    onClick={handleVoiceClick}
+                    disabled={voiceState === 'parsing'}
+                    style={{
+                      width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                      border: `1.5px solid ${voiceState === 'listening' ? 'rgba(255,69,96,0.5)' : 'rgba(255,184,0,0.25)'}`,
+                      background: voiceState === 'listening' ? 'rgba(255,69,96,0.12)' : 'rgba(255,184,0,0.08)',
+                      color: voiceState === 'listening' ? '#FF4560' : '#FFB800',
+                      cursor: voiceState === 'parsing' ? 'wait' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem',
+                      animation: voiceState === 'listening' ? 'live-pulse 1.2s infinite' : 'none',
+                    }}
+                  >
+                    {voiceState === 'listening' ? '⏹' : '🎤'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Manual form */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div>
+                <label style={labelStyle}>Bet Type</label>
+                <select value={customBetType} onChange={e => setCustomBetType(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
                   onFocus={e => e.target.style.borderColor = 'var(--gold)'}
                   onBlur={e => e.target.style.borderColor = 'var(--border)'}
                 >
-                  {pickOpts.length === 0
-                    ? <option value={0}>Select bet type first</option>
-                    : pickOpts.map((o, i) => <option key={i} value={i}>{o.label}</option>)
-                  }
+                  {betTypes.map(bt => <option key={bt} value={bt}>{bt}</option>)}
                 </select>
-              )}
+              </div>
+              <div>
+                <label style={labelStyle}>Odds (American)</label>
+                <input
+                  value={customOdds} onChange={e => setCustomOdds(e.target.value)}
+                  placeholder="-110 or +133"
+                  style={{ ...inputStyle, fontFamily: 'IBM Plex Mono, monospace', color: parseInt(customOdds) > 0 ? 'var(--green)' : 'var(--text-primary)' }}
+                  onFocus={e => e.target.style.borderColor = 'var(--gold)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                />
+              </div>
             </div>
-          </div>
-
-          {/* Row 2: Odds + Units */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
-              <label style={labelStyle}>Odds (American)</label>
-              <input value={oddsVal} onChange={e => setOddsVal(e.target.value)}
-                placeholder="-110 or +133"
-                style={{ ...inputStyle, fontFamily: 'IBM Plex Mono, monospace', color: parseInt(oddsVal) > 0 ? 'var(--green)' : parseInt(oddsVal) < 0 ? 'var(--text-secondary)' : 'var(--text-primary)' }}
+              <label style={labelStyle}>Pick / Team / Bet Description</label>
+              <input
+                value={customTeam} onChange={e => setCustomTeam(e.target.value)}
+                placeholder="e.g. Gerrit Cole over 7.5 K's, LAD ML, Parlay: NYY + Over 8.5"
+                style={inputStyle}
                 onFocus={e => e.target.style.borderColor = 'var(--gold)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
             </div>
             <div>
               <label style={labelStyle}>Units</label>
-              <input value={units} onChange={e => setUnits(e.target.value)}
-                placeholder="1.0" type="number" min="0.1" step="0.5"
-                style={{ ...inputStyle, fontFamily: 'IBM Plex Mono, monospace' }}
+              <UnitsChips value={units} onChange={setUnits} />
+            </div>
+            <div>
+              <label style={labelStyle}>Sportsbook</label>
+              <select value={book} onChange={e => setBook(e.target.value)} style={{ ...inputStyle, cursor: 'pointer', maxWidth: '200px' }}
+                onFocus={e => e.target.style.borderColor = 'var(--gold)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+              >
+                {BOOKS.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Notes <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Edge, reasoning, context…" rows={2}
+                style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
                 onFocus={e => e.target.style.borderColor = 'var(--gold)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
             </div>
-          </div>
 
-          {/* Row 3: Sportsbook */}
-          <div>
-            <label style={labelStyle}>Sportsbook</label>
-            <select value={book} onChange={e => setBook(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}
-              onFocus={e => e.target.style.borderColor = 'var(--gold)'}
-              onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            {/* Contest toggle for custom */}
+            <div
+              onClick={handleContestToggle}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                padding: '0.5rem 0.75rem', borderRadius: '8px',
+                background: isContest ? 'rgba(255,184,0,0.08)' : 'var(--bg-elevated)',
+                border: `1px solid ${isContest ? 'rgba(255,184,0,0.3)' : 'var(--border)'}`,
+                transition: 'all 0.15s', userSelect: 'none',
+              }}
             >
-              {BOOKS.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          </div>
-
-          {/* Row 4: Notes */}
-          <div>
-            <label style={labelStyle}>Notes <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Sharp money on this side… public fading… weather angle…"
-              rows={2}
-              style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
-              onFocus={e => e.target.style.borderColor = 'var(--gold)'}
-              onBlur={e => e.target.style.borderColor = 'var(--border)'}
-            />
-          </div>
-
-          {/* Error */}
-          {saveError && (
-            <div style={{ padding: '0.5rem 0.75rem', background: 'var(--red-subtle)', border: '1px solid rgba(255,69,96,0.2)', borderRadius: '7px', color: 'var(--red)', fontSize: '0.78rem' }}>
-              ⚠️ {saveError}
+              <div style={{
+                width: '18px', height: '18px', borderRadius: '4px', flexShrink: 0,
+                border: `2px solid ${isContest ? 'var(--gold)' : 'var(--border)'}`,
+                background: isContest ? 'var(--gold)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+              }}>
+                {isContest && <span style={{ color: '#000', fontSize: '0.65rem', fontWeight: 900 }}>✓</span>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>🏆 Enter as Contest Pick</div>
+                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                  {isContest ? 'Grok will audit this — locked once saved' : 'Personal tracking only'}
+                </div>
+              </div>
+              {verifying && <PulsingDots />}
             </div>
-          )}
-        </div>
 
-        {/* Footer */}
-        <div style={{ padding: '0.85rem 1.2rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-elevated)' }}>
-          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '7px', padding: '0.45rem 1rem', color: 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {/* Contest result for custom */}
+            {isContest && contestResult && <ContestBadge result={contestResult} />}
+          </div>
+        )}
+
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        <div style={{
+          padding: '0.85rem 1.1rem',
+          marginTop: '0.75rem',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
+          background: 'var(--bg-elevated)',
+          borderRadius: '0 0 16px 16px',
+        }}>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '7px', padding: '0.45rem 1rem', color: 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
             Cancel
           </button>
 
-          {saved ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--green)', fontWeight: 700, fontSize: '0.88rem' }}>
-              <span style={{ fontSize: '1.1rem' }}>✅</span> Bet saved!
-            </div>
-          ) : (
-            <button onClick={handleSave} disabled={saving} style={{
-              background: saving ? 'var(--bg-overlay)' : 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)',
-              color: saving ? 'var(--text-muted)' : '#0a0a0a',
-              border: 'none', borderRadius: '7px', padding: '0.5rem 1.4rem',
-              fontSize: '0.88rem', fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit', boxShadow: saving ? 'none' : '0 2px 10px rgba(255,184,0,0.3)',
-              transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '6px',
-            }}>
-              {saving ? '⟳ Saving…' : '💾 Save Bet'}
-            </button>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flex: 1 }}>
+            {saveError && (
+              <div style={{ fontSize: '0.68rem', color: '#FF4560', textAlign: 'right' }}>⚠ {saveError}</div>
+            )}
+            {saved ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--green)', fontWeight: 700, fontSize: '0.88rem' }}>
+                <span>✅</span> Saved!
+              </div>
+            ) : (
+              <button
+                onClick={handleSave}
+                disabled={saving || (!hasSelection)}
+                style={{
+                  background: saving || !hasSelection
+                    ? 'var(--bg-overlay)'
+                    : isContest && contestResult?.eligible
+                      ? 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)'
+                      : 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)',
+                  color: saving || !hasSelection ? 'var(--text-muted)' : '#0a0a0a',
+                  border: 'none', borderRadius: '8px', padding: '0.5rem 1.4rem',
+                  fontSize: '0.88rem', fontWeight: 800,
+                  cursor: saving || !hasSelection ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                  boxShadow: saving || !hasSelection ? 'none' : '0 2px 12px rgba(255,184,0,0.35)',
+                  transition: 'all 0.15s',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  opacity: !hasSelection ? 0.5 : 1,
+                }}
+              >
+                {saving
+                  ? '⟳ Saving…'
+                  : isContest
+                    ? '🏆 Save Contest Pick'
+                    : '💾 Save Bet'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </>
