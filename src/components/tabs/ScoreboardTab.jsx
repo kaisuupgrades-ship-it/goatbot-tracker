@@ -698,8 +698,9 @@ function WinProbBar({ homeTeam, awayTeam, homeProb, awayProb, homeOdds, awayOdds
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
-export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode }) {
+export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null }) {
   const [expanded, setExpanded] = useState(false);
+  const isExpanded = suppressHeader ? (externalExpanded ?? false) : expanded;
   const [h2hData,  setH2hData]  = useState(null);   // { record, games } or null
   const [h2hLoad,  setH2hLoad]  = useState(false);
   const { away, home } = getCompetitors(event);
@@ -754,9 +755,15 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
 
   return (
     <div
-      style={{
+      style={suppressHeader ? {
         background: 'var(--bg-surface)',
-        border: `1px solid ${expanded ? 'rgba(255,184,0,0.35)' : isStarred ? 'rgba(255,184,0,0.2)' : 'var(--border)'}`,
+        border: '1px solid rgba(255,69,96,0.18)',
+        borderRadius: '0 0 10px 10px',
+        borderTop: 'none',
+        overflow: 'hidden',
+      } : {
+        background: 'var(--bg-surface)',
+        border: `1px solid ${isExpanded ? 'rgba(255,184,0,0.35)' : isStarred ? 'rgba(255,184,0,0.2)' : 'var(--border)'}`,
         borderRadius: '10px', overflow: 'hidden',
         transition: 'border-color 0.15s',
         boxShadow: isStarred ? '0 0 16px rgba(255,184,0,0.06)' : 'none',
@@ -766,6 +773,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
       <div
         onClick={() => setExpanded(prev => !prev)}
         style={{
+          display: suppressHeader ? 'none' : undefined,
           padding: '0.8rem 1rem',
           cursor: 'pointer',
           userSelect: 'none',
@@ -976,10 +984,10 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
       </div>
 
       {/* ── Expanded panel ────────────────────────────── */}
-      {expanded && (
+      {isExpanded && (
         <div
           onClick={e => e.stopPropagation()}
-          style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-base)', padding: '0.9rem 1rem' }}
+          style={{ borderTop: suppressHeader ? 'none' : '1px solid var(--border)', background: 'var(--bg-base)', padding: '0.9rem 1rem' }}
         >
 
           {/* Venue */}
@@ -1330,12 +1338,14 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
 
           {/* Action row */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid var(--border-subtle)', gap: '8px' }}>
-            <div
-              onClick={() => setExpanded(false)}
-              style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              ▲ click to collapse
-            </div>
+            {!suppressHeader && (
+              <div
+                onClick={() => setExpanded(false)}
+                style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                ▲ click to collapse
+              </div>
+            )}
 
             {onAnalyze && (
               <button
@@ -1702,8 +1712,8 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     return true;
   });
 
-  // In all-sports mode, maintain the chronological sort even after filtering
-  const sortedFilteredGames = isAllMode ? sortAllSportsEvents(filteredGames) : filteredGames;
+  // Always sort: live first, then upcoming (chrono), finals shuffled to bottom
+  const sortedFilteredGames = sortAllSportsEvents(filteredGames);
 
   const currentSport = SPORTS.find(s => s.key === sport);
 

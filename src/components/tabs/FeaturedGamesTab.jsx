@@ -152,7 +152,7 @@ const STATUS_STYLES = {
 
 // ── SCORE BUG ─────────────────────────────────────────────────────────────────
 // Prominent live score display shown above the GameCard for in-progress games
-function ScoreBug({ event, sport }) {
+function ScoreBug({ event, sport, isStarred = false, onUnstar, expanded = false, onToggleExpand }) {
   const { away, home } = getEventCompetitors(event);
   const awayScore    = away.score != null ? String(away.score) : null;
   const homeScore    = home.score != null ? String(home.score) : null;
@@ -175,9 +175,9 @@ function ScoreBug({ event, sport }) {
     <div style={{
       background: 'linear-gradient(160deg, #0d0d14 0%, #12121e 100%)',
       border: '1px solid rgba(255,69,96,0.28)',
-      borderRadius: '10px',
+      borderRadius: expanded ? '10px 10px 0 0' : '10px',
       padding: '0.85rem 1.1rem 0.8rem',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)',
+      boxShadow: expanded ? 'none' : '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)',
     }}>
 
       {/* Top bar: LIVE badge + period + sport label */}
@@ -207,14 +207,31 @@ function ScoreBug({ event, sport }) {
             </span>
           )}
         </div>
-        {SPORT_LABELS[sport] && (
-          <span style={{
-            fontSize: '0.63rem', color: 'rgba(255,255,255,0.28)', fontWeight: 600,
-            letterSpacing: '0.04em',
-          }}>
-            {SPORT_LABELS[sport].emoji} {SPORT_LABELS[sport].label}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {SPORT_LABELS[sport] && (
+            <span style={{
+              fontSize: '0.63rem', color: 'rgba(255,255,255,0.28)', fontWeight: 600,
+              letterSpacing: '0.04em',
+            }}>
+              {SPORT_LABELS[sport].emoji} {SPORT_LABELS[sport].label}
+            </span>
+          )}
+          <button
+            onClick={e => onUnstar?.(e)}
+            title={isStarred ? 'Unstar this game' : 'Star this game'}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+              fontSize: '0.9rem', lineHeight: 1, flexShrink: 0,
+              color: isStarred ? '#FFB800' : 'rgba(255,255,255,0.3)',
+              filter: isStarred ? 'drop-shadow(0 0 4px rgba(255,184,0,0.5))' : 'none',
+              transition: 'all 0.12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; e.currentTarget.style.transform = 'scale(1.2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = isStarred ? '#FFB800' : 'rgba(255,255,255,0.3)'; e.currentTarget.style.transform = ''; }}
+          >
+            {isStarred ? '★' : '☆'}
+          </button>
+        </div>
       </div>
 
       {/* Big score row */}
@@ -293,6 +310,23 @@ function ScoreBug({ event, sport }) {
           <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>HOME</span>
         </div>
 
+      </div>
+
+      {/* Expand / collapse toggle */}
+      <div
+        onClick={onToggleExpand}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+          marginTop: '0.6rem', paddingTop: '0.45rem',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          cursor: 'pointer', color: 'rgba(255,255,255,0.28)',
+          fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.08em',
+          userSelect: 'none', transition: 'color 0.12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.28)'; }}
+      >
+        {expanded ? '▲ HIDE DETAILS' : '▼ DETAILS'}
       </div>
     </div>
   );
@@ -538,6 +572,14 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
     )
   );
 
+  // ── Expand state for live ScoreBug cards ─────────────────────────────────
+  const [expandedIds, setExpandedIds] = useState(new Set());
+  const toggleExpand = (id) => setExpandedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
   // ── BetSlip modal ─────────────────────────────────────────────────────────
   const [betSlipGame,  setBetSlipGame]  = useState(null);
   const [BetSlipModal, setBetSlipModal] = useState(null);
@@ -652,25 +694,52 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
           {featuredEvents.map(event => {
             const isLive       = event.status?.type?.state === 'in';
             const relatedPicks = matchPicksToGame(picks, event);
+            const isExpanded   = expandedIds.has(event.id);
+            const starredEntry = starredList.find(g => g.id === event.id);
 
             return (
               <div key={event.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
-                {/* ── Score Bug (live games only) ── */}
-                {isLive && <ScoreBug event={event} sport={event._sport} />}
-
-                {/* ── Standard GameCard ── */}
-                <GameCard
-                  event={event}
-                  sport={event._sport}
-                  onAnalyze={(prompt) => onAnalyze?.(prompt)}
-                  onAddBet={(ev, sp) => setBetSlipGame({ event: ev, sport: sp })}
-                  starred={starred}
-                  onStar={toggleStar}
-                  injuries={injuries}
-                  injuriesChecked={injuriesChecked}
-                  isAllMode={starredSports.length > 1}
-                />
+                {isLive ? (
+                  /* ── Live: ScoreBug (single header) + expandable details ── */
+                  <>
+                    <ScoreBug
+                      event={event}
+                      sport={event._sport}
+                      isStarred={!!starred?.[event.id]}
+                      onUnstar={(e) => starredEntry && toggleStar(e, starredEntry)}
+                      expanded={isExpanded}
+                      onToggleExpand={() => toggleExpand(event.id)}
+                    />
+                    {/* GameCard with header suppressed — only shows expandable details */}
+                    <GameCard
+                      event={event}
+                      sport={event._sport}
+                      onAnalyze={(prompt) => onAnalyze?.(prompt)}
+                      onAddBet={(ev, sp) => setBetSlipGame({ event: ev, sport: sp })}
+                      starred={starred}
+                      onStar={toggleStar}
+                      injuries={injuries}
+                      injuriesChecked={injuriesChecked}
+                      isAllMode={starredSports.length > 1}
+                      suppressHeader={true}
+                      externalExpanded={isExpanded}
+                    />
+                  </>
+                ) : (
+                  /* ── Non-live: standard GameCard with its own header ── */
+                  <GameCard
+                    event={event}
+                    sport={event._sport}
+                    onAnalyze={(prompt) => onAnalyze?.(prompt)}
+                    onAddBet={(ev, sp) => setBetSlipGame({ event: ev, sport: sp })}
+                    starred={starred}
+                    onStar={toggleStar}
+                    injuries={injuries}
+                    injuriesChecked={injuriesChecked}
+                    isAllMode={starredSports.length > 1}
+                  />
+                )}
 
                 {/* ── Related Picks + Bet Tracker ── */}
                 {relatedPicks.length > 0 && (
