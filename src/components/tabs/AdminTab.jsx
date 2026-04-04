@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import BacktestPanel from './admin/BacktestPanel';
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
 
@@ -1058,6 +1059,7 @@ const ADMIN_TABS = [
   { id: 'activity',  label: '📡 Activity',      desc: 'Last sign-on, recent activity & IP addresses' },
   { id: 'picks',     label: '📋 Picks Audit',   desc: 'View and moderate all picks' },
   { id: 'contests',  label: '🏆 Contests',      desc: 'Active contests and participants' },
+  { id: 'backtest',  label: '📈 Backtester',    desc: 'Import historical data, run backtests, save sharp edges' },
   { id: 'system',    label: '⚙️ System',         desc: 'Announcements and system settings' },
 ];
 
@@ -1122,6 +1124,7 @@ export default function AdminTab({ user }) {
       {active === 'activity'  && <ActivityPanel   userEmail={user.email} />}
       {active === 'picks'     && <PicksAuditPanel userEmail={user.email} />}
       {active === 'contests'  && <ContestsPanel   userEmail={user.email} />}
+      {active === 'backtest'  && <BacktestPanel   userEmail={user.email} />}
       {active === 'system'    && <SystemPanel     userEmail={user.email} />}
     </div>
   );

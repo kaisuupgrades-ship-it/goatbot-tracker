@@ -14,8 +14,61 @@
  * }
  */
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 15;
+
+// ── Supabase persistent cache (shared across ALL serverless instances) ──────────
+// The in-memory Map was useless on Vercel — each cold start got a fresh empty
+// cache, so every request hit The Odds API. Supabase acts as a global L2 cache.
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+// L2: Supabase TTL — 15 min during off-peak, 5 min during likely game windows
+function getOddsCacheTTL() {
+  const hour = new Date().getUTCHours(); // UTC
+  // US game windows: ~17:00–04:00 UTC (noon–midnight ET)
+  const isGameWindow = hour >= 17 || hour <= 4;
+  return isGameWindow ? 5 * 60 * 1000 : 15 * 60 * 1000;
+}
+
+async function getSupabaseCache(sportKey) {
+  try {
+    const { data } = await supabase
+      .from('settings')
+      .select('value, updated_at')
+      .eq('key', `odds_cache_${sportKey}`)
+      .single();
+    if (!data?.value) return null;
+    const ageMs = Date.now() - new Date(data.updated_at).getTime();
+    if (ageMs > getOddsCacheTTL()) return null; // stale
+    const payload = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    return payload;
+  } catch { return null; }
+}
+
+async function setSupabaseCache(sportKey, result) {
+  try {
+    await supabase.from('settings').upsert(
+      [{ key: `odds_cache_${sportKey}`, value: JSON.stringify(result) }],
+      { onConflict: 'key' }
+    );
+  } catch { /* cache write failure is non-fatal */ }
+}
+
+// L1: In-process memory cache (warm instances only — keeps latency low when
+// the same serverless instance handles back-to-back requests within 5 min)
+const memCache = new Map();
+const MEM_TTL  = 5 * 60 * 1000;
+
+function getMemCache(key) {
+  const e = memCache.get(key);
+  if (!e || Date.now() - e.time > MEM_TTL) { memCache.delete(key); return null; }
+  return e.data;
+}
+function setMemCache(key, data) { memCache.set(key, { data, time: Date.now() }); }
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 const THE_ODDS_KEY  = process.env.THE_ODDS_API_KEY;
@@ -53,17 +106,6 @@ const LEGACY_MARKET_MAP = {
   Handicap: 'spreads', Total: 'totals', OU: 'totals', 'Over/Under': 'totals',
 };
 
-// ── In-memory cache — 3 min TTL ───────────────────────────────────────────────
-const cache = new Map();
-const CACHE_TTL = 3 * 60 * 1000;
-
-function getCached(key) {
-  const e = cache.get(key);
-  if (!e) return null;
-  if (Date.now() - e.time > CACHE_TTL) { cache.delete(key); return null; }
-  return e.data;
-}
-function setCache(key, data) { cache.set(key, { data, time: Date.now() }); }
 
 // ── The Odds API (primary) ────────────────────────────────────────────────────
 async function fetchFromTheOddsAPI(sportKey) {
@@ -204,14 +246,25 @@ export async function GET(req) {
   }
 
   const cacheKey = sportKey;
-  const cached   = getCached(cacheKey);
-  if (cached) return NextResponse.json({ ...cached, cached: true });
 
+  // L1: check in-process memory cache first (fastest — zero network)
+  const memHit = getMemCache(cacheKey);
+  if (memHit) return NextResponse.json({ ...memHit, cached: true });
+
+  // L2: check Supabase persistent cache (shared across all serverless instances)
+  const sbHit = await getSupabaseCache(sportKey);
+  if (sbHit) {
+    setMemCache(cacheKey, sbHit); // warm L1 for this instance
+    return NextResponse.json({ ...sbHit, cached: true });
+  }
+
+  // Cache miss — fetch live data
   // Try The Odds API first (better — all games + all markets in 1 call)
   if (THE_ODDS_KEY) {
     try {
       const result = await fetchFromTheOddsAPI(sportKey);
-      setCache(cacheKey, result);
+      setMemCache(cacheKey, result);
+      await setSupabaseCache(sportKey, result);
       return NextResponse.json({ ...result, cached: false });
     } catch (err) {
       console.warn('[/api/odds] The Odds API failed, trying legacy:', err.message);
@@ -222,7 +275,8 @@ export async function GET(req) {
   if (LEGACY_KEY) {
     try {
       const result = await fetchFromLegacy(sportKey);
-      setCache(cacheKey, result);
+      setMemCache(cacheKey, result);
+      await setSupabaseCache(sportKey, result);
       return NextResponse.json({ ...result, cached: false });
     } catch (err) {
       console.error('[/api/odds] Both odds providers failed:', err.message);

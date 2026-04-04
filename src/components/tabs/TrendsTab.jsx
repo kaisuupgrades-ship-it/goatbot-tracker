@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtOdds(n) {
@@ -249,6 +249,10 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
   const [globalEdges, setGlobalEdges] = useState(null); // admin-pushed cache
   const [userScanned, setUserScanned] = useState(false); // true once user runs their own scan
 
+  // Per-sport scan cache — keyed by sport key, value = { edges, error }
+  // Persists for the life of the browser session (cleared only on full page reload)
+  const scanCache = useRef(new Map());
+
   // On mount: fetch admin-pushed global edges (no spinner — silent background load)
   useEffect(() => {
     fetch('/api/trends?action=global-edges')
@@ -275,7 +279,17 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
     { key: 'nfl', label: '🏈 NFL' },
   ];
 
-  const scan = useCallback(async (sportKey = sport) => {
+  const scan = useCallback(async (sportKey = sport, forceRefresh = false) => {
+    // Check cache first — skip the whole scan if we already have results
+    if (!forceRefresh && scanCache.current.has(sportKey)) {
+      const hit = scanCache.current.get(sportKey);
+      setEdges(hit.edges);
+      setError(hit.error || '');
+      setScanned(true);
+      setUserScanned(true);
+      return;
+    }
+
     setLoading(true); setError(''); setEdges([]);
     try {
       // Fetch today's games for the selected sport(s)
@@ -392,8 +406,10 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
       }
 
       if (gameList.length === 0) {
+        const noGamesErr = 'No games found for today. Check back later or try a different sport.';
+        scanCache.current.set(sportKey, { edges: [], error: noGamesErr });
         setEdges([]);
-        setError('No games found for today. Check back later or try a different sport.');
+        setError(noGamesErr);
         setScanned(true);
         setLoading(false);
         return;
@@ -486,7 +502,9 @@ Return ONLY the JSON array, no other text.`;
         return;
       }
 
-      setEdges(Array.isArray(parsed) ? parsed : []);
+      const resultEdges = Array.isArray(parsed) ? parsed : [];
+      scanCache.current.set(sportKey, { edges: resultEdges, error: '' });
+      setEdges(resultEdges);
       setScanned(true);
       setUserScanned(true); // mark that this is user's own scan (not admin cache)
     } catch (err) {
@@ -552,7 +570,7 @@ Return ONLY the JSON array, no other text.`;
             </span>
           )}
           <button
-            onClick={() => scan(sport)}
+            onClick={() => scan(sport, true)}
             disabled={loading}
             className="btn-gold"
             style={{ opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
@@ -565,7 +583,7 @@ Return ONLY the JSON array, no other text.`;
       {/* Sport filter */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         {SPORTS.map(s => (
-          <button key={s.key} onClick={() => { setSport(s.key); if (scanned) scan(s.key); }}
+          <button key={s.key} onClick={() => { setSport(s.key); if (userScanned || scanned) scan(s.key); }}
             style={{
               padding: '5px 13px', borderRadius: '7px', cursor: 'pointer', fontSize: '0.8rem',
               border: `1px solid ${sport === s.key ? '#FFB800' : '#222'}`,

@@ -44,8 +44,11 @@ export async function signOut() {
 }
 
 export async function getUser() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
+  // Use getSession() so the Supabase client reads from localStorage and
+  // auto-refreshes the access token with the refresh token when needed.
+  // This keeps users logged in across page reloads without re-prompting.
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
 }
 
 // ── Picks helpers ───────────────────────────────────────────────────────────
