@@ -261,6 +261,8 @@ export async function POST(req) {
         user: buildEdgePrompt(gameList, today, weatherMap),
         maxTokens: 2000,
         temperature: 0.5,
+        useGrok4: true,   // use the most capable model for site-wide published analysis
+        webSearch: true,  // enable live web search for latest injury news, line movement, etc.
       });
 
       const raw     = aiResult.text || '';

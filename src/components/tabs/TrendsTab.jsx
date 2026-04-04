@@ -242,32 +242,35 @@ function AskAnalyst({ user }) {
 export default function TrendsTab({ picks, user, onNavigateToTracker }) {
   const [edges, setEdges]         = useState([]);
   const [loading, setLoading]     = useState(false);
+  const [globalLoading, setGlobalLoading] = useState(true); // true while fetching server-side data
   const [scanned, setScanned]     = useState(false);
   const [error, setError]         = useState('');
   const [sport, setSport]         = useState('all');
   const [logged, setLogged]       = useState(null);
-  const [globalEdges, setGlobalEdges] = useState(null); // admin-pushed cache
+  const [globalEdges, setGlobalEdges] = useState(null); // server pre-generated edges
   const [userScanned, setUserScanned] = useState(false); // true once user runs their own scan
 
   // Per-sport scan cache — keyed by sport key, value = { edges, error }
   // Persists for the life of the browser session (cleared only on full page reload)
   const scanCache = useRef(new Map());
 
-  // On mount: fetch admin-pushed global edges (no spinner — silent background load)
+  // On mount: fetch server pre-generated edges immediately — no user action needed
   useEffect(() => {
+    setGlobalLoading(true);
     fetch('/api/trends?action=global-edges')
       .then(r => r.json())
       .then(d => {
         if (d.cached && Array.isArray(d.edges) && d.edges.length > 0) {
           setGlobalEdges({ edges: d.edges, pushed_at: d.pushed_at });
-          // Only show global edges if user hasn't run their own scan
+          // Always show global edges unless user has already run their own scan
           if (!userScanned) {
             setEdges(d.edges);
             setScanned(true);
           }
         }
       })
-      .catch(() => {}); // silent fail — user can always scan manually
+      .catch(() => {})
+      .finally(() => setGlobalLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -547,36 +550,99 @@ Return ONLY the JSON array, no other text.`;
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap',
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '1.1rem' }}>⚡</span>
             <span style={{ fontWeight: 800, color: '#FFB800', fontSize: '1rem' }}>Today's Edges</span>
             <span style={{ fontSize: '0.62rem', color: '#555', background: '#111', border: '1px solid #222', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
               {todayStr()}
             </span>
+            {/* Server-generated badge — shown when BetOS pre-loaded today's analysis */}
+            {globalEdges && !userScanned && (
+              <span style={{
+                fontSize: '0.6rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px',
+                color: '#4ade80', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
+                letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: '4px',
+              }}>
+                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', animation: 'pulse 2s infinite' }} />
+                LIVE · BetOS AI
+              </span>
+            )}
+            {userScanned && (
+              <span style={{
+                fontSize: '0.6rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px',
+                color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)',
+                letterSpacing: '0.06em',
+              }}>
+                YOUR SCAN
+              </span>
+            )}
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.77rem', lineHeight: 1.5, margin: 0, maxWidth: '520px' }}>
-            BetOS scans today's slate and surfaces situational betting edges — home dogs, rest spots, fade opportunities, and line value — with real current odds.
+            {globalEdges && !userScanned
+              ? 'BetOS AI (Grok 4 + live web search) pre-analyzed today\'s slate automatically. Updated twice daily. Use "Ask the Analyst" below for custom queries.'
+              : 'BetOS scans today\'s slate and surfaces situational betting edges — home dogs, rest spots, fade opportunities, and line value — with real current odds.'}
           </p>
+          {/* Show last generated timestamp */}
+          {globalEdges?.pushed_at && !userScanned && (
+            <div style={{ marginTop: '5px', fontSize: '0.67rem', color: '#444' }}>
+              Last updated: {new Date(globalEdges.pushed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+            </div>
+          )}
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-          {/* Show when displaying admin-pushed edges (user hasn't run their own yet) */}
-          {scanned && !userScanned && globalEdges && (
-            <span style={{
-              fontSize: '0.6rem', color: '#555', background: '#111', border: '1px solid #222',
-              padding: '2px 7px', borderRadius: '4px', fontWeight: 600, letterSpacing: '0.07em',
-              whiteSpace: 'nowrap',
-            }}>
-              📡 Admin pre-loaded
+          {/* Loading indicator while fetching global edges */}
+          {globalLoading && (
+            <span style={{ fontSize: '0.7rem', color: '#555', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #FFB800', borderTopColor: 'transparent', animation: 'spin-border 0.8s linear infinite' }} />
+              Loading analysis…
             </span>
           )}
-          <button
-            onClick={() => scan(sport, true)}
-            disabled={loading}
-            className="btn-gold"
-            style={{ opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
-          >
-            {loading ? '🔍 Scanning…' : scanned ? '🔄 Refresh' : '🔍 Scan Today\'s Slate'}
-          </button>
+
+          {/* When global data exists: show "Run Your Own Scan" as secondary option */}
+          {globalEdges && !userScanned && !globalLoading && (
+            <button
+              onClick={() => scan(sport, true)}
+              disabled={loading}
+              style={{
+                padding: '6px 14px', borderRadius: '7px', fontSize: '0.75rem', fontWeight: 600,
+                cursor: loading ? 'wait' : 'pointer', border: '1px solid #333',
+                background: 'transparent', color: '#666',
+                opacity: loading ? 0.5 : 1, whiteSpace: 'nowrap', transition: 'all 0.15s',
+              }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = '#555'; e.currentTarget.style.color = '#999'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#666'; }}
+            >
+              {loading ? '🔍 Scanning…' : '🔍 Run My Own Scan'}
+            </button>
+          )}
+
+          {/* When no global data: show primary scan button */}
+          {(!globalEdges || userScanned) && !globalLoading && (
+            <button
+              onClick={() => scan(sport, true)}
+              disabled={loading}
+              className="btn-gold"
+              style={{ opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
+            >
+              {loading ? '🔍 Scanning…' : scanned ? '🔄 Refresh' : '🔍 Scan Today\'s Slate'}
+            </button>
+          )}
+
+          {/* When user has run own scan, offer to switch back to BetOS global */}
+          {userScanned && globalEdges && (
+            <button
+              onClick={() => { setEdges(globalEdges.edges); setUserScanned(false); setError(''); }}
+              style={{
+                padding: '4px 10px', borderRadius: '6px', fontSize: '0.68rem',
+                cursor: 'pointer', border: '1px solid rgba(74,222,128,0.25)',
+                background: 'rgba(74,222,128,0.05)', color: '#4ade80',
+                transition: 'all 0.12s', whiteSpace: 'nowrap',
+              }}
+            >
+              ← Back to BetOS AI
+            </button>
+          )}
         </div>
       </div>
 

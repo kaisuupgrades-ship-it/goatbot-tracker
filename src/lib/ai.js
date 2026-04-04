@@ -17,18 +17,19 @@ const XAI_BASE       = 'https://api.x.ai/v1';
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
 
 // Model choices
-const XAI_MODEL      = 'grok-3';           // reliable, supports web search
-const CLAUDE_MODEL   = 'claude-sonnet-4-5'; // fast, high quality, cost-effective
+const XAI_MODEL        = 'grok-3';           // default — reliable, supports web search
+const XAI_MODEL_HEAVY  = 'grok-4';           // for deep daily analysis (cron + admin scan)
+const CLAUDE_MODEL     = 'claude-sonnet-4-5'; // fast, high quality, cost-effective
 
 /**
  * Call xAI grok-3 chat completions (with optional web search)
  */
-async function callXai({ system, user, maxTokens = 1500, temperature = 0.7, webSearch = false, signal }) {
+async function callXai({ system, user, maxTokens = 1500, temperature = 0.7, webSearch = false, signal, model }) {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error('XAI_API_KEY not configured');
 
   const body = {
-    model: XAI_MODEL,
+    model: model || XAI_MODEL,
     messages: [
       ...(system ? [{ role: 'system', content: system }] : []),
       { role: 'user', content: user },
@@ -54,9 +55,10 @@ async function callXai({ system, user, maxTokens = 1500, temperature = 0.7, webS
   }
 
   const data = await res.json();
+  const usedModel = model || XAI_MODEL;
   return {
     text: data.choices?.[0]?.message?.content?.trim() || '',
-    model: XAI_MODEL,
+    model: usedModel,
     provider: 'xai',
   };
 }
@@ -113,13 +115,15 @@ async function callClaude({ system, user, maxTokens = 1500, temperature = 0.7, s
  * @param {boolean} [opts.webSearch]   — enable xAI web search (no effect on Claude)
  * @param {boolean} [opts.requireSearch] — if true and xAI fails, Claude gets a
  *                                         "[no live search]" note prepended
+ * @param {boolean} [opts.useGrok4]   — use grok-4 instead of grok-3 (for deep daily analysis)
  * @param {AbortSignal} [opts.signal]  — optional AbortSignal for timeout
  * @returns {Promise<{ text: string, model: string, provider: string, fallback: boolean }>}
  */
-export async function callAI({ system, user, maxTokens = 1500, temperature = 0.7, webSearch = false, requireSearch = false, signal } = {}) {
+export async function callAI({ system, user, maxTokens = 1500, temperature = 0.7, webSearch = false, requireSearch = false, useGrok4 = false, signal } = {}) {
+  const xaiModel = useGrok4 ? XAI_MODEL_HEAVY : XAI_MODEL;
   // Try xAI first
   try {
-    const result = await callXai({ system, user, maxTokens, temperature, webSearch, signal });
+    const result = await callXai({ system, user, maxTokens, temperature, webSearch, signal, model: xaiModel });
     return { ...result, fallback: false };
   } catch (xaiErr) {
     console.warn('[BetOS AI] xAI failed, falling back to Claude:', xaiErr.message);
