@@ -72,7 +72,7 @@ function mergeGames(prevGames, newGames) {
 }
 
 // Sort a mixed-sport event list: live → upcoming (chrono) → final (newest first)
-function sortAllSportsEvents(events) {
+export function sortAllSportsEvents(events) {
   const live     = events.filter(e => getGameState(e).state === 'live');
   const upcoming = events.filter(e => getGameState(e).state === 'pre');
   const final    = events.filter(e => getGameState(e).state === 'final');
@@ -629,7 +629,7 @@ function WinProbBar({ homeTeam, awayTeam, homeProb, awayProb, homeOdds, awayOdds
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
-function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode }) {
+export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode }) {
   const [expanded, setExpanded] = useState(false);
   const [h2hData,  setH2hData]  = useState(null);   // { record, games } or null
   const [h2hLoad,  setH2hLoad]  = useState(false);

@@ -76,7 +76,17 @@ function StarredCount() {
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
 
-export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose }) {
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+function avatarSrc(user) {
+  if (!user?.id || !SUPABASE_URL) return null;
+  const ts = user?.user_metadata?.avatar_updated_at
+    ? new Date(user.user_metadata.avatar_updated_at).getTime()
+    : '';
+  return `${SUPABASE_URL}/storage/v1/object/public/avatars/${user.id}.jpg${ts ? `?v=${ts}` : ''}`;
+}
+
+export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile }) {
   const [collapsed, setCollapsed] = useState(false);
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
 
@@ -86,9 +96,11 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
   const units    = settled.reduce((s, p) => s + (parseFloat(p.profit) || 0), 0);
   const pending  = picks.filter(p => !p.result || p.result === 'PENDING').length;
 
-  const username = isDemo
+  const username  = isDemo
     ? 'Demo Mode'
     : (user?.user_metadata?.username || user?.email?.split('@')[0] || 'Bettor');
+  const [avatarErr, setAvatarErr] = useState(false);
+  const hasAvatar = !isDemo && !avatarErr && !!user?.user_metadata?.avatar_url;
 
   return (
     <aside
@@ -246,19 +258,43 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
 
           {/* User + sign out */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-            <div style={{
-              width: '26px', height: '26px', borderRadius: '50%',
-              background: isDemo ? 'var(--gold-subtle)' : 'var(--bg-overlay)',
-              border: `1px solid ${isDemo ? 'rgba(255,184,0,0.3)' : 'var(--border)'}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '0.75rem', color: isDemo ? 'var(--gold)' : 'var(--text-secondary)',
-              flexShrink: 0,
-            }}>
-              {username[0]?.toUpperCase() || '?'}
-            </div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {username}
-            </span>
+            {/* Clickable avatar/name → open profile */}
+            <button
+              onClick={() => !isDemo && onOpenProfile?.()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '7px', flex: 1,
+                background: 'none', border: 'none', cursor: isDemo ? 'default' : 'pointer',
+                padding: '3px 4px', borderRadius: '6px', textAlign: 'left',
+                transition: 'background 0.15s', overflow: 'hidden',
+                minWidth: 0,
+              }}
+              title={isDemo ? 'Demo Mode' : 'Edit profile'}
+              onMouseEnter={e => { if (!isDemo) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <div style={{
+                width: '26px', height: '26px', borderRadius: '50%',
+                background: isDemo ? 'var(--gold-subtle)' : 'var(--bg-overlay)',
+                border: `1px solid ${isDemo ? 'rgba(255,184,0,0.3)' : 'var(--border)'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.75rem', color: isDemo ? 'var(--gold)' : 'var(--text-secondary)',
+                flexShrink: 0, overflow: 'hidden',
+              }}>
+                {hasAvatar ? (
+                  <img
+                    src={avatarSrc(user)}
+                    alt="avatar"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={() => setAvatarErr(true)}
+                  />
+                ) : (
+                  username[0]?.toUpperCase() || '?'
+                )}
+              </div>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {username}
+              </span>
+            </button>
             <button
               onClick={onSignOut}
               style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem', flexShrink: 0, padding: '3px' }}

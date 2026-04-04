@@ -33,6 +33,8 @@ const MARKET_KEY_MAP = {
 // In-memory cache — 3 min TTL
 const cache = new Map();
 const CACHE_TTL = 3 * 60 * 1000;
+// Bump this version string to bust the cache after algorithm changes
+const CACHE_VERSION = 'v2-standard-totals';
 
 function getCached(key) {
   const entry = cache.get(key);
@@ -59,25 +61,47 @@ function normalizeEvent(ev, oddsData) {
   const bookmakers = Object.entries(bookmakers_obj).map(([bookName, markets]) => {
     const normalizedMarkets = (markets || []).map(mkt => {
       const key = MARKET_KEY_MAP[mkt.name] || mkt.name.toLowerCase();
-      // Use the first odds line (main line)
-      const firstOdds = (mkt.odds || [])[0] || {};
+      const allOdds = mkt.odds || [];
       let outcomes = [];
 
       if (key === 'h2h') {
-        if (firstOdds.home != null) outcomes.push({ name: ev.home, price: decimalToAmerican(firstOdds.home) });
-        if (firstOdds.away != null) outcomes.push({ name: ev.away, price: decimalToAmerican(firstOdds.away) });
+        const line = allOdds[0] || {};
+        if (line.home != null) outcomes.push({ name: ev.home, price: decimalToAmerican(line.home) });
+        if (line.away != null) outcomes.push({ name: ev.away, price: decimalToAmerican(line.away) });
       } else if (key === 'spreads') {
-        const hdp = firstOdds.hdp ?? 0;
-        if (firstOdds.home != null) outcomes.push({ name: ev.home, price: decimalToAmerican(firstOdds.home), point: -hdp });
-        if (firstOdds.away != null) outcomes.push({ name: ev.away, price: decimalToAmerican(firstOdds.away), point: hdp });
+        const line = allOdds[0] || {};
+        const hdp = line.hdp ?? 0;
+        if (line.home != null) outcomes.push({ name: ev.home, price: decimalToAmerican(line.home), point: -hdp });
+        if (line.away != null) outcomes.push({ name: ev.away, price: decimalToAmerican(line.away), point: hdp });
       } else if (key === 'totals') {
-        const total = firstOdds.hdp ?? firstOdds.total ?? null;
-        if (firstOdds.over != null)  outcomes.push({ name: 'Over',  price: decimalToAmerican(firstOdds.over),  point: total });
-        if (firstOdds.under != null) outcomes.push({ name: 'Under', price: decimalToAmerican(firstOdds.under), point: total });
+        // The API returns multiple alternate total lines (e.g. O/U 4, 4.5, 5, 5.5, 6 ...).
+        // The first entry is the LOWEST (extreme odds like -833/+486 — not useful).
+        // Find the standard game total: the line where both over AND under juice
+        // is closest to -110 (i.e. within standard -135 to +120 range).
+        const standardLine = allOdds.find(o => {
+          if (o.over == null || o.under == null) return false;
+          const ov = decimalToAmerican(o.over);
+          const un = decimalToAmerican(o.under);
+          return ov != null && un != null && ov >= -135 && ov <= 120 && un >= -135 && un <= 120;
+        });
+        // Fallback: pick the line with juice closest to -110 on both sides
+        const bestLine = standardLine || allOdds.reduce((best, o) => {
+          if (o.over == null || o.under == null) return best;
+          const ov = decimalToAmerican(o.over);
+          const un = decimalToAmerican(o.under);
+          if (ov == null || un == null) return best;
+          const score = Math.abs(ov + 110) + Math.abs(un + 110); // distance from -110 each side
+          if (!best || score < best.score) return { ...o, score };
+          return best;
+        }, null) || allOdds[allOdds.length - 1] || {}; // last entry tends to be highest/main line
+        const total = bestLine.hdp ?? bestLine.total ?? null;
+        if (bestLine.over  != null) outcomes.push({ name: 'Over',  price: decimalToAmerican(bestLine.over),  point: total });
+        if (bestLine.under != null) outcomes.push({ name: 'Under', price: decimalToAmerican(bestLine.under), point: total });
       } else {
         // Generic fallback
-        if (firstOdds.home != null) outcomes.push({ name: ev.home, price: decimalToAmerican(firstOdds.home) });
-        if (firstOdds.away != null) outcomes.push({ name: ev.away, price: decimalToAmerican(firstOdds.away) });
+        const line = allOdds[0] || {};
+        if (line.home != null) outcomes.push({ name: ev.home, price: decimalToAmerican(line.home) });
+        if (line.away != null) outcomes.push({ name: ev.away, price: decimalToAmerican(line.away) });
       }
 
       return { key, outcomes };

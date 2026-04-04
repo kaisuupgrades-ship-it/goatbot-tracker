@@ -2,6 +2,36 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchProfile, upsertProfile } from '@/lib/supabase';
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+// ── UserAvatar: shows real photo if available, falls back to emoji ─────────────
+function UserAvatar({ userId, avatarEmoji, size = 32 }) {
+  const [imgErr, setImgErr] = useState(false);
+  const src = SUPABASE_URL && userId
+    ? `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg`
+    : null;
+  const showImg = src && !imgErr;
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+      fontSize: size * 0.5,
+    }}>
+      {showImg ? (
+        <img
+          src={src}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={() => setImgErr(true)}
+        />
+      ) : (
+        <span>{avatarEmoji || '🐐'}</span>
+      )}
+    </div>
+  );
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n, decimals = 2) {
@@ -139,7 +169,7 @@ function generateMockPicks(entry) {
 }
 
 function PublicProfileModal({ entry, onClose }) {
-  const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score } = entry;
+  const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, id: userId } = entry;
   const winRate  = total > 0 ? ((wins / total) * 100).toFixed(1) : '—';
   const unitsNum = parseFloat(units) || 0;
   const roiNum   = parseFloat(roi) || 0;
@@ -198,11 +228,10 @@ function PublicProfileModal({ entry, onClose }) {
                 width: '62px', height: '62px', borderRadius: '50%',
                 background: 'linear-gradient(135deg, rgba(255,184,0,0.2), rgba(255,149,0,0.08))',
                 border: '2px solid rgba(255,184,0,0.45)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '2.1rem', flexShrink: 0,
+                flexShrink: 0, overflow: 'hidden',
                 boxShadow: '0 0 14px rgba(255,184,0,0.2)',
               }}>
-                {avatar_emoji || '🐐'}
+                <UserAvatar userId={userId} avatarEmoji={avatar_emoji} size={62} />
               </div>
               <div>
                 <div style={{ fontWeight: 900, fontSize: '1.15rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
@@ -457,7 +486,7 @@ function PublicProfileModal({ entry, onClose }) {
 // ── Leaderboard Row ────────────────────────────────────────────────────────────
 
 function LeaderRow({ entry, maxScore, isMe, onViewProfile }) {
-  const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score } = entry;
+  const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, id: userId } = entry;
 
   return (
     <div
@@ -484,7 +513,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile }) {
 
       {/* Name */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-        <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{avatar_emoji || '🐐'}</span>
+        <UserAvatar userId={userId} avatarEmoji={avatar_emoji} size={30} />
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700, color: isMe ? 'var(--gold)' : 'var(--text-primary)', fontSize: '0.9rem', truncate: true }}>
@@ -927,7 +956,7 @@ export default function LeaderboardTab({ user, isDemo }) {
           borderRadius: '10px', padding: '1rem 1.25rem',
           display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
         }}>
-          <span style={{ fontSize: '1.5rem' }}>{data.userEntry.avatar_emoji || '🐐'}</span>
+          <UserAvatar userId={user?.id} avatarEmoji={data.userEntry.avatar_emoji} size={40} />
           <div>
             <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: '0.95rem' }}>
               You're ranked #{data.userRank} of {data.total}

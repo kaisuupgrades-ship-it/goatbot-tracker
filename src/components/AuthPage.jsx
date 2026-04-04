@@ -102,6 +102,230 @@ function TypeWriter({ texts, speed = 55, pause = 2000 }) {
   );
 }
 
+// ── Tournament Banner ─────────────────────────────────────────────────────────
+const TOURNAMENT_END = new Date('2025-07-31T23:59:59-05:00'); // ← update this date
+
+function useTournamentCountdown() {
+  const [time, setTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, ended: false });
+  useEffect(() => {
+    function tick() {
+      const diff = TOURNAMENT_END.getTime() - Date.now();
+      if (diff <= 0) { setTime(t => ({ ...t, ended: true })); return; }
+      setTime({
+        days:    Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours:   Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+        ended:   false,
+      });
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
+
+function CountdownUnit({ value, label }) {
+  return (
+    <div style={{ textAlign: 'center', minWidth: '52px' }}>
+      <div style={{
+        fontFamily: 'IBM Plex Mono', fontSize: 'clamp(1.5rem, 3vw, 2.1rem)',
+        fontWeight: 900, color: '#FFB800', lineHeight: 1,
+        background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.25)',
+        borderRadius: '8px', padding: '8px 10px', minWidth: '52px',
+        textAlign: 'center', display: 'block',
+        boxShadow: '0 0 20px rgba(255,184,0,0.08)',
+      }}>
+        {String(value).padStart(2, '0')}
+      </div>
+      <div style={{ fontSize: '0.6rem', color: '#6A6A88', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: '5px' }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+// Mock leaderboard preview data for landing page
+const PREVIEW_LEADERS = [
+  { rank: 1, name: 'SharpDave',   record: '18-7',  units: '+14.2', emoji: '🏆' },
+  { rank: 2, name: 'BetKingJon',  record: '21-11', units: '+11.8', emoji: '🔥' },
+  { rank: 3, name: 'EdgeFinder',  record: '15-6',  units: '+9.4',  emoji: '💎' },
+  { rank: 4, name: 'ZeroJuice',   record: '12-5',  units: '+7.1',  emoji: '⚡' },
+  { rank: 5, name: '???',         record: '—',     units: '—',     emoji: '🐐', you: true },
+];
+
+function TournamentBanner({ onCTAClick }) {
+  const countdown = useTournamentCountdown();
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #0D0D18 0%, #111120 50%, #0A0A14 100%)',
+      border: '1px solid rgba(255,184,0,0.3)',
+      borderRadius: '20px',
+      overflow: 'hidden',
+      position: 'relative',
+      boxShadow: '0 0 60px rgba(255,184,0,0.06), 0 20px 40px rgba(0,0,0,0.4)',
+    }}>
+      {/* Shimmer top accent */}
+      <div style={{
+        height: '3px',
+        background: 'linear-gradient(90deg, transparent 0%, #FFB800 25%, #FFD700 50%, #FF9500 75%, transparent 100%)',
+        backgroundSize: '200% auto',
+        animation: 'prize-shimmer 2.5s linear infinite',
+      }} />
+
+      <div style={{ padding: 'clamp(1.5rem, 4vw, 2.5rem)' }}>
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '2rem' }}>
+          <div style={{ flex: '1 1 280px' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              background: 'rgba(255,184,0,0.12)', border: '1px solid rgba(255,184,0,0.35)',
+              borderRadius: '20px', padding: '3px 12px', marginBottom: '12px',
+              fontSize: '0.68rem', fontWeight: 800, color: '#FFB800',
+              textTransform: 'uppercase', letterSpacing: '0.12em',
+              animation: 'pulse-glow 2.5s ease-in-out infinite',
+            }}>
+              🏆 LIVE TOURNAMENT
+            </div>
+            <h2 style={{
+              fontSize: 'clamp(1.5rem, 4vw, 2.3rem)', fontWeight: 900, lineHeight: 1.15,
+              color: '#EDEDF5', letterSpacing: '-0.03em', margin: '0 0 10px',
+            }}>
+              GOAT BOT Pick Challenge
+            </h2>
+            <p style={{ color: '#8888AA', fontSize: '0.9rem', lineHeight: 1.6, margin: 0, maxWidth: '460px' }}>
+              Compete against the sharpest bettors on the platform. Log your picks, build your record, and climb the leaderboard.
+              Top performers earn prizes — and bragging rights money can't buy.
+            </p>
+          </div>
+
+          {/* Prize pool */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(255,184,0,0.12), rgba(255,149,0,0.06))',
+            border: '1px solid rgba(255,184,0,0.25)',
+            borderRadius: '14px', padding: '1.25rem 1.5rem', textAlign: 'center', flexShrink: 0,
+            minWidth: '160px',
+            boxShadow: '0 0 30px rgba(255,184,0,0.06)',
+          }}>
+            <div style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>
+              Prize Pool
+            </div>
+            <div style={{
+              fontFamily: 'IBM Plex Mono', fontSize: '2.2rem', fontWeight: 900,
+              color: '#FFB800', lineHeight: 1, marginBottom: '4px',
+            }}>
+              $500
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#6A6A88' }}>+ Exclusive Perks</div>
+          </div>
+        </div>
+
+        {/* Countdown + leaderboard preview */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+
+          {/* Countdown */}
+          <div>
+            <div style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '12px' }}>
+              {countdown.ended ? 'Tournament Ended' : 'Time Remaining'}
+            </div>
+            {!countdown.ended ? (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <CountdownUnit value={countdown.days}    label="Days"  />
+                <span style={{ color: '#FFB800', fontSize: '1.8rem', fontWeight: 900, alignSelf: 'center', lineHeight: 1, marginBottom: '18px' }}>:</span>
+                <CountdownUnit value={countdown.hours}   label="Hours" />
+                <span style={{ color: '#FFB800', fontSize: '1.8rem', fontWeight: 900, alignSelf: 'center', lineHeight: 1, marginBottom: '18px' }}>:</span>
+                <CountdownUnit value={countdown.minutes} label="Mins"  />
+                <span style={{ color: '#FFB800', fontSize: '1.8rem', fontWeight: 900, alignSelf: 'center', lineHeight: 1, marginBottom: '18px' }}>:</span>
+                <CountdownUnit value={countdown.seconds} label="Secs"  />
+              </div>
+            ) : (
+              <div style={{ color: '#FFB800', fontWeight: 700 }}>Results being tabulated…</div>
+            )}
+
+            <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: '#666', lineHeight: 1.7 }}>
+              <div>📅 Season-long competition</div>
+              <div>✓ Free to enter — just sign up</div>
+              <div>⚡ Verified picks earn bonus Sharp Score</div>
+            </div>
+          </div>
+
+          {/* Leaderboard preview */}
+          <div>
+            <div style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '12px' }}>
+              Current Standings (Preview)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              {PREVIEW_LEADERS.map(p => (
+                <div key={p.rank} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '7px 10px', borderRadius: '7px',
+                  background: p.you ? 'rgba(255,184,0,0.08)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${p.you ? 'rgba(255,184,0,0.25)' : 'rgba(255,255,255,0.05)'}`,
+                  opacity: p.you ? 1 : 1,
+                }}>
+                  <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: '#555', minWidth: '20px' }}>
+                    #{p.rank}
+                  </span>
+                  <span style={{ fontSize: '0.9rem' }}>{p.emoji}</span>
+                  <span style={{
+                    flex: 1, fontSize: '0.82rem', fontWeight: 600,
+                    color: p.you ? '#FFB800' : '#EDEDF5',
+                    fontStyle: p.you ? 'italic' : 'normal',
+                  }}>
+                    {p.you ? 'You? 👈' : p.name}
+                  </span>
+                  <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: '#888' }}>{p.record}</span>
+                  <span style={{
+                    fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: 700,
+                    color: p.you ? '#666' : '#4ade80',
+                  }}>
+                    {p.units}u
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            onClick={onCTAClick}
+            style={{
+              background: 'linear-gradient(135deg, #FFB800, #FF9500)',
+              border: 'none', borderRadius: '10px', padding: '12px 28px',
+              color: '#000', fontWeight: 800, fontSize: '0.9rem',
+              cursor: 'pointer', fontFamily: 'inherit',
+              boxShadow: '0 4px 20px rgba(255,184,0,0.3)',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(255,184,0,0.45)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(255,184,0,0.3)'; }}
+          >
+            🏆 Enter the Tournament — Free
+          </button>
+          <span style={{ fontSize: '0.75rem', color: '#6A6A88' }}>
+            No credit card. No entry fee. Just sharp picks.
+          </span>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes pulse-glow {
+          0%, 100% { box-shadow: 0 0 8px rgba(255,184,0,0.2); }
+          50%       { box-shadow: 0 0 18px rgba(255,184,0,0.5); }
+        }
+        @keyframes prize-shimmer {
+          from { background-position: 200% center; }
+          to   { background-position: -200% center; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ── Feature card with hover glow ─────────────────────────────────────────────
 const FEATURES = [
   { icon: '📡', label: 'Live Scores', desc: 'MLB, NBA, NFL, NHL — real-time scoreboard with smart context', color: '#FF6B35' },
@@ -453,6 +677,19 @@ export default function AuthPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          TOURNAMENT SECTION
+      ═══════════════════════════════════════════════════════════ */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        maxWidth: '900px', margin: '0 auto',
+        padding: '0 1.5rem 4rem',
+      }}>
+        <TournamentBanner onCTAClick={() => {
+          document.getElementById('auth-section')?.scrollIntoView({ behavior: 'smooth' });
+        }} />
       </div>
 
       {/* ═══════════════════════════════════════════════════════════

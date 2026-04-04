@@ -12,6 +12,7 @@ import AnalyzerTab      from './tabs/AnalyzerTab';
 import LeaderboardTab    from './tabs/LeaderboardTab';
 import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
 import AdminTab          from './tabs/AdminTab';
+import ProfileModal      from './ProfileModal';
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
 
@@ -114,7 +115,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
     start_date: new Date().toISOString().split('T')[0],
     bankroll: 100,
   });
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileNavOpen,   setMobileNavOpen]   = useState(false);
+  const [profileOpen,     setProfileOpen]     = useState(false);
+  const [currentUser,     setCurrentUser]     = useState(user);
   // Preserved state for cross-tab navigation
   const [goatPrompt, setGoatPrompt] = useState('');
   const [goatReport, setGoatReport] = useState(null);
@@ -144,13 +147,14 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
       <Sidebar
         activeTab={activeTab}
         setActiveTab={(tab) => { setActiveTab(tab); setMobileNavOpen(false); }}
-        user={user}
+        user={currentUser}
         isDemo={isDemo}
         contest={contest}
         picks={picks}
         onSignOut={handleSignOut}
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
+        onOpenProfile={() => setProfileOpen(true)}
       />
 
       {/* Main */}
@@ -215,16 +219,17 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             <LeaderboardTab user={user} isDemo={isDemo} />
           </div>
           <div style={{ display: activeTab === 'featured' ? 'block' : 'none' }}>
-            <FeaturedGamesTab onAnalyze={(prompt, savedReport) => {
-              if (savedReport) {
-                setGoatReport(savedReport);
-                setGoatPrompt('');
-              } else {
+            <FeaturedGamesTab
+              user={user}
+              picks={picks}
+              setPicks={setPicks}
+              isDemo={isDemo}
+              onAnalyze={(prompt) => {
                 setGoatPrompt(prompt);
                 setGoatReport(null);
-              }
-              setActiveTab('analyzer');
-            }} />
+                setActiveTab('analyzer');
+              }}
+            />
           </div>
           {user?.email?.toLowerCase() === ADMIN_EMAIL && (
             <div style={{ display: activeTab === 'admin' ? 'block' : 'none' }}>
@@ -233,6 +238,18 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           )}
         </main>
       </div>
+
+      {/* Profile modal */}
+      {profileOpen && !isDemo && (
+        <ProfileModal
+          user={currentUser}
+          onClose={() => setProfileOpen(false)}
+          onUpdated={(updatedUser) => {
+            setCurrentUser(updatedUser);
+            setProfileOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

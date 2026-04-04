@@ -1,0 +1,535 @@
+'use client';
+import { useState, useRef, useCallback } from 'react';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+// Rate limit windows (milliseconds)
+const LIMITS = {
+  username:   7  * 24 * 60 * 60 * 1000, // 7 days
+  email:      30 * 24 * 60 * 60 * 1000, // 30 days
+  phone:       7 * 24 * 60 * 60 * 1000, // 7 days
+};
+
+function msToReadable(ms) {
+  const days  = Math.floor(ms / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  if (days > 0) return `${days}d ${hours}h`;
+  const mins = Math.floor((ms % (60 * 60 * 1000)) / 60000);
+  return `${hours}h ${mins}m`;
+}
+
+function getTimeUntilAllowed(lastChangedAt, limitMs) {
+  if (!lastChangedAt) return 0;
+  const elapsed = Date.now() - new Date(lastChangedAt).getTime();
+  return Math.max(0, limitMs - elapsed);
+}
+
+// ── Avatar display helpers ──────────────────────────────────────────────────
+function avatarUrl(userId) {
+  if (!SUPABASE_URL || !userId) return null;
+  return `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg`;
+}
+
+// ── Section separator ───────────────────────────────────────────────────────
+function SectionLabel({ children }) {
+  return (
+    <div style={{
+      fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-muted)',
+      textTransform: 'uppercase', letterSpacing: '0.1em',
+      marginBottom: '10px', marginTop: '4px',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// ── Input row ───────────────────────────────────────────────────────────────
+function FieldRow({ label, children, hint, locked, lockedMsg }) {
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+        <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{label}</label>
+        {locked && lockedMsg && (
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '2px 7px', borderRadius: '4px' }}>
+            🔒 {lockedMsg}
+          </span>
+        )}
+      </div>
+      {hint && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '6px' }}>{hint}</div>}
+      {children}
+    </div>
+  );
+}
+
+// ── Main modal ──────────────────────────────────────────────────────────────
+export default function ProfileModal({ user, onClose, onUpdated }) {
+  const meta = user?.user_metadata || {};
+
+  // Derive current values
+  const userId    = user?.id;
+  const currentUsername = meta.username || user?.email?.split('@')[0] || '';
+  const currentEmail    = user?.email || '';
+  const currentPhone    = meta.phone || '';
+  const currentAvatar   = meta.avatar_url || null;
+
+  // Rate-limit timestamps (stored in user_metadata)
+  const usernameChangedAt = meta.username_changed_at || null;
+  const emailChangedAt    = meta.email_changed_at    || null;
+  const phoneChangedAt    = meta.phone_changed_at    || null;
+
+  const usernameWait = getTimeUntilAllowed(usernameChangedAt, LIMITS.username);
+  const emailWait    = getTimeUntilAllowed(emailChangedAt,    LIMITS.email);
+  const phoneWait    = getTimeUntilAllowed(phoneChangedAt,    LIMITS.phone);
+
+  // Form state
+  const [username, setUsername] = useState(currentUsername);
+  const [email,    setEmail]    = useState(currentEmail);
+  const [phone,    setPhone]    = useState(currentPhone);
+
+  // Avatar state
+  const [avatarPreview,    setAvatarPreview]    = useState(currentAvatar ? avatarUrl(userId) : null);
+  const [avatarFile,       setAvatarFile]       = useState(null);
+  const [avatarUploading,  setAvatarUploading]  = useState(false);
+
+  // UI state
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState(null);
+  const [success,  setSuccess]  = useState(null);
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'security'
+
+  const fileInputRef = useRef(null);
+
+  // ── Avatar pick ──────────────────────────────────────────────────────────
+  function handleAvatarChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Avatar must be under 2 MB.');
+      return;
+    }
+    if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)) {
+      setError('Avatar must be a JPEG, PNG, WebP, or GIF.');
+      return;
+    }
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+    setError(null);
+  }
+
+  // ── Save profile ─────────────────────────────────────────────────────────
+  async function handleSave() {
+    setError(null);
+    setSuccess(null);
+    setSaving(true);
+
+    try {
+      // 1. Upload avatar if new file selected
+      let newAvatarUrl = currentAvatar;
+      if (avatarFile) {
+        setAvatarUploading(true);
+        const uploadRes = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          headers: { 'Content-Type': avatarFile.type },
+          body: avatarFile,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || 'Avatar upload failed');
+        newAvatarUrl = uploadData.avatar_url;
+        setAvatarUploading(false);
+      }
+
+      // 2. Build update payload (only changed fields)
+      const updates = {};
+      const now = new Date().toISOString();
+
+      if (username !== currentUsername) {
+        if (usernameWait > 0) throw new Error(`Username locked for ${msToReadable(usernameWait)}.`);
+        if (username.trim().length < 3) throw new Error('Username must be at least 3 characters.');
+        if (username.trim().length > 24) throw new Error('Username must be 24 characters or less.');
+        if (!/^[a-zA-Z0-9_\-. ]+$/.test(username.trim())) throw new Error('Username can only contain letters, numbers, spaces, underscores, hyphens, and dots.');
+        updates.username = username.trim();
+        updates.username_changed_at = now;
+      }
+
+      if (email !== currentEmail) {
+        if (emailWait > 0) throw new Error(`Email locked for ${msToReadable(emailWait)}.`);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Invalid email address.');
+        updates.email = email.trim();
+        updates.email_changed_at = now;
+      }
+
+      if (phone !== currentPhone) {
+        if (phoneWait > 0) throw new Error(`Phone locked for ${msToReadable(phoneWait)}.`);
+        const cleaned = phone.replace(/\D/g, '');
+        if (phone && cleaned.length < 10) throw new Error('Enter a valid phone number (10+ digits).');
+        updates.phone = phone.trim();
+        updates.phone_changed_at = now;
+      }
+
+      if (newAvatarUrl !== currentAvatar) {
+        updates.avatar_url = newAvatarUrl;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setSuccess('No changes to save.');
+        setSaving(false);
+        return;
+      }
+
+      // 3. Send to API
+      const res  = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Update failed');
+
+      setSuccess('Profile updated! Some changes (like email) may require confirmation.');
+      setAvatarFile(null);
+      onUpdated?.(data.user);
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+      setAvatarUploading(false);
+    }
+  }
+
+  // ── Password change ───────────────────────────────────────────────────────
+  const [pwSending, setPwSending]   = useState(false);
+  const [pwSuccess, setPwSuccess]   = useState(null);
+  const [pwError,   setPwError]     = useState(null);
+
+  async function handlePasswordReset() {
+    setPwSending(true); setPwError(null); setPwSuccess(null);
+    try {
+      const res  = await fetch('/api/profile/reset-password', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send reset email');
+      setPwSuccess(`Reset link sent to ${currentEmail}`);
+    } catch (err) {
+      setPwError(err.message);
+    } finally {
+      setPwSending(false);
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const inputStyle = (disabled) => ({
+    width: '100%', padding: '8px 11px',
+    background: disabled ? 'var(--bg-base)' : 'var(--bg-elevated)',
+    border: `1px solid ${disabled ? 'var(--border)' : 'rgba(255,255,255,0.1)'}`,
+    borderRadius: '7px', color: disabled ? 'var(--text-muted)' : 'var(--text-primary)',
+    fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none',
+    boxSizing: 'border-box',
+    cursor: disabled ? 'not-allowed' : 'text',
+    transition: 'border 0.15s',
+  });
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1rem',
+        animation: 'fadeIn 0.15s ease',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: '14px', width: '100%', maxWidth: '440px',
+        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        animation: 'slideUp 0.2s cubic-bezier(0.4,0,0.2,1)',
+      }}>
+
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '1.1rem 1.4rem', borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>My Profile</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '1px' }}>{currentEmail}</div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem', padding: '4px 7px', borderRadius: '6px' }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Tab bar */}
+        <div style={{
+          display: 'flex', gap: '0', padding: '0 1.4rem', flexShrink: 0,
+          borderBottom: '1px solid var(--border)',
+        }}>
+          {['profile','security'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: '10px 14px 8px', fontSize: '0.78rem', fontWeight: 600,
+                color: activeTab === tab ? 'var(--gold)' : 'var(--text-muted)',
+                borderBottom: `2px solid ${activeTab === tab ? 'var(--gold)' : 'transparent'}`,
+                transition: 'all 0.15s',
+                textTransform: 'capitalize',
+              }}
+            >
+              {tab === 'profile' ? '👤 Profile' : '🔒 Security'}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.4rem' }}>
+
+          {activeTab === 'profile' && (
+            <>
+              {/* Avatar */}
+              <SectionLabel>Avatar</SectionLabel>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    width: '68px', height: '68px', borderRadius: '50%',
+                    background: 'var(--bg-elevated)', border: '2px solid var(--border)',
+                    overflow: 'hidden', cursor: 'pointer', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    position: 'relative',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--gold)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  title="Click to upload avatar"
+                >
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={() => setAvatarPreview(null)}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '1.6rem', color: 'var(--text-muted)' }}>
+                      {currentUsername[0]?.toUpperCase() || '?'}
+                    </span>
+                  )}
+                  {/* Overlay hint */}
+                  <div style={{
+                    position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    opacity: 0, transition: 'opacity 0.15s', borderRadius: '50%',
+                    fontSize: '1.2rem',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={e => e.currentTarget.style.opacity = 0}
+                  >
+                    📷
+                  </div>
+                </div>
+                <div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                      borderRadius: '7px', padding: '6px 13px', cursor: 'pointer',
+                      color: 'var(--text-secondary)', fontSize: '0.78rem', fontFamily: 'inherit',
+                      display: 'block', marginBottom: '5px',
+                    }}
+                  >
+                    {avatarFile ? '✓ Image selected' : 'Upload photo'}
+                  </button>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    JPEG, PNG, WebP or GIF · max 2 MB<br />Can update anytime
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: 'none' }}
+                  onChange={handleAvatarChange}
+                />
+              </div>
+
+              {/* Username */}
+              <SectionLabel>Display Name</SectionLabel>
+              <FieldRow
+                label="Username"
+                hint="Shown on the Leaderboard and in your picks. 3–24 characters."
+                locked={usernameWait > 0}
+                lockedMsg={usernameWait > 0 ? `changes in ${msToReadable(usernameWait)}` : null}
+              >
+                <input
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  disabled={usernameWait > 0}
+                  placeholder="e.g. SharpBettorJon"
+                  maxLength={24}
+                  style={inputStyle(usernameWait > 0)}
+                  onFocus={e => { if (!usernameWait) e.target.style.borderColor = 'var(--gold)'; }}
+                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                />
+                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
+                  {username.length}/24 · Can change every 7 days
+                </div>
+              </FieldRow>
+
+              {/* Email */}
+              <SectionLabel>Contact</SectionLabel>
+              <FieldRow
+                label="Email"
+                hint="A confirmation will be sent to the new address."
+                locked={emailWait > 0}
+                lockedMsg={emailWait > 0 ? `changes in ${msToReadable(emailWait)}` : null}
+              >
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  disabled={emailWait > 0}
+                  placeholder="you@example.com"
+                  style={inputStyle(emailWait > 0)}
+                  onFocus={e => { if (!emailWait) e.target.style.borderColor = 'var(--gold)'; }}
+                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                />
+                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Can change every 30 days
+                </div>
+              </FieldRow>
+
+              <FieldRow
+                label="Phone (optional)"
+                hint="For future SMS alerts and 2FA. Not shown publicly."
+                locked={phoneWait > 0}
+                lockedMsg={phoneWait > 0 ? `changes in ${msToReadable(phoneWait)}` : null}
+              >
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  disabled={phoneWait > 0}
+                  placeholder="+1 555-555-5555"
+                  style={inputStyle(phoneWait > 0)}
+                  onFocus={e => { if (!phoneWait) e.target.style.borderColor = 'var(--gold)'; }}
+                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                />
+                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Can change every 7 days
+                </div>
+              </FieldRow>
+            </>
+          )}
+
+          {activeTab === 'security' && (
+            <>
+              <SectionLabel>Password</SectionLabel>
+              <div style={{
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: '10px', padding: '1rem 1.1rem', marginBottom: '20px',
+              }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  Change Password
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: 1.6 }}>
+                  We'll send a secure reset link to <strong style={{ color: 'var(--text-secondary)' }}>{currentEmail}</strong>. The link expires in 1 hour.
+                </div>
+                <button
+                  onClick={handlePasswordReset}
+                  disabled={pwSending}
+                  style={{
+                    background: 'var(--bg-overlay)', border: '1px solid var(--border)',
+                    borderRadius: '7px', padding: '7px 14px', cursor: pwSending ? 'not-allowed' : 'pointer',
+                    color: 'var(--text-secondary)', fontSize: '0.8rem', fontFamily: 'inherit',
+                    opacity: pwSending ? 0.6 : 1,
+                  }}
+                >
+                  {pwSending ? 'Sending…' : '📧 Send Reset Link'}
+                </button>
+                {pwSuccess && <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#4ade80' }}>✓ {pwSuccess}</div>}
+                {pwError   && <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--red)' }}>✗ {pwError}</div>}
+              </div>
+
+              <SectionLabel>Account Info</SectionLabel>
+              <div style={{
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: '10px', padding: '1rem 1.1rem',
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>User ID</span>
+                    <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{userId?.slice(0, 8)}…</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Email verified</span>
+                    <span style={{ color: meta.email_verified ? '#4ade80' : 'var(--gold)' }}>
+                      {meta.email_verified ? '✓ Verified' : '⚠ Unverified'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Member since</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Status messages */}
+          {error   && <div style={{ marginTop: '12px', padding: '9px 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', color: 'var(--red)', fontSize: '0.78rem' }}>✗ {error}</div>}
+          {success && <div style={{ marginTop: '12px', padding: '9px 12px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '7px', color: '#4ade80', fontSize: '0.78rem' }}>✓ {success}</div>}
+        </div>
+
+        {/* Footer */}
+        {activeTab === 'profile' && (
+          <div style={{
+            padding: '1rem 1.4rem', borderTop: '1px solid var(--border)',
+            display: 'flex', gap: '8px', justifyContent: 'flex-end',
+            flexShrink: 0,
+          }}>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'none', border: '1px solid var(--border)', borderRadius: '7px',
+                padding: '8px 16px', cursor: 'pointer', color: 'var(--text-muted)',
+                fontSize: '0.82rem', fontFamily: 'inherit',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || avatarUploading}
+              style={{
+                background: 'var(--gold)', border: 'none', borderRadius: '7px',
+                padding: '8px 20px', cursor: saving ? 'not-allowed' : 'pointer',
+                color: '#000', fontWeight: 700, fontSize: '0.82rem', fontFamily: 'inherit',
+                opacity: saving ? 0.7 : 1, transition: 'opacity 0.15s',
+              }}
+            >
+              {avatarUploading ? 'Uploading…' : saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
