@@ -130,17 +130,18 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
           cursor: collapsed ? 'pointer' : 'default',
         }}
       >
-        {/* Icon — shown always */}
-        <img
-          src="/icon.svg"
-          alt="BetOS"
-          style={{ width: collapsed ? '32px' : '28px', height: collapsed ? '32px' : '28px', flexShrink: 0 }}
-        />
-        {!collapsed && (
+        {/* Collapsed: icon only. Expanded: full horizontal lockup (logo.svg already contains the icon) */}
+        {collapsed ? (
+          <img
+            src="/icon.svg"
+            alt="BetOS"
+            style={{ width: '32px', height: '32px', flexShrink: 0 }}
+          />
+        ) : (
           <img
             src="/logo.svg"
             alt="BetOS"
-            style={{ height: '36px', width: 'auto', marginLeft: '2px' }}
+            style={{ height: '36px', width: 'auto', flexShrink: 0 }}
           />
         )}
         <button

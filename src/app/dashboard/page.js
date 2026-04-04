@@ -82,10 +82,10 @@ function BetOSSplash({ dataReady, onComplete }) {
         />
       </div>
 
-      {/* BetOS wordmark via logo SVG */}
+      {/* BetOS wordmark — text only, icon is already shown above */}
       <div style={{ marginBottom: '0.35rem' }}>
         <img
-          src="/logo.svg"
+          src="/wordmark.svg"
           alt="BetOS"
           style={{ height: 'clamp(36px, 8vw, 54px)', width: 'auto' }}
         />

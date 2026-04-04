@@ -450,8 +450,8 @@ export default function AuthPage() {
           gap: '8px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            <img src="/icon.svg" alt="BetOS" style={{ height: 'clamp(22px, 5vw, 30px)', width: 'auto' }} />
-            <img src="/logo.svg" alt="BetOS" style={{ height: 'clamp(18px, 4vw, 26px)', width: 'auto' }} />
+            {/* logo.svg is the full horizontal lockup (icon + wordmark) */}
+            <img src="/logo.svg" alt="BetOS" style={{ height: 'clamp(26px, 5vw, 36px)', width: 'auto' }} />
             <span style={{
               fontSize: '0.5rem', color: '#FFB800', border: '1px solid rgba(255,184,0,0.3)',
               borderRadius: '4px', padding: '1px 5px', fontWeight: 700, letterSpacing: '0.08em',
