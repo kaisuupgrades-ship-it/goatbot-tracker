@@ -216,7 +216,7 @@ function TournamentBanner({ onCTAClick }) {
               fontFamily: 'IBM Plex Mono', fontSize: '2.2rem', fontWeight: 900,
               color: '#FFB800', lineHeight: 1, marginBottom: '4px',
             }}>
-              $500
+              $100
             </div>
             <div style={{ fontSize: '0.7rem', color: '#6A6A88' }}>+ Exclusive Perks</div>
           </div>
