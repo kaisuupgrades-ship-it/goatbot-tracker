@@ -111,6 +111,24 @@ function parseResponsesOutput(resp) {
   return JSON.stringify(resp).substring(0, 500);
 }
 
+/**
+ * Helper: fetch with a timeout via AbortController.
+ * Returns { response, timedOut } — on timeout, response is null.
+ */
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    return { response: res, timedOut: false };
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') return { response: null, timedOut: true };
+    throw err;
+  }
+}
+
 export async function POST(req) {
   if (!XAI_API_KEY) {
     return NextResponse.json({ error: 'XAI_API_KEY not configured on server. Add it to .env.local' }, { status: 500 });
@@ -122,36 +140,49 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    // Use /v1/responses with grok-4 for live web search
-    const payload = {
-      model: 'grok-4',
-      instructions: SYSTEM_PROMPT,
-      input: [{ role: 'user', content: prompt }],
-      tools: [{ type: 'web_search' }],
-      max_output_tokens: 2000,
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${XAI_API_KEY}`,
     };
 
-    const response = await fetch(`${XAI_BASE}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${XAI_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      // Fallback to grok-3 on any failure (including 410 Gone, 404, 400, 5xx)
-      // grok-4 /responses may be deprecated — grok-3 /chat/completions is always reliable
-      const shouldFallback = response.status >= 400; // fall back on ANY non-2xx
-      if (shouldFallback) {
-        const fallback = await fetch(`${XAI_BASE}/chat/completions`, {
+    // ── Tier 1: grok-4 + web search (25s budget) ─────────────────────────
+    // grok-4 /responses with web search is the best quality but can be slow.
+    // Give it 25 seconds — if it doesn't finish, fall through to grok-3.
+    try {
+      const { response, timedOut } = await fetchWithTimeout(
+        `${XAI_BASE}/responses`,
+        {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${XAI_API_KEY}`,
-          },
+          headers,
+          body: JSON.stringify({
+            model: 'grok-4',
+            instructions: SYSTEM_PROMPT,
+            input: [{ role: 'user', content: prompt }],
+            tools: [{ type: 'web_search' }],
+            max_output_tokens: 2000,
+          }),
+        },
+        25_000,
+      );
+      if (!timedOut && response?.ok) {
+        const data = await response.json();
+        const result = parseResponsesOutput(data);
+        return NextResponse.json({ result, model: 'grok-4' });
+      }
+      if (timedOut) console.log('[goatbot] grok-4 timed out after 25s, falling back to grok-3');
+      else console.log('[goatbot] grok-4 returned', response?.status, '— falling back to grok-3');
+    } catch (err) {
+      console.log('[goatbot] grok-4 error:', err.message, '— falling back');
+    }
+
+    // ── Tier 2: grok-3 /chat/completions (20s budget) ────────────────────
+    // Much faster and very reliable.
+    try {
+      const { response, timedOut } = await fetchWithTimeout(
+        `${XAI_BASE}/chat/completions`,
+        {
+          method: 'POST',
+          headers,
           body: JSON.stringify({
             model: 'grok-3',
             messages: [
@@ -161,20 +192,32 @@ export async function POST(req) {
             temperature: 0.7,
             max_tokens: 2000,
           }),
-        });
-        if (fallback.ok) {
-          const fbData = await fallback.json();
-          return NextResponse.json({ result: fbData.choices[0].message.content, model: 'grok-3' });
-        }
+        },
+        20_000,
+      );
+      if (!timedOut && response?.ok) {
+        const data = await response.json();
+        return NextResponse.json({ result: data.choices[0].message.content, model: 'grok-3' });
       }
+      if (timedOut) console.log('[goatbot] grok-3 timed out after 20s, falling back to Claude');
+      else console.log('[goatbot] grok-3 returned', response?.status, '— falling back to Claude');
+    } catch (err) {
+      console.log('[goatbot] grok-3 error:', err.message, '— falling back');
+    }
 
-      // Last resort: Claude (no web search, but still analytical)
-      const claudeKey = process.env.ANTHROPIC_API_KEY;
-      if (claudeKey) {
-        try {
-          const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+    // ── Tier 3: Claude (10s budget) ──────────────────────────────────────
+    const claudeKey = process.env.ANTHROPIC_API_KEY;
+    if (claudeKey) {
+      try {
+        const { response, timedOut } = await fetchWithTimeout(
+          'https://api.anthropic.com/v1/messages',
+          {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': claudeKey,
+              'anthropic-version': '2023-06-01',
+            },
             body: JSON.stringify({
               model: 'claude-sonnet-4-5',
               system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is currently unavailable. Base your analysis on the provided odds data and your training knowledge. Flag anything that should be verified live.]',
@@ -182,20 +225,17 @@ export async function POST(req) {
               max_tokens: 2000,
               temperature: 0.7,
             }),
-          });
-          if (claudeRes.ok) {
-            const claudeData = await claudeRes.json();
-            return NextResponse.json({ result: claudeData.content?.[0]?.text || '', model: 'claude-sonnet-4-5 (no live search)' });
-          }
-        } catch { /* fall through */ }
-      }
-
-      return NextResponse.json({ error: errData.error?.message || `HTTP ${response.status}` }, { status: response.status });
+          },
+          10_000,
+        );
+        if (!timedOut && response?.ok) {
+          const data = await response.json();
+          return NextResponse.json({ result: data.content?.[0]?.text || '', model: 'claude-sonnet-4-5 (no live search)' });
+        }
+      } catch { /* fall through */ }
     }
 
-    const data = await response.json();
-    const result = parseResponsesOutput(data);
-    return NextResponse.json({ result, model: 'grok-4' });
+    return NextResponse.json({ error: 'All AI providers timed out or failed. Please try again.' }, { status: 503 });
   } catch (err) {
     console.error('BetOS API error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
