@@ -112,6 +112,14 @@ function UsersPanel({ userEmail }) {
   const [search, setSearch] = useState('');
   const [actionMsg, setActionMsg] = useState('');
 
+  // Create user form
+  const [showCreate, setShowCreate] = useState(false);
+  const [newEmail, setNewEmail]     = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [creating, setCreating]     = useState(false);
+  const [createMsg, setCreateMsg]   = useState('');
+
   const load = useCallback(() => {
     setLoading(true);
     fetch(`/api/admin?action=users&userEmail=${encodeURIComponent(userEmail)}`)
@@ -136,6 +144,24 @@ function UsersPanel({ userEmail }) {
     setTimeout(() => setActionMsg(''), 3000);
   }
 
+  async function handleCreateUser(e) {
+    e.preventDefault();
+    setCreating(true); setCreateMsg('');
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create_user', userEmail, newEmail, newPassword, newUsername }),
+    });
+    const d = await res.json();
+    setCreating(false);
+    if (d.error) { setCreateMsg(`Error: ${d.error}`); return; }
+    setCreateMsg(`✓ Account created for ${newEmail}`);
+    setNewEmail(''); setNewPassword(''); setNewUsername('');
+    setShowCreate(false);
+    load();
+    setTimeout(() => setCreateMsg(''), 5000);
+  }
+
   const users = (data?.users || []).filter(u =>
     !search || (u.username || '').toLowerCase().includes(search.toLowerCase()) || (u.id || '').includes(search)
   );
@@ -147,16 +173,96 @@ function UsersPanel({ userEmail }) {
       {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
       {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
           placeholder="Search username or ID…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ maxWidth: '320px' }}
+          style={{ maxWidth: '280px' }}
         />
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{users.length} users</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', flex: 1 }}>{users.length} users</span>
+        <button
+          onClick={() => { setShowCreate(v => !v); setCreateMsg(''); }}
+          style={{
+            padding: '6px 14px', borderRadius: '7px', border: 'none', cursor: 'pointer',
+            background: showCreate ? 'rgba(255,184,0,0.1)' : 'linear-gradient(135deg, #FFB800, #FF9500)',
+            color: showCreate ? '#FFB800' : '#000',
+            fontSize: '0.78rem', fontWeight: 700, fontFamily: 'inherit',
+            border: showCreate ? '1px solid rgba(255,184,0,0.3)' : 'none',
+          }}
+        >
+          {showCreate ? '✕ Cancel' : '+ Create User'}
+        </button>
       </div>
+
+      {/* Create User Form */}
+      {showCreate && (
+        <form onSubmit={handleCreateUser} style={{
+          background: 'var(--bg-elevated)', border: '1px solid rgba(255,184,0,0.2)',
+          borderRadius: '10px', padding: '1rem', marginBottom: '1rem',
+          display: 'flex', flexDirection: 'column', gap: '0.75rem',
+        }}>
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#FFB800', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>
+            Manually add a user account
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 180px' }}>
+              <label style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>Email *</label>
+              <input
+                className="input" type="email" placeholder="friend@example.com" required
+                value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ flex: '1 1 160px' }}>
+              <label style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>Username</label>
+              <input
+                className="input" type="text" placeholder="SharpBettor"
+                value={newUsername} onChange={e => setNewUsername(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ flex: '1 1 160px' }}>
+              <label style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>Password *</label>
+              <input
+                className="input" type="password" placeholder="min 6 chars" required minLength={6}
+                value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+          {createMsg && (
+            <div style={{
+              padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.78rem',
+              background: createMsg.startsWith('Error') ? 'rgba(248,113,113,0.07)' : 'rgba(74,222,128,0.07)',
+              color: createMsg.startsWith('Error') ? '#f87171' : '#4ade80',
+              border: `1px solid ${createMsg.startsWith('Error') ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
+            }}>
+              {createMsg}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="submit" disabled={creating}
+              style={{
+                padding: '6px 18px', borderRadius: '7px', border: 'none', cursor: creating ? 'wait' : 'pointer',
+                background: creating ? '#333' : 'linear-gradient(135deg, #FFB800, #FF9500)',
+                color: creating ? '#666' : '#000', fontSize: '0.8rem', fontWeight: 800, fontFamily: 'inherit',
+              }}
+            >{creating ? 'Creating…' : 'Create Account'}</button>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', alignSelf: 'center' }}>
+              They can log in immediately with these credentials.
+            </div>
+          </div>
+        </form>
+      )}
+
+      {createMsg && !showCreate && (
+        <div style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.78rem', background: 'rgba(74,222,128,0.07)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.2)', marginBottom: '0.75rem' }}>
+          {createMsg}
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {users.map(u => (

@@ -802,52 +802,82 @@ function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries
                     </span>
                   )}
                 </div>
-                {/* Right side: score (live/final) OR moneyline odds (pre-game) */}
-                {score != null ? (
-                  <span style={{
-                    fontWeight: win ? 800 : 400, fontSize: '1.05rem',
-                    color: win ? 'var(--text-primary)' : 'var(--text-muted)',
-                    fontFamily: 'IBM Plex Mono, monospace', minWidth: '24px', textAlign: 'right', flexShrink: 0,
-                  }}>
-                    {score}
-                  </span>
-                ) : gameState.state === 'pre' && ml != null ? (
-                  <span style={{
-                    fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.85rem', fontWeight: 700,
-                    color: ml > 0 ? 'var(--green)' : 'var(--text-secondary)',
-                    flexShrink: 0, minWidth: '48px', textAlign: 'right',
-                    letterSpacing: '-0.02em',
-                  }}>
-                    {formatOdds(ml)}
-                  </span>
-                ) : null}
+                {/* Right side: score (live/final) + moneyline (pre/live) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  {/* Moneyline — show for pre AND live */}
+                  {(gameState.state === 'pre' || gameState.state === 'live') && ml != null && (
+                    <span style={{
+                      fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.78rem', fontWeight: 700,
+                      color: ml > 0 ? 'var(--green)' : 'var(--text-secondary)',
+                      minWidth: '40px', textAlign: 'right',
+                      letterSpacing: '-0.02em', opacity: gameState.state === 'live' ? 0.75 : 1,
+                    }}>
+                      {formatOdds(ml)}
+                    </span>
+                  )}
+                  {/* Score — show for live/final */}
+                  {score != null && (
+                    <span style={{
+                      fontWeight: win ? 800 : 400, fontSize: '1.05rem',
+                      color: win ? 'var(--text-primary)' : 'var(--text-muted)',
+                      fontFamily: 'IBM Plex Mono, monospace', minWidth: '24px', textAlign: 'right',
+                    }}>
+                      {score}
+                    </span>
+                  )}
+                  {/* Pre-game: show moneyline in score column position if no score yet */}
+                  {score == null && gameState.state === 'pre' && ml == null && (
+                    <span style={{ minWidth: '24px' }} />
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Odds strip — pre-game only */}
-        {odds && gameState.state === 'pre' && (odds.spread || odds.total != null) && (
-          <div style={{ display: 'flex', gap: '8px', marginTop: '0.6rem', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)', alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Sportsbook badge */}
+        {/* Odds strip — pre-game and live */}
+        {odds && gameState.state !== 'final' && (odds.spread || odds.total != null) && (
+          <div style={{ display: 'flex', gap: '8px', marginTop: '0.6rem', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)', alignItems: 'center', flexWrap: 'wrap', opacity: gameState.state === 'live' ? 0.8 : 1 }}>
             <span style={{
               fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
-              background: 'rgba(0,177,79,0.10)', color: '#00b14f',
-              border: '1px solid rgba(0,177,79,0.22)',
+              background: gameState.state === 'live' ? 'rgba(255,69,96,0.10)' : 'rgba(0,177,79,0.10)',
+              color: gameState.state === 'live' ? '#FF4560' : '#00b14f',
+              border: `1px solid ${gameState.state === 'live' ? 'rgba(255,69,96,0.22)' : 'rgba(0,177,79,0.22)'}`,
               letterSpacing: '0.04em', flexShrink: 0, fontFamily: 'IBM Plex Mono, monospace',
             }}>
-              DK
+              {gameState.state === 'live' ? 'LIVE' : 'DK'}
             </span>
-            {/* Spread / run line */}
             {odds.spread && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                 Spread <strong style={{ color: 'var(--gold)', fontFamily: 'IBM Plex Mono, monospace' }}>{odds.spread}</strong>
               </span>
             )}
-            {/* Over/Under */}
             {odds.total != null && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                 O/U <strong style={{ color: 'var(--gold)', fontFamily: 'IBM Plex Mono, monospace' }}>{odds.total}</strong>
+              </span>
+            )}
+          </div>
+        )}
+        {/* For final games: show opener if ESPN still has data, otherwise nothing */}
+        {odds && gameState.state === 'final' && (odds.spread || odds.total != null) && (
+          <div style={{ display: 'flex', gap: '8px', marginTop: '0.6rem', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)', alignItems: 'center', flexWrap: 'wrap', opacity: 0.4 }}>
+            <span style={{
+              fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
+              background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              letterSpacing: '0.04em', flexShrink: 0, fontFamily: 'IBM Plex Mono, monospace',
+            }}>
+              OPENER
+            </span>
+            {odds.spread && (
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                Spread <strong style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{odds.spread}</strong>
+              </span>
+            )}
+            {odds.total != null && (
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                O/U <strong style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{odds.total}</strong>
               </span>
             )}
           </div>
@@ -1303,7 +1333,8 @@ function NewsCard({ article, sportKey }) {
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function toESPNDate(date) {
   // ESPN scoreboard date param format: YYYYMMDD
-  const d = new Date(date);
+  // Append T12:00:00 so JS parses as local noon, not UTC midnight (avoids -1 day offset in US timezones)
+  const d = new Date(date + 'T12:00:00');
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');

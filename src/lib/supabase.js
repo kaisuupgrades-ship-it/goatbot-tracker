@@ -22,6 +22,23 @@ export async function signIn(email, password) {
   return { data, error };
 }
 
+export async function signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+    },
+  });
+  return { data, error };
+}
+
+export async function resetPassword(email) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?type=recovery`,
+  });
+  return { data, error };
+}
+
 export async function signOut() {
   return supabase.auth.signOut();
 }

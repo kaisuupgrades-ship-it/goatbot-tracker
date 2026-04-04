@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn, signUp, getUser } from '@/lib/supabase';
+import { signIn, signUp, getUser, signInWithGoogle, resetPassword } from '@/lib/supabase';
 
 const SUPABASE_CONFIGURED =
   typeof process !== 'undefined' &&
@@ -129,6 +129,9 @@ export default function AuthPage() {
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState('');
   const [mounted, setMounted]   = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -167,6 +170,23 @@ export default function AuthPage() {
       setMode('login');
     }
     setLoading(false);
+  }
+
+  async function handleGoogle() {
+    setError(''); setLoading(true);
+    const { error } = await signInWithGoogle();
+    if (error) { setError(error.message); setLoading(false); }
+    // on success, browser redirects — no need to setLoading(false)
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    setForgotLoading(true); setError(''); setSuccess('');
+    const { error } = await resetPassword(forgotEmail);
+    setForgotLoading(false);
+    if (error) { setError(error.message); return; }
+    setSuccess('Password reset email sent! Check your inbox.');
+    setShowForgot(false);
   }
 
   return (
@@ -486,6 +506,42 @@ export default function AuthPage() {
             ))}
           </div>
 
+          {/* Google Sign In */}
+          <button
+            type="button"
+            onClick={handleGoogle}
+            disabled={loading}
+            style={{
+              width: '100%', padding: '0.72rem 1rem',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '10px', cursor: loading ? 'wait' : 'pointer',
+              fontFamily: 'inherit', fontSize: '0.88rem', fontWeight: 600,
+              color: '#EDEDF5',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+              marginBottom: '1rem',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+          >
+            <svg width="18" height="18" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              <path fill="none" d="M0 0h48v48H0z"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div style={{ flex: 1, height: '1px', background: '#1A1A24' }} />
+            <span style={{ color: '#6A6A88', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em' }}>or</span>
+            <div style={{ flex: 1, height: '1px', background: '#1A1A24' }} />
+          </div>
+
           {/* Form */}
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             {mode === 'signup' && (
@@ -511,7 +567,24 @@ export default function AuthPage() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Password</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowForgot(true); setError(''); setSuccess(''); setForgotEmail(email); }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: '#6A6A88', fontSize: '0.7rem', fontFamily: 'inherit',
+                      padding: 0, transition: 'color 0.2s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#FFB800'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#6A6A88'}
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <input
                 type="password" placeholder="••••••••"
                 value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
@@ -563,7 +636,7 @@ export default function AuthPage() {
             </button>
           </form>
 
-          {/* Divider */}
+          {/* Divider before demo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.5rem 0' }}>
             <div style={{ flex: 1, height: '1px', background: '#1A1A24' }} />
             <span style={{ color: '#6A6A88', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em' }}>or</span>
@@ -597,6 +670,78 @@ export default function AuthPage() {
           Self-hosted. No subscriptions. Your data stays yours.
         </p>
       </div>
+
+      {/* ── Forgot Password Modal ─────────────────────────────────────────── */}
+      {showForgot && (
+        <div
+          onClick={() => setShowForgot(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#111118', border: '1px solid rgba(255,184,0,0.2)',
+              borderRadius: '16px', padding: '2rem',
+              width: '100%', maxWidth: '380px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+            }}
+          >
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#EDEDF5', marginBottom: '4px' }}>Reset password</div>
+              <div style={{ fontSize: '0.78rem', color: '#6A6A88' }}>We'll email you a link to set a new password.</div>
+            </div>
+            <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={labelStyle}>Email</label>
+                <input
+                  type="email" placeholder="you@example.com"
+                  value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required
+                  style={inputStyle}
+                  onFocus={e => { e.target.style.borderColor = '#FFB800'; e.target.style.boxShadow = '0 0 0 3px rgba(255,184,0,0.08)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#1A1A24'; e.target.style.boxShadow = 'none'; }}
+                  autoFocus
+                />
+              </div>
+              {error && (
+                <div style={{ padding: '0.6rem 0.85rem', background: 'rgba(255,69,96,0.06)', border: '1px solid rgba(255,69,96,0.2)', borderRadius: '8px', color: '#FF4560', fontSize: '0.8rem' }}>
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div style={{ padding: '0.6rem 0.85rem', background: 'rgba(0,212,139,0.06)', border: '1px solid rgba(0,212,139,0.2)', borderRadius: '8px', color: '#00D48B', fontSize: '0.8rem' }}>
+                  {success}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '0.25rem' }}>
+                <button
+                  type="button" onClick={() => setShowForgot(false)}
+                  style={{
+                    flex: 1, padding: '0.65rem', borderRadius: '9px',
+                    border: '1px solid #1A1A24', background: 'transparent',
+                    color: '#6A6A88', fontSize: '0.85rem', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >Cancel</button>
+                <button
+                  type="submit" disabled={forgotLoading}
+                  style={{
+                    flex: 1, padding: '0.65rem', borderRadius: '9px', border: 'none',
+                    background: forgotLoading ? '#333' : 'linear-gradient(135deg, #FFB800, #FF9500)',
+                    color: forgotLoading ? '#666' : '#000',
+                    fontSize: '0.85rem', fontWeight: 800,
+                    cursor: forgotLoading ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  }}
+                >{forgotLoading ? 'Sending...' : 'Send Reset Link'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════
           INLINE KEYFRAMES STYLE TAG

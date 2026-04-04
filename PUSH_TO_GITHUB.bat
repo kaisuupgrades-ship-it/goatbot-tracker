@@ -10,7 +10,7 @@ git config user.email "kaisuupgrades@gmail.com"
 git config user.name "kaisuupgrades-ship-it"
 
 git add -A
-git commit -m "Fix ScoreboardTab.jsx syntax error - wrap return in Fragment"
+git commit -m "Fix date offset bug, add Google OAuth, voice+text AI bet entry, admin create user"
 git push origin main
 
 echo.

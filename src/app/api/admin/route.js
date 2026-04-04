@@ -114,7 +114,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json();
-  const { action, userEmail, targetId, value } = body;
+  const { action, userEmail, targetId, value, newEmail, newPassword, newUsername } = body;
 
   if (!isAdmin(userEmail)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -146,6 +146,32 @@ export async function POST(req) {
         .eq('id', targetId);
       if (error) throw error;
       return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'create_user') {
+      if (!newEmail || !newPassword) {
+        return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+      }
+      // Create the auth user via service role (admin API)
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: newEmail,
+        password: newPassword,
+        email_confirm: true, // skip email verification
+        user_metadata: { username: newUsername || newEmail.split('@')[0] },
+      });
+      if (authError) throw authError;
+
+      // Create their profile row
+      if (authData?.user?.id) {
+        await supabaseAdmin.from('profiles').upsert([{
+          id: authData.user.id,
+          username: newUsername || newEmail.split('@')[0],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }], { onConflict: 'id' });
+      }
+
+      return NextResponse.json({ ok: true, userId: authData?.user?.id });
     }
 
     if (action === 'broadcast') {
