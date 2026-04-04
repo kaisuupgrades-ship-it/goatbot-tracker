@@ -560,14 +560,17 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       } else {
         const { data, error } = await addPick(payload);
         if (error) throw new Error(error.message || 'Save failed');
-        if (data) {
-          setPicks(prev => [...prev, data]);
-          // Background auto-analysis (always fires, silent)
+        // Always update local state — use returned record if available, else optimistically
+        // use the payload so the pick appears immediately even if Supabase SELECT returns null
+        const newPick = data || { ...payload, id: `pending_${Date.now()}` };
+        setPicks(prev => [...prev, newPick]);
+        // Background auto-analysis (fire-and-forget, non-blocking)
+        if (newPick.id && !newPick.id.startsWith('pending_')) {
           fetch('/api/auto-analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              pickId: data.id, sport: payload.sport, team: payload.team,
+              pickId: newPick.id, sport: payload.sport, team: payload.team,
               bet_type: payload.bet_type, odds: payload.odds, units: payload.units,
               date: payload.date, notes: payload.notes,
             }),
@@ -588,6 +591,8 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       setSaveError(e.message || 'Save failed. Try again.');
       setSaving(false);
     }
+    // Note: setSaving(false) is intentional here as a safety net for any
+    // code paths that don't explicitly clear it above
     setSaving(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isContest, contestResult, isDemo, units, notes, book, user?.id, gameDate, sport, picks, setPicks, onClose, awayAbbr, homeAbbr, aiCheckResult]);

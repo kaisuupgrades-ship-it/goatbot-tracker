@@ -463,7 +463,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   const [filterResult, setFilterResult] = useState('ALL');
   const [filterSport, setFilterSport] = useState('ALL');
   const [sortField, setSortField] = useState('date');
-  const [sortDir, setSortDir] = useState('asc');
+  const [sortDir, setSortDir] = useState('desc'); // newest picks first
   const [contestForm, setContestForm] = useState(false);
   const [contestEdit, setContestEdit] = useState(contest || {});
   const [filterContest, setFilterContest] = useState(false);
