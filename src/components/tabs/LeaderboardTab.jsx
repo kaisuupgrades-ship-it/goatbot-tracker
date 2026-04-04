@@ -691,20 +691,31 @@ function ContestBanner() {
   const urgent = daysLeft <= 5;
 
   return (
+    /* Outer wrapper: provides animated border via spinning conic gradient */
     <div style={{
-      background: 'linear-gradient(135deg, rgba(20,14,0,0.9) 0%, rgba(28,18,0,0.95) 100%)',
-      border: '1px solid rgba(255,184,0,0.4)',
-      borderRadius: '14px', overflow: 'hidden',
-      animation: 'contest-glow 3s ease-in-out infinite',
       position: 'relative',
+      borderRadius: '14px',
+      padding: '1.5px',
+      overflow: 'hidden',
+      boxShadow: '0 0 40px rgba(255,184,0,0.08), 0 8px 24px rgba(0,0,0,0.4)',
     }}>
-      {/* Animated shimmer top bar */}
+      {/* Spinning gold spotlight — travels around the full border */}
       <div style={{
-        height: '3px',
-        background: 'linear-gradient(90deg, transparent 0%, #FFB800 25%, #FFD700 50%, #FF9500 75%, transparent 100%)',
-        backgroundSize: '200% auto',
-        animation: 'prize-shimmer 2.5s linear infinite',
+        position: 'absolute',
+        top: '50%', left: '50%',
+        width: '220%', height: '220%',
+        transform: 'translate(-50%, -50%)',
+        background: 'conic-gradient(from 0deg, transparent 0deg, rgba(255,184,0,0.12) 20deg, rgba(255,184,0,0.85) 50deg, rgba(255,220,80,1) 65deg, rgba(255,149,0,0.85) 80deg, rgba(255,184,0,0.12) 110deg, transparent 140deg)',
+        animation: 'spin-border 3s linear infinite',
       }} />
+
+      {/* Inner card */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        background: 'linear-gradient(135deg, rgba(20,14,0,0.97) 0%, rgba(28,18,0,0.99) 100%)',
+        borderRadius: '12.5px',
+        overflow: 'hidden',
+      }}>
 
       {/* Subtle radial glow behind trophy */}
       <div style={{
@@ -854,6 +865,7 @@ function ContestBanner() {
           </div>
         </div>
       )}
+      </div>{/* /inner card */}
     </div>
   );
 }

@@ -160,20 +160,32 @@ function TournamentBanner({ onCTAClick }) {
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #0D0D18 0%, #111120 50%, #0A0A14 100%)',
-      border: '1px solid rgba(255,184,0,0.3)',
-      borderRadius: '20px',
-      overflow: 'hidden',
       position: 'relative',
-      boxShadow: '0 0 60px rgba(255,184,0,0.06), 0 20px 40px rgba(0,0,0,0.4)',
+      borderRadius: '20px',
+      padding: '1.5px',
+      overflow: 'hidden',
+      boxShadow: '0 0 60px rgba(255,184,0,0.08), 0 20px 40px rgba(0,0,0,0.4)',
     }}>
-      {/* Shimmer top accent */}
+      {/* Spinning conic gradient — the glow that travels around the border */}
       <div style={{
-        height: '3px',
-        background: 'linear-gradient(90deg, transparent 0%, #FFB800 25%, #FFD700 50%, #FF9500 75%, transparent 100%)',
-        backgroundSize: '200% auto',
-        animation: 'prize-shimmer 2.5s linear infinite',
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        width: '210%',
+        height: '210%',
+        transform: 'translate(-50%, -50%)',
+        background: 'conic-gradient(from 0deg, transparent 0deg, rgba(255,184,0,0.15) 20deg, rgba(255,184,0,0.9) 50deg, rgba(255,220,80,1) 65deg, rgba(255,149,0,0.9) 80deg, rgba(255,184,0,0.15) 110deg, transparent 140deg)',
+        animation: 'spin-border 3.5s linear infinite',
       }} />
+
+      {/* Inner card sits on top, its solid bg hides the center of the gradient */}
+      <div style={{
+        position: 'relative',
+        zIndex: 1,
+        background: 'linear-gradient(135deg, #0D0D18 0%, #111120 50%, #0A0A14 100%)',
+        borderRadius: '18.5px',
+        overflow: 'hidden',
+      }}>
 
       <div style={{ padding: 'clamp(1.5rem, 4vw, 2.5rem)' }}>
         {/* Header row */}
@@ -312,14 +324,12 @@ function TournamentBanner({ onCTAClick }) {
         </div>
       </div>
 
+      </div>{/* /inner card */}
+
       <style>{`
         @keyframes pulse-glow {
           0%, 100% { box-shadow: 0 0 8px rgba(255,184,0,0.2); }
           50%       { box-shadow: 0 0 18px rgba(255,184,0,0.5); }
-        }
-        @keyframes prize-shimmer {
-          from { background-position: 200% center; }
-          to   { background-position: -200% center; }
         }
       `}</style>
     </div>
