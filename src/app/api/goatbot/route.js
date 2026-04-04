@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const XAI_BASE    = 'https://api.x.ai/v1';
@@ -145,9 +145,9 @@ export async function POST(req) {
       'Authorization': `Bearer ${XAI_API_KEY}`,
     };
 
-    // ── Tier 1: grok-4 + web search (25s budget) ─────────────────────────
-    // grok-4 /responses with web search is the best quality but can be slow.
-    // Give it 25 seconds — if it doesn't finish, fall through to grok-3.
+    // ── Tier 1: grok-4 + web search (90s budget) ─────────────────────────
+    // grok-4 /responses with web search is the best quality.
+    // Vercel Pro gives us 300s — let it do thorough research.
     try {
       const { response, timedOut } = await fetchWithTimeout(
         `${XAI_BASE}/responses`,
@@ -159,24 +159,24 @@ export async function POST(req) {
             instructions: SYSTEM_PROMPT,
             input: [{ role: 'user', content: prompt }],
             tools: [{ type: 'web_search' }],
-            max_output_tokens: 2000,
+            max_output_tokens: 3000,
           }),
         },
-        25_000,
+        90_000,
       );
       if (!timedOut && response?.ok) {
         const data = await response.json();
         const result = parseResponsesOutput(data);
         return NextResponse.json({ result, model: 'grok-4' });
       }
-      if (timedOut) console.log('[goatbot] grok-4 timed out after 25s, falling back to grok-3');
+      if (timedOut) console.log('[goatbot] grok-4 timed out after 90s, falling back to grok-3');
       else console.log('[goatbot] grok-4 returned', response?.status, '— falling back to grok-3');
     } catch (err) {
       console.log('[goatbot] grok-4 error:', err.message, '— falling back');
     }
 
-    // ── Tier 2: grok-3 /chat/completions (20s budget) ────────────────────
-    // Much faster and very reliable.
+    // ── Tier 2: grok-3 /chat/completions (60s budget) ────────────────────
+    // Fast and reliable fallback.
     try {
       const { response, timedOut } = await fetchWithTimeout(
         `${XAI_BASE}/chat/completions`,
@@ -190,22 +190,22 @@ export async function POST(req) {
               { role: 'user', content: prompt },
             ],
             temperature: 0.7,
-            max_tokens: 2000,
+            max_tokens: 3000,
           }),
         },
-        20_000,
+        60_000,
       );
       if (!timedOut && response?.ok) {
         const data = await response.json();
         return NextResponse.json({ result: data.choices[0].message.content, model: 'grok-3' });
       }
-      if (timedOut) console.log('[goatbot] grok-3 timed out after 20s, falling back to Claude');
+      if (timedOut) console.log('[goatbot] grok-3 timed out after 60s, falling back to Claude');
       else console.log('[goatbot] grok-3 returned', response?.status, '— falling back to Claude');
     } catch (err) {
       console.log('[goatbot] grok-3 error:', err.message, '— falling back');
     }
 
-    // ── Tier 3: Claude (10s budget) ──────────────────────────────────────
+    // ── Tier 3: Claude (45s budget) ──────────────────────────────────────
     const claudeKey = process.env.ANTHROPIC_API_KEY;
     if (claudeKey) {
       try {
@@ -222,11 +222,11 @@ export async function POST(req) {
               model: 'claude-sonnet-4-5',
               system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is currently unavailable. Base your analysis on the provided odds data and your training knowledge. Flag anything that should be verified live.]',
               messages: [{ role: 'user', content: prompt }],
-              max_tokens: 2000,
+              max_tokens: 3000,
               temperature: 0.7,
             }),
           },
-          10_000,
+          45_000,
         );
         if (!timedOut && response?.ok) {
           const data = await response.json();
