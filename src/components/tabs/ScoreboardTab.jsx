@@ -1483,6 +1483,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const todayStr = toLocalDateStr(new Date());
 
   const [betSlipGame, setBetSlipGame] = useState(null); // { event, sport } | null
+  const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team → bookmaker game data
 
   const [sport, setSport]       = useState('mlb');
   const [games, setGames]       = useState([]);
@@ -1600,6 +1601,22 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     setNewsLoading(false);
   }, []);
 
+  // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill
+  const loadRealOdds = useCallback(async (s) => {
+    if (s === 'all') return; // skip in multi-sport mode
+    try {
+      const res = await fetch(`/api/odds?sport=${s}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      const lookup = {};
+      (d.data || []).forEach(game => {
+        const key = (game.home_team || '').toLowerCase().replace(/\s+/g, '_');
+        lookup[key] = game;
+      });
+      setRealOddsLookup(lookup);
+    } catch { /* fail silently — real odds are a bonus */ }
+  }, []);
+
   const loadInjuries = useCallback(async (s) => {
     if (s === 'all') return; // Skip injuries in All mode — too many parallel calls
     try {
@@ -1633,6 +1650,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     loadGames(sport, selectedDate);
     loadNews(sport);
     loadInjuries(sport);
+    loadRealOdds(sport);
 
     if (selectedDate !== todayStr) return; // No auto-refresh on non-today dates
 
@@ -1640,7 +1658,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     let interval = setInterval(() => loadGames(sport, selectedDate), REFRESH_TODAY);
 
     return () => clearInterval(interval);
-  }, [sport, selectedDate, loadGames, loadNews, loadInjuries, todayStr]);
+  }, [sport, selectedDate, loadGames, loadNews, loadInjuries, loadRealOdds, todayStr]);
 
   // Separate effect: tighten polling to 20s when live games are detected
   useEffect(() => {
@@ -2037,7 +2055,39 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     {/* ── Bet Slip Modal ─────────────────────────────────────────────────── */}
     {betSlipGame && (() => {
       const { away, home } = getCompetitors(betSlipGame.event);
-      const odds = getOdds(betSlipGame.event);
+      const espnOdds = getOdds(betSlipGame.event);
+
+      // Merge real bookmaker odds (The Odds API) over ESPN odds for better pre-fill accuracy
+      const homeName = home?.team?.displayName || home?.team?.name || '';
+      const awayName = away?.team?.displayName || away?.team?.name || '';
+      const homeKey  = homeName.toLowerCase().replace(/\s+/g, '_');
+      const realGame = realOddsLookup[homeKey]
+        || Object.values(realOddsLookup).find(g =>
+            (g.home_team || '').toLowerCase().includes(homeName.split(' ').pop().toLowerCase())
+          );
+
+      let odds = espnOdds;
+      if (realGame) {
+        const book     = realGame.bookmakers?.[0];
+        const h2h      = book?.markets?.find(m => m.key === 'h2h');
+        const spreads  = book?.markets?.find(m => m.key === 'spreads');
+        const totals   = book?.markets?.find(m => m.key === 'totals');
+        const sHome    = spreads?.outcomes?.find(o => o.name === realGame.home_team);
+        const sAway    = spreads?.outcomes?.find(o => o.name === realGame.away_team);
+        odds = {
+          homeOdds:      h2h?.outcomes?.find(o => o.name === realGame.home_team)?.price ?? espnOdds?.homeOdds ?? null,
+          awayOdds:      h2h?.outcomes?.find(o => o.name === realGame.away_team)?.price ?? espnOdds?.awayOdds ?? null,
+          spread:        sHome?.point != null
+            ? `${realGame.home_team.split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
+            : espnOdds?.spread,
+          homeSpreadOdds: sHome?.price ?? espnOdds?.homeSpreadOdds ?? null,
+          awaySpreadOdds: sAway?.price ?? espnOdds?.awaySpreadOdds ?? null,
+          total:         totals?.outcomes?.[0]?.point ?? espnOdds?.total ?? null,
+          overOdds:      totals?.outcomes?.find(o => o.name === 'Over')?.price  ?? espnOdds?.overOdds  ?? null,
+          underOdds:     totals?.outcomes?.find(o => o.name === 'Under')?.price ?? espnOdds?.underOdds ?? null,
+        };
+      }
+
       return (
         <BetSlipModal
           game={{ away, home, odds, date: betSlipGame.event?.date }}
