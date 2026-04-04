@@ -1465,9 +1465,16 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const INTEL_REFRESH = 5 * 60 * 1000; // auto-scan every 5 min
 
   const runIntelScan = useCallback(async (s, customQuery = '') => {
-    if (!process.env.NEXT_PUBLIC_XAI_ENABLED && intelLoading) return;
+    if (intelLoading) return; // debounce — don't fire while already scanning
     setIntelLoading(true);
     setIntelError('');
+
+    // Client-side safety timeout: always clear spinner after 60s
+    const safetyTimer = setTimeout(() => {
+      setIntelLoading(false);
+      setIntelError('Scan timed out — xAI is slow right now. Try again in a moment.');
+    }, 60_000);
+
     try {
       const res = await fetch('/api/injury-intel', {
         method:  'POST',
@@ -1479,8 +1486,10 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
       else { setIntelText(data.intel || ''); setIntelTs(new Date()); }
     } catch (e) {
       setIntelError('Scan failed — check your connection');
+    } finally {
+      clearTimeout(safetyTimer);
+      setIntelLoading(false);
     }
-    setIntelLoading(false);
   }, [intelLoading]);
 
   const loadGames = useCallback(async (s, dateStr) => {

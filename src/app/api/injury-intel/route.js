@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Extend Vercel function timeout so grok-4 web-search has time to respond
+export const maxDuration = 60;
+
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const XAI_BASE    = 'https://api.x.ai/v1';
 
@@ -69,26 +72,37 @@ export async function POST(req) {
     ? buildQueryPrompt(sport, query.trim(), dateStr)
     : buildAutoPrompt(sport, dateStr);
 
-  try {
-    const payload = {
-      model: 'grok-4',
-      instructions: 'You are an elite sports injury scout. Be concise, structured, and source everything. Only use verified, recent information from your web search.',
-      input: [{ role: 'user', content: prompt }],
-      tools: [{ type: 'web_search' }],
-      max_output_tokens: 1500,
-    };
+  // Abort after 55s so we respond before Vercel's 60s limit kills the function
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), 55_000);
 
-    const response = await fetch(`${XAI_BASE}/responses`, {
+  try {
+    // Try grok-3 with live search (fast + reliable)
+    const response = await fetch(`${XAI_BASE}/chat/completions`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${XAI_API_KEY}` },
-      body:    JSON.stringify(payload),
+      signal:  controller.signal,
+      body:    JSON.stringify({
+        model:    'grok-3',
+        messages: [
+          { role: 'system', content: 'You are an elite sports injury scout. Be concise, structured, and source everything. Only use verified, recent information.' },
+          { role: 'user',   content: prompt },
+        ],
+        temperature:  0.3,
+        max_tokens:   1200,
+        // Enable live search if the API supports it
+        search_parameters: { mode: 'auto' },
+      }),
     });
+
+    clearTimeout(abortTimer);
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      // Fallback to grok-3 without search
-      if (response.status === 400 || response.status === 404) {
-        const fallback = await fetch(`${XAI_BASE}/chat/completions`, {
+
+      // If search_parameters isn't supported, retry without it
+      if (response.status === 400) {
+        const retry = await fetch(`${XAI_BASE}/chat/completions`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${XAI_API_KEY}` },
           body:    JSON.stringify({
@@ -97,22 +111,27 @@ export async function POST(req) {
               { role: 'system', content: 'You are an elite sports injury scout. Be concise and structured.' },
               { role: 'user',   content: prompt },
             ],
-            temperature:  0.5,
-            max_tokens:   1500,
+            temperature: 0.3,
+            max_tokens:  1200,
           }),
         });
-        if (fallback.ok) {
-          const fbData = await fallback.json();
-          return NextResponse.json({ intel: fbData.choices[0].message.content, model: 'grok-3', timestamp: new Date().toISOString() });
+        if (retry.ok) {
+          const retryData = await retry.json();
+          return NextResponse.json({ intel: retryData.choices?.[0]?.message?.content || '', model: 'grok-3', timestamp: new Date().toISOString() });
         }
       }
+
       return NextResponse.json({ error: errData.error?.message || `HTTP ${response.status}` }, { status: response.status });
     }
 
     const data  = await response.json();
-    const intel = parseGrokOutput(data);
-    return NextResponse.json({ intel, model: 'grok-4', timestamp: new Date().toISOString() });
+    const intel = data.choices?.[0]?.message?.content || parseGrokOutput(data);
+    return NextResponse.json({ intel, model: 'grok-3', timestamp: new Date().toISOString() });
   } catch (err) {
+    clearTimeout(abortTimer);
+    if (err.name === 'AbortError') {
+      return NextResponse.json({ error: 'Scan timed out — xAI is slow right now. Try again in a moment.' }, { status: 504 });
+    }
     console.error('Injury Intel API error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
