@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { addPick, updatePick, deletePick, setPickPublic } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
 
@@ -872,8 +872,8 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               </thead>
               <tbody>
                 {filtered.map((pick, idx) => (
+                  <React.Fragment key={pick.id}>
                   <tr
-                    key={pick.id}
                     style={{
                       borderBottom: '1px solid #1a1a1a',
                       background: idx % 2 === 0 ? 'transparent' : '#0d0d0d',
@@ -1005,6 +1005,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                       </td>
                     </tr>
                   )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
