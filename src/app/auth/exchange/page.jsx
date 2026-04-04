@@ -5,11 +5,13 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Client-side OAuth code exchange.
+ * Client-side auth exchange — handles both Supabase OAuth flows:
  *
- * Supabase uses PKCE — the code_verifier is stored in the browser's localStorage
- * when signInWithOAuth() is called. The server-side /auth/callback route cannot
- * access localStorage, so it passes the code here for the browser to exchange.
+ *  1. PKCE (code query param)    → exchangeCodeForSession(code)
+ *  2. Implicit (hash fragment)   → Supabase SDK auto-detects from window.location
+ *
+ * The /auth/callback route.js forwards here so we can read the full URL
+ * including the hash fragment (which servers can never see).
  */
 export default function AuthExchange() {
   const searchParams = useSearchParams();
@@ -17,29 +19,42 @@ export default function AuthExchange() {
   const [status, setStatus] = useState('Signing you in…');
 
   useEffect(() => {
-    const code = searchParams.get('code');
+    async function handleAuth() {
+      try {
+        const code = searchParams.get('code');
 
-    if (!code) {
-      router.replace('/?error=auth');
-      return;
-    }
-
-    supabase.auth
-      .exchangeCodeForSession(code)
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('[auth/exchange] exchangeCodeForSession error:', error.message);
-          setStatus('Sign-in failed. Redirecting…');
-          router.replace('/?error=auth');
-        } else {
-          setStatus('Signed in! Taking you to your dashboard…');
-          router.replace('/dashboard');
+        if (code) {
+          // ── PKCE flow ────────────────────────────────────────────────────
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error) {
+            router.replace('/dashboard');
+            return;
+          }
+          console.error('[auth/exchange] PKCE exchange error:', error.message);
         }
-      })
-      .catch((err) => {
+
+        // ── Implicit flow ────────────────────────────────────────────────
+        // Supabase's client SDK automatically detects tokens in window.location.hash.
+        // Give it one tick to process, then check the session.
+        await new Promise((r) => setTimeout(r, 200));
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session) {
+          router.replace('/dashboard');
+          return;
+        }
+
+        // Nothing worked
+        console.error('[auth/exchange] No session established. hash:', window.location.hash.substring(0, 60));
+        setStatus('Sign-in failed. Redirecting…');
+        router.replace('/?error=auth');
+      } catch (err) {
         console.error('[auth/exchange] unexpected error:', err);
         router.replace('/?error=auth');
-      });
+      }
+    }
+
+    handleAuth();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -53,10 +68,9 @@ export default function AuthExchange() {
         background: '#0a0a0a',
         color: '#fff',
         fontFamily: 'sans-serif',
-        gap: '16px',
+        gap: 16,
       }}
     >
-      {/* Spinner */}
       <div
         style={{
           width: 40,
@@ -68,7 +82,7 @@ export default function AuthExchange() {
         }}
       />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <p style={{ color: '#aaa', fontSize: 14 }}>{status}</p>
+      <p style={{ color: '#aaa', fontSize: 14, margin: 0 }}>{status}</p>
     </div>
   );
 }

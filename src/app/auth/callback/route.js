@@ -1,32 +1,54 @@
 import { NextResponse } from 'next/server';
 
-// Always redirect to the canonical domain — never back to vercel.app
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://betos.win';
 
+/**
+ * Supabase can use either:
+ *   - PKCE flow  → ?code=XXX  (query param, visible server-side)
+ *   - Implicit   → #access_token=XXX  (hash fragment, INVISIBLE server-side)
+ *
+ * We handle both by returning a tiny HTML page that reads the full URL
+ * (including hash) and passes everything to the client-side /auth/exchange page.
+ */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const code = searchParams.get('code');
-  const type = searchParams.get('type');
   const error = searchParams.get('error');
+  const type  = searchParams.get('type');
 
-  // Password recovery
   if (type === 'recovery') {
     return NextResponse.redirect(`${SITE_URL}/auth/reset-password`);
   }
 
-  // OAuth error from provider
   if (error) {
-    console.error('[auth/callback] OAuth provider error:', error, searchParams.get('error_description'));
     return NextResponse.redirect(`${SITE_URL}/?error=auth`);
   }
 
-  // Hand the code to the client-side exchange page.
-  // We CANNOT call exchangeCodeForSession() here (server-side) because the PKCE
-  // code_verifier is stored in the browser's localStorage — not available server-side.
-  // The /auth/exchange page runs in the browser where localStorage is accessible.
-  if (code) {
-    return NextResponse.redirect(`${SITE_URL}/auth/exchange?code=${encodeURIComponent(code)}`);
-  }
+  // Return a thin HTML trampoline that preserves the hash fragment
+  // and forwards everything (code OR access_token) to the exchange page.
+  const html = `<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8"><title>Signing in…</title></head>
+  <body style="background:#0a0a0a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+    <p>Signing you in…</p>
+    <script>
+      (function () {
+        var hash   = window.location.hash;   // #access_token=... (implicit)
+        var search = window.location.search; // ?code=...         (PKCE)
+        var base   = ${JSON.stringify(SITE_URL)} + '/auth/exchange';
 
-  return NextResponse.redirect(`${SITE_URL}/?error=auth`);
+        if (hash) {
+          // Implicit flow — pass hash to client page
+          window.location.replace(base + search + hash);
+        } else {
+          // PKCE flow (or no params at all)
+          window.location.replace(base + search);
+        }
+      })();
+    </script>
+  </body>
+</html>`;
+
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
 }
