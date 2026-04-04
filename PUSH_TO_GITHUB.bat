@@ -9,18 +9,15 @@ cd /d "%~dp0"
 git config user.email "kaisuupgrades@gmail.com"
 git config user.name "kaisuupgrades-ship-it"
 
-git init
 git add -A
-git commit -m "Initial commit: GOAT BOT Tracker"
-git branch -M main
-git remote remove origin 2>nul
-git remote add origin https://github.com/kaisuupgrades-ship-it/goatbot-tracker.git
-git push -u origin main --force
+git commit -m "Fix ScoreboardTab.jsx syntax error - wrap return in Fragment"
+git push origin main
 
 echo.
 echo ========================================
 if %ERRORLEVEL% EQU 0 (
     echo   SUCCESS! Code pushed to GitHub.
+    echo   Vercel will auto-redeploy in ~60 seconds.
 ) else (
     echo   Something went wrong. Check above for errors.
 )

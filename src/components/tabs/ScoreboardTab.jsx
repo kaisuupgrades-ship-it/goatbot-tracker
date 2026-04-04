@@ -1533,6 +1533,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const currentSport = SPORTS.find(s => s.key === sport);
 
   return (
+    <>
     <div className="fade-in" style={{ display: 'flex', gap: '1.25rem' }}>
 
       {/* Main column */}
@@ -1891,5 +1892,6 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         />
       );
     })()}
+    </>
   );
 }
