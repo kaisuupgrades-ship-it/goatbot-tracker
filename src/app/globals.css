@@ -583,3 +583,9 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ── Announcement banner ticker ─────────────────────────────────────────────── */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}

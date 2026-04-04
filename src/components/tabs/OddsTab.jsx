@@ -64,20 +64,32 @@ function bestSpread(bookmakers, teamName) {
   return { price: bestPrice, point: bestPoint };
 }
 
-// Get total line (O/U number) and best over/under odds
+// Get total line (O/U number) and standard over/under odds
+// Prefer lines where BOTH over AND under are near standard juice (-140 to +120)
+// to avoid showing alternate/outlier totals with extreme odds like -263/+486
 function bestTotal(bookmakers) {
-  let line = null;
-  let overPrice = null;
-  let underPrice = null;
-  bookmakers.forEach(bk => {
+  // Pass 1: standard-juice lines only
+  for (const bk of bookmakers) {
+    const mkt = bk.markets?.find(m => m.key === 'totals');
+    if (!mkt) continue;
+    const over  = mkt.outcomes?.find(o => o.name === 'Over');
+    const under = mkt.outcomes?.find(o => o.name === 'Under');
+    if (!over?.price || !under?.price) continue;
+    // Both sides in normal juice range → this is the standard line
+    if (over.price >= -140 && over.price <= 120 && under.price >= -140 && under.price <= 120) {
+      return { line: over.point, overPrice: over.price, underPrice: under.price };
+    }
+  }
+  // Pass 2: any line available (fallback)
+  for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'totals');
     const over  = mkt?.outcomes?.find(o => o.name === 'Over');
     const under = mkt?.outcomes?.find(o => o.name === 'Under');
-    if (over?.point != null && line === null) line = over.point;
-    if (over?.price  != null && (overPrice  === null || over.price  > overPrice))  overPrice  = over.price;
-    if (under?.price != null && (underPrice === null || under.price > underPrice)) underPrice = under.price;
-  });
-  return { line, overPrice, underPrice };
+    if (over?.point != null) {
+      return { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
+    }
+  }
+  return { line: null, overPrice: null, underPrice: null };
 }
 
 // Build GOAT BOT prompt incorporating all three markets

@@ -10,7 +10,7 @@ git config user.email "kaisuupgrades@gmail.com"
 git config user.name "kaisuupgrades-ship-it"
 
 git add -A
-git commit -m "Fix HistoryTab JSX fragment syntax for build"
+git commit -m "Odds board standard lines, Featured tab redesign, GOAT report matchup logos, announcement banner, batch analyzer"
 git push origin main
 
 echo.

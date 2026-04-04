@@ -360,6 +360,88 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
   }
 }
 
+// ── Team logo helpers ─────────────────────────────────────────────────────────
+const TEAM_ABBR_MAP = {
+  // MLB
+  'Arizona Diamondbacks':'ari','Atlanta Braves':'atl','Baltimore Orioles':'bal',
+  'Boston Red Sox':'bos','Chicago Cubs':'chc','Chicago White Sox':'chw',
+  'Cincinnati Reds':'cin','Cleveland Guardians':'cle','Colorado Rockies':'col',
+  'Detroit Tigers':'det','Houston Astros':'hou','Kansas City Royals':'kc',
+  'Los Angeles Angels':'laa','Los Angeles Dodgers':'lad','Miami Marlins':'mia',
+  'Milwaukee Brewers':'mil','Minnesota Twins':'min','New York Mets':'nym',
+  'New York Yankees':'nyy','Oakland Athletics':'oak','Athletics':'oak',
+  'Philadelphia Phillies':'phi','Pittsburgh Pirates':'pit','San Diego Padres':'sd',
+  'San Francisco Giants':'sf','Seattle Mariners':'sea','St. Louis Cardinals':'stl',
+  'Tampa Bay Rays':'tb','Texas Rangers':'tex','Toronto Blue Jays':'tor',
+  'Washington Nationals':'wsh',
+  // NBA
+  'Atlanta Hawks':'atl','Boston Celtics':'bos','Brooklyn Nets':'bkn',
+  'Charlotte Hornets':'cha','Chicago Bulls':'chi','Cleveland Cavaliers':'cle',
+  'Dallas Mavericks':'dal','Denver Nuggets':'den','Detroit Pistons':'det',
+  'Golden State Warriors':'gs','Houston Rockets':'hou','Indiana Pacers':'ind',
+  'Los Angeles Clippers':'lac','Los Angeles Lakers':'lal','Memphis Grizzlies':'mem',
+  'Miami Heat':'mia','Milwaukee Bucks':'mil','Minnesota Timberwolves':'min',
+  'New Orleans Pelicans':'no','New York Knicks':'ny','Oklahoma City Thunder':'okc',
+  'Orlando Magic':'orl','Philadelphia 76ers':'phi','Phoenix Suns':'phx',
+  'Portland Trail Blazers':'por','Sacramento Kings':'sac','San Antonio Spurs':'sa',
+  'Toronto Raptors':'tor','Utah Jazz':'utah','Washington Wizards':'wsh',
+  // NFL
+  'Arizona Cardinals':'ari','Atlanta Falcons':'atl','Baltimore Ravens':'bal',
+  'Buffalo Bills':'buf','Carolina Panthers':'car','Chicago Bears':'chi',
+  'Cincinnati Bengals':'cin','Cleveland Browns':'cle','Dallas Cowboys':'dal',
+  'Denver Broncos':'den','Detroit Lions':'det','Green Bay Packers':'gb',
+  'Houston Texans':'hou','Indianapolis Colts':'ind','Jacksonville Jaguars':'jax',
+  'Kansas City Chiefs':'kc','Las Vegas Raiders':'lv','Los Angeles Chargers':'lac',
+  'Los Angeles Rams':'lar','Miami Dolphins':'mia','Minnesota Vikings':'min',
+  'New England Patriots':'ne','New Orleans Saints':'no','New York Giants':'nyg',
+  'New York Jets':'nyj','Philadelphia Eagles':'phi','Pittsburgh Steelers':'pit',
+  'San Francisco 49ers':'sf','Seattle Seahawks':'sea','Tampa Bay Buccaneers':'tb',
+  'Tennessee Titans':'ten','Washington Commanders':'wsh',
+  // NHL
+  'Anaheim Ducks':'ana','Arizona Coyotes':'ari','Boston Bruins':'bos',
+  'Buffalo Sabres':'buf','Calgary Flames':'cgy','Carolina Hurricanes':'car',
+  'Chicago Blackhawks':'chi','Colorado Avalanche':'col','Columbus Blue Jackets':'cbj',
+  'Dallas Stars':'dal','Detroit Red Wings':'det','Edmonton Oilers':'edm',
+  'Florida Panthers':'fla','Los Angeles Kings':'lak','Minnesota Wild':'min',
+  'Montreal Canadiens':'mtl','Nashville Predators':'nsh','New Jersey Devils':'njd',
+  'New York Islanders':'nyi','New York Rangers':'nyr','Ottawa Senators':'ott',
+  'Philadelphia Flyers':'phi','Pittsburgh Penguins':'pit','San Jose Sharks':'sjs',
+  'Seattle Kraken':'sea','St. Louis Blues':'stl','Tampa Bay Lightning':'tb',
+  'Toronto Maple Leafs':'tor','Utah Hockey Club':'utah','Vancouver Canucks':'van',
+  'Vegas Golden Knights':'vgk','Washington Capitals':'wsh','Winnipeg Jets':'wpg',
+};
+
+function getTeamAbbr(name) {
+  if (!name) return null;
+  if (TEAM_ABBR_MAP[name]) return TEAM_ABBR_MAP[name];
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(TEAM_ABBR_MAP)) {
+    if (k.toLowerCase() === lower) return v;
+  }
+  // Partial: check if last word matches a known team nickname
+  const lastWord = name.trim().split(/\s+/).pop()?.toLowerCase();
+  if (lastWord) {
+    for (const [k, v] of Object.entries(TEAM_ABBR_MAP)) {
+      if (k.toLowerCase().endsWith(lastWord)) return v;
+    }
+  }
+  return null;
+}
+
+function teamLogoUrl(sport, name) {
+  const abbr = getTeamAbbr(name);
+  if (!abbr || !sport) return null;
+  return `https://a.espncdn.com/i/teamlogos/${sport.toLowerCase()}/500/${abbr}.png`;
+}
+
+// Extract "Away @ Home" matchup from a prompt string
+function extractMatchup(prompt) {
+  if (!prompt) return { away: null, home: null };
+  const m = prompt.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|,|\.\s|$)/i);
+  if (!m) return { away: null, home: null };
+  return { away: m[1].trim(), home: m[2].trim() };
+}
+
 function GoatPickCard({ result, model, prompt, runTime }) {
   const [analysisOpen, setAnalysisOpen] = useState(true);
   const parsed = useMemo(() => parseReport(result), [result]);
@@ -371,6 +453,13 @@ function GoatPickCard({ result, model, prompt, runTime }) {
 
   // Edge bar chart data
   const edgePct = edge ? Math.min(edge * 10, 100) : (confScore || 60);
+
+  // Matchup extraction for logo display
+  const { away: awayName, home: homeName } = useMemo(() => extractMatchup(prompt), [prompt]);
+  const sportKey = (sport || 'mlb').toLowerCase();
+  const awayLogoUrl = awayName ? teamLogoUrl(sportKey, awayName) : null;
+  const homeLogoUrl = homeName ? teamLogoUrl(sportKey, homeName) : null;
+  const hasMatchup  = !!(awayName && homeName);
 
   return (
     <div style={{
@@ -435,6 +524,51 @@ function GoatPickCard({ result, model, prompt, runTime }) {
         </div>
       </div>
 
+      {/* ── MATCHUP BUG — team logos + names ── */}
+      {hasMatchup && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: '0', padding: '1rem 1.4rem 0.75rem',
+          background: 'rgba(0,0,0,0.25)',
+          borderBottom: '1px solid rgba(255,184,0,0.07)',
+        }}>
+          {/* Away team */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', flex: 1 }}>
+            {awayLogoUrl ? (
+              <img src={awayLogoUrl} alt={awayName} width={48} height={48}
+                style={{ objectFit: 'contain', filter: 'drop-shadow(0 2px 8px rgba(255,255,255,0.08))' }}
+                onError={e => { e.target.style.display = 'none'; }} />
+            ) : (
+              <div style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🏟️</div>
+            )}
+            <div style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, color: '#e0e0e0', fontSize: '0.78rem', textAlign: 'center' }}>
+              {awayName?.split(' ').pop() || awayName}
+            </div>
+            <div style={{ fontSize: '0.58rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Away</div>
+          </div>
+
+          {/* @ divider */}
+          <div style={{ padding: '0 12px', textAlign: 'center' }}>
+            <div style={{ color: '#2a2a2a', fontWeight: 900, fontSize: '1.1rem', lineHeight: 1 }}>@</div>
+          </div>
+
+          {/* Home team */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', flex: 1 }}>
+            {homeLogoUrl ? (
+              <img src={homeLogoUrl} alt={homeName} width={48} height={48}
+                style={{ objectFit: 'contain', filter: 'drop-shadow(0 2px 8px rgba(255,255,255,0.08))' }}
+                onError={e => { e.target.style.display = 'none'; }} />
+            ) : (
+              <div style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🏟️</div>
+            )}
+            <div style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, color: '#e0e0e0', fontSize: '0.78rem', textAlign: 'center' }}>
+              {homeName?.split(' ').pop() || homeName}
+            </div>
+            <div style={{ fontSize: '0.58rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Home</div>
+          </div>
+        </div>
+      )}
+
       {/* ── THE PICK HERO ── */}
       {pick && (
         <div style={{
@@ -476,7 +610,7 @@ function GoatPickCard({ result, model, prompt, runTime }) {
                   color: parseInt(odds) > 0 ? '#4ade80' : '#e0d0b0',
                   background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '6px', padding: '2px 10px',
-                }}>{parseInt(odds) > 0 ? '+' : ''}{odds}</span>
+                }}>{/^[+-]/.test(odds) ? odds : (parseInt(odds) > 0 ? `+${odds}` : odds)}</span>
               </div>
             )}
           </div>
@@ -781,6 +915,8 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
       setResult(data.result);
       setModel(data.model || 'grok-4');
       setRunTime(rt);
+      // Extract team names from prompt for cross-tab linkage (Featured, History)
+      const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|$)/i);
       const report = {
         id: Date.now().toString(),
         prompt: base,
@@ -788,6 +924,8 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
         model: data.model || 'grok-4',
         timestamp: new Date().toISOString(),
         runTime: rt,
+        awayTeam: teamMatch ? teamMatch[1].trim() : null,
+        homeTeam: teamMatch ? teamMatch[2].trim() : null,
       };
       saveReport(report);
       setHistory(getReports());

@@ -150,10 +150,19 @@ async function saveAnalysis(pickId, analysis, model) {
 /**
  * POST /api/auto-analyze
  * Accepts: { pickId, sport, team, bet_type, odds, units, date, notes }
+ * OR: { action: 'batch-all' } to analyze all unanalyzed picks (admin)
  */
 export async function POST(req) {
   try {
-    const { pickId, sport, team, bet_type, odds, units, date, notes } = await req.json();
+    const body = await req.json();
+
+    // Admin batch-all action
+    if (body.action === 'batch-all') {
+      const result = await runBatchAll();
+      return NextResponse.json({ ok: true, ...result });
+    }
+
+    const { pickId, sport, team, bet_type, odds, units, date, notes } = body;
 
     if (!pickId || !sport || !team || !bet_type || odds === undefined || !date) {
       return NextResponse.json(
@@ -209,6 +218,55 @@ export async function POST(req) {
     console.error('Auto-analyze POST error:', err.message);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
+}
+
+/**
+ * POST /api/auto-analyze?action=batch-all
+ * Fetches all picks without a cached analysis and processes them (admin-triggered)
+ */
+async function runBatchAll() {
+  // Fetch all picks
+  const { data: allPicks, error: picksErr } = await supabase
+    .from('picks')
+    .select('id, sport, team, bet_type, odds, units, date, notes')
+    .order('created_at', { ascending: false });
+
+  if (picksErr) throw new Error(picksErr.message);
+  if (!allPicks?.length) return { processed: 0, skipped: 0, total: 0 };
+
+  // Fetch already-analyzed pick IDs
+  const { data: existing } = await supabase
+    .from('pick_analyses')
+    .select('pick_id');
+  const existingIds = new Set((existing || []).map(r => r.pick_id));
+
+  const unanalyzed = allPicks.filter(p => !existingIds.has(p.id));
+  let processed = 0;
+  let failed = 0;
+
+  // Process in batches of 5 to avoid rate limits
+  for (let i = 0; i < unanalyzed.length; i += 5) {
+    const batch = unanalyzed.slice(i, i + 5);
+    await Promise.allSettled(batch.map(async (pick) => {
+      try {
+        const prompt = buildAnalysisPrompt(pick.team, pick.bet_type, pick.odds, pick.date, pick.sport, pick.notes);
+        let analysis, model;
+        if (!XAI_API_KEY) {
+          analysis = generateFallbackAnalysis(pick.odds, pick.team, pick.bet_type);
+          model = 'fallback';
+        } else {
+          analysis = await callXAI(prompt);
+          model = 'grok-3';
+        }
+        await saveAnalysis(pick.id, analysis, model);
+        processed++;
+      } catch { failed++; }
+    }));
+    // Small delay between batches
+    if (i + 5 < unanalyzed.length) await new Promise(r => setTimeout(r, 500));
+  }
+
+  return { processed, failed, skipped: existingIds.size, total: allPicks.length };
 }
 
 /**

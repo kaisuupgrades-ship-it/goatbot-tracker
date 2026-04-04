@@ -623,6 +623,25 @@ function SystemPanel({ userEmail }) {
   const [sending, setSending]           = useState(false);
   const [msg, setMsg]                   = useState('');
   const [sysInfo, setSysInfo]           = useState(null);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchResult,  setBatchResult]  = useState(null);
+
+  async function runBatchAnalysis() {
+    setBatchRunning(true);
+    setBatchResult(null);
+    try {
+      const res  = await fetch('/api/auto-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'batch-all' }),
+      });
+      const data = await res.json();
+      setBatchResult(data);
+    } catch (e) {
+      setBatchResult({ error: e.message });
+    }
+    setBatchRunning(false);
+  }
 
   useEffect(() => {
     fetch(`/api/admin?action=system&userEmail=${encodeURIComponent(userEmail)}`)
@@ -648,6 +667,37 @@ function SystemPanel({ userEmail }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {msg && <div style={{ color: msg.startsWith('✓') ? '#4ade80' : '#f87171', padding: '0.5rem 0.75rem', background: msg.startsWith('✓') ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', borderRadius: '6px', fontSize: '0.8rem' }}>{msg}</div>}
+
+      {/* Batch auto-analyzer */}
+      <div className="card" style={{ padding: '1.2rem' }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          🐐 Batch GOAT Analyzer
+        </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.85rem', lineHeight: 1.6 }}>
+          Run the GOAT BOT quick analysis on every pick that doesn't have one yet. Uses grok-3 for speed. Cached forever — won't re-run picks that are already analyzed.
+        </p>
+        {batchResult && (
+          <div style={{
+            padding: '0.65rem 0.85rem', borderRadius: '7px', marginBottom: '0.85rem', fontSize: '0.78rem',
+            background: batchResult.error ? 'rgba(248,113,113,0.06)' : 'rgba(74,222,128,0.06)',
+            border: `1px solid ${batchResult.error ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
+            color: batchResult.error ? '#f87171' : '#4ade80',
+          }}>
+            {batchResult.error
+              ? `Error: ${batchResult.error}`
+              : `✓ Done — ${batchResult.processed} analyzed, ${batchResult.skipped} already had reports, ${batchResult.failed || 0} failed. Total picks: ${batchResult.total}`
+            }
+          </div>
+        )}
+        <button
+          className="btn-gold"
+          onClick={runBatchAnalysis}
+          disabled={batchRunning}
+          style={{ opacity: batchRunning ? 0.7 : 1 }}
+        >
+          {batchRunning ? '🐐 Analyzing all picks…' : '🐐 Analyze All Unanalyzed Picks'}
+        </button>
+      </div>
 
       <div className="card" style={{ padding: '1.2rem' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>📢 Site Announcement</div>

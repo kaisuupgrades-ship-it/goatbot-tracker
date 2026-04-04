@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signOut } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Sidebar       from './Sidebar';
@@ -14,6 +14,84 @@ import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
 import AdminTab          from './tabs/AdminTab';
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+
+// ── Announcement Banner — reads from admin broadcast (settings table) ──────────
+function AnnouncementBanner() {
+  const [text,      setText]      = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    async function fetchAnnouncement() {
+      try {
+        const res  = await fetch('/api/settings?key=announcement');
+        const data = await res.json();
+        if (data.value) {
+          // Only show if not dismissed for this version (key = updatedAt timestamp)
+          const dismissKey = `goatbot_banner_dismissed_${data.updated_at || 'default'}`;
+          if (sessionStorage.getItem(dismissKey)) return; // already dismissed this session
+          setText(data.value);
+          setUpdatedAt(data.updated_at);
+        }
+      } catch {}
+    }
+    fetchAnnouncement();
+    // Re-check every 5 minutes in case admin broadcasts a new message
+    const interval = setInterval(fetchAnnouncement, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  function dismiss() {
+    const dismissKey = `goatbot_banner_dismissed_${updatedAt || 'default'}`;
+    try { sessionStorage.setItem(dismissKey, '1'); } catch {}
+    setDismissed(true);
+  }
+
+  if (!text || dismissed) return null;
+
+  return (
+    <div style={{
+      background: 'linear-gradient(90deg, rgba(255,184,0,0.12) 0%, rgba(255,140,0,0.08) 100%)',
+      borderBottom: '1px solid rgba(255,184,0,0.2)',
+      padding: '0 1.5rem',
+      display: 'flex', alignItems: 'center', gap: '10px',
+      minHeight: '34px', flexShrink: 0,
+      animation: 'fadeIn 0.3s ease',
+    }}>
+      <span style={{ color: '#FFB800', fontSize: '0.78rem', flexShrink: 0 }}>📣</span>
+      {/* Scrolling ticker for long messages, static for short */}
+      <div style={{
+        flex: 1, overflow: 'hidden',
+        fontSize: '0.78rem', fontWeight: 600,
+        color: 'rgba(255,220,100,0.9)',
+        whiteSpace: text.length > 80 ? 'nowrap' : 'normal',
+      }}>
+        {text.length > 80 ? (
+          <div style={{
+            display: 'inline-block',
+            animation: 'ticker-scroll 20s linear infinite',
+            paddingLeft: '100%',
+          }}>
+            {text}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{text}
+          </div>
+        ) : text}
+      </div>
+      <button
+        onClick={dismiss}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0,
+          color: 'rgba(255,184,0,0.5)', fontSize: '0.85rem', padding: '2px 6px',
+          borderRadius: '4px', lineHeight: 1, transition: 'color 0.1s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,184,0,0.5)'; }}
+        title="Dismiss"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
 
 const TAB_META = {
   tracker:    { label: 'My Picks',     sub: 'Track your picks and ROI' },
@@ -103,6 +181,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             </span>
           </div>
         </header>
+
+        {/* Announcement Banner — only shows when admin has broadcast a message */}
+        <AnnouncementBanner />
 
         {/* Tab content — all tabs stay mounted, hidden when inactive to preserve state */}
         <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }} className="fade-up main-content">
