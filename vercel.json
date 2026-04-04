@@ -8,5 +8,19 @@
       "path": "/api/cron/trends",
       "schedule": "0 17 * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "goatbot-tracker.vercel.app" }],
+      "destination": "https://betos.win/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "goatbot-tracker-lead-forgev1.vercel.app" }],
+      "destination": "https://betos.win/$1",
+      "permanent": true
+    }
   ]
 }

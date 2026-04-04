@@ -22,11 +22,20 @@ export async function signIn(email, password) {
   return { data, error };
 }
 
+// Always redirect back to the canonical production domain, regardless of which
+// URL the user happened to land on (betos.win vs goatbot-tracker.vercel.app).
+const SITE_URL =
+  (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SITE_URL)
+    ? process.env.NEXT_PUBLIC_SITE_URL
+    : typeof window !== 'undefined'
+      ? 'https://betos.win'
+      : '';
+
 export async function signInWithGoogle() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+      redirectTo: `${SITE_URL}/auth/callback`,
     },
   });
   return { data, error };
@@ -34,7 +43,7 @@ export async function signInWithGoogle() {
 
 export async function resetPassword(email) {
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?type=recovery`,
+    redirectTo: `${SITE_URL}/auth/callback?type=recovery`,
   });
   return { data, error };
 }
