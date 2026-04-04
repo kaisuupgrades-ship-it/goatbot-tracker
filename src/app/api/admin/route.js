@@ -158,6 +158,79 @@ export async function GET(req) {
       return NextResponse.json({ contests: contests || [] });
     }
 
+    if (action === 'activity') {
+      // Pull all auth users (last_sign_in_at, created_at) — requires service role
+      let authUsers = [];
+      try {
+        const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 500 });
+        authUsers = authData?.users || [];
+      } catch { /* service role not configured */ }
+
+      // Last pick timestamp per user
+      const { data: allPicks } = await supabaseAdmin
+        .from('picks')
+        .select('user_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+
+      const lastPickMap = {};
+      (allPicks || []).forEach(p => {
+        if (!lastPickMap[p.user_id] || p.created_at > lastPickMap[p.user_id]) {
+          lastPickMap[p.user_id] = p.created_at;
+        }
+      });
+
+      // IP addresses from Supabase audit log (service role only)
+      let ipMap = {};
+      try {
+        const { data: auditData } = await supabaseAdmin
+          .schema('auth')
+          .from('audit_log_entries')
+          .select('actor_id, payload, created_at')
+          .order('created_at', { ascending: false })
+          .limit(3000);
+
+        (auditData || []).forEach(entry => {
+          if (!entry.actor_id || ipMap[entry.actor_id]) return;
+          const payload = typeof entry.payload === 'string' ? JSON.parse(entry.payload) : (entry.payload || {});
+          const ip = payload.ip_address
+            || payload.traits?.ip_address
+            || null;
+          if (ip) ipMap[entry.actor_id] = ip;
+        });
+      } catch { /* audit_log_entries not accessible */ }
+
+      // Profile rows for usernames / ban status
+      const { data: profiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, username, is_banned')
+        .limit(500);
+
+      const profileMap = {};
+      (profiles || []).forEach(p => { profileMap[p.id] = p; });
+
+      const activity = authUsers.map(u => ({
+        id: u.id,
+        email: u.email,
+        username: profileMap[u.id]?.username || null,
+        is_banned: profileMap[u.id]?.is_banned || false,
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at || null,
+        last_pick: lastPickMap[u.id] || null,
+        ip_address: ipMap[u.id] || null,
+      }));
+
+      // Sort: most recently signed-in first
+      activity.sort((a, b) => {
+        if (!a.last_sign_in_at && !b.last_sign_in_at) return 0;
+        if (!a.last_sign_in_at) return 1;
+        if (!b.last_sign_in_at) return -1;
+        return new Date(b.last_sign_in_at) - new Date(a.last_sign_in_at);
+      });
+
+      return NextResponse.json({ activity });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (err) {
     console.error('Admin API error:', err.message);

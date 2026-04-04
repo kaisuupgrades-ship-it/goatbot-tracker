@@ -617,6 +617,181 @@ function ContestsPanel({ userEmail }) {
   );
 }
 
+// ── ACTIVITY TAB ─────────────────────────────────────────────────────────────
+function ActivityPanel({ userEmail }) {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [search,  setSearch]  = useState('');
+  const [sortBy,  setSortBy]  = useState('signin'); // signin | activity | created
+
+  useEffect(() => {
+    fetch(`/api/admin?action=activity&userEmail=${encodeURIComponent(userEmail)}`)
+      .then(r => r.json())
+      .then(d => { if (d.error) setError(d.error); else setData(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [userEmail]);
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = now - d;
+    const mins  = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days  = Math.floor(diff / 86400000);
+    if (mins < 1)    return 'Just now';
+    if (mins < 60)   return `${mins}m ago`;
+    if (hours < 24)  return `${hours}h ago`;
+    if (days < 7)    return `${days}d ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+  }
+
+  function fmtFull(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading activity…</div>;
+  if (error)   return <div style={{ color: '#f87171', padding: '1rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>⚠ {error}</div>;
+
+  const rows = (data?.activity || [])
+    .filter(u => {
+      const q = search.toLowerCase();
+      return !search || (u.email || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      if (sortBy === 'activity') {
+        const aLast = a.last_pick || a.last_sign_in_at || '';
+        const bLast = b.last_pick || b.last_sign_in_at || '';
+        return bLast.localeCompare(aLast);
+      }
+      if (sortBy === 'created') return new Date(b.created_at) - new Date(a.created_at);
+      // default: last sign-in
+      if (!a.last_sign_in_at && !b.last_sign_in_at) return 0;
+      if (!a.last_sign_in_at) return 1;
+      if (!b.last_sign_in_at) return -1;
+      return new Date(b.last_sign_in_at) - new Date(a.last_sign_in_at);
+    });
+
+  const hasIPs = rows.some(r => r.ip_address);
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          placeholder="Search user or email…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: '200px' }}
+        />
+        <select className="input" value={sortBy} onChange={e => setSortBy(e.target.value)}
+          style={{ width: '160px', fontSize: '0.75rem', padding: '4px 8px' }}>
+          <option value="signin">Sort: Last Sign-In</option>
+          <option value="activity">Sort: Last Activity</option>
+          <option value="created">Sort: Newest Account</option>
+        </select>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', flex: 1 }}>{rows.length} users</span>
+      </div>
+
+      {!hasIPs && (
+        <div style={{ padding: '0.6rem 0.85rem', background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.12)', borderRadius: '7px', marginBottom: '1rem', fontSize: '0.72rem', color: '#888' }}>
+          <span style={{ color: '#FFB800', fontWeight: 700 }}>ℹ IP addresses</span> — requires Supabase service role key with audit log access. IPs will appear here once configured.
+        </div>
+      )}
+
+      {/* Table */}
+      <div style={{ overflowX: 'auto', background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px solid var(--border)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {['User', 'Email', 'Last Sign-In', 'Last Activity', 'Joined', hasIPs ? 'IP Address' : null, 'Status']
+                .filter(Boolean)
+                .map(h => (
+                  <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                ))
+              }
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((u, i) => {
+              const lastActivity = u.last_pick || u.last_sign_in_at;
+              const isOnline = u.last_sign_in_at && (Date.now() - new Date(u.last_sign_in_at)) < 15 * 60 * 1000; // within 15 min
+              return (
+                <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                  {/* User */}
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'var(--bg-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          {(u.username || u.email || '?')[0].toUpperCase()}
+                        </div>
+                        {isOnline && (
+                          <div style={{ position: 'absolute', bottom: 0, right: 0, width: '7px', height: '7px', borderRadius: '50%', background: '#4ade80', border: '1.5px solid var(--bg-elevated)' }} />
+                        )}
+                      </div>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{u.username || '—'}</span>
+                    </div>
+                  </td>
+                  {/* Email */}
+                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{u.email || '—'}</td>
+                  {/* Last Sign-In */}
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>
+                    <span
+                      title={fmtFull(u.last_sign_in_at)}
+                      style={{ color: u.last_sign_in_at ? 'var(--text-secondary)' : 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem' }}
+                    >
+                      {fmtDate(u.last_sign_in_at)}
+                    </span>
+                  </td>
+                  {/* Last Activity (most recent pick or sign-in) */}
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                      <span
+                        title={fmtFull(lastActivity)}
+                        style={{ color: lastActivity ? 'var(--text-secondary)' : 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem' }}
+                      >
+                        {fmtDate(lastActivity)}
+                      </span>
+                      {u.last_pick && (
+                        <span style={{ color: '#60a5fa', fontSize: '0.6rem' }}>📋 pick</span>
+                      )}
+                    </div>
+                  </td>
+                  {/* Joined */}
+                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                    {u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                  </td>
+                  {/* IP (conditional column) */}
+                  {hasIPs && (
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.68rem', color: u.ip_address ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                      {u.ip_address || '—'}
+                    </td>
+                  )}
+                  {/* Status */}
+                  <td style={{ padding: '0.6rem 0.85rem' }}>
+                    {u.is_banned
+                      ? <Badge label="BANNED"  color="#f87171" bg="rgba(248,113,113,0.1)" border="rgba(248,113,113,0.2)" />
+                      : isOnline
+                        ? <Badge label="ONLINE"  color="#4ade80" bg="rgba(74,222,128,0.1)"  border="rgba(74,222,128,0.2)"  />
+                        : <Badge label="OFFLINE" color="#555"    bg="rgba(85,85,85,0.1)"    border="rgba(85,85,85,0.2)"    />
+                    }
+                  </td>
+                </tr>
+              );
+            })}
+            {!rows.length && (
+              <tr><td colSpan={hasIPs ? 7 : 6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No user data — ensure Supabase service role key is configured</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── SYSTEM TAB ────────────────────────────────────────────────────────────────
 function SystemPanel({ userEmail }) {
   const [announcement, setAnnouncement] = useState('');
@@ -750,6 +925,7 @@ function SystemPanel({ userEmail }) {
 const ADMIN_TABS = [
   { id: 'overview',  label: '📊 Overview',     desc: 'Site-wide stats and recent activity' },
   { id: 'users',     label: '👥 Users',         desc: 'Manage user accounts, roles & bans' },
+  { id: 'activity',  label: '📡 Activity',      desc: 'Last sign-on, recent activity & IP addresses' },
   { id: 'picks',     label: '📋 Picks Audit',   desc: 'View and moderate all picks' },
   { id: 'contests',  label: '🏆 Contests',      desc: 'Active contests and participants' },
   { id: 'system',    label: '⚙️ System',         desc: 'Announcements and system settings' },
@@ -811,11 +987,12 @@ export default function AdminTab({ user }) {
       <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '-0.5rem 0 0' }}>{desc}</p>
 
       {/* Panel content */}
-      {active === 'overview' && <OverviewPanel  userEmail={user.email} />}
-      {active === 'users'    && <UsersPanel     userEmail={user.email} />}
-      {active === 'picks'    && <PicksAuditPanel userEmail={user.email} />}
-      {active === 'contests' && <ContestsPanel  userEmail={user.email} />}
-      {active === 'system'   && <SystemPanel    userEmail={user.email} />}
+      {active === 'overview'  && <OverviewPanel   userEmail={user.email} />}
+      {active === 'users'     && <UsersPanel      userEmail={user.email} />}
+      {active === 'activity'  && <ActivityPanel   userEmail={user.email} />}
+      {active === 'picks'     && <PicksAuditPanel userEmail={user.email} />}
+      {active === 'contests'  && <ContestsPanel   userEmail={user.email} />}
+      {active === 'system'    && <SystemPanel     userEmail={user.email} />}
     </div>
   );
 }
