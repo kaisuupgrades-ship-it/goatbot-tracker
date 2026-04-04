@@ -236,11 +236,12 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
           </div>
         </div>
       ) : (
-        /* Live GameCards — identical to Scoreboard */
+        /* Live GameCards — same grid as Scoreboard */
         <div className="game-cards-grid" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
           gap: '10px',
+          alignItems: 'start',
         }}>
           {featuredEvents.map(event => (
             <GameCard
@@ -266,14 +267,6 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
         </div>
       )}
 
-      {/* Tip */}
-      <div style={{
-        padding: '0.75rem 1rem', background: 'var(--bg-surface)',
-        border: '1px solid var(--border)', borderRadius: '8px',
-        fontSize: '0.74rem', color: 'var(--text-muted)', lineHeight: 1.6,
-      }}>
-        <strong style={{ color: 'var(--text-secondary)' }}>Tip:</strong> Tap ☆ on any Scoreboard game to pin it here. Your watchlist updates live — {hasLive ? 'every 20s (live game detected)' : 'every 45s'}.
-      </div>
 
       {/* BetSlip modal */}
       {betSlipGame && BetSlipModal && (
