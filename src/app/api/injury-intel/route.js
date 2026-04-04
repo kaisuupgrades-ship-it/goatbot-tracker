@@ -61,9 +61,33 @@ function parseGrokOutput(resp) {
   return '';
 }
 
+const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
+const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY;
+
+async function callClaude(prompt) {
+  if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not configured');
+  const res = await fetch(`${ANTHROPIC_BASE}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5',
+      system: 'You are an elite sports injury scout. Be concise and structured. NOTE: You do not have live web search — provide analysis based on your training data and clearly state that live status should be verified before wagering.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1200,
+      temperature: 0.3,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Claude error ${res.status}: ${err.error?.message || 'Unknown'}`);
+  }
+  const data = await res.json();
+  return data.content?.[0]?.text || '';
+}
+
 export async function POST(req) {
-  if (!XAI_API_KEY) {
-    return NextResponse.json({ error: 'XAI_API_KEY not configured' }, { status: 500 });
+  if (!XAI_API_KEY && !ANTHROPIC_KEY) {
+    return NextResponse.json({ error: 'No AI API key configured' }, { status: 500 });
   }
 
   const { sport = 'mlb', query = '', date } = await req.json();
@@ -72,35 +96,37 @@ export async function POST(req) {
     ? buildQueryPrompt(sport, query.trim(), dateStr)
     : buildAutoPrompt(sport, dateStr);
 
-  // Abort after 55s so we respond before Vercel's 60s limit kills the function
-  const controller = new AbortController();
-  const abortTimer = setTimeout(() => controller.abort(), 55_000);
+  // Try xAI first (has live web search — preferred for injury intel)
+  if (XAI_API_KEY) {
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 55_000);
 
-  try {
-    // Try grok-3 with live search (fast + reliable)
-    const response = await fetch(`${XAI_BASE}/chat/completions`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${XAI_API_KEY}` },
-      signal:  controller.signal,
-      body:    JSON.stringify({
-        model:    'grok-3',
-        messages: [
-          { role: 'system', content: 'You are an elite sports injury scout. Be concise, structured, and source everything. Only use verified, recent information.' },
-          { role: 'user',   content: prompt },
-        ],
-        temperature:  0.3,
-        max_tokens:   1200,
-        // Enable live search if the API supports it
-        search_parameters: { mode: 'auto' },
-      }),
-    });
+    try {
+      const response = await fetch(`${XAI_BASE}/chat/completions`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${XAI_API_KEY}` },
+        signal:  controller.signal,
+        body:    JSON.stringify({
+          model:    'grok-3',
+          messages: [
+            { role: 'system', content: 'You are an elite sports injury scout. Be concise, structured, and source everything. Only use verified, recent information.' },
+            { role: 'user',   content: prompt },
+          ],
+          temperature:  0.3,
+          max_tokens:   1200,
+          search_parameters: { mode: 'auto' },
+        }),
+      });
 
-    clearTimeout(abortTimer);
+      clearTimeout(abortTimer);
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const data  = await response.json();
+        const intel = data.choices?.[0]?.message?.content || parseGrokOutput(data);
+        return NextResponse.json({ intel, model: 'grok-3', timestamp: new Date().toISOString() });
+      }
 
-      // If search_parameters isn't supported, retry without it
+      // If search_parameters isn't supported (400), retry without it
       if (response.status === 400) {
         const retry = await fetch(`${XAI_BASE}/chat/completions`, {
           method:  'POST',
@@ -121,18 +147,28 @@ export async function POST(req) {
         }
       }
 
-      return NextResponse.json({ error: errData.error?.message || `HTTP ${response.status}` }, { status: response.status });
+      console.warn(`[injury-intel] xAI returned ${response.status}, falling back to Claude`);
+    } catch (err) {
+      clearTimeout(abortTimer);
+      if (err.name === 'AbortError') {
+        console.warn('[injury-intel] xAI timed out, falling back to Claude');
+      } else {
+        console.warn('[injury-intel] xAI error:', err.message, '— falling back to Claude');
+      }
     }
+  }
 
-    const data  = await response.json();
-    const intel = data.choices?.[0]?.message?.content || parseGrokOutput(data);
-    return NextResponse.json({ intel, model: 'grok-3', timestamp: new Date().toISOString() });
+  // Fall back to Claude (no live search, but still useful for general injury knowledge)
+  try {
+    const intel = await callClaude(prompt);
+    return NextResponse.json({
+      intel,
+      model: 'claude-sonnet-4-5 (no live search)',
+      timestamp: new Date().toISOString(),
+      warning: 'Live web search unavailable — verify injury status before wagering',
+    });
   } catch (err) {
-    clearTimeout(abortTimer);
-    if (err.name === 'AbortError') {
-      return NextResponse.json({ error: 'Scan timed out — xAI is slow right now. Try again in a moment.' }, { status: 504 });
-    }
-    console.error('Injury Intel API error:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+    console.error('[injury-intel] Both AI providers failed:', err.message);
+    return NextResponse.json({ error: 'Injury intel temporarily unavailable. Please try again in a moment.' }, { status: 503 });
   }
 }

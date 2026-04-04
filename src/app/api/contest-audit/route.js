@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { callAI } from '@/lib/ai';
+
+export const maxDuration = 60;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
-
-const XAI_API_KEY = process.env.XAI_API_KEY;
-const XAI_BASE = 'https://api.x.ai/v1';
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
 
@@ -34,10 +34,9 @@ async function aiAuditPick(pick) {
     return { status: 'REJECTED', reason: issues.join('; '), confidence: 'RULE', aiUsed: false };
   }
 
-  // If XAI available, do a quick smell-test for suspicious activity
-  if (XAI_API_KEY) {
-    try {
-      const prompt = `You are an AI auditor for a sports betting contest. Review this pick for legitimacy:
+  // AI smell-test for suspicious activity (xAI first, Claude fallback)
+  try {
+    const prompt = `You are an AI auditor for a sports betting contest. Review this pick for legitimacy:
 - Team: ${pick.team}
 - Bet Type: ${pick.bet_type}
 - Odds: ${pick.odds}
@@ -50,30 +49,17 @@ Check for: suspicious timing (pick submitted after game started), implausible od
 Respond with EXACTLY one line: APPROVED or FLAGGED followed by a brief reason.
 Examples: "APPROVED - Standard moneyline bet, odds in range" or "FLAGGED - Odds seem implausible for this matchup"`;
 
-      const res = await fetch(`${XAI_BASE}/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${XAI_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'grok-3',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 100,
-          temperature: 0.1,
-        }),
-      });
-      const data = await res.json();
-      const answer = data.choices?.[0]?.message?.content?.trim() || '';
+    const result = await callAI({ user: prompt, maxTokens: 100, temperature: 0.1 });
+    const answer = result.text;
 
-      if (answer.startsWith('FLAGGED')) {
-        return { status: 'FLAGGED', reason: answer.replace('FLAGGED', '').replace(/^[\s-]+/, ''), confidence: 'AI', aiUsed: true };
-      }
-      return { status: 'APPROVED', reason: answer.replace('APPROVED', '').replace(/^[\s-]+/, '') || 'Passed all checks', confidence: 'AI', aiUsed: true };
-    } catch {
-      // AI failed — fall through to rule-based approval
+    if (answer.startsWith('FLAGGED')) {
+      return { status: 'FLAGGED', reason: answer.replace('FLAGGED', '').replace(/^[\s-]+/, ''), confidence: 'AI', aiUsed: true };
     }
+    return { status: 'APPROVED', reason: answer.replace('APPROVED', '').replace(/^[\s-]+/, '') || 'Passed all checks', confidence: 'AI', aiUsed: true };
+  } catch (err) {
+    console.warn('[contest-audit] AI check failed, approving by rules:', err.message);
+    return { status: 'APPROVED', reason: 'Passed rule checks (AI unavailable)', confidence: 'RULE', aiUsed: false };
   }
-
-  // No AI available — approve based on rules alone
-  return { status: 'APPROVED', reason: 'Passed rule checks (AI unavailable)', confidence: 'RULE', aiUsed: false };
 }
 
 // ── GET: Fetch audit log for admin ──────────────────────────────────────────

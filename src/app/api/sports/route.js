@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 15;
+
 // ESPN unofficial API — free, no key needed
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 

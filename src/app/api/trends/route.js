@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { callAI } from '@/lib/ai';
+
+export const maxDuration = 60;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -174,22 +177,10 @@ export async function POST(req) {
     return NextResponse.json({ error: usage.reason, rateLimited: true }, { status: 429 });
   }
 
-  // Use xAI Grok if configured (preferred — already used for BetOS)
-  const XAI_API_KEY = process.env.XAI_API_KEY;
-  if (XAI_API_KEY) {
-    try {
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${XAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'grok-3',
-          messages: [
-            {
-              role: 'system',
-              content: `You are BetOS Trends Analyst — a sharp sports betting researcher with deep knowledge of situational betting, line movement, and statistical edges.
+  // Use AI (xAI grok-3 first, Claude fallback)
+  try {
+    const aiResult = await callAI({
+      system: `You are BetOS Trends Analyst — a sharp sports betting researcher with deep knowledge of situational betting, line movement, and statistical edges.
 
 Answer questions about sports betting trends and edges. Rules:
 - Be honest about uncertainty — say "research suggests" not "proven fact" for statistical claims
@@ -198,26 +189,17 @@ Answer questions about sports betting trends and edges. Rules:
 - Never invent specific win/loss records or ROI percentages you don't actually know
 - End every response with a concrete "Bottom line:" action sentence
 - Keep responses under 220 words, direct and practical`,
-            },
-            { role: 'user', content: question },
-          ],
-          temperature: 0.6,
-          max_tokens: 350,
-        }),
-      });
-
-      const data = await response.json();
-      const answer = data.choices?.[0]?.message?.content || 'Unable to generate insight.';
-      return NextResponse.json({ answer, remaining: usage.remaining, source: 'grok' });
-    } catch (err) {
-      console.error('Grok API error:', err);
-    }
+      user: question,
+      maxTokens: 350,
+      temperature: 0.6,
+    });
+    return NextResponse.json({ answer: aiResult.text, remaining: usage.remaining, source: aiResult.provider });
+  } catch (err) {
+    console.error('AI trends error:', err.message);
+    return NextResponse.json({
+      answer: 'AI analysis is temporarily unavailable. Please try again shortly.',
+      remaining: usage.remaining,
+      source: 'error',
+    });
   }
-
-  // Fallback if no AI key at all
-  return NextResponse.json({
-    answer: 'AI analysis requires an API key. Contact the admin to configure XAI_API_KEY.',
-    remaining: usage.remaining,
-    source: 'fallback',
-  });
 }

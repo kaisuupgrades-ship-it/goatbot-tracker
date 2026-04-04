@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { callAI } from '@/lib/ai';
 
-const XAI_API_KEY = process.env.XAI_API_KEY;
-const XAI_BASE = 'https://api.x.ai/v1';
+export const maxDuration = 120;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -73,38 +73,16 @@ function buildAnalysisPrompt(team, betType, odds, date, sport, notes) {
 }
 
 /**
- * Call xAI API with grok-3 for quick analysis
+ * Call AI (xAI grok-3 first, Claude fallback) for quick analysis
  */
 async function callXAI(prompt) {
-  const payload = {
-    model: 'grok-3',
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a sharp sports bettor giving quick, decisive analysis. Be concise and direct.',
-      },
-      { role: 'user', content: prompt },
-    ],
+  const result = await callAI({
+    system: 'You are a sharp sports bettor giving quick, decisive analysis. Be concise and direct.',
+    user: prompt,
+    maxTokens: 300,
     temperature: 0.7,
-    max_tokens: 300,
-  };
-
-  const response = await fetch(`${XAI_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${XAI_API_KEY}`,
-    },
-    body: JSON.stringify(payload),
   });
-
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error?.message || `HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0]?.message?.content || '';
+  return result.text;
 }
 
 /**

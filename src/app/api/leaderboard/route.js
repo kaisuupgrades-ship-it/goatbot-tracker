@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 15;
+
 const CACHE_TTL = 60 * 1000; // 1 min
 let cache = { data: null, ts: 0 };
 

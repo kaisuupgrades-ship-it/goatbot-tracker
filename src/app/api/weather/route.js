@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 15;
+
 // Open-Meteo — free, no API key needed
 // Forecast docs: https://open-meteo.com/en/docs
 // Archive docs:  https://open-meteo.com/en/docs/historical-weather-api

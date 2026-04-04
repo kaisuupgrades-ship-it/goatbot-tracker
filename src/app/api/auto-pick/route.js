@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
+export const maxDuration = 60;
+
 const DATA_DIR  = join(process.cwd(), 'data');
 const DATA_FILE = join(DATA_DIR, 'auto-pick.json');
 

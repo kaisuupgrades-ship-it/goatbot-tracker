@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const maxDuration = 30;
+
 const ADMIN_EMAILS = ['kaisuupgrades@gmail.com'];
 
 // Use service role key if available, otherwise fall back to anon (limited access)

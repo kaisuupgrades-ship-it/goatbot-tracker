@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 15;
+
 const ODDS_API_KEY  = process.env.ODDS_API_KEY;
 const ODDS_API_BASE = 'https://api.odds-api.io/v3';
 

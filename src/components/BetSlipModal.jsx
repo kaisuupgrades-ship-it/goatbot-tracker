@@ -454,6 +454,15 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
 
+  // ── Reset transient states when modal closes ────────────────────────────────
+  useEffect(() => {
+    return () => {
+      setShowConfirm(false);
+      setAiCheckResult(null);
+      setSaveError('');
+    };
+  }, []);
+
   // ── Save ──────────────────────────────────────────────────────────────────
   // ── Contest save flow: validate → confirm → AI check → save ────────────────
   const handleSave = useCallback(async () => {

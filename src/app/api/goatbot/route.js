@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 60;
+
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const XAI_BASE    = 'https://api.x.ai/v1';
 
@@ -140,8 +142,10 @@ export async function POST(req) {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      // Fallback to grok-3 without search if grok-4 fails
-      if (response.status === 400 || response.status === 404) {
+      // Fallback to grok-3 on any failure (including 410 Gone, 404, 400, 5xx)
+      // grok-4 /responses may be deprecated — grok-3 /chat/completions is always reliable
+      const shouldFallback = response.status >= 400; // fall back on ANY non-2xx
+      if (shouldFallback) {
         const fallback = await fetch(`${XAI_BASE}/chat/completions`, {
           method: 'POST',
           headers: {
@@ -160,9 +164,32 @@ export async function POST(req) {
         });
         if (fallback.ok) {
           const fbData = await fallback.json();
-          return NextResponse.json({ result: fbData.choices[0].message.content, model: 'grok-3 (fallback)' });
+          return NextResponse.json({ result: fbData.choices[0].message.content, model: 'grok-3' });
         }
       }
+
+      // Last resort: Claude (no web search, but still analytical)
+      const claudeKey = process.env.ANTHROPIC_API_KEY;
+      if (claudeKey) {
+        try {
+          const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-5',
+              system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is currently unavailable. Base your analysis on the provided odds data and your training knowledge. Flag anything that should be verified live.]',
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: 2000,
+              temperature: 0.7,
+            }),
+          });
+          if (claudeRes.ok) {
+            const claudeData = await claudeRes.json();
+            return NextResponse.json({ result: claudeData.content?.[0]?.text || '', model: 'claude-sonnet-4-5 (no live search)' });
+          }
+        } catch { /* fall through */ }
+      }
+
       return NextResponse.json({ error: errData.error?.message || `HTTP ${response.status}` }, { status: response.status });
     }
 

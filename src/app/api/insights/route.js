@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
+import { callAI } from '@/lib/ai';
 
-const XAI_API_KEY = process.env.XAI_API_KEY;
-const XAI_BASE    = 'https://api.x.ai/v1';
+export const maxDuration = 60;
 
 export async function POST(req) {
-  if (!XAI_API_KEY) {
-    return NextResponse.json({ error: 'XAI_API_KEY not configured' }, { status: 500 });
+  if (!process.env.XAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: 'No AI API key configured' }, { status: 500 });
   }
 
   try {
@@ -72,30 +72,13 @@ Return ONLY valid JSON (no markdown, no code fences) in exactly this structure:
 
 Include 1-3 leaks, 1-3 edges, 1-2 patterns, and 3 recommendations. Be brutally honest. If they have no real edge, say so. If they're doing something well, be specific about what.`;
 
-    const response = await fetch(`${XAI_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${XAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'grok-3',
-        messages: [
-          { role: 'system', content: 'You are a sharp sports betting analyst. Return only valid JSON.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.4,
-        max_tokens: 1500,
-      }),
+    const aiResult = await callAI({
+      system: 'You are a sharp sports betting analyst. Return only valid JSON.',
+      user: prompt,
+      maxTokens: 1500,
+      temperature: 0.4,
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return NextResponse.json({ error: err.error?.message || `API error ${response.status}` }, { status: response.status });
-    }
-
-    const data   = await response.json();
-    const raw    = data.choices?.[0]?.message?.content || '';
+    const raw = aiResult.text;
 
     // Strip markdown code fences if model added them
     const cleaned = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
