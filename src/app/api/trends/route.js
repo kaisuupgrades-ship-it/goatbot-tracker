@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callAI } from '@/lib/ai';
-import { fetchOddsForSports, mergeOddsIntoGameList, buildOddsLookup } from '@/lib/odds';
+import { fetchOddsForSports, buildOddsLookup } from '@/lib/odds';
+import { fetchWeatherForGames } from '@/lib/weather';
 
 export const maxDuration = 60;
 
@@ -125,18 +126,24 @@ async function fetchTodaysGames() {
   return gameList;
 }
 
-function buildEdgePrompt(gameList, dateStr) {
+function buildEdgePrompt(gameList, dateStr, weatherMap = {}) {
+  const weatherLines = Object.entries(weatherMap)
+    .map(([matchup, w]) => `  ${matchup}: ${w}`)
+    .join('\n');
+
   return `You are BetOS — a sharp sports betting analyst. Today is ${dateStr}.
 
-Here are today's games with current odds:
+Here are today's games with current FanDuel/DraftKings odds:
 ${gameList.map(g =>
   `${g.emoji} ${g.sport}: ${g.matchup} (${g.away} @ ${g.home})` +
   (g.mlAway != null ? ` | ML: Away ${g.mlAway > 0 ? '+' : ''}${g.mlAway} / Home ${g.mlHome > 0 ? '+' : ''}${g.mlHome}` : '') +
   (g.spread ? ` | Spread: ${g.spread}` : '') +
   (g.total != null ? ` | Total: ${g.total}` +
     (g.overOdds  != null ? ` (O ${g.overOdds > 0 ? '+' : ''}${g.overOdds}`  : '') +
-    (g.underOdds != null ? ` / U ${g.underOdds > 0 ? '+' : ''}${g.underOdds})` : (g.overOdds != null ? ')' : '')) : '')
+    (g.underOdds != null ? ` / U ${g.underOdds > 0 ? '+' : ''}${g.underOdds})` : (g.overOdds != null ? ')' : '')) : '') +
+  (weatherMap[g.matchup] ? ` | Weather: ${weatherMap[g.matchup]}` : '')
 ).join('\n')}
+${weatherLines ? `\nOutdoor stadium weather conditions:\n${weatherLines}` : ''}
 
 Identify the 4-8 BEST situational betting edges from this slate. For each edge, consider:
 - Home/away underdog value spots
@@ -240,7 +247,10 @@ export async function POST(req) {
         return NextResponse.json({ error: 'No games found for today. ESPN may not have updated yet.' }, { status: 404 });
       }
 
-      // 2. Run AI edge analysis
+      // 2. Fetch weather for outdoor MLB/NFL games (parallel, non-blocking)
+      const weatherMap = await fetchWeatherForGames(gameList).catch(() => ({}));
+
+      // 3. Run AI edge analysis
       const today = new Date().toLocaleDateString('en-US', {
         weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
       });
@@ -248,7 +258,7 @@ export async function POST(req) {
 
       const aiResult = await callAI({
         system: 'You are BetOS, a sharp sports betting analyst. Return ONLY valid JSON arrays, no markdown or explanation.',
-        user: buildEdgePrompt(gameList, today),
+        user: buildEdgePrompt(gameList, today, weatherMap),
         maxTokens: 2000,
         temperature: 0.5,
       });
