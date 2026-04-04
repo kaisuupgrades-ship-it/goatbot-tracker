@@ -134,11 +134,54 @@ function getCompetitors(event) {
 function getOdds(event) {
   const odds = event?.competitions?.[0]?.odds?.[0];
   if (!odds) return null;
+
+  // ── Moneyline ─────────────────────────────────────────────────────────────
+  let homeOdds = odds.homeTeamOdds?.moneyLine
+    || odds.homeTeamOdds?.current?.moneyLine
+    || null;
+  let awayOdds = odds.awayTeamOdds?.moneyLine
+    || odds.awayTeamOdds?.current?.moneyLine
+    || null;
+
+  // Fallback: ESPN details = "LAD -314" for MLB/NHL where -NNN IS the ML price
+  if ((!homeOdds || !awayOdds) && odds.details) {
+    const m = odds.details.match(/([A-Z]+)\s*([-+]?\d+)/);
+    if (m) {
+      const parsedOdds = parseInt(m[2]);
+      if (Math.abs(parsedOdds) >= 100) {
+        // The listed team gets the parsed odds; opposing team gets the other side
+        const detailsTeamIsHome = event?.competitions?.[0]?.competitors
+          ?.find(c => c.homeAway === 'home')?.team?.abbreviation === m[1];
+        if (detailsTeamIsHome) {
+          if (!homeOdds) homeOdds = parsedOdds;
+        } else {
+          if (!awayOdds) awayOdds = parsedOdds;
+        }
+      }
+    }
+  }
+
+  // ── Spread / Run Line / Puck Line prices ──────────────────────────────────
+  const homeSpreadOdds = odds.homeTeamOdds?.spreadLine
+    || odds.homeTeamOdds?.current?.pointSpread?.american
+    || null;
+  const awaySpreadOdds = odds.awayTeamOdds?.spreadLine
+    || odds.awayTeamOdds?.current?.pointSpread?.american
+    || null;
+
+  // ── Over / Under prices ────────────────────────────────────────────────────
+  const overOdds  = odds.overOdds  || odds.homeTeamOdds?.overLine  || null;
+  const underOdds = odds.underOdds || odds.awayTeamOdds?.underLine || null;
+
   return {
-    homeOdds: odds.homeTeamOdds?.moneyLine || odds.homeTeamOdds?.current?.moneyLine || null,
-    awayOdds: odds.awayTeamOdds?.moneyLine || odds.awayTeamOdds?.current?.moneyLine || null,
+    homeOdds,
+    awayOdds,
     spread:   odds.details || null,
-    total:    odds.overUnder || null,
+    total:    odds.overUnder ?? null,
+    homeSpreadOdds,
+    awaySpreadOdds,
+    overOdds,
+    underOdds,
     provider: odds.provider?.name || '',
   };
 }

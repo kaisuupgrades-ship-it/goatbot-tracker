@@ -796,6 +796,7 @@ function ActivityPanel({ userEmail }) {
 function SystemPanel({ userEmail }) {
   const [announcement, setAnnouncement] = useState('');
   const [sending, setSending]           = useState(false);
+  const [clearing, setClearing]         = useState(false);
   const [msg, setMsg]                   = useState('');
   const [sysInfo, setSysInfo]           = useState(null);
   const [batchRunning, setBatchRunning] = useState(false);
@@ -818,12 +819,14 @@ function SystemPanel({ userEmail }) {
     setBatchRunning(false);
   }
 
-  useEffect(() => {
+  function loadSysInfo() {
     fetch(`/api/admin?action=system&userEmail=${encodeURIComponent(userEmail)}`)
       .then(r => r.json())
       .then(d => setSysInfo(d))
       .catch(() => {});
-  }, [userEmail]);
+  }
+
+  useEffect(() => { loadSysInfo(); }, [userEmail]);
 
   async function sendAnnouncement() {
     if (!announcement.trim()) return;
@@ -834,10 +837,32 @@ function SystemPanel({ userEmail }) {
       body: JSON.stringify({ action: 'broadcast', userEmail, value: announcement.trim() }),
     });
     const d = await res.json();
+    if (!d.error) {
+      setAnnouncement('');
+      loadSysInfo(); // refresh to show new active announcement
+    }
     setMsg(d.error ? `Error: ${d.error}` : '✓ Announcement broadcast');
     setSending(false);
     setTimeout(() => setMsg(''), 5000);
   }
+
+  async function clearAnnouncement() {
+    if (!window.confirm('Clear the active announcement? It will be removed for all users.')) return;
+    setClearing(true);
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'broadcast', userEmail, value: '' }),
+    });
+    const d = await res.json();
+    if (!d.error) loadSysInfo();
+    setMsg(d.error ? `Error: ${d.error}` : '✓ Announcement cleared');
+    setClearing(false);
+    setTimeout(() => setMsg(''), 5000);
+  }
+
+  const activeMsg = sysInfo?.currentAnnouncement || '';
+  const updatedAt = sysInfo?.announcementUpdatedAt;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -875,21 +900,75 @@ function SystemPanel({ userEmail }) {
       </div>
 
       <div className="card" style={{ padding: '1.2rem' }}>
-        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>📢 Site Announcement</div>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.75rem' }}>
-          Broadcast a message to all users on the platform. Stored in the settings table.
-        </p>
-        <textarea
-          className="input"
-          placeholder="e.g. New feature live: Import bet slips from DraftKings screenshots..."
-          value={announcement}
-          onChange={e => setAnnouncement(e.target.value)}
-          rows={3}
-          style={{ resize: 'vertical', marginBottom: '0.75rem' }}
-        />
-        <button className="btn-gold" onClick={sendAnnouncement} disabled={sending || !announcement.trim()}>
-          {sending ? 'Sending…' : 'Broadcast Announcement'}
-        </button>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          📢 Site Announcement
+          {activeMsg
+            ? <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '4px', padding: '2px 7px', letterSpacing: '0.06em' }}>ACTIVE</span>
+            : <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '4px', padding: '2px 7px', letterSpacing: '0.06em' }}>NONE</span>
+          }
+        </div>
+
+        {/* Current active announcement */}
+        {activeMsg ? (
+          <div style={{ marginBottom: '1rem', padding: '0.85rem', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: 'var(--text-primary)', fontSize: '0.82rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{activeMsg}</div>
+                {updatedAt && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginTop: '6px', fontFamily: 'IBM Plex Mono, monospace' }}>
+                    Last updated: {new Date(updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={clearAnnouncement}
+                disabled={clearing}
+                title="Clear / delete this announcement"
+                style={{ flexShrink: 0, background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171', borderRadius: '6px', padding: '0.3rem 0.7rem', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', opacity: clearing ? 0.6 : 1 }}
+              >
+                {clearing ? 'Clearing…' : '🗑 Clear'}
+              </button>
+            </div>
+            <button
+              onClick={() => setAnnouncement(activeMsg)}
+              style={{ marginTop: '0.6rem', background: 'none', border: 'none', color: 'var(--gold)', fontSize: '0.7rem', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+            >
+              ✏️ Edit this message
+            </button>
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.75rem' }}>
+            No active announcement. Compose one below — it will appear as a banner for all users.
+          </p>
+        )}
+
+        {/* Compose new / replacement announcement */}
+        <div style={{ marginBottom: '0.75rem' }}>
+          <label style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+            {activeMsg ? 'Replace with new message' : 'New announcement'}
+          </label>
+          <textarea
+            className="input"
+            placeholder="e.g. New feature live: Import bet slips from DraftKings screenshots..."
+            value={announcement}
+            onChange={e => setAnnouncement(e.target.value)}
+            rows={3}
+            style={{ resize: 'vertical', marginBottom: '0.75rem' }}
+          />
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="btn-gold" onClick={sendAnnouncement} disabled={sending || !announcement.trim()}>
+              {sending ? 'Sending…' : activeMsg ? '📢 Replace Announcement' : '📢 Broadcast Announcement'}
+            </button>
+            {announcement && (
+              <button
+                onClick={() => setAnnouncement('')}
+                style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '6px', padding: '0.45rem 0.85rem', fontSize: '0.78rem', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="card" style={{ padding: '1.2rem' }}>

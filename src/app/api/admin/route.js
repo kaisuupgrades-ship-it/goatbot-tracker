@@ -140,10 +140,19 @@ export async function GET(req) {
     }
 
     if (action === 'system') {
+      // Also fetch current announcement from settings table
+      const { data: announcementRow } = await supabaseAdmin
+        .from('settings')
+        .select('value, updated_at')
+        .eq('key', 'announcement')
+        .single();
+
       return NextResponse.json({
         environment: process.env.NODE_ENV || 'production',
         serviceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
         supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✓ Set' : '✗ Missing',
+        currentAnnouncement: announcementRow?.value || '',
+        announcementUpdatedAt: announcementRow?.updated_at || null,
       });
     }
 

@@ -113,7 +113,9 @@ function QuickBetBtn({ label, sublabel, odds, selected, onClick }) {
           {fmtOdds(odds)}
         </div>
       ) : (
-        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>odds TBD</div>
+        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          {selected ? 'Enter odds ↓' : 'Set odds →'}
+        </div>
       )}
     </button>
   );
@@ -204,36 +206,63 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const spreadData = odds?.spread ? parseSpread(odds.spread, awayAbbr, homeAbbr) : null;
 
   // Build the quick-bet options from real odds data
+  // For spread/total, default to -110 (standard juice) when ESPN doesn't supply a price —
+  // this is correct ~95% of the time and far better than showing "odds TBD".
+  const spreadSection = sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread';
+  const spreadBetType = sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread';
+
+  // For MLB/NHL the spread string encodes the ML, not a ±1.5 number.
+  // In those sports the run/puck line is always ±1.5 — show that if spread looks like an ML (≥100).
+  const spreadIsML = spreadData && Math.abs(spreadData.awayLine) >= 100;
+  const effectiveSpreadData = spreadIsML
+    ? { awayLine: -1.5, homeLine: 1.5 }  // normalize to actual run/puck line
+    : spreadData;
+  // When spread string was actually an ML price, use it for the ML buttons if they're missing
+  const mlFromSpread = spreadIsML ? spreadData : null;
+  const resolvedAwayOdds = odds?.awayOdds ?? (mlFromSpread?.awayLine ? mlFromSpread.awayLine : null);
+  const resolvedHomeOdds = odds?.homeOdds ?? (mlFromSpread?.homeLine ? mlFromSpread.homeLine : null);
+
   const quickBets = [
     // ── Moneyline ──────────────────────────────────────────────────────────
     {
       section: 'Moneyline',
       bets: [
-        { id: 'away-ml', label: awayAbbr, sublabel: 'Moneyline', bet_type: 'Moneyline', team: awayName, odds: odds?.awayOdds ?? null, defaultOdds: odds?.awayOdds },
-        { id: 'home-ml', label: homeAbbr, sublabel: 'Moneyline', bet_type: 'Moneyline', team: homeName, odds: odds?.homeOdds ?? null, defaultOdds: odds?.homeOdds },
+        {
+          id: 'away-ml', label: awayAbbr, sublabel: 'Moneyline',
+          bet_type: 'Moneyline', team: awayName,
+          odds: resolvedAwayOdds,
+          defaultOdds: resolvedAwayOdds,
+        },
+        {
+          id: 'home-ml', label: homeAbbr, sublabel: 'Moneyline',
+          bet_type: 'Moneyline', team: homeName,
+          odds: resolvedHomeOdds,
+          defaultOdds: resolvedHomeOdds,
+        },
       ],
     },
-    // ── Spread (only if data available) ───────────────────────────────────
-    ...(spreadData ? [{
-      section: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+    // ── Spread / Run Line / Puck Line (only if data available) ─────────────
+    ...(effectiveSpreadData ? [{
+      section: spreadSection,
       bets: [
         {
           id: 'away-spread',
           label: awayAbbr,
-          sublabel: `${spreadData.awayLine > 0 ? '+' : ''}${spreadData.awayLine}`,
-          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
-          team: `${awayName} ${spreadData.awayLine > 0 ? '+' : ''}${spreadData.awayLine}`,
-          odds: null,   // spread price not usually in this feed
-          defaultOdds: -110,
+          sublabel: `${effectiveSpreadData.awayLine > 0 ? '+' : ''}${effectiveSpreadData.awayLine}`,
+          bet_type: spreadBetType,
+          team: `${awayName} ${effectiveSpreadData.awayLine > 0 ? '+' : ''}${effectiveSpreadData.awayLine}`,
+          // Use real spread price from ESPN if available; otherwise -110 is standard juice
+          odds: odds?.awaySpreadOdds ?? -110,
+          defaultOdds: odds?.awaySpreadOdds ?? -110,
         },
         {
           id: 'home-spread',
           label: homeAbbr,
-          sublabel: `${spreadData.homeLine > 0 ? '+' : ''}${spreadData.homeLine}`,
-          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
-          team: `${homeName} ${spreadData.homeLine > 0 ? '+' : ''}${spreadData.homeLine}`,
-          odds: null,
-          defaultOdds: -110,
+          sublabel: `${effectiveSpreadData.homeLine > 0 ? '+' : ''}${effectiveSpreadData.homeLine}`,
+          bet_type: spreadBetType,
+          team: `${homeName} ${effectiveSpreadData.homeLine > 0 ? '+' : ''}${effectiveSpreadData.homeLine}`,
+          odds: odds?.homeSpreadOdds ?? -110,
+          defaultOdds: odds?.homeSpreadOdds ?? -110,
         },
       ],
     }] : []),
@@ -241,8 +270,18 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     ...(odds?.total != null ? [{
       section: `Total (${odds.total})`,
       bets: [
-        { id: 'over', label: 'Over', sublabel: `${odds.total}`, bet_type: 'Total (Over)', team: `Over ${odds.total}`, odds: null, defaultOdds: -110 },
-        { id: 'under', label: 'Under', sublabel: `${odds.total}`, bet_type: 'Total (Under)', team: `Under ${odds.total}`, odds: null, defaultOdds: -110 },
+        {
+          id: 'over',  label: 'Over',  sublabel: `${odds.total}`,
+          bet_type: 'Total (Over)',  team: `Over ${odds.total}`,
+          odds: odds?.overOdds  ?? -110,
+          defaultOdds: odds?.overOdds  ?? -110,
+        },
+        {
+          id: 'under', label: 'Under', sublabel: `${odds.total}`,
+          bet_type: 'Total (Under)', team: `Under ${odds.total}`,
+          odds: odds?.underOdds ?? -110,
+          defaultOdds: odds?.underOdds ?? -110,
+        },
       ],
     }] : []),
   ];
