@@ -156,8 +156,8 @@ function parseReport(text) {
   const oddsM = t.match(/(?:odds?|line|ml)[:\s]*([+-]\d{3,4})/i) || t.match(/([+-]\d{3,4})/);
   const odds  = oddsM ? oddsM[1] : null;
 
-  // WIN PROBABILITY (e.g. "win probability: 62%")
-  const winPM = t.match(/(?:win\s*prob(?:ability)?)[:\s]+(\d{1,3})%/i);
+  // MARKET IMPLIED PROB — matches both old "WIN PROBABILITY" and new "MARKET IMPLIED PROB"
+  const winPM = t.match(/(?:market\s*implied\s*prob(?:ability)?|win\s*prob(?:ability)?)[:\s]+(\d{1,3})%/i);
   const winProb = winPM ? parseInt(winPM[1]) : null;
 
   // KEY FACTORS — numbered/bulleted items (max 5)
@@ -313,7 +313,7 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
     ${conf ? `<div class="metric"><div class="metric-label">Confidence</div><div class="metric-value" style="color:${confColor}">${conf}</div></div>` : ''}
     ${edge ? `<div class="metric"><div class="metric-label">Edge Score</div><div class="metric-value">${edge}/10</div></div>` : ''}
     ${odds ? `<div class="metric"><div class="metric-label">Current Odds</div><div class="metric-value">${odds}</div></div>` : ''}
-    ${winProb ? `<div class="metric"><div class="metric-label">Win Probability</div><div class="metric-value">${winProb}%</div></div>` : ''}
+    ${winProb ? `<div class="metric"><div class="metric-label">Market Implied</div><div class="metric-value">${winProb}%</div></div>` : ''}
   </div>
 
   ${factors && factors.length > 0 ? `
@@ -652,7 +652,7 @@ function GoatPickCard({ result, model, prompt, runTime }) {
             {/* Win prob */}
             {winProb && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', minWidth: '60px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Win Prob</div>
+                <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', minWidth: '60px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Mkt Implied</div>
                 <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${winProb}%`, background: 'linear-gradient(90deg, #4ade8060, #4ade80)', borderRadius: '3px', transition: 'width 1s ease' }} />
                 </div>

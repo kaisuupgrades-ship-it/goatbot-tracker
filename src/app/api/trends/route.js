@@ -174,67 +174,49 @@ export async function POST(req) {
     return NextResponse.json({ error: usage.reason, rateLimited: true }, { status: 429 });
   }
 
-  // If ANTHROPIC_API_KEY is configured, use real AI
-  if (process.env.ANTHROPIC_API_KEY) {
+  // Use xAI Grok if configured (preferred — already used for GOAT BOT)
+  const XAI_API_KEY = process.env.XAI_API_KEY;
+  if (XAI_API_KEY) {
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
+          'Authorization': `Bearer ${XAI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
-          system: `You are GOAT BOT, an expert sports betting analyst with deep knowledge of statistical trends, line movement, situational betting, and sharp money concepts.
+          model: 'grok-3',
+          messages: [
+            {
+              role: 'system',
+              content: `You are GOAT BOT Trends Analyst — a sharp sports betting researcher with deep knowledge of situational betting, line movement, and statistical edges.
 
-Provide concise, data-driven insights for bettors. Focus on:
-- Specific statistical edges (with approximate sample sizes and ROI when relevant)
-- Situational spots: rest, travel, revenge games, weather
-- Public vs sharp money dynamics
-- MLB: exit velocity, launch angle, park factors, bullpen usage
-- NFL: rest advantages, primetime trends, divisional matchups
-- NBA: back-to-back fatigue, pace matchups, home/road splits
-
-Keep responses under 200 words. Be direct and actionable. End with a one-sentence bottom line.`,
-          messages: [{ role: 'user', content: question }],
+Answer questions about sports betting trends and edges. Rules:
+- Be honest about uncertainty — say "research suggests" not "proven fact" for statistical claims
+- Give actionable advice with specific parameters (e.g. "fade road B2B teams when they are -3 or more chalk")
+- Mention sample size caveats when discussing trends
+- Never invent specific win/loss records or ROI percentages you don't actually know
+- End every response with a concrete "Bottom line:" action sentence
+- Keep responses under 220 words, direct and practical`,
+            },
+            { role: 'user', content: question },
+          ],
+          temperature: 0.6,
+          max_tokens: 350,
         }),
       });
 
       const data = await response.json();
-      const answer = data.content?.[0]?.text || 'Unable to generate insight.';
-
-      return NextResponse.json({
-        answer,
-        remaining: usage.remaining,
-        source: 'ai',
-      });
+      const answer = data.choices?.[0]?.message?.content || 'Unable to generate insight.';
+      return NextResponse.json({ answer, remaining: usage.remaining, source: 'grok' });
     } catch (err) {
-      console.error('AI API error:', err);
+      console.error('Grok API error:', err);
     }
   }
 
-  // Fallback: smart keyword-based responses when AI API not configured
-  const q = question.toLowerCase();
-  let answer = "Great question! This type of analysis looks at situational edges that the public often overlooks. ";
-
-  if (q.includes('home run') || q.includes('hr') || q.includes('homer')) {
-    answer += "For home run trends: focus on hitters with exit velocity above 95 mph in their last 10 AB and playing in hitter-friendly parks (Coors Field, Great American Ball Park, Globe Life). Anytime HR markets have value when the public underestimates a hot hitter's current trajectory vs. their full-season average. Wind blowing out 10+ mph adds roughly 8% more to the HR probability.";
-  } else if (q.includes('pitcher') || q.includes('pitching') || q.includes('era')) {
-    answer += "Pitching matchups: look beyond ERA — focus on xFIP and SIERA for true talent. A pitcher with good ERA but poor strikeout rate is due for regression. When a team starter has a K/9 above 9.5 against a lineup with 25%+ strikeout rate, back the under. First-inning totals on debut starters are particularly sharp: opponents have zero film.";
-  } else if (q.includes('weather') || q.includes('wind') || q.includes('rain')) {
-    answer += "Weather is one of the most underutilized free edges in MLB betting. Wind blowing in at 15+ mph from center suppresses offense dramatically — totals go under 63% of the time in those conditions. Check Weather.com for park-specific wind direction before lines move. Wrigley Field and Guaranteed Rate Field are the most wind-sensitive parks in MLB.";
-  } else if (q.includes('back to back') || q.includes('b2b') || q.includes('fatigue')) {
-    answer += "Back-to-back fatigue is most pronounced in the NBA and NHL. Road teams on the second night of a B2B show a -4.3 point scoring drop on average vs. their season average. In the NHL, goalie fatigue compounds this — back-up goaltenders starting B2B road games have a save percentage 2.1% below their starter's average, a significant edge for live betting.";
-  } else {
-    answer += "To find real edges, look at situational spots the public ignores: rest advantages (teams on 3+ days vs. B2B), revenge games, prime-time performance splits, and weather conditions. Track your own picks here to build a personal database — your sample will reveal YOUR specific betting edges over time. The best bettors find niches the market hasn't fully priced in.";
-  }
-
-  answer += "\n\n📊 *This is a preview response. Add your ANTHROPIC_API_KEY to Vercel environment variables to unlock real-time AI analysis.*";
-
+  // Fallback if no AI key at all
   return NextResponse.json({
-    answer,
+    answer: 'AI analysis requires an API key. Contact the admin to configure XAI_API_KEY.',
     remaining: usage.remaining,
     source: 'fallback',
   });

@@ -63,11 +63,37 @@ function mergeGames(prevGames, newGames) {
   const prevMap = new Map(prevGames.map(g => [g.id, g]));
   return newGames.map(g => {
     const prev = prevMap.get(g.id);
-    // If scores/status haven't changed, keep the old reference to prevent re-render
-    if (prev && JSON.stringify(prev.competitions) === JSON.stringify(g.competitions) && prev.status?.type?.state === g.status?.type?.state) {
+    if (!prev) return g;
+
+    // Preserve closing odds when ESPN drops them on live/final games
+    const hasNewOdds  = (g.competitions?.[0]?.odds?.length   ?? 0) > 0;
+    const hasPrevOdds = (prev.competitions?.[0]?.odds?.length ?? 0) > 0;
+
+    let merged = g;
+    if (!hasNewOdds && hasPrevOdds) {
+      // Carry forward the last known odds, tag as closing line
+      merged = {
+        ...g,
+        _closingLine: true,
+        competitions: (g.competitions || []).map((comp, i) => ({
+          ...comp,
+          odds: comp.odds?.length ? comp.odds : (prev.competitions?.[i]?.odds ?? []),
+        })),
+      };
+    } else if (prev._closingLine && hasNewOdds) {
+      // Odds came back (unlikely but handle it) — clear the flag
+      merged = { ...g, _closingLine: false };
+    }
+
+    // If nothing meaningful changed, keep old reference (avoids unnecessary re-renders)
+    if (
+      !merged._closingLine &&
+      JSON.stringify(prev.competitions) === JSON.stringify(merged.competitions) &&
+      prev.status?.type?.state === merged.status?.type?.state
+    ) {
       return prev;
     }
-    return g;
+    return merged;
   });
 }
 
@@ -849,17 +875,25 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           })}
         </div>
 
-        {/* Odds strip — pre-game and live */}
-        {odds && gameState.state !== 'final' && (odds.spread || odds.total != null) && (
+        {/* Odds strip — pre-game, live, and closing line */}
+        {odds && (gameState.state !== 'final' || event._closingLine) && (odds.spread || odds.total != null) && (
           <div style={{ display: 'flex', gap: '8px', marginTop: '0.6rem', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)', alignItems: 'center', flexWrap: 'wrap', opacity: gameState.state === 'live' ? 0.8 : 1 }}>
             <span style={{
               fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
-              background: gameState.state === 'live' ? 'rgba(255,69,96,0.10)' : 'rgba(0,177,79,0.10)',
-              color: gameState.state === 'live' ? '#FF4560' : '#00b14f',
-              border: `1px solid ${gameState.state === 'live' ? 'rgba(255,69,96,0.22)' : 'rgba(0,177,79,0.22)'}`,
+              background: event._closingLine
+                ? 'rgba(255,184,0,0.08)'
+                : gameState.state === 'live' ? 'rgba(255,69,96,0.10)' : 'rgba(0,177,79,0.10)',
+              color: event._closingLine
+                ? 'var(--text-muted)'
+                : gameState.state === 'live' ? '#FF4560' : '#00b14f',
+              border: `1px solid ${event._closingLine
+                ? 'rgba(255,255,255,0.08)'
+                : gameState.state === 'live' ? 'rgba(255,69,96,0.22)' : 'rgba(0,177,79,0.22)'}`,
               letterSpacing: '0.04em', flexShrink: 0, fontFamily: 'IBM Plex Mono, monospace',
-            }}>
-              {gameState.state === 'live' ? 'LIVE' : 'DK'}
+            }}
+              title={event._closingLine ? 'Closing line — odds at game start' : undefined}
+            >
+              {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : 'DK'}
             </span>
             {odds.spread && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
@@ -1267,12 +1301,38 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   const gameInfo = gameState.state === 'pre'
                     ? `${awayName} @ ${homeName} — ${gameState.label}`
                     : `${awayName} ${awayScore ?? ''} @ ${homeName} ${homeScore ?? ''} (${gameState.label})`;
-                  const oddsInfo = odds
-                    ? `ML: ${awayName} ${formatOdds(odds.awayOdds)} / ${homeName} ${formatOdds(odds.homeOdds)}${odds.spread ? ` · Spread: ${odds.spread}` : ''}${odds.total ? ` · O/U: ${odds.total}` : ''}`
-                    : '';
+
+                  // Calculate market-implied probabilities from real odds (pure math)
+                  function calcImplied(ml) {
+                    if (!ml) return null;
+                    const p = ml > 0 ? 100 / (ml + 100) : Math.abs(ml) / (Math.abs(ml) + 100);
+                    return (p * 100).toFixed(1);
+                  }
+                  const awayImpl = odds?.awayOdds ? calcImplied(odds.awayOdds) : null;
+                  const homeImpl = odds?.homeOdds ? calcImplied(odds.homeOdds) : null;
+
+                  // Build a verified data block Grok must treat as ground truth
+                  const verifiedBlock = odds ? [
+                    '--- VERIFIED ODDS (from live feed — treat as ground truth, do not search for different odds) ---',
+                    `Matchup: ${awayName} @ ${homeName}`,
+                    odds.awayOdds ? `${awayName} ML: ${formatOdds(odds.awayOdds)}${awayImpl ? ` (market implied: ${awayImpl}%)` : ''}` : '',
+                    odds.homeOdds ? `${homeName} ML: ${formatOdds(odds.homeOdds)}${homeImpl ? ` (market implied: ${homeImpl}%)` : ''}` : '',
+                    odds.spread   ? `Spread: ${odds.spread}` : '',
+                    odds.total    ? `Over/Under: ${odds.total}` : '',
+                    odds.provider ? `Source: ${odds.provider}` : '',
+                    '--- END VERIFIED ODDS ---',
+                  ].filter(Boolean).join('\n') : '';
+
                   const recInfo = `${awayName} record: ${awayRec.total || '—'} (away: ${awayRec.away || '—'}). ${homeName} record: ${homeRec.total || '—'} (home: ${homeRec.home || '—'}).`;
                   const venueInfo = venue ? `Venue: ${venue}.` : '';
-                  const prompt = `Run a full GOAT BOT analysis on ${gameInfo}. ${oddsInfo ? `Current lines: ${oddsInfo}.` : ''} ${recInfo} ${venueInfo} Give me the sharpest edge, line movement signals, ATS angles, and your best pick with confidence level.`;
+
+                  const prompt = [
+                    `Run a full GOAT BOT analysis on ${gameInfo}.`,
+                    verifiedBlock,
+                    recInfo,
+                    venueInfo,
+                    'Use web search ONLY for: confirmed injury/lineup news, line movement history from open to now, public betting splits, and any sharp action signals. Do not invent or override any numbers in the verified block above.',
+                  ].filter(Boolean).join('\n\n');
                   onAnalyze(prompt);
                 }}
                 style={{
@@ -1719,7 +1779,8 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         </div>
 
         {/* Games grid */}
-        {loading ? (
+        {loading && games.length === 0 ? (
+          /* First-load skeleton only — never show this on background refresh */
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
             <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{isAllMode ? '⏳' : currentSport?.emoji || '⏳'}</div>
             <p style={{ fontSize: '0.85rem' }}>
