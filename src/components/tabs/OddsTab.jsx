@@ -92,7 +92,7 @@ function bestTotal(bookmakers) {
   return { line: null, overPrice: null, underPrice: null };
 }
 
-// Build GOAT BOT prompt incorporating all three markets
+// Build BetOS prompt incorporating all three markets
 function buildUnifiedPrompt(game) {
   const commence   = new Date(game.commence_time);
   const today      = new Date();
@@ -118,7 +118,7 @@ function buildUnifiedPrompt(game) {
   const oddsStr = [mlStr, sprStr, totStr].filter(Boolean).join(' · ');
 
   const dateCtx = `[Game date: ${dateLabel}. Today is ${today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.]\n`;
-  return `${dateCtx}Run a full GOAT BOT analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
+  return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
 }
 
 // ── Unified Game Row ──────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
             </tbody>
           </table>
 
-          {/* Best lines summary + GOAT BOT */}
+          {/* Best lines summary + BetOS */}
           <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Best ML */}
             {awayML != null && (
@@ -382,7 +382,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                 🎯 O/U {total.line}: O {formatOdds(total.overPrice)} / U {formatOdds(total.underPrice)}
               </span>
             )}
-            {/* GOAT BOT button */}
+            {/* BetOS button */}
             {onAnalyze && (
               <button
                 onClick={e => { e.stopPropagation(); onAnalyze(buildUnifiedPrompt(game)); }}
@@ -396,7 +396,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.18)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.08)'; }}
               >
-                🐐 Analyze with GOAT BOT
+                🎯 Analyze with BetOS
               </button>
             )}
           </div>

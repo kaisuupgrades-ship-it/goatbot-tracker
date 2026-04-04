@@ -21,7 +21,7 @@ const NAV_SECTIONS = [
   {
     section: 'Tools',
     items: [
-      { id: 'analyzer',    label: 'Analyzer',    icon: '🧠',  desc: 'GOAT BOT + AI tools' },
+      { id: 'analyzer',    label: 'Analyzer',    icon: '🧠',  desc: 'BetOS + AI tools' },
       { id: 'trends',      label: 'Trends',      icon: '📈',  desc: 'Situational edge finder' },
       { id: 'leaderboard', label: 'Leaderboard', icon: '🏆', desc: 'Sharp rankings' },
     ],
@@ -55,7 +55,7 @@ function StarredCount() {
   const [count, setCount] = useState(0);
   useEffect(() => {
     function load() {
-      try { setCount(Object.keys(JSON.parse(localStorage.getItem('goatbot_starred_games') || '{}')).length); } catch {}
+      try { setCount(Object.keys(JSON.parse(localStorage.getItem('betos_starred_games') || '{}')).length); } catch {}
     }
     load();
     window.addEventListener('storage', load);
@@ -130,11 +130,11 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
           cursor: collapsed ? 'pointer' : 'default',
         }}
       >
-        <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>🐐</span>
+        <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>🎯</span>
         {!collapsed && (
           <div>
             <div style={{ fontWeight: 900, color: 'var(--gold)', fontSize: '1rem', letterSpacing: '-0.03em', lineHeight: 1 }}>
-              GOAT BOT
+              BetOS
             </div>
             <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: '1px' }}>
               Sports Intelligence

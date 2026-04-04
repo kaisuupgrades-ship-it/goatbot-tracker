@@ -690,19 +690,28 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
       )}
 
       {/* BetSlip modal */}
-      {betSlipGame && BetSlipModal && (
-        <BetSlipModal
-          event={betSlipGame.event}
-          sport={betSlipGame.sport}
-          user={user}
-          isDemo={isDemo}
-          onClose={() => setBetSlipGame(null)}
-          onSave={(pick) => {
-            setPicks?.(prev => [pick, ...prev]);
-            setBetSlipGame(null);
-          }}
-        />
-      )}
+      {betSlipGame && BetSlipModal && (() => {
+        const { away, home } = getEventCompetitors(betSlipGame.event);
+        const eventOdds = betSlipGame.event?.competitions?.[0]?.odds?.[0];
+        const odds = eventOdds ? {
+          homeOdds: eventOdds.homeTeamOdds?.moneyLine || eventOdds.homeTeamOdds?.current?.moneyLine || null,
+          awayOdds: eventOdds.awayTeamOdds?.moneyLine || eventOdds.awayTeamOdds?.current?.moneyLine || null,
+          spread:   eventOdds.details || null,
+          total:    eventOdds.overUnder || null,
+          provider: eventOdds.provider?.name || '',
+        } : null;
+        return (
+          <BetSlipModal
+            game={{ away, home, odds, date: betSlipGame.event?.date }}
+            sport={betSlipGame.sport}
+            user={user}
+            picks={picks}
+            setPicks={setPicks}
+            isDemo={isDemo}
+            onClose={() => setBetSlipGame(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

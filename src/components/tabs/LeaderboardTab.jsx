@@ -26,7 +26,7 @@ function UserAvatar({ userId, avatarEmoji, size = 32 }) {
           onError={() => setImgErr(true)}
         />
       ) : (
-        <span>{avatarEmoji || '🐐'}</span>
+        <span>{avatarEmoji || '🎯'}</span>
       )}
     </div>
   );
@@ -569,7 +569,7 @@ const AVATARS = ['🐐', '🔥', '⚡', '🦅', '🎯', '💎', '🏆', '🐺', 
 
 function ProfileEditor({ user, profile, onSave, onClose }) {
   const [displayName, setDisplayName] = useState(profile?.display_name || '');
-  const [avatar, setAvatar]           = useState(profile?.avatar_emoji || '🐐');
+  const [avatar, setAvatar]           = useState(profile?.avatar_emoji || '🎯');
   const [isPublic, setIsPublic]       = useState(profile?.is_public || false);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
@@ -850,7 +850,7 @@ function ContestBanner() {
           </div>
 
           <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center', paddingTop: '4px' }}>
-            🐐 <strong style={{ color: 'rgba(255,184,0,0.8)' }}>GOAT BOT</strong> users have the edge — use the Analyzer, log sharp plays, climb the board.
+            🎯 <strong style={{ color: 'rgba(255,184,0,0.8)' }}>BetOS</strong> users have the edge — use the Analyzer, log sharp plays, climb the board.
           </div>
         </div>
       )}

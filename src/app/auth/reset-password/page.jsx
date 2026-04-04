@@ -43,9 +43,9 @@ export default function ResetPasswordPage() {
         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🐐</div>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎯</div>
           <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#EDEDF5' }}>Set new password</div>
-          <div style={{ fontSize: '0.78rem', color: '#6A6A88', marginTop: '4px' }}>Choose a strong password for your GOAT BOT account.</div>
+          <div style={{ fontSize: '0.78rem', color: '#6A6A88', marginTop: '4px' }}>Choose a strong password for your BetOS account.</div>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>

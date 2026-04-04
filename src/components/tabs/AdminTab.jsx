@@ -566,7 +566,7 @@ function ContestsPanel({ userEmail }) {
         <button onClick={handleBatchAudit} style={{
           padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700,
           border: '1px solid rgba(255,184,0,0.3)', background: 'rgba(255,184,0,0.08)', color: '#FFB800',
-        }}>🐐 Run AI Audit on Pending</button>
+        }}>🎯 Run AI Audit on Pending</button>
         <button onClick={load} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', border: '1px solid #222', background: 'transparent', color: '#666' }}>↻</button>
       </div>
 
@@ -671,10 +671,10 @@ function SystemPanel({ userEmail }) {
       {/* Batch auto-analyzer */}
       <div className="card" style={{ padding: '1.2rem' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          🐐 Batch GOAT Analyzer
+          🎯 Batch BetOS Analyzer
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.85rem', lineHeight: 1.6 }}>
-          Run the GOAT BOT quick analysis on every pick that doesn't have one yet. Uses grok-3 for speed. Cached forever — won't re-run picks that are already analyzed.
+          Run the BetOS quick analysis on every pick that doesn't have one yet. Uses grok-3 for speed. Cached forever — won't re-run picks that are already analyzed.
         </p>
         {batchResult && (
           <div style={{
@@ -695,7 +695,7 @@ function SystemPanel({ userEmail }) {
           disabled={batchRunning}
           style={{ opacity: batchRunning ? 0.7 : 1 }}
         >
-          {batchRunning ? '🐐 Analyzing all picks…' : '🐐 Analyze All Unanalyzed Picks'}
+          {batchRunning ? '🎯 Analyzing all picks…' : '🎯 Analyze All Unanalyzed Picks'}
         </button>
       </div>
 

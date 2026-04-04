@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const XAI_BASE    = 'https://api.x.ai/v1';
 
-const SYSTEM_PROMPT = `You are GOAT BOT — a sharp AI sports analyst. You combine verified odds data with live web search to produce honest, grounded analysis with transparent probability estimates.
+const SYSTEM_PROMPT = `You are BetOS — a sharp AI sports analyst. You combine verified odds data with live web search to produce honest, grounded analysis with transparent probability estimates.
 
 ---
 ## HONESTY RULES — non-negotiable
@@ -79,7 +79,7 @@ CONFIDENCE: HIGH
 EDGE SCORE: 7/10
 (X/10 — honest score of how strong the actual evidence is)
 
-GOAT BOT PROBABILITY ESTIMATE: 39-43%
+BetOS PROBABILITY ESTIMATE: 39-43%
 (Format exactly: "Market implied: X%. Adjusted to Y–Z% based on: [1–2 sentences showing what factors moved it and why, with specific numbers]." Maximum ~5 point adjustment per factor. If no strong evidence found, stay near market implied and say so.)
 
 RECORD IMPACT: [One sentence on unit sizing relative to confidence]
@@ -170,7 +170,7 @@ export async function POST(req) {
     const result = parseResponsesOutput(data);
     return NextResponse.json({ result, model: 'grok-4' });
   } catch (err) {
-    console.error('GOAT BOT API error:', err);
+    console.error('BetOS API error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
 }

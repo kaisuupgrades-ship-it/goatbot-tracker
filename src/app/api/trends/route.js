@@ -174,7 +174,7 @@ export async function POST(req) {
     return NextResponse.json({ error: usage.reason, rateLimited: true }, { status: 429 });
   }
 
-  // Use xAI Grok if configured (preferred — already used for GOAT BOT)
+  // Use xAI Grok if configured (preferred — already used for BetOS)
   const XAI_API_KEY = process.env.XAI_API_KEY;
   if (XAI_API_KEY) {
     try {
@@ -189,7 +189,7 @@ export async function POST(req) {
           messages: [
             {
               role: 'system',
-              content: `You are GOAT BOT Trends Analyst — a sharp sports betting researcher with deep knowledge of situational betting, line movement, and statistical edges.
+              content: `You are BetOS Trends Analyst — a sharp sports betting researcher with deep knowledge of situational betting, line movement, and statistical edges.
 
 Answer questions about sports betting trends and edges. Rules:
 - Be honest about uncertainty — say "research suggests" not "proven fact" for statistical claims

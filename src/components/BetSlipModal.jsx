@@ -359,9 +359,10 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
         transform: 'translate(-50%, -50%)',
         background: voiceFlash ? 'rgba(0,212,139,0.04)' : 'var(--bg-surface)',
         border: voiceFlash ? '1px solid rgba(0,212,139,0.4)' : '1px solid rgba(255,184,0,0.3)',
-        borderRadius: '14px', width: '100%', maxWidth: '460px',
+        borderRadius: '14px', width: 'calc(100% - 24px)', maxWidth: '460px',
+        maxHeight: 'calc(100vh - 40px)',
+        overflowY: 'auto',
         boxShadow: '0 24px 80px rgba(0,0,0,0.7), 0 0 40px rgba(255,184,0,0.06)',
-        overflow: 'hidden',
         animation: 'fade-in 0.18s cubic-bezier(0.34,1.56,0.64,1)',
         transition: 'border-color 0.3s, background 0.3s',
       }}>

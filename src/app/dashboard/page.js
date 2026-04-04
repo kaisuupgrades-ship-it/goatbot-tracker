@@ -8,17 +8,17 @@ import { Suspense } from 'react';
 
 // ── Loading messages — cycle through as bar fills ──────────────────────────────
 const LOAD_MSGS = [
-  { pct:  0, text: 'Booting GOAT BOT intelligence systems...'   },
+  { pct:  0, text: 'Booting BetOS intelligence systems...'       },
   { pct: 14, text: 'Connecting to live sportsbook feeds...'     },
   { pct: 28, text: 'Scanning sharp money signals...'            },
   { pct: 45, text: 'Calculating closing line value...'          },
   { pct: 62, text: 'Loading your picks and contest data...'     },
   { pct: 78, text: 'Calibrating the edge prediction model...'   },
-  { pct: 93, text: 'GOAT BOT locked and loaded. Let\'s eat.'    },
+  { pct: 93, text: 'BetOS locked and loaded. Let\'s eat.'       },
 ];
 
-// ── GOAT BOT Splash Screen ─────────────────────────────────────────────────────
-function GoatBotSplash({ dataReady, onComplete }) {
+// ── BetOS Splash Screen ───────────────────────────────────────────────────────
+function BetOSSplash({ dataReady, onComplete }) {
   const [progress, setProgress]   = useState(0);
   const [barDone,  setBarDone]    = useState(false);
   const [fading,   setFading]     = useState(false);
@@ -69,16 +69,16 @@ function GoatBotSplash({ dataReady, onComplete }) {
         pointerEvents: 'none',
       }} />
 
-      {/* Floating goat */}
+      {/* Floating logo */}
       <div style={{
-        fontSize: '4.5rem', marginBottom: '1.4rem',
+        fontSize: 'clamp(2.8rem, 10vw, 4.5rem)', marginBottom: '1.4rem',
         animation: 'goat-float 2.8s ease-in-out infinite',
         filter: 'drop-shadow(0 0 18px rgba(255,184,0,0.25))',
       }}>
-        🐐
+        🎯
       </div>
 
-      {/* GOAT BOT wordmark */}
+      {/* BetOS wordmark */}
       <div style={{
         fontFamily: "'Inter', sans-serif",
         fontSize: 'clamp(1.8rem, 5vw, 2.6rem)',
@@ -92,7 +92,7 @@ function GoatBotSplash({ dataReady, onComplete }) {
         animation: 'gold-shimmer 3s linear infinite',
         marginBottom: '0.35rem',
       }}>
-        GOAT BOT
+        BetOS
       </div>
 
       {/* Subtitle */}
@@ -105,7 +105,7 @@ function GoatBotSplash({ dataReady, onComplete }) {
         marginBottom: '2.8rem',
         animation: 'splash-fadein 0.8s ease 0.2s both',
       }}>
-        Greatest Of All Time · Sports Intelligence
+        AI-Powered Sports Betting OS
       </div>
 
       {/* Progress bar + message */}
@@ -205,12 +205,12 @@ function DashboardInner() {
   useEffect(() => {
     async function init() {
       const demoParam   = searchParams.get('demo') === 'true';
-      const demoSession = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('goatbot_demo') === 'true';
+      const demoSession = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('betos_demo') === 'true';
 
       if (demoParam || demoSession) {
-        sessionStorage.setItem('goatbot_demo', 'true');
+        sessionStorage.setItem('betos_demo', 'true');
         setIsDemo(true);
-        setUser({ id: 'demo', email: 'demo@goatbot.local', user_metadata: { username: 'Demo User' } });
+        setUser({ id: 'demo', email: 'demo@betos.local', user_metadata: { username: 'Demo User' } });
         setPicks(loadDemoPicks());
         setContest(loadDemoContest());
         setDataReady(true);
@@ -234,7 +234,7 @@ function DashboardInner() {
     <>
       {/* Splash overlay — always renders first; fades once bar done + data ready */}
       {showSplash && (
-        <GoatBotSplash dataReady={dataReady} onComplete={handleSplashComplete} />
+        <BetOSSplash dataReady={dataReady} onComplete={handleSplashComplete} />
       )}
 
       {/* Dashboard — render behind splash (or alone once splash is gone) */}

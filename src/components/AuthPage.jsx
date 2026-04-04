@@ -152,7 +152,7 @@ const PREVIEW_LEADERS = [
   { rank: 2, name: 'BetKingJon',  record: '21-11', units: '+11.8', emoji: '🔥' },
   { rank: 3, name: 'EdgeFinder',  record: '15-6',  units: '+9.4',  emoji: '💎' },
   { rank: 4, name: 'ZeroJuice',   record: '12-5',  units: '+7.1',  emoji: '⚡' },
-  { rank: 5, name: '???',         record: '—',     units: '—',     emoji: '🐐', you: true },
+  { rank: 5, name: '???',         record: '—',     units: '—',     emoji: '🎯', you: true },
 ];
 
 function TournamentBanner({ onCTAClick }) {
@@ -193,7 +193,7 @@ function TournamentBanner({ onCTAClick }) {
               fontSize: 'clamp(1.5rem, 4vw, 2.3rem)', fontWeight: 900, lineHeight: 1.15,
               color: '#EDEDF5', letterSpacing: '-0.03em', margin: '0 0 10px',
             }}>
-              GOAT BOT Pick Challenge
+              BetOS Pick Challenge
             </h2>
             <p style={{ color: '#8888AA', fontSize: '0.9rem', lineHeight: 1.6, margin: 0, maxWidth: '460px' }}>
               Compete against the sharpest bettors on the platform. Log your picks, build your record, and climb the leaderboard.
@@ -329,11 +329,11 @@ function TournamentBanner({ onCTAClick }) {
 // ── Feature card with hover glow ─────────────────────────────────────────────
 const FEATURES = [
   { icon: '📡', label: 'Live Scores', desc: 'MLB, NBA, NFL, NHL — real-time scoreboard with smart context', color: '#FF6B35' },
-  { icon: '🐐', label: 'GOAT BOT AI', desc: 'AI-powered pick analysis with live web search', color: '#FFB800' },
+  { icon: '🎯', label: 'BetOS AI', desc: 'AI-powered pick analysis with live web search', color: '#FFB800' },
   { icon: '📊', label: 'Edge Finder', desc: '20+ built-in sharp betting trends and angles', color: '#4E9BF5' },
   { icon: '🏥', label: 'Injury Intel', desc: 'Real-time injury scanning from Twitter + beat reporters', color: '#00D48B' },
   { icon: '📈', label: 'Pick Tracker', desc: 'Full P/L tracking, equity curves, and heat metrics', color: '#9B6DFF' },
-  { icon: '🎤', label: 'Voice Input', desc: 'Talk to GOAT BOT — hands-free pick analysis', color: '#FF4560' },
+  { icon: '🎤', label: 'Voice Input', desc: 'Talk to BetOS — hands-free pick analysis', color: '#FF4560' },
 ];
 
 const TAGLINES = [
@@ -359,7 +359,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     setMounted(true);
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('goatbot_demo') === 'true') {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('betos_demo') === 'true') {
       router.push('/dashboard?demo=true');
       return;
     }
@@ -369,7 +369,7 @@ export default function AuthPage() {
   }, [router]);
 
   function handleDemoMode() {
-    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('goatbot_demo', 'true');
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('betos_demo', 'true');
     router.push('/dashboard?demo=true');
   }
 
@@ -443,34 +443,35 @@ export default function AuthPage() {
         {/* Nav bar */}
         <nav style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '1.25rem 0',
+          padding: '1rem 0',
           opacity: mounted ? 1 : 0,
           transform: mounted ? 'translateY(0)' : 'translateY(-10px)',
           transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+          gap: '8px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
             <span style={{
-              fontSize: '1.6rem',
+              fontSize: 'clamp(1.1rem, 4vw, 1.6rem)',
               animation: 'goat-float 4s ease-in-out infinite',
-            }}>🐐</span>
+              lineHeight: 1,
+            }}>🎯</span>
             <span style={{
-              fontWeight: 900, fontSize: '1.2rem', color: '#FFB800',
+              fontWeight: 900, fontSize: 'clamp(0.9rem, 3.5vw, 1.2rem)', color: '#FFB800',
               letterSpacing: '-0.04em',
-            }}>GOAT BOT</span>
+            }}>BetOS</span>
             <span style={{
-              fontSize: '0.55rem', color: '#FFB800', border: '1px solid rgba(255,184,0,0.3)',
-              borderRadius: '4px', padding: '1px 6px', fontWeight: 700, letterSpacing: '0.1em',
-              marginLeft: '4px',
+              fontSize: '0.5rem', color: '#FFB800', border: '1px solid rgba(255,184,0,0.3)',
+              borderRadius: '4px', padding: '1px 5px', fontWeight: 700, letterSpacing: '0.08em',
             }}>BETA</span>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
             <button
               onClick={() => document.getElementById('auth-section')?.scrollIntoView({ behavior: 'smooth' })}
               style={{
-                padding: '7px 18px', borderRadius: '8px',
+                padding: '6px 12px', borderRadius: '8px',
                 border: '1px solid rgba(255,184,0,0.3)', background: 'rgba(255,184,0,0.06)',
-                color: '#FFB800', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'inherit', transition: 'all 0.2s',
+                color: '#FFB800', fontSize: 'clamp(0.7rem, 2.5vw, 0.82rem)', fontWeight: 600, cursor: 'pointer',
+                fontFamily: 'inherit', transition: 'all 0.2s', whiteSpace: 'nowrap',
               }}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.15)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.06)'; }}
@@ -480,10 +481,10 @@ export default function AuthPage() {
             <button
               onClick={() => { setMode('signup'); document.getElementById('auth-section')?.scrollIntoView({ behavior: 'smooth' }); }}
               style={{
-                padding: '7px 18px', borderRadius: '8px',
+                padding: '6px 12px', borderRadius: '8px',
                 border: 'none', background: 'linear-gradient(135deg, #FFB800, #FF9500)',
-                color: '#000', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
-                fontFamily: 'inherit', transition: 'all 0.2s',
+                color: '#000', fontSize: 'clamp(0.7rem, 2.5vw, 0.82rem)', fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit', transition: 'all 0.2s', whiteSpace: 'nowrap',
               }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(255,184,0,0.4)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
@@ -496,20 +497,20 @@ export default function AuthPage() {
         {/* Hero content */}
         <div style={{
           textAlign: 'center',
-          paddingTop: '5rem',
-          paddingBottom: '4rem',
+          paddingTop: 'clamp(2rem, 8vw, 5rem)',
+          paddingBottom: 'clamp(2rem, 6vw, 4rem)',
           opacity: mounted ? 1 : 0,
           transform: mounted ? 'translateY(0)' : 'translateY(20px)',
           transition: 'all 0.8s 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
         }}>
-          {/* GOAT icon */}
+          {/* Brand icon */}
           <div style={{
-            fontSize: '4.5rem', lineHeight: 1,
-            marginBottom: '1.5rem',
+            fontSize: 'clamp(2.5rem, 10vw, 4.5rem)', lineHeight: 1,
+            marginBottom: 'clamp(0.75rem, 3vw, 1.5rem)',
             animation: 'goat-float 5s ease-in-out infinite',
             filter: 'drop-shadow(0 0 40px rgba(255,184,0,0.3))',
           }}>
-            🐐
+            🎯
           </div>
 
           {/* Main headline */}
@@ -544,17 +545,17 @@ export default function AuthPage() {
           </div>
 
           {/* CTA buttons */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', padding: '0 0.5rem' }}>
             <button
               onClick={() => { setMode('signup'); document.getElementById('auth-section')?.scrollIntoView({ behavior: 'smooth' }); }}
               style={{
-                padding: '14px 36px', borderRadius: '12px',
+                padding: 'clamp(10px, 2.5vw, 14px) clamp(20px, 5vw, 36px)', borderRadius: '12px',
                 border: 'none',
                 background: 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)',
-                color: '#000', fontSize: '1rem', fontWeight: 800, cursor: 'pointer',
+                color: '#000', fontSize: 'clamp(0.85rem, 2.5vw, 1rem)', fontWeight: 800, cursor: 'pointer',
                 fontFamily: 'inherit', letterSpacing: '-0.01em',
                 boxShadow: '0 4px 30px rgba(255,184,0,0.35), inset 0 1px 0 rgba(255,255,255,0.2)',
-                transition: 'all 0.2s',
+                transition: 'all 0.2s', whiteSpace: 'nowrap',
               }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 40px rgba(255,184,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 30px rgba(255,184,0,0.35), inset 0 1px 0 rgba(255,255,255,0.2)'; }}
@@ -564,13 +565,13 @@ export default function AuthPage() {
             <button
               onClick={handleDemoMode}
               style={{
-                padding: '14px 36px', borderRadius: '12px',
+                padding: 'clamp(10px, 2.5vw, 14px) clamp(20px, 5vw, 36px)', borderRadius: '12px',
                 border: '1px solid rgba(255,255,255,0.1)',
                 background: 'rgba(255,255,255,0.03)',
-                color: '#EDEDF5', fontSize: '1rem', fontWeight: 600, cursor: 'pointer',
+                color: '#EDEDF5', fontSize: 'clamp(0.85rem, 2.5vw, 1rem)', fontWeight: 600, cursor: 'pointer',
                 fontFamily: 'inherit',
                 transition: 'all 0.2s',
-                backdropFilter: 'blur(10px)',
+                backdropFilter: 'blur(10px)', whiteSpace: 'nowrap',
               }}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}
@@ -581,8 +582,8 @@ export default function AuthPage() {
 
           {/* Social proof numbers */}
           <div style={{
-            display: 'flex', justifyContent: 'center', gap: '2.5rem',
-            marginTop: '4rem',
+            display: 'flex', justifyContent: 'center', gap: 'clamp(1.2rem, 4vw, 2.5rem)',
+            marginTop: 'clamp(2rem, 5vw, 4rem)',
             flexWrap: 'wrap',
           }}>
             {[
@@ -592,13 +593,13 @@ export default function AuthPage() {
             ].map((stat, i) => (
               <div key={i} style={{ textAlign: 'center' }}>
                 <div style={{
-                  fontSize: '2rem', fontWeight: 900, color: '#FFB800',
+                  fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 900, color: '#FFB800',
                   fontFamily: 'IBM Plex Mono, monospace',
                   lineHeight: 1,
                 }}>
                   <AnimCounter end={stat.value} suffix={stat.suffix} duration={1500 + i * 300} />
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#6A6A88', marginTop: '6px', letterSpacing: '0.04em' }}>
+                <div style={{ fontSize: 'clamp(0.6rem, 2vw, 0.72rem)', color: '#6A6A88', marginTop: '4px', letterSpacing: '0.04em' }}>
                   {stat.label}
                 </div>
               </div>
@@ -631,7 +632,7 @@ export default function AuthPage() {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
           gap: '1rem',
         }}>
           {FEATURES.map((f, i) => (
@@ -894,7 +895,7 @@ export default function AuthPage() {
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.1)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.3)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.15)'; }}
           >
-            <span style={{ fontSize: '1.1rem' }}>🐐</span>
+            <span style={{ fontSize: '1.1rem' }}>🎯</span>
             <div style={{ textAlign: 'left' }}>
               <div style={{ color: '#FFB800', fontWeight: 700, fontSize: '0.85rem', lineHeight: 1 }}>Try Demo Mode</div>
               <div style={{ color: '#6A6A88', fontSize: '0.7rem', marginTop: '3px' }}>No account needed — picks save to browser</div>

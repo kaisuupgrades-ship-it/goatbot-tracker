@@ -377,7 +377,7 @@ function AIInsightsPanel({ user }) {
           <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'linear-gradient(135deg, #0a0e18 0%, #080808 100%)', border: '1px solid #FFB80022', borderRadius: '9px' }}>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
               <span style={{ fontSize: '0.8rem' }}>🤖</span>
-              <span style={{ color: '#FFB800', fontWeight: 700, fontSize: '0.8rem' }}>GOAT BOT Analysis</span>
+              <span style={{ color: '#FFB800', fontWeight: 700, fontSize: '0.8rem' }}>BetOS Analysis</span>
             </div>
             <p style={{ color: '#e0e0e0', fontSize: '0.85rem', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{aiAnswer}</p>
           </div>

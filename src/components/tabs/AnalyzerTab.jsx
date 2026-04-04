@@ -89,7 +89,7 @@ function renderRichLines(text) {
   });
 }
 
-// ── GOAT BOT PICK CARD — The Greatest Of All Time Report ────────────────────
+// ── BetOS PICK CARD — AI-Powered Pick Report ────────────────────────────
 
 // Parse key metrics out of the AI text
 // ── Shared extraction helpers (used by parseReport + history rows) ────────────
@@ -124,11 +124,11 @@ function extractEdge(text) {
   return null;
 }
 
-// Clean prompt for display — strip context prefixes and "Run a full GOAT BOT analysis on"
+// Clean prompt for display — strip context prefixes and "Run a full BetOS analysis on"
 function cleanPromptDisplay(prompt, maxLen = 72) {
   return (prompt || '')
     .replace(/^\[(?:Today|Target date|TOURNAMENT|EVENT|FUTURES)[^\]]*\]\n?/i, '')
-    .replace(/^Run a full GOAT BOT analysis on\s*/i, '')
+    .replace(/^Run a full BetOS analysis on\s*/i, '')
     .replace(/^\[.*?\]\n?/g, '') // any remaining bracket prefixes
     .trim()
     .slice(0, maxLen);
@@ -261,7 +261,7 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>GOAT BOT Pick Report</title>
+  <title>BetOS Pick Report</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Inter:wght@400;600;700;900&display=swap');
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -293,8 +293,8 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
 <body>
   <div class="header">
     <div>
-      <div class="brand">🐐 GOAT BOT™</div>
-      <div class="subtitle">Greatest Of All Time Sports Intelligence · Pick Report</div>
+      <div class="brand">🎯 BetOS™</div>
+      <div class="subtitle">AI-Powered Sports Betting OS · Pick Report</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:12px;color:#888;">${ts}</div>
@@ -330,16 +330,16 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
   ${prompt ? `
   <div style="margin-bottom:16px;padding:10px 14px;background:#f8f8f8;border-radius:6px;border:1px solid #eee;">
     <div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Original Query</div>
-    <div style="font-size:12px;color:#555;">${prompt.replace(/^Run a full GOAT BOT analysis on\s*/i, '').slice(0, 200)}</div>
+    <div style="font-size:12px;color:#555;">${prompt.replace(/^Run a full BetOS analysis on\s*/i, '').slice(0, 200)}</div>
   </div>` : ''}
 
   <div class="disclaimer">
-    ⚠️ For entertainment and informational purposes only. GOAT BOT reports are AI-generated analysis and do not constitute financial or gambling advice. Always gamble responsibly.
+    ⚠️ For entertainment and informational purposes only. BetOS reports are AI-generated analysis and do not constitute financial or gambling advice. Always gamble responsibly.
   </div>
 
   <div class="footer">
-    <span class="footer-ts">Generated ${ts} · GOAT BOT Intelligence</span>
-    <span class="footer-brand">GOAT BOT™</span>
+    <span class="footer-ts">Generated ${ts} · BetOS Intelligence</span>
+    <span class="footer-brand">BetOS™</span>
   </div>
 
   <button class="print-btn no-print" onclick="window.print()">🖨 Save as PDF</button>
@@ -492,7 +492,7 @@ function GoatPickCard({ result, model, prompt, runTime }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '1.5rem', flexShrink: 0,
               boxShadow: '0 0 14px rgba(255,184,0,0.2)',
-            }}>🐐</div>
+            }}>🎯</div>
             <div>
               <div style={{
                 fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -501,7 +501,7 @@ function GoatPickCard({ result, model, prompt, runTime }) {
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
               }}>
-                GOAT BOT PICK REPORT
+                BetOS PICK REPORT
               </div>
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.62rem', marginTop: '1px', letterSpacing: '0.04em' }}>
                 Live Intel · {ts}{runTime ? ` · ${runTime}s runtime` : ''}
@@ -739,21 +739,21 @@ function GoatPickCard({ result, model, prompt, runTime }) {
           background: 'linear-gradient(90deg, #FFD700, #FF9500)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
           flexShrink: 0,
-        }}>GOAT BOT™</span>
+        }}>BetOS™</span>
       </div>
     </div>
   );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 1. GOAT BOT LIVE — command center
+// 1. BetOS LIVE — command center
 // ────────────────────────────────────────────────────────────────────────────
 
 const SPORT_PRESETS = [
   { emoji: '⚾', label: 'MLB Today',     color: '#E31937', prompt: 'Find me the sharpest MLB pick for today. Give me the best edge on tonight\'s slate — line movement, CLV, key matchup factors, full analysis.' },
   { emoji: '🏀', label: 'NBA Tonight',   color: '#F58426', prompt: 'Analyze tonight\'s NBA slate. Find the single sharpest pick — rest spots, pace mismatches, line movement vs closing number.' },
-  { emoji: '🏈', label: 'NFL This Week', color: '#013369', prompt: 'Give me the sharpest NFL pick this week. Edge metrics, CLV projection, public fading angle, full GOAT BOT breakdown.' },
-  { emoji: '🏒', label: 'NHL Slate',     color: '#00528C', prompt: 'Run a full GOAT BOT scan on tonight\'s NHL slate. Find the best moneyline or puck line value.' },
+  { emoji: '🏈', label: 'NFL This Week', color: '#013369', prompt: 'Give me the sharpest NFL pick this week. Edge metrics, CLV projection, public fading angle, full BetOS breakdown.' },
+  { emoji: '🏒', label: 'NHL Slate',     color: '#00528C', prompt: 'Run a full BetOS scan on tonight\'s NHL slate. Find the best moneyline or puck line value.' },
   { emoji: '⛳', label: 'Golf Pick',     color: '#4ade80', prompt: 'Give me the sharpest golf betting angle — top-10 finish, outright winner, or head-to-head matchup. Consider form, course fit, and odds value.' },
   { emoji: '🔥', label: 'Best Bet Now',  color: '#FF6B35', prompt: 'Scan ALL sports right now — MLB, NBA, NFL, NHL — and find me the single best bet with the highest true edge anywhere on the board today. Don\'t limit to one sport.' },
 ];
@@ -780,7 +780,7 @@ function buildContextualPrompt(base, ctx, ctxInput) {
 }
 
 // ── Report persistence ─────────────────────────────────────────────────────────
-const REPORTS_KEY = 'goatbot_reports';
+const REPORTS_KEY = 'betos_reports';
 function saveReport(report) {
   try {
     const prev = JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]');
@@ -796,7 +796,7 @@ const LOAD_STEPS = [
   'Scanning sportsbooks for line movement...',
   'Identifying sharp money signals...',
   'Running edge model vs closing line...',
-  'Generating GOAT BOT pick report...',
+  'Generating BetOS pick report...',
 ];
 
 const FEED_SYSTEM_PROMPT = `You are a sports betting intelligence feed. Search X/Twitter and sports news sources for the most recent (last 2 hours) relevant betting intel. Return exactly 6 items in this strict format:
@@ -808,7 +808,7 @@ ANGLE: [one-line betting takeaway]
 
 Do not include any URLs, markdown formatting, asterisks, or source citations. Plain text only.`;
 
-function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportConsumed }) {
+function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportConsumed }) {
   const [prompt, setPrompt]             = useState('');
   const [result, setResult]             = useState('');
   const [model, setModel]               = useState('');
@@ -865,7 +865,7 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
     if (injectedPrompt && prompt === injectedPrompt && !hasRun.current && !loading) {
       hasRun.current = true;
       onPromptConsumed?.();
-      runGoatBot(injectedPrompt);
+      runBetOS(injectedPrompt);
     }
   }, [prompt, injectedPrompt]);
 
@@ -894,7 +894,7 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
     return () => timerRefs.current.forEach(clearTimeout);
   }, [loading]);
 
-  async function runGoatBot(overridePrompt) {
+  async function runBetOS(overridePrompt) {
     const base = overridePrompt || prompt;
     if (!base.trim()) return;
     const q = buildContextualPrompt(base, ctx, ctxInput);
@@ -974,7 +974,7 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
     try {
       const context = feedItems.length
         ? `Recent sports intel:\n${feedItems.map(f => `- ${f.item}: ${f.detail}`).join('\n')}\n\n`
-        : result ? `Current GOAT BOT report context:\n${result.slice(0, 800)}\n\n` : '';
+        : result ? `Current BetOS report context:\n${result.slice(0, 800)}\n\n` : '';
       const res = await fetch('/api/goatbot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1017,10 +1017,10 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
           background: 'rgba(255,184,0,0.025)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '1.9rem', lineHeight: 1 }}>🐐</span>
+            <span style={{ fontSize: '1.9rem', lineHeight: 1 }}>🎯</span>
             <div>
               <div style={{ fontWeight: 900, color: '#FFB800', fontSize: '1.1rem', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                GOAT BOT
+                BetOS
               </div>
               <div style={{ color: 'rgba(255,184,0,0.45)', fontSize: '0.6rem', letterSpacing: '0.16em', textTransform: 'uppercase', marginTop: '3px' }}>
                 Sharp Pick Intelligence
@@ -1161,7 +1161,7 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
               onKeyDown={e => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
-                  runGoatBot();
+                  runBetOS();
                 }
               }}
               placeholder={`"Find the sharpest edge on tonight's MLB slate"  ·  "Analyze Dodgers vs Padres, I like the under"  ·  "Best dog on the board right now"`}
@@ -1184,7 +1184,7 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
             <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
               <VoiceButton value={prompt} onChange={setPrompt} size="md" />
               <button
-                onClick={() => runGoatBot()}
+                onClick={() => runBetOS()}
                 disabled={!canFire}
                 style={{
                   padding: '10px 22px',
@@ -1230,7 +1230,7 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
               color: '#FFB800', fontSize: '0.68rem',
               letterSpacing: '0.15em', textTransform: 'uppercase',
             }}>
-              ◈ GOAT BOT ACTIVATING
+              ◈ BetOS ACTIVATING
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ textAlign: 'right' }}>
@@ -1319,12 +1319,12 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
           padding: '2.5rem 2rem',
           textAlign: 'center',
         }}>
-          <div style={{ fontSize: '2.8rem', marginBottom: '1rem', lineHeight: 1 }}>🐐</div>
+          <div style={{ fontSize: '2.8rem', marginBottom: '1rem', lineHeight: 1 }}>🎯</div>
           <div style={{ color: 'rgba(255,184,0,0.85)', fontWeight: 900, fontSize: '1rem', letterSpacing: '0.06em', marginBottom: '6px' }}>
-            GOAT BOT READY
+            BetOS READY
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '1.5rem', maxWidth: '380px', margin: '0 auto 1.5rem', lineHeight: 1.65 }}>
-            Ask GOAT BOT for today's sharpest pick, or use a preset above to instantly scan any sport's slate.
+            Ask BetOS for today's sharpest pick, or use a preset above to instantly scan any sport's slate.
           </div>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
             {[
@@ -1357,9 +1357,9 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
             style={{ width: '100%', padding: '0.75rem 1.25rem', background: 'rgba(255,184,0,0.04)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-              <span style={{ fontSize: '1rem' }}>🐐</span>
+              <span style={{ fontSize: '1rem' }}>🎯</span>
               <div style={{ minWidth: 0, textAlign: 'left' }}>
-                <div style={{ color: 'var(--gold)', fontWeight: 800, fontSize: '0.78rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>GOAT BOT Pick Report</div>
+                <div style={{ color: 'var(--gold)', fontWeight: 800, fontSize: '0.78rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>BetOS Pick Report</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '360px' }}>
                   {(() => {
                     const pick = result?.match(/(?:^|\n)THE PICK\s*:\s*([^\n]{5,100})/im)?.[1]?.trim();
@@ -1443,7 +1443,7 @@ function GoatBotLive({ injectedPrompt, onPromptConsumed, injectedReport, onRepor
                       onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
                       onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'none'; }}
                     >
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', flexShrink: 0 }}>🐐</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', flexShrink: 0 }}>🎯</span>
                       <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {pickLine ? `→ ${pickLine}` : `→ ${cleanPromptDisplay(entry.prompt, 68)}`}
@@ -2046,7 +2046,7 @@ function BettingInsights({ picks }) {
         <div className="surface" style={{ padding: '2.5rem', textAlign: 'center' }}>
           <div style={{ color: 'var(--gold)', fontSize: '1.8rem', marginBottom: '0.75rem' }}>🧠</div>
           <p style={{ color: 'var(--text-secondary)' }}>Reviewing your {settled.length} picks for patterns, leaks, and edges...</p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.4rem' }}>Analyzing patterns with GOAT BOT AI...</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.4rem' }}>Analyzing patterns with BetOS AI...</p>
         </div>
       )}
 
@@ -2177,17 +2177,17 @@ function BettingInsights({ picks }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: 'goatbot',   label: '🐐 GOAT BOT Live',        desc: 'Real-time AI pick analysis + live web search' },
+  { id: 'betos',   label: '🎯 BetOS Live',        desc: 'Real-time AI pick analysis + live web search' },
   { id: 'filter',    label: '📊 Filter Analysis',        desc: 'ROI breakdown by sport, odds range, bet type' },
   { id: 'insights',  label: '🧠 AI Insights',           desc: 'Personalized coaching — leaks, edges, and habits from your pick history' },
 ];
 
 export default function AnalyzerTab({ picks, goatPrompt, onGoatPromptConsumed, goatReport, onGoatReportConsumed }) {
-  const [active, setActive] = useState('goatbot');
+  const [active, setActive] = useState('betos');
 
-  // Auto-switch to GOAT BOT tab when a prompt or report is injected
+  // Auto-switch to BetOS tab when a prompt or report is injected
   useEffect(() => {
-    if (goatPrompt || goatReport) setActive('goatbot');
+    if (goatPrompt || goatReport) setActive('betos');
   }, [goatPrompt, goatReport]);
 
   return (
@@ -2220,10 +2220,10 @@ export default function AnalyzerTab({ picks, goatPrompt, onGoatPromptConsumed, g
         {SECTIONS.find(s => s.id === active)?.desc}
       </p>
 
-      {/* Section content — GoatBotLive stays mounted to preserve results */}
+      {/* Section content — BetOSLive stays mounted to preserve results */}
       {active === 'insights'  && <BettingInsights picks={picks} />}
-      <div style={{ display: active === 'goatbot' ? 'block' : 'none' }}>
-        <GoatBotLive
+      <div style={{ display: active === 'betos' ? 'block' : 'none' }}>
+        <BetOSLive
           injectedPrompt={goatPrompt}
           onPromptConsumed={onGoatPromptConsumed}
           injectedReport={goatReport}

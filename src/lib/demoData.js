@@ -40,8 +40,8 @@ export const DEMO_PICKS = [
 
 // ── localStorage persistence for demo mode ──────────────────────────────────
 
-const PICKS_KEY   = 'goatbot_demo_picks';
-const CONTEST_KEY = 'goatbot_demo_contest';
+const PICKS_KEY   = 'betos_demo_picks';
+const CONTEST_KEY = 'betos_demo_contest';
 
 export function loadDemoPicks() {
   if (typeof window === 'undefined') return DEMO_PICKS;

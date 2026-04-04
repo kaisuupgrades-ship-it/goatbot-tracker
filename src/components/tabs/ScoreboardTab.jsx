@@ -4,7 +4,7 @@ import BetSlipModal from '@/components/BetSlipModal';
 import VoiceButton from '@/components/VoiceInput';
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
-const STARRED_KEY = 'goatbot_starred_games';
+const STARRED_KEY = 'betos_starred_games';
 
 export function useStarredGames() {
   const [starred, setStarred] = useState({});
@@ -1327,7 +1327,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   const venueInfo = venue ? `Venue: ${venue}.` : '';
 
                   const prompt = [
-                    `Run a full GOAT BOT analysis on ${gameInfo}.`,
+                    `Run a full BetOS analysis on ${gameInfo}.`,
                     verifiedBlock,
                     recInfo,
                     venueInfo,
@@ -1346,7 +1346,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.16)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.08)'; e.currentTarget.style.transform = ''; }}
               >
-                🐐 GOAT BOT Analyze
+                🎯 BetOS Analyze
               </button>
             )}
           </div>

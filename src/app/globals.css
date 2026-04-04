@@ -451,16 +451,16 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   to   { transform: rotate(360deg); }
 }
 
-/* ── GOAT BOT Splash Screen Animations ────────────────────────────────────── */
+/* ── BetOS Splash Screen Animations ──────────────────────────────────────── */
 
-/* Floating goat emoji */
+/* Floating logo emoji */
 @keyframes goat-float {
   0%, 100% { transform: translateY(0px) rotate(-2deg); }
   33%       { transform: translateY(-10px) rotate(1deg); }
   66%       { transform: translateY(-5px) rotate(-1deg); }
 }
 
-/* Sweeping gold gradient on "GOAT BOT" wordmark */
+/* Sweeping gold gradient on "BetOS" wordmark */
 @keyframes gold-shimmer {
   0%   { background-position: 0% center; }
   100% { background-position: 200% center; }
@@ -533,8 +533,13 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
     min-width: calc(50% - 6px) !important;
   }
 
-  /* Main content — tighter padding */
-  .main-content { padding: 1rem !important; }
+  /* Main content — tighter padding with safe area support */
+  .main-content {
+    padding: 1rem !important;
+    padding-left: max(1rem, env(safe-area-inset-left)) !important;
+    padding-right: max(1rem, env(safe-area-inset-right)) !important;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+  }
 
   /* Tables — horizontal scroll */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -565,9 +570,24 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   }
   .sport-selector::-webkit-scrollbar { display: none; }
 
-  /* GOAT BOT command center — tighter padding */
-  .goatbot-command textarea {
+  /* BetOS command center — tighter padding */
+  .betos-command textarea {
     font-size: 0.85rem !important;
+  }
+
+  /* Auth page — responsive padding */
+  .auth-page-wrap {
+    padding-top: env(safe-area-inset-top) !important;
+  }
+
+  /* Modal overlays — safe area aware */
+  .modal-overlay {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* Featured games grid — single column on tablets and below */
+  .game-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)) !important;
   }
 }
 
@@ -581,6 +601,11 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   /* Game cards — single column guaranteed */
   .game-cards-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  /* Tighter padding on small phones */
+  header {
+    padding: 0 0.75rem !important;
   }
 }
 

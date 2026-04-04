@@ -966,7 +966,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                           }}
                           style={{ padding: '3px 8px', borderRadius: '5px', border: `1px solid ${analyses[pick.id] ? 'rgba(255,184,0,0.3)' : '#333'}`, background: expandedAnalysis === pick.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: analyses[pick.id] ? '#FFB800' : '#666', cursor: 'pointer', fontSize: '0.75rem' }}
                           title={analyses[pick.id] ? 'View AI analysis' : 'Get AI analysis'}
-                        >🐐</button>
+                        >🎯</button>
                         {pick.contest_entry ? (
                           <span style={{ fontSize: '0.62rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700, whiteSpace: 'nowrap' }} title="Contest picks are locked — no editing or deleting">🔒 LOCKED</span>
                         ) : (
@@ -992,7 +992,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                     <tr key={`${pick.id}-analysis`}>
                       <td colSpan={15} style={{ padding: '0.6rem 1rem 0.8rem', background: '#0a0800', borderBottom: '1px solid rgba(255,184,0,0.15)' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                          <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>🐐</span>
+                          <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>🎯</span>
                           <div style={{ fontSize: '0.78rem', lineHeight: 1.5 }}>
                             {analysisLoading && !analyses[pick.id]
                               ? <span style={{ color: '#888' }}>Analyzing pick…</span>

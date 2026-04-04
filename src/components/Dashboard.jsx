@@ -29,7 +29,7 @@ function AnnouncementBanner() {
         const data = await res.json();
         if (data.value) {
           // Only show if not dismissed for this version (key = updatedAt timestamp)
-          const dismissKey = `goatbot_banner_dismissed_${data.updated_at || 'default'}`;
+          const dismissKey = `betos_banner_dismissed_${data.updated_at || 'default'}`;
           if (sessionStorage.getItem(dismissKey)) return; // already dismissed this session
           setText(data.value);
           setUpdatedAt(data.updated_at);
@@ -43,7 +43,7 @@ function AnnouncementBanner() {
   }, []);
 
   function dismiss() {
-    const dismissKey = `goatbot_banner_dismissed_${updatedAt || 'default'}`;
+    const dismissKey = `betos_banner_dismissed_${updatedAt || 'default'}`;
     try { sessionStorage.setItem(dismissKey, '1'); } catch {}
     setDismissed(true);
   }
@@ -100,9 +100,9 @@ const TAB_META = {
   odds:       { label: 'Odds Board',   sub: 'Compare lines across books in real time' },
   trends:     { label: 'Trends',       sub: 'Situational edges, filter engine & backtest' },
   history:    { label: 'Pick History', sub: 'Log, edit, and analyze every bet' },
-  analyzer:    { label: 'Analyzer',     sub: 'GOAT BOT live analysis + sharp tools' },
+  analyzer:    { label: 'Analyzer',     sub: 'BetOS live analysis + sharp tools' },
   leaderboard:  { label: 'Leaderboard',     sub: 'Sharp picks, verified records, public rankings' },
-  featured:     { label: 'Featured Games',  sub: 'Your starred games & quick GOAT BOT access' },
+  featured:     { label: 'Featured Games',  sub: 'Your starred games & quick BetOS access' },
   admin:        { label: '🛡 Admin Panel',  sub: 'User management, analytics & system settings' },
 };
 
@@ -124,7 +124,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
 
   async function handleSignOut() {
     if (isDemo) {
-      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('goatbot_demo');
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('betos_demo');
       router.push('/');
       return;
     }

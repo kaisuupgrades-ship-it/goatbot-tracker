@@ -61,7 +61,7 @@ function generateFallbackAnalysis(odds, team, betType) {
 }
 
 /**
- * Build concise GOAT BOT prompt
+ * Build concise BetOS prompt
  */
 function buildAnalysisPrompt(team, betType, odds, date, sport, notes) {
   let prompt = `Quick analysis: ${team} ${betType} at ${odds} on ${date}. Sport: ${sport}.`;
