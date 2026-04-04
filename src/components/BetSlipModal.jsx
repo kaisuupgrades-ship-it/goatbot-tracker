@@ -215,6 +215,12 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   // In those sports the run/puck line is always ±1.5 — show that if spread looks like an ML (≥100).
   const spreadIsML = spreadData && Math.abs(spreadData.awayLine) >= 100;
 
+  // When spread string was actually an ML price, use it for the ML buttons if they're missing
+  const mlFromSpread = spreadIsML ? spreadData : null;
+  // Resolved ML odds — must be declared before effectiveSpreadData (used in homeFavored)
+  const resolvedAwayOdds = odds?.awayOdds ?? (mlFromSpread?.awayLine ? mlFromSpread.awayLine : null);
+  const resolvedHomeOdds = odds?.homeOdds ?? (mlFromSpread?.homeLine ? mlFromSpread.homeLine : null);
+
   // For NHL and MLB the line is ALWAYS ±1.5 — show puck/run line even when odds data is missing
   const alwaysHasFixedLine = ['nhl', 'mlb'].includes(sport);
   // Infer which team is favored from ML odds to assign -1.5 correctly
@@ -231,10 +237,6 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             ? { awayLine: 1.5,  homeLine: -1.5 }   // home favored → away +1.5 / home -1.5
             : { awayLine: -1.5, homeLine: 1.5  })   // away favored → away -1.5 / home +1.5
         : null;
-  // When spread string was actually an ML price, use it for the ML buttons if they're missing
-  const mlFromSpread = spreadIsML ? spreadData : null;
-  const resolvedAwayOdds = odds?.awayOdds ?? (mlFromSpread?.awayLine ? mlFromSpread.awayLine : null);
-  const resolvedHomeOdds = odds?.homeOdds ?? (mlFromSpread?.homeLine ? mlFromSpread.homeLine : null);
 
   const quickBets = [
     // ── Moneyline ──────────────────────────────────────────────────────────

@@ -445,6 +445,17 @@ Return ONLY the JSON array, no other text.`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: prompt, userId: user?.id || null, isEdgeScan: true }),
       });
+
+      // Handle non-OK HTTP responses safely
+      if (!res.ok) {
+        let errMsg = `Server error (${res.status})`;
+        try { const e = await res.json(); errMsg = e.error || errMsg; } catch {}
+        setError(errMsg);
+        setScanned(true);
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
 
       if (data.error && !data.answer) {
@@ -456,12 +467,30 @@ Return ONLY the JSON array, no other text.`;
 
       const raw = data.answer || '';
       const cleaned = raw.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
-      const parsed = JSON.parse(cleaned);
+
+      // Validate it actually looks like a JSON array before parsing
+      if (!cleaned.startsWith('[')) {
+        setError('AI returned an unexpected response. Please try scanning again.');
+        setScanned(true);
+        setLoading(false);
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        setError('Could not parse AI response. Please try scanning again.');
+        setScanned(true);
+        setLoading(false);
+        return;
+      }
+
       setEdges(Array.isArray(parsed) ? parsed : []);
       setScanned(true);
       setUserScanned(true); // mark that this is user's own scan (not admin cache)
     } catch (err) {
-      setError(`Scan failed: ${err.message}. Try again in a moment.`);
+      setError(`Scan failed — network or server error. Try again in a moment.`);
       setScanned(true);
     }
     setLoading(false);

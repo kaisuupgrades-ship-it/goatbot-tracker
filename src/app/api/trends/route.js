@@ -340,7 +340,23 @@ Answer questions about sports betting trends and edges. Rules:
       maxTokens: 2000,
       temperature: 0.5,
     });
-    return NextResponse.json({ answer: aiResult.text, source: aiResult.provider });
+
+    // Strip markdown fences and validate the response is a JSON array before sending to client
+    const raw     = aiResult.text || '';
+    const cleaned = raw.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
+
+    // If AI returned an error string instead of JSON, treat it as a failure
+    if (!cleaned.startsWith('[')) {
+      console.warn('[edge-scan] AI returned non-JSON:', cleaned.substring(0, 120));
+      return NextResponse.json({ error: 'AI returned an unexpected response. Please try again.' }, { status: 502 });
+    }
+
+    // Validate it parses correctly before sending
+    try { JSON.parse(cleaned); } catch {
+      return NextResponse.json({ error: 'AI response was malformed JSON. Please try again.' }, { status: 502 });
+    }
+
+    return NextResponse.json({ answer: cleaned, source: aiResult.provider });
   } catch (err) {
     console.error('Edge scan AI error:', err.message);
     return NextResponse.json({ error: 'AI unavailable. Try again in a moment.' }, { status: 503 });
