@@ -761,44 +761,44 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
       {/* BetSlip modal */}
       {betSlipGame && BetSlipModal && (() => {
         const { away, home } = getEventCompetitors(betSlipGame.event);
-        const eventOdds = betSlipGame.event?.competitions?.[0]?.odds?.[0];
+        // Extract odds from the enriched event (real odds already merged in via Scoreboard's enrichedGames,
+        // or directly from ESPN's odds structure for events fetched here)
+        const ev = betSlipGame.event;
+        const rawOdds = ev?.competitions?.[0]?.odds?.[0];
         let odds = null;
-        if (eventOdds) {
-          let homeOdds = eventOdds.homeTeamOdds?.moneyLine || eventOdds.homeTeamOdds?.current?.moneyLine || null;
-          let awayOdds = eventOdds.awayTeamOdds?.moneyLine || eventOdds.awayTeamOdds?.current?.moneyLine || null;
-          // Fallback: parse ML from details string (e.g. "LAD -314" for MLB)
-          if ((!homeOdds || !awayOdds) && eventOdds.details) {
-            const m = eventOdds.details.match(/([A-Z]+)\s*([-+]?\d+)/);
+        if (rawOdds) {
+          let homeOdds = rawOdds.homeTeamOdds?.moneyLine ?? rawOdds.homeTeamOdds?.current?.moneyLine ?? null;
+          let awayOdds = rawOdds.awayTeamOdds?.moneyLine ?? rawOdds.awayTeamOdds?.current?.moneyLine ?? null;
+          if ((!homeOdds || !awayOdds) && rawOdds.details) {
+            const m = rawOdds.details.match(/([A-Z]+)\s*([-+]?\d+)/);
             if (m) {
-              const parsedOdds = parseInt(m[2]);
-              if (Math.abs(parsedOdds) >= 100) {
-                const detailsTeamIsHome = betSlipGame.event?.competitions?.[0]?.competitors
-                  ?.find(c => c.homeAway === 'home')?.team?.abbreviation === m[1];
-                if (detailsTeamIsHome) { if (!homeOdds) homeOdds = parsedOdds; }
-                else { if (!awayOdds) awayOdds = parsedOdds; }
+              const p = parseInt(m[2]);
+              if (Math.abs(p) >= 100) {
+                const isHome = ev?.competitions?.[0]?.competitors?.find(c => c.homeAway === 'home')?.team?.abbreviation === m[1];
+                if (isHome) { if (!homeOdds) homeOdds = p; } else { if (!awayOdds) awayOdds = p; }
               }
             }
           }
           odds = {
-            homeOdds,
-            awayOdds,
-            spread:          eventOdds.details || null,
-            total:           eventOdds.overUnder ?? null,
-            homeSpreadOdds:  eventOdds.homeTeamOdds?.spreadLine || eventOdds.homeTeamOdds?.current?.pointSpread?.american || null,
-            awaySpreadOdds:  eventOdds.awayTeamOdds?.spreadLine || eventOdds.awayTeamOdds?.current?.pointSpread?.american || null,
-            overOdds:        eventOdds.overOdds  || eventOdds.homeTeamOdds?.overLine  || null,
-            underOdds:       eventOdds.underOdds || eventOdds.awayTeamOdds?.underLine || null,
-            provider:        eventOdds.provider?.name || '',
+            homeOdds, awayOdds,
+            spread:          rawOdds.details || null,
+            total:           rawOdds.overUnder ?? null,
+            homeSpreadOdds:  rawOdds._homeSpreadOdds ?? rawOdds.homeTeamOdds?.spreadLine ?? null,
+            awaySpreadOdds:  rawOdds._awaySpreadOdds ?? rawOdds.awayTeamOdds?.spreadLine ?? null,
+            overOdds:        rawOdds._overOdds  ?? rawOdds.overOdds  ?? null,
+            underOdds:       rawOdds._underOdds ?? rawOdds.underOdds ?? null,
+            provider:        rawOdds._source    ?? rawOdds.provider?.name ?? '',
           };
         }
         return (
           <BetSlipModal
-            game={{ away, home, odds, date: betSlipGame.event?.date }}
+            game={{ away, home, odds, date: ev?.date }}
             sport={betSlipGame.sport}
             user={user}
             picks={picks}
             setPicks={setPicks}
             isDemo={isDemo}
+            onAnalyze={onAnalyze}
             onClose={() => setBetSlipGame(null)}
           />
         );

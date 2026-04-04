@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import BetSlipModal from '@/components/BetSlipModal';
 import VoiceButton from '@/components/VoiceInput';
 
@@ -162,16 +162,19 @@ function getOdds(event) {
   }
 
   // ── Spread / Run Line / Puck Line prices ──────────────────────────────────
-  const homeSpreadOdds = odds.homeTeamOdds?.spreadLine
-    || odds.homeTeamOdds?.current?.pointSpread?.american
-    || null;
-  const awaySpreadOdds = odds.awayTeamOdds?.spreadLine
-    || odds.awayTeamOdds?.current?.pointSpread?.american
-    || null;
+  // Prefer enriched _real fields (from The Odds API); fall back to ESPN
+  const homeSpreadOdds = odds._homeSpreadOdds
+    ?? odds.homeTeamOdds?.spreadLine
+    ?? odds.homeTeamOdds?.current?.pointSpread?.american
+    ?? null;
+  const awaySpreadOdds = odds._awaySpreadOdds
+    ?? odds.awayTeamOdds?.spreadLine
+    ?? odds.awayTeamOdds?.current?.pointSpread?.american
+    ?? null;
 
   // ── Over / Under prices ────────────────────────────────────────────────────
-  const overOdds  = odds.overOdds  || odds.homeTeamOdds?.overLine  || null;
-  const underOdds = odds.underOdds || odds.awayTeamOdds?.underLine || null;
+  const overOdds  = odds._overOdds  ?? odds.overOdds  ?? odds.homeTeamOdds?.overLine  ?? null;
+  const underOdds = odds._underOdds ?? odds.underOdds ?? odds.awayTeamOdds?.underLine ?? null;
 
   return {
     homeOdds,
@@ -182,7 +185,7 @@ function getOdds(event) {
     awaySpreadOdds,
     overOdds,
     underOdds,
-    provider: odds.provider?.name || '',
+    provider: odds._source || odds.provider?.name || '',
   };
 }
 
@@ -927,8 +930,9 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
         </div>
 
         {/* Odds strip — pre-game, live, and closing line */}
-        {odds && (gameState.state !== 'final' || event._closingLine) && (odds.spread || odds.total != null) && (
+        {odds && (gameState.state !== 'final' || event._closingLine) && (odds.awayOdds || odds.homeOdds || odds.spread || odds.total != null) && (
           <div style={{ display: 'flex', gap: '8px', marginTop: '0.6rem', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)', alignItems: 'center', flexWrap: 'wrap', opacity: gameState.state === 'live' ? 0.8 : 1 }}>
+            {/* Source badge */}
             <span style={{
               fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
               background: event._closingLine
@@ -944,9 +948,29 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             }}
               title={event._closingLine ? 'Closing line — odds at game start' : undefined}
             >
-              {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : 'DK'}
+              {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
             </span>
-            {odds.spread && (
+            {/* Moneyline: away / home */}
+            {(odds.awayOdds || odds.homeOdds) && (
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                {away.team?.abbreviation || 'AWY'}{' '}
+                <strong style={{
+                  color: odds.awayOdds > 0 ? 'var(--green)' : 'var(--text-secondary)',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                }}>
+                  {odds.awayOdds != null ? (odds.awayOdds > 0 ? `+${odds.awayOdds}` : odds.awayOdds) : '–'}
+                </strong>
+                {' / '}
+                {home.team?.abbreviation || 'HME'}{' '}
+                <strong style={{
+                  color: odds.homeOdds > 0 ? 'var(--green)' : 'var(--text-secondary)',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                }}>
+                  {odds.homeOdds != null ? (odds.homeOdds > 0 ? `+${odds.homeOdds}` : odds.homeOdds) : '–'}
+                </strong>
+              </span>
+            )}
+            {odds.spread && !(odds.awayOdds || odds.homeOdds) && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                 Spread <strong style={{ color: 'var(--gold)', fontFamily: 'IBM Plex Mono, monospace' }}>{odds.spread}</strong>
               </span>
@@ -1703,7 +1727,75 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
   const isAllMode = sport === 'all';
 
-  const filteredGames = games.filter(e => {
+  // ── Merge The Odds API data into game events (single source of truth) ─────
+  // This ensures GameCard, BetSlipModal, and every other consumer see the same odds.
+  const enrichedGames = useMemo(() => {
+    if (!Object.keys(realOddsLookup).length) return games;
+    return games.map(event => {
+      const competitors = event.competitions?.[0]?.competitors || [];
+      const homeComp = competitors.find(c => c.homeAway === 'home') || competitors[1] || {};
+      const awayComp = competitors.find(c => c.homeAway === 'away') || competitors[0] || {};
+      const homeName = homeComp.team?.displayName || homeComp.team?.name || '';
+      if (!homeName) return event;
+
+      const homeKey  = homeName.toLowerCase().replace(/\s+/g, '_');
+      const realGame = realOddsLookup[homeKey]
+        || Object.values(realOddsLookup).find(g =>
+            (g.home_team || '').toLowerCase().includes(homeName.split(' ').pop().toLowerCase())
+          );
+      if (!realGame) return event;
+
+      const book    = realGame.bookmakers?.[0];
+      const h2h     = book?.markets?.find(m => m.key === 'h2h');
+      const spreads = book?.markets?.find(m => m.key === 'spreads');
+      const totals  = book?.markets?.find(m => m.key === 'totals');
+
+      const homeH2h  = h2h?.outcomes?.find(o => o.name === realGame.home_team);
+      const awayH2h  = h2h?.outcomes?.find(o => o.name === realGame.away_team);
+      const sHome    = spreads?.outcomes?.find(o => o.name === realGame.home_team);
+      const sAway    = spreads?.outcomes?.find(o => o.name === realGame.away_team);
+      const tOver    = totals?.outcomes?.find(o => o.name === 'Over');
+      const tUnder   = totals?.outcomes?.find(o => o.name === 'Under');
+
+      const existingOdds = event.competitions?.[0]?.odds?.[0] || {};
+      const mergedOdds = {
+        ...existingOdds,
+        homeTeamOdds: {
+          ...(existingOdds.homeTeamOdds || {}),
+          moneyLine: homeH2h?.price ?? existingOdds.homeTeamOdds?.moneyLine ?? null,
+          spreadLine: sHome?.price ?? existingOdds.homeTeamOdds?.spreadLine ?? null,
+        },
+        awayTeamOdds: {
+          ...(existingOdds.awayTeamOdds || {}),
+          moneyLine: awayH2h?.price ?? existingOdds.awayTeamOdds?.moneyLine ?? null,
+          spreadLine: sAway?.price ?? existingOdds.awayTeamOdds?.spreadLine ?? null,
+        },
+        overUnder: tOver?.point ?? tUnder?.point ?? existingOdds.overUnder ?? null,
+        details: sHome?.point != null
+          ? `${realGame.home_team.split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
+          : existingOdds.details ?? null,
+        // Enriched over/under prices (ESPN doesn't expose these in a standard field)
+        _overOdds:       tOver?.price  ?? null,
+        _underOdds:      tUnder?.price ?? null,
+        _awaySpreadOdds: sAway?.price  ?? null,
+        _homeSpreadOdds: sHome?.price  ?? null,
+        _source: book?.title || 'DK',
+      };
+
+      return {
+        ...event,
+        competitions: [
+          {
+            ...event.competitions[0],
+            odds: [mergedOdds, ...(event.competitions[0]?.odds?.slice(1) || [])],
+          },
+          ...(event.competitions?.slice(1) || []),
+        ],
+      };
+    });
+  }, [games, realOddsLookup]);
+
+  const filteredGames = enrichedGames.filter(e => {
     const state = getGameState(e).state;
     if (filter === 'live')    return state === 'live';
     if (filter === 'upcoming') return state === 'pre';
@@ -2064,40 +2156,9 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
     {/* ── Bet Slip Modal ─────────────────────────────────────────────────── */}
     {betSlipGame && (() => {
+      // Events are pre-enriched via enrichedGames — single source of truth, no separate merge needed
       const { away, home } = getCompetitors(betSlipGame.event);
-      const espnOdds = getOdds(betSlipGame.event);
-
-      // Merge real bookmaker odds (The Odds API) over ESPN odds for better pre-fill accuracy
-      const homeName = home?.team?.displayName || home?.team?.name || '';
-      const awayName = away?.team?.displayName || away?.team?.name || '';
-      const homeKey  = homeName.toLowerCase().replace(/\s+/g, '_');
-      const realGame = realOddsLookup[homeKey]
-        || Object.values(realOddsLookup).find(g =>
-            (g.home_team || '').toLowerCase().includes(homeName.split(' ').pop().toLowerCase())
-          );
-
-      let odds = espnOdds;
-      if (realGame) {
-        const book     = realGame.bookmakers?.[0];
-        const h2h      = book?.markets?.find(m => m.key === 'h2h');
-        const spreads  = book?.markets?.find(m => m.key === 'spreads');
-        const totals   = book?.markets?.find(m => m.key === 'totals');
-        const sHome    = spreads?.outcomes?.find(o => o.name === realGame.home_team);
-        const sAway    = spreads?.outcomes?.find(o => o.name === realGame.away_team);
-        odds = {
-          homeOdds:      h2h?.outcomes?.find(o => o.name === realGame.home_team)?.price ?? espnOdds?.homeOdds ?? null,
-          awayOdds:      h2h?.outcomes?.find(o => o.name === realGame.away_team)?.price ?? espnOdds?.awayOdds ?? null,
-          spread:        sHome?.point != null
-            ? `${realGame.home_team.split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
-            : espnOdds?.spread,
-          homeSpreadOdds: sHome?.price ?? espnOdds?.homeSpreadOdds ?? null,
-          awaySpreadOdds: sAway?.price ?? espnOdds?.awaySpreadOdds ?? null,
-          total:         totals?.outcomes?.[0]?.point ?? espnOdds?.total ?? null,
-          overOdds:      totals?.outcomes?.find(o => o.name === 'Over')?.price  ?? espnOdds?.overOdds  ?? null,
-          underOdds:     totals?.outcomes?.find(o => o.name === 'Under')?.price ?? espnOdds?.underOdds ?? null,
-        };
-      }
-
+      const odds = getOdds(betSlipGame.event);
       return (
         <BetSlipModal
           game={{ away, home, odds, date: betSlipGame.event?.date }}
@@ -2106,6 +2167,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           picks={picks}
           setPicks={setPicks}
           isDemo={isDemo}
+          onAnalyze={onAnalyze}
           onClose={() => setBetSlipGame(null)}
         />
       );
