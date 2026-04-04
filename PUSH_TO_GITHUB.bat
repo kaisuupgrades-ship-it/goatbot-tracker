@@ -10,7 +10,7 @@ git config user.email "kaisuupgrades@gmail.com"
 git config user.name "kaisuupgrades-ship-it"
 
 git add -A
-git commit -m "Fix date offset bug, add Google OAuth, voice+text AI bet entry, admin create user"
+git commit -m "Auto-analyze picks, scoreboard merge refresh, contest rules (1/day -145 locked), AI audit, sidebar fix, odds board unified"
 git push origin main
 
 echo.

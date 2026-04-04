@@ -115,7 +115,8 @@ export async function GET(req) {
     }, { status: 200 });
   }
 
-  const cacheKey = `${sportKey}-${market}`;
+  // 'all' or any market = same data (we always return all markets); normalize cache key
+  const cacheKey = `${sportKey}-all`;
   const cached = getCached(cacheKey);
   if (cached) return NextResponse.json({ ...cached, cached: true });
 

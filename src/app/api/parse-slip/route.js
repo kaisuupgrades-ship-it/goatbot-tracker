@@ -3,21 +3,26 @@ import { NextResponse } from 'next/server';
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const XAI_BASE    = 'https://api.x.ai/v1';
 
-const EXTRACT_PROMPT = `You are parsing a sports betting slip. Extract all bet details and return ONLY valid JSON (no markdown, no code fences).
+const EXTRACT_PROMPT = `You are parsing a sports betting slip or verbal bet input. Extract all bet details and return ONLY valid JSON (no markdown, no code fences, no extra text).
 
 Return this exact structure:
 {
-  "team": "team name or player being bet on",
+  "team": "team name or player being bet on (e.g. 'New York Yankees', 'LeBron James')",
   "sport": "MLB|NBA|NFL|NHL|NCAAF|NCAAB|Soccer|UFC|Other",
-  "bet_type": "Moneyline|Spread|Total (Over)|Total (Under)|Prop|Parlay|Other",
-  "odds": <American odds as a number, e.g. -110 or 105>,
-  "book": "sportsbook name (FanDuel, DraftKings, BetMGM, Caesars, etc.)",
-  "matchup": "Away Team at Home Team",
+  "bet_type": "Moneyline|Spread|Run Line|Puck Line|Total (Over)|Total (Under)|Prop|Parlay|Other",
+  "odds": <American odds as integer, e.g. -110 or 105. REQUIRED.>,
+  "units": <wager size as decimal number. Parse '2u', '2 units', '2 unit', 'two units' as 2. Parse '0.5u', 'half unit' as 0.5. If not mentioned use null.>,
+  "book": "sportsbook name or null",
+  "matchup": "Away Team at Home Team or null",
   "date": "YYYY-MM-DD or null",
   "notes": "brief one-line description of the bet"
 }
 
-If you cannot determine a value with confidence, use null. American odds only — convert decimal/fractional if needed.`;
+Rules:
+- bet_type: 'money line', 'ML', 'moneyline' → 'Moneyline'. 'over' → 'Total (Over)'. 'under' → 'Total (Under)'. 'RL' → 'Run Line'. 'PL' → 'Puck Line'.
+- units: ALWAYS parse unit expressions — '2u', '2 units', '2unit' all mean 2. '1.5u' means 1.5.
+- odds: must be an integer. '-125' stays -125. '+110' stays 110.
+- If you cannot determine a value with confidence, use null. American odds only — convert decimal/fractional if needed.`;
 
 async function callVision(imageBase64, mimeType) {
   const response = await fetch(`${XAI_BASE}/chat/completions`, {

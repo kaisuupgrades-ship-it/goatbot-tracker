@@ -57,6 +57,20 @@ const SPORTS = [
 // Sports fetched in "All" mode (skip 'all' key itself)
 const ALL_SPORTS_KEYS = SPORTS.filter(s => s.key !== 'all').map(s => s.key);
 
+// Merge new games into existing state by game ID, preserving object references for unchanged games
+function mergeGames(prevGames, newGames) {
+  if (!prevGames.length) return newGames; // first load, just set
+  const prevMap = new Map(prevGames.map(g => [g.id, g]));
+  return newGames.map(g => {
+    const prev = prevMap.get(g.id);
+    // If scores/status haven't changed, keep the old reference to prevent re-render
+    if (prev && JSON.stringify(prev.competitions) === JSON.stringify(g.competitions) && prev.status?.type?.state === g.status?.type?.state) {
+      return prev;
+    }
+    return g;
+  });
+}
+
 // Sort a mixed-sport event list: live → upcoming (chrono) → final (newest first)
 function sortAllSportsEvents(events) {
   const live     = events.filter(e => getGameState(e).state === 'live');
@@ -1426,12 +1440,12 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           )
         );
         const merged = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-        setGames(sortAllSportsEvents(merged));
+        setGames(prev => sortAllSportsEvents(mergeGames(prev, merged)));
       } else {
         const res = await fetch(`/api/sports?sport=${s}&endpoint=scoreboard&date=${espnDate}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        setGames(data.events || []);
+        setGames(prev => mergeGames(prev, data.events || []));
       }
       setLastUpdated(new Date());
     } catch (e) {
@@ -1856,7 +1870,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
             {intelLoading && !intelText && (
               <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
                 <div style={{ fontSize: '1.5rem', marginBottom: '8px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</div>
-                <div style={{ fontSize: '0.75rem' }}>Grok is searching Twitter/X,<br/>ESPN & beat reporters…</div>
+                <div style={{ fontSize: '0.75rem' }}>Scanning Twitter/X,<br/>ESPN & beat reporters…</div>
               </div>
             )}
             {intelError && (
@@ -1866,7 +1880,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
             )}
             {intelText && !intelLoading && (
               <div style={{ overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
-                {/* Render Grok response with status word highlighting */}
+                {/* Render response with status word highlighting */}
                 {intelText.split('\n').map((line, i) => {
                   if (!line.trim()) return <div key={i} style={{ height: '4px' }} />;
                   const isHeader = line.startsWith('🏥') || line.startsWith('⚡');

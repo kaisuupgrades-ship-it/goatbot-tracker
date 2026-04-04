@@ -11,12 +11,6 @@ const SPORTS = [
   { key: 'mls',   label: 'MLS',   emoji: '⚽' },
 ];
 
-const MARKETS = [
-  { key: 'h2h',     label: 'Moneyline' },
-  { key: 'spreads', label: 'Spread'    },
-  { key: 'totals',  label: 'Total'     },
-];
-
 const BOOK_LABELS = {
   fanduel:     'FanDuel',
   draftkings:  'DraftKings',
@@ -41,24 +35,53 @@ function oddsColor(price) {
 function impliedProb(price) {
   if (!price) return null;
   const p = price > 0 ? 100 / (price + 100) : Math.abs(price) / (Math.abs(price) + 100);
-  return (p * 100).toFixed(1) + '%';
+  return (p * 100).toFixed(0) + '%';
 }
 
-// Find the best (highest) odds for a given outcome across all books
-function bestOdds(bookmakers, outcomeName, market) {
+// Get best odds for a team from a specific market across all books
+function bestOdds(bookmakers, outcomeName, marketKey) {
   let best = null;
   bookmakers.forEach(bk => {
-    const mkt = bk.markets?.find(m => m.key === market);
+    const mkt = bk.markets?.find(m => m.key === marketKey);
     const outcome = mkt?.outcomes?.find(o => o.name === outcomeName);
-    if (outcome?.price != null) {
-      if (best === null || outcome.price > best) best = outcome.price;
-    }
+    if (outcome?.price != null && (best === null || outcome.price > best)) best = outcome.price;
   });
   return best;
 }
 
-// Auto-detect game date context for GOAT BOT prompt
-function buildOddsPrompt(game, market) {
+// Get best spread point + juice for a team
+function bestSpread(bookmakers, teamName) {
+  let bestPrice = null;
+  let bestPoint = null;
+  bookmakers.forEach(bk => {
+    const mkt = bk.markets?.find(m => m.key === 'spreads');
+    const outcome = mkt?.outcomes?.find(o => o.name === teamName);
+    if (outcome?.price != null && (bestPrice === null || outcome.price > bestPrice)) {
+      bestPrice = outcome.price;
+      bestPoint = outcome.point;
+    }
+  });
+  return { price: bestPrice, point: bestPoint };
+}
+
+// Get total line (O/U number) and best over/under odds
+function bestTotal(bookmakers) {
+  let line = null;
+  let overPrice = null;
+  let underPrice = null;
+  bookmakers.forEach(bk => {
+    const mkt = bk.markets?.find(m => m.key === 'totals');
+    const over  = mkt?.outcomes?.find(o => o.name === 'Over');
+    const under = mkt?.outcomes?.find(o => o.name === 'Under');
+    if (over?.point != null && line === null) line = over.point;
+    if (over?.price  != null && (overPrice  === null || over.price  > overPrice))  overPrice  = over.price;
+    if (under?.price != null && (underPrice === null || under.price > underPrice)) underPrice = under.price;
+  });
+  return { line, overPrice, underPrice };
+}
+
+// Build GOAT BOT prompt incorporating all three markets
+function buildUnifiedPrompt(game) {
   const commence   = new Date(game.commence_time);
   const today      = new Date();
   const isToday    = commence.toDateString() === today.toDateString();
@@ -66,129 +89,259 @@ function buildOddsPrompt(game, market) {
   const dateLabel  = isToday    ? `today (${commence.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })})`
                    : isTomorrow ? `tomorrow (${commence.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })})`
                    : commence.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  const marketLabel = { h2h: 'moneyline', spreads: 'spread', totals: 'total' }[market] || market;
 
-  // Best odds summary
   const books = game.bookmakers || [];
-  const teams = [game.away_team, game.home_team];
-  function best(teamName) {
-    let b = null;
-    books.forEach(bk => {
-      const mkt = bk.markets?.find(m => m.key === market);
-      const o = mkt?.outcomes?.find(oc => oc.name === teamName);
-      if (o?.price != null && (b === null || o.price > b)) b = o.price;
-    });
-    return b;
-  }
-  const awayBest = best(game.away_team);
-  const homeBest = best(game.home_team);
-  const oddsStr = awayBest != null && homeBest != null
-    ? `Current ${marketLabel}: ${game.away_team.split(' ').pop()} ${awayBest > 0 ? '+' : ''}${awayBest} / ${game.home_team.split(' ').pop()} ${homeBest > 0 ? '+' : ''}${homeBest}`
-    : '';
+  const away  = game.away_team;
+  const home  = game.home_team;
+
+  const awayML  = bestOdds(books, away, 'h2h');
+  const homeML  = bestOdds(books, home, 'h2h');
+  const awaySpr = bestSpread(books, away);
+  const homeSpr = bestSpread(books, home);
+  const total   = bestTotal(books);
+
+  const mlStr  = awayML != null && homeML != null ? `ML: ${away.split(' ').pop()} ${formatOdds(awayML)} / ${home.split(' ').pop()} ${formatOdds(homeML)}` : '';
+  const sprStr = awaySpr.point != null ? `Spread: ${away.split(' ').pop()} ${awaySpr.point > 0 ? '+' : ''}${awaySpr.point} (${formatOdds(awaySpr.price)})` : '';
+  const totStr = total.line != null ? `O/U: ${total.line} (O ${formatOdds(total.overPrice)} / U ${formatOdds(total.underPrice)})` : '';
+  const oddsStr = [mlStr, sprStr, totStr].filter(Boolean).join(' · ');
 
   const dateCtx = `[Game date: ${dateLabel}. Today is ${today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.]\n`;
-  return `${dateCtx}Run a full GOAT BOT analysis on ${game.away_team} @ ${game.home_team} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Give me the sharpest ${marketLabel} edge — line movement signals, sharp money angles, injury impact, and your best pick with confidence level.`;
+  return `${dateCtx}Run a full GOAT BOT analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
 }
 
-// ── Game Odds Row ─────────────────────────────────────────────────────────────
-function GameOddsRow({ game, market, expanded, onToggle, onAnalyze }) {
+// ── Unified Game Row ──────────────────────────────────────────────────────────
+function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
   const books = game.bookmakers || [];
-  const teams = [game.away_team, game.home_team];
+  const away  = game.away_team;
+  const home  = game.home_team;
 
-  // Best odds per team
-  const bests = Object.fromEntries(teams.map(t => [t, bestOdds(books, t, market)]));
+  const awayML  = bestOdds(books, away, 'h2h');
+  const homeML  = bestOdds(books, home, 'h2h');
+  const awaySpr = bestSpread(books, away);
+  const homeSpr = bestSpread(books, home);
+  const total   = bestTotal(books);
 
   const commenceTime = new Date(game.commence_time);
-  const isUpcoming = commenceTime > new Date();
+  const isLive = game.status === 'live';
+  const timeLabel = isLive
+    ? 'LIVE'
+    : commenceTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  // All books that have any market data
+  const allBooks = books.filter(bk =>
+    bk.markets?.some(m => ['h2h','spreads','totals'].includes(m.key))
+  );
 
   return (
     <div style={{ borderBottom: '1px solid #1a1a1a' }}>
-      {/* Header row */}
+      {/* Collapsed summary row */}
       <div
         onClick={onToggle}
-        style={{
-          padding: '0.8rem 1rem', cursor: 'pointer', display: 'flex',
-          alignItems: 'center', gap: '1rem', transition: 'background 0.1s',
-        }}
+        style={{ padding: '0.75rem 1rem', cursor: 'pointer', transition: 'background 0.1s' }}
         onMouseEnter={e => e.currentTarget.style.background = '#141414'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
-        {/* Game info */}
-        <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-          <p style={{ fontWeight: 700, color: '#f0f0f0', fontSize: '0.88rem', marginBottom: '2px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-            {game.away_team} <span style={{ color: 'var(--text-muted)' }}>@</span> {game.home_team}
-          </p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-            {isUpcoming ? commenceTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'In Progress / Final'}
-          </p>
+        {/* Top line: teams + time */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+          <span style={{ fontWeight: 700, color: '#f0f0f0', fontSize: '0.88rem' }}>
+            {away.split(' ').pop()} <span style={{ color: '#555', fontWeight: 400 }}>@</span> {home.split(' ').pop()}
+          </span>
+          <span style={{ fontSize: '0.65rem', color: '#888', flex: 1 }}>
+            {away.includes(' ') ? away.split(' ').slice(0, -1).join(' ') : ''} vs {home.includes(' ') ? home.split(' ').slice(0, -1).join(' ') : ''}
+          </span>
+          {isLive
+            ? <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', padding: '1px 6px' }}>● LIVE</span>
+            : <span style={{ fontSize: '0.65rem', color: '#666', whiteSpace: 'nowrap' }}>{timeLabel}</span>
+          }
+          <span style={{ color: '#444', fontSize: '0.72rem', marginLeft: '4px' }}>{expanded ? '▲' : '▼'}</span>
         </div>
 
-        {/* Best odds per team */}
-        <div style={{ display: 'flex', gap: '1rem', flexShrink: 0 }}>
-          {teams.map(team => {
-            const best = bests[team];
-            const shortName = team.split(' ').pop();
-            return (
-              <div key={team} style={{ textAlign: 'center', minWidth: '70px' }}>
-                <p style={{ color: '#888', fontSize: '0.68rem', marginBottom: '2px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{shortName}</p>
-                <p style={{ color: best != null && best === Math.max(...Object.values(bests).filter(v => v != null)) ? '#FFB800' : oddsColor(best), fontWeight: 700, fontSize: '0.95rem', fontFamily: 'monospace' }}>
-                  {formatOdds(best)}
-                </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{impliedProb(best)}</p>
+        {/* Bottom line: ML | Spread | O/U inline */}
+        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          {/* Moneyline column */}
+          <div style={{ minWidth: '90px' }}>
+            <div style={{ fontSize: '0.58rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>Moneyline</div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Away</div>
+                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', fontWeight: 700, color: oddsColor(awayML) }}>{formatOdds(awayML)}</div>
               </div>
-            );
-          })}
-        </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Home</div>
+                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', fontWeight: 700, color: oddsColor(homeML) }}>{formatOdds(homeML)}</div>
+              </div>
+            </div>
+          </div>
 
-        {/* Line spread / total summary */}
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '60px', textAlign: 'right', flexShrink: 0 }}>
-          {books.length} books
-          <span style={{ marginLeft: '6px' }}>{expanded ? '▲' : '▼'}</span>
+          {/* Divider */}
+          <div style={{ width: '1px', background: '#1f1f1f', alignSelf: 'stretch' }} />
+
+          {/* Spread column */}
+          <div style={{ minWidth: '110px' }}>
+            <div style={{ fontSize: '0.58rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>Spread</div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Away</div>
+                {awaySpr.point != null
+                  ? <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: '#f0f0f0' }}>
+                      {awaySpr.point > 0 ? '+' : ''}{awaySpr.point}
+                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(awaySpr.price)})</span>
+                    </div>
+                  : <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#444' }}>—</div>
+                }
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Home</div>
+                {homeSpr.point != null
+                  ? <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: '#f0f0f0' }}>
+                      {homeSpr.point > 0 ? '+' : ''}{homeSpr.point}
+                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(homeSpr.price)})</span>
+                    </div>
+                  : <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#444' }}>—</div>
+                }
+              </div>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{ width: '1px', background: '#1f1f1f', alignSelf: 'stretch' }} />
+
+          {/* O/U column */}
+          <div style={{ minWidth: '100px' }}>
+            <div style={{ fontSize: '0.58rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>
+              O/U {total.line != null ? <span style={{ color: '#FFB800', fontWeight: 700 }}>{total.line}</span> : ''}
+            </div>
+            {total.line != null
+              ? <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Over</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: oddsColor(total.overPrice) }}>{formatOdds(total.overPrice)}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Under</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: oddsColor(total.underPrice) }}>{formatOdds(total.underPrice)}</div>
+                  </div>
+                </div>
+              : <div style={{ color: '#444', fontSize: '0.8rem' }}>—</div>
+            }
+          </div>
+
+          <div style={{ marginLeft: 'auto', color: '#444', fontSize: '0.65rem', alignSelf: 'center', whiteSpace: 'nowrap' }}>
+            {allBooks.length} book{allBooks.length !== 1 ? 's' : ''}
+          </div>
         </div>
       </div>
 
-      {/* Expanded book comparison */}
+      {/* Expanded: book-by-book table (all 3 markets) */}
       {expanded && (
         <div style={{ background: '#0d0d0d', borderTop: '1px solid #1a1a1a', padding: '0.75rem 1rem', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', minWidth: '400px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem', minWidth: '520px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #1f1f1f' }}>
-                <th style={{ padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600, textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>Book</th>
-                {teams.map(t => (
-                  <th key={t} style={{ padding: '4px 12px', color: '#aaa', fontWeight: 600, textAlign: 'center', fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
-                    {t.split(' ').slice(-1)[0]}
-                  </th>
-                ))}
-                <th style={{ padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600, textAlign: 'right', fontSize: '0.7rem' }}>Updated</th>
+                <th style={{ padding: '4px 8px', color: '#555', fontWeight: 600, textAlign: 'left', fontSize: '0.68rem', textTransform: 'uppercase' }}>Book</th>
+                <th colSpan={2} style={{ padding: '4px 8px', color: '#888', fontWeight: 600, textAlign: 'center', fontSize: '0.68rem', textTransform: 'uppercase', borderLeft: '1px solid #1f1f1f' }}>Moneyline</th>
+                <th colSpan={2} style={{ padding: '4px 8px', color: '#888', fontWeight: 600, textAlign: 'center', fontSize: '0.68rem', textTransform: 'uppercase', borderLeft: '1px solid #1f1f1f' }}>Spread</th>
+                <th colSpan={2} style={{ padding: '4px 8px', color: '#888', fontWeight: 600, textAlign: 'center', fontSize: '0.68rem', textTransform: 'uppercase', borderLeft: '1px solid #1f1f1f' }}>O/U</th>
+                <th style={{ padding: '4px 6px', color: '#555', fontWeight: 600, textAlign: 'right', fontSize: '0.65rem', textTransform: 'uppercase' }}>Updated</th>
+              </tr>
+              <tr style={{ borderBottom: '1px solid #222' }}>
+                <th style={{ padding: '2px 8px' }} />
+                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center', borderLeft: '1px solid #1f1f1f' }}>{away.split(' ').pop()}</th>
+                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center' }}>{home.split(' ').pop()}</th>
+                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center', borderLeft: '1px solid #1f1f1f' }}>Away</th>
+                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center' }}>Home</th>
+                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center', borderLeft: '1px solid #1f1f1f' }}>Over</th>
+                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center' }}>Under</th>
+                <th style={{ padding: '2px 6px' }} />
               </tr>
             </thead>
             <tbody>
-              {books.map(bk => {
-                const mkt = bk.markets?.find(m => m.key === market);
+              {allBooks.map(bk => {
+                const h2h     = bk.markets?.find(m => m.key === 'h2h');
+                const spreads = bk.markets?.find(m => m.key === 'spreads');
+                const totals  = bk.markets?.find(m => m.key === 'totals');
+
+                const awayMLPrice  = h2h?.outcomes?.find(o => o.name === away)?.price;
+                const homeMLPrice  = h2h?.outcomes?.find(o => o.name === home)?.price;
+                const awaySprOut   = spreads?.outcomes?.find(o => o.name === away);
+                const homeSprOut   = spreads?.outcomes?.find(o => o.name === home);
+                const overOut      = totals?.outcomes?.find(o => o.name === 'Over');
+                const underOut     = totals?.outcomes?.find(o => o.name === 'Under');
+
+                function Cell({ price, isBest, point }) {
+                  if (price == null) return <td style={{ padding: '6px 8px', textAlign: 'center', color: '#333' }}>—</td>;
+                  return (
+                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                      {point != null && (
+                        <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>
+                          {point > 0 ? '+' : ''}{point}
+                        </span>
+                      )}
+                      <span style={{
+                        color: isBest ? '#000' : oddsColor(price),
+                        background: isBest ? '#FFB800' : 'transparent',
+                        padding: isBest ? '1px 5px' : '0',
+                        borderRadius: isBest ? '3px' : '0',
+                        fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem',
+                      }}>
+                        {formatOdds(price)}
+                      </span>
+                    </td>
+                  );
+                }
+
                 return (
                   <tr key={bk.key} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                    <td style={{ padding: '6px 8px', color: '#888', fontWeight: 500 }}>
+                    <td style={{ padding: '6px 8px', color: '#888', fontWeight: 500, whiteSpace: 'nowrap' }}>
                       {BOOK_LABELS[bk.key] || bk.title}
                     </td>
-                    {teams.map(team => {
-                      const outcome = mkt?.outcomes?.find(o => o.name === team);
-                      const price = outcome?.price;
-                      const isBest = price === bests[team] && price != null;
-                      return (
-                        <td key={team} style={{ padding: '6px 12px', textAlign: 'center' }}>
-                          <span style={{
-                            color: isBest ? '#000' : oddsColor(price),
-                            background: isBest ? '#FFB800' : 'transparent',
-                            padding: isBest ? '2px 6px' : '0',
-                            borderRadius: isBest ? '4px' : '0',
-                            fontWeight: 700, fontFamily: 'monospace', fontSize: '0.85rem',
-                          }}>
-                            {formatOdds(price)}
-                          </span>
-                        </td>
-                      );
-                    })}
-                    <td style={{ padding: '6px 8px', color: 'var(--text-muted)', fontSize: '0.68rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <Cell price={awayMLPrice} isBest={awayMLPrice === awayML} />
+                    <Cell price={homeMLPrice} isBest={homeMLPrice === homeML} />
+                    <td style={{ padding: '6px 8px', textAlign: 'center', borderLeft: '1px solid #1a1a1a' }}>
+                      {awaySprOut?.price != null
+                        ? <>
+                            <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{awaySprOut.point > 0 ? '+' : ''}{awaySprOut.point}</span>
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: awaySprOut.price === awaySpr.price ? '#FFB800' : oddsColor(awaySprOut.price), background: awaySprOut.price === awaySpr.price ? 'rgba(255,184,0,0.1)' : 'transparent', padding: awaySprOut.price === awaySpr.price ? '1px 4px' : '0', borderRadius: '3px' }}>
+                              {formatOdds(awaySprOut.price)}
+                            </span>
+                          </>
+                        : <span style={{ color: '#333' }}>—</span>
+                      }
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                      {homeSprOut?.price != null
+                        ? <>
+                            <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{homeSprOut.point > 0 ? '+' : ''}{homeSprOut.point}</span>
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: homeSprOut.price === homeSpr.price ? '#FFB800' : oddsColor(homeSprOut.price), background: homeSprOut.price === homeSpr.price ? 'rgba(255,184,0,0.1)' : 'transparent', padding: homeSprOut.price === homeSpr.price ? '1px 4px' : '0', borderRadius: '3px' }}>
+                              {formatOdds(homeSprOut.price)}
+                            </span>
+                          </>
+                        : <span style={{ color: '#333' }}>—</span>
+                      }
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'center', borderLeft: '1px solid #1a1a1a' }}>
+                      {overOut?.price != null
+                        ? <>
+                            {overOut.point != null && <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{overOut.point}</span>}
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: overOut.price === total.overPrice ? '#FFB800' : oddsColor(overOut.price), background: overOut.price === total.overPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: overOut.price === total.overPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
+                              {formatOdds(overOut.price)}
+                            </span>
+                          </>
+                        : <span style={{ color: '#333' }}>—</span>
+                      }
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                      {underOut?.price != null
+                        ? <>
+                            {underOut.point != null && <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{underOut.point}</span>}
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: underOut.price === total.underPrice ? '#FFB800' : oddsColor(underOut.price), background: underOut.price === total.underPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: underOut.price === total.underPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
+                              {formatOdds(underOut.price)}
+                            </span>
+                          </>
+                        : <span style={{ color: '#333' }}>—</span>
+                      }
+                    </td>
+                    <td style={{ padding: '6px 6px', color: '#555', fontSize: '0.65rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {bk.last_update ? new Date(bk.last_update).toLocaleTimeString() : '—'}
                     </td>
                   </tr>
@@ -197,35 +350,41 @@ function GameOddsRow({ game, market, expanded, onToggle, onAnalyze }) {
             </tbody>
           </table>
 
-          {/* Best line summary + GOAT BOT */}
+          {/* Best lines summary + GOAT BOT */}
           <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            {teams.map(team => {
-              const best = bests[team];
-              const bookWithBest = books.find(bk => {
-                const mkt = bk.markets?.find(m => m.key === market);
-                return mkt?.outcomes?.find(o => o.name === team && o.price === best);
-              });
-              return best != null ? (
-                <span key={team} style={{ padding: '3px 8px', background: '#1a1200', border: '1px solid #FFB80066', borderRadius: '4px', color: '#FFB800', fontSize: '0.72rem' }}>
-                  🏆 Best {team.split(' ').pop()}: <strong>{formatOdds(best)}</strong> @ {BOOK_LABELS[bookWithBest?.key] || bookWithBest?.title || '?'}
-                </span>
-              ) : null;
-            })}
-            {/* GOAT BOT analyze button */}
+            {/* Best ML */}
+            {awayML != null && (
+              <span style={{ padding: '3px 8px', background: '#1a1200', border: '1px solid #FFB80044', borderRadius: '4px', color: '#FFB800', fontSize: '0.7rem' }}>
+                🏆 Best ML: {away.split(' ').pop()} <strong>{formatOdds(awayML)}</strong> / {home.split(' ').pop()} <strong>{formatOdds(homeML)}</strong>
+              </span>
+            )}
+            {/* Best spread */}
+            {awaySpr.point != null && (
+              <span style={{ padding: '3px 8px', background: '#0d1a0d', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', color: '#4ade80', fontSize: '0.7rem' }}>
+                📐 Spread: {away.split(' ').pop()} {awaySpr.point > 0 ? '+' : ''}{awaySpr.point} ({formatOdds(awaySpr.price)})
+              </span>
+            )}
+            {/* Best total */}
+            {total.line != null && (
+              <span style={{ padding: '3px 8px', background: '#0d0d1a', border: '1px solid rgba(96,165,250,0.2)', borderRadius: '4px', color: '#60a5fa', fontSize: '0.7rem' }}>
+                🎯 O/U {total.line}: O {formatOdds(total.overPrice)} / U {formatOdds(total.underPrice)}
+              </span>
+            )}
+            {/* GOAT BOT button */}
             {onAnalyze && (
               <button
-                onClick={e => { e.stopPropagation(); onAnalyze(buildOddsPrompt(game, market)); }}
+                onClick={e => { e.stopPropagation(); onAnalyze(buildUnifiedPrompt(game)); }}
                 style={{
-                  marginLeft: 'auto', padding: '4px 12px', borderRadius: '7px',
+                  marginLeft: 'auto', padding: '5px 14px', borderRadius: '7px',
                   border: '1px solid rgba(255,184,0,0.4)', background: 'rgba(255,184,0,0.08)',
-                  color: '#FFB800', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.12s',
-                  whiteSpace: 'nowrap',
+                  color: '#FFB800', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.12s',
+                  whiteSpace: 'nowrap', fontFamily: 'inherit',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.18)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.08)'; }}
               >
-                🐐 GOAT BOT
+                🐐 Analyze with GOAT BOT
               </button>
             )}
           </div>
@@ -261,78 +420,61 @@ function SetupScreen() {
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function OddsTab({ onAnalyze }) {
-  const [sport, setSport]       = useState('mlb');
-  const [market, setMarket]     = useState('h2h');
-  const [games, setGames]       = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [sport, setSport]           = useState('mlb');
+  const [games, setGames]           = useState([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
   const [configured, setConfigured] = useState(true);
-  const [expanded, setExpanded] = useState(null);
-  const [remaining, setRemaining] = useState(null);
-  const [search, setSearch]     = useState('');
-  const [sortBy, setSortBy]     = useState('time'); // time | spread
+  const [expanded, setExpanded]     = useState(null);
+  const [remaining, setRemaining]   = useState(null);
+  const [search, setSearch]         = useState('');
 
-  const load = useCallback(async (s, m) => {
+  const load = useCallback(async (s) => {
     setLoading(true);
     setError('');
     try {
-      const res  = await fetch(`/api/odds?sport=${s}&market=${m}`);
+      // Fetch all markets in one call (market param not needed — API returns all)
+      const res  = await fetch(`/api/odds?sport=${s}&market=all`);
       const data = await res.json();
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.error);
       setConfigured(true);
       setGames(data.data || []);
-      setRemaining(data.remaining);
+      setRemaining(data.remaining ?? null);
     } catch (e) {
       setError(e.message);
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(sport, market); }, [sport, market, load]);
+  useEffect(() => { load(sport); }, [sport, load]);
 
   if (!configured) return <SetupScreen />;
 
-  const filtered = games
-    .filter(g => !search || g.home_team.toLowerCase().includes(search.toLowerCase()) || g.away_team.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => sortBy === 'time' ? new Date(a.commence_time) - new Date(b.commence_time) : 0);
+  const filtered = games.filter(g =>
+    !search ||
+    g.home_team.toLowerCase().includes(search.toLowerCase()) ||
+    g.away_team.toLowerCase().includes(search.toLowerCase())
+  ).sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Sport */}
+        {/* Sport tabs */}
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           {SPORTS.map(s => (
-            <button key={s.key} onClick={() => setSport(s.key)}
+            <button key={s.key} onClick={() => { setSport(s.key); setExpanded(null); }}
               style={{
                 padding: '4px 10px', borderRadius: '6px', border: `1px solid ${sport === s.key ? '#FFB800' : '#222'}`,
                 background: sport === s.key ? '#1a1200' : 'transparent',
                 color: sport === s.key ? '#FFB800' : '#666',
-                fontWeight: sport === s.key ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer',
+                fontWeight: sport === s.key ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit',
               }}>
               {s.emoji} {s.label}
-            </button>
-          ))}
-        </div>
-
-        <span style={{ color: '#2a2a2a' }}>|</span>
-
-        {/* Market */}
-        <div style={{ display: 'flex', gap: '4px' }}>
-          {MARKETS.map(m => (
-            <button key={m.key} onClick={() => setMarket(m.key)}
-              style={{
-                padding: '4px 10px', borderRadius: '6px',
-                border: `1px solid ${market === m.key ? '#60a5fa' : '#222'}`,
-                background: market === m.key ? '#0d1a2b' : 'transparent',
-                color: market === m.key ? '#60a5fa' : '#666',
-                fontWeight: market === m.key ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer',
-              }}>
-              {m.label}
             </button>
           ))}
         </div>
@@ -347,16 +489,16 @@ export default function OddsTab({ onAnalyze }) {
             API: {remaining} req remaining
           </span>
         )}
-        <button onClick={() => load(sport, market)}
-          style={{ background: 'none', border: '1px solid #2a2a2a', borderRadius: '6px', color: 'var(--text-secondary)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem' }}>
-          ↻
+        <button onClick={() => load(sport)}
+          style={{ background: 'none', border: '1px solid #2a2a2a', borderRadius: '6px', color: 'var(--text-secondary)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit' }}>
+          ↻ Refresh
         </button>
       </div>
 
       {/* Table */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <p>Loading odds...</p>
+          Loading odds…
         </div>
       ) : error ? (
         <div style={{ padding: '1rem', background: '#2b0d0d', border: '1px solid #991b1b', borderRadius: '8px', color: '#f87171', fontSize: '0.85rem' }}>
@@ -371,17 +513,14 @@ export default function OddsTab({ onAnalyze }) {
           {/* Header */}
           <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ color: '#888', fontSize: '0.75rem' }}>
-              {filtered.length} games · Click a row to compare books · <span style={{ color: '#FFB800' }}>Gold = best line</span>
+              {filtered.length} game{filtered.length !== 1 ? 's' : ''} · Click to compare books · <span style={{ color: '#FFB800' }}>Gold = best line</span>
             </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-              {MARKETS.find(m => m.key === market)?.label} odds
-            </span>
+            <span style={{ color: '#555', fontSize: '0.68rem' }}>ML · Spread · O/U</span>
           </div>
-          {filtered.map((game) => (
+          {filtered.map(game => (
             <GameOddsRow
               key={game.id}
               game={game}
-              market={market}
               expanded={expanded === game.id}
               onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
               onAnalyze={onAnalyze}

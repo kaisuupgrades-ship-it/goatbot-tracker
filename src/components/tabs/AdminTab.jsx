@@ -77,7 +77,7 @@ function OverviewPanel({ userEmail }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 600 }}>{u.username || 'Unknown'}</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{u.id?.slice(0, 16)}…</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>joined {u.created_at ? new Date(u.created_at).toLocaleDateString() : '?'}</div>
               </div>
               {u.is_banned && <Badge label="BANNED" color="#f87171" bg="rgba(248,113,113,0.1)" border="rgba(248,113,113,0.2)" />}
               <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>
@@ -162,9 +162,25 @@ function UsersPanel({ userEmail }) {
     setTimeout(() => setCreateMsg(''), 5000);
   }
 
-  const users = (data?.users || []).filter(u =>
-    !search || (u.username || '').toLowerCase().includes(search.toLowerCase()) || (u.id || '').includes(search)
-  );
+  const [statusFilter, setStatusFilter] = useState('all'); // all | active | banned
+  const [sortBy, setSortBy]             = useState('joined'); // joined | picks | roi | active
+
+  const users = (data?.users || [])
+    .filter(u => {
+      const q = search.toLowerCase();
+      const matchesSearch = !search ||
+        (u.username || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.display_name || '').toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || (statusFilter === 'banned' ? u.is_banned : !u.is_banned);
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'picks')  return (b.pick_count || 0) - (a.pick_count || 0);
+      if (sortBy === 'roi')    return (b.roi ?? -999) - (a.roi ?? -999);
+      if (sortBy === 'active') return (b.last_pick || '0').localeCompare(a.last_pick || '0');
+      return new Date(b.created_at) - new Date(a.created_at); // joined
+    });
 
   if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading users…</div>;
 
@@ -173,19 +189,39 @@ function UsersPanel({ userEmail }) {
       {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
       {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
-          placeholder="Search username or ID…"
+          placeholder="Search name or email…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ maxWidth: '280px' }}
+          style={{ width: '200px' }}
         />
+        {/* Status filter */}
+        <div style={{ display: 'flex', gap: '3px' }}>
+          {[['all','All'],['active','Active'],['banned','Banned']].map(([v,l]) => (
+            <button key={v} onClick={() => setStatusFilter(v)} style={{
+              padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem',
+              border: `1px solid ${statusFilter === v ? '#FFB800' : '#222'}`,
+              background: statusFilter === v ? '#1a1200' : 'transparent',
+              color: statusFilter === v ? '#FFB800' : '#666', fontWeight: statusFilter === v ? 700 : 400,
+            }}>{l}</button>
+          ))}
+        </div>
+        {/* Sort */}
+        <select className="input" value={sortBy} onChange={e => setSortBy(e.target.value)}
+          style={{ width: '140px', fontSize: '0.75rem', padding: '4px 8px' }}>
+          <option value="joined">Sort: Newest</option>
+          <option value="picks">Sort: Most Picks</option>
+          <option value="roi">Sort: Best ROI</option>
+          <option value="active">Sort: Last Active</option>
+        </select>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', flex: 1 }}>{users.length} users</span>
         <button
           onClick={() => { setShowCreate(v => !v); setCreateMsg(''); }}
           style={{
-            padding: '6px 14px', borderRadius: '7px', border: 'none', cursor: 'pointer',
+            padding: '6px 14px', borderRadius: '7px', cursor: 'pointer',
             background: showCreate ? 'rgba(255,184,0,0.1)' : 'linear-gradient(135deg, #FFB800, #FF9500)',
             color: showCreate ? '#FFB800' : '#000',
             fontSize: '0.78rem', fontWeight: 700, fontFamily: 'inherit',
@@ -276,12 +312,37 @@ function UsersPanel({ userEmail }) {
               {(u.username || '?')[0].toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: '150px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 700 }}>{u.username || 'Unknown'}</span>
                 {u.role === 'admin' && <Badge label="ADMIN" color="#fbbf24" bg="rgba(251,191,36,0.1)" border="rgba(251,191,36,0.2)" />}
                 {u.is_banned && <Badge label="BANNED" color="#f87171" bg="rgba(248,113,113,0.1)" border="rgba(248,113,113,0.2)" />}
               </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}>{u.id?.slice(0, 20)}… · {u.pick_count || 0} picks · joined {u.created_at ? new Date(u.created_at).toLocaleDateString() : '?'}</div>
+              {u.email && <div style={{ color: 'var(--text-muted)', fontSize: '0.67rem', marginBottom: '3px' }}>{u.email}</div>}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {u.pick_count > 0 ? (
+                  <>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.68rem', fontFamily: 'IBM Plex Mono, monospace' }}>
+                      <span style={{ color: '#4ade80' }}>{u.wins}W</span>-<span style={{ color: '#f87171' }}>{u.losses}L</span>{u.pushes > 0 ? <span style={{ color: '#94a3b8' }}>-{u.pushes}P</span> : ''}
+                    </span>
+                    {u.roi !== null && (
+                      <span style={{ color: u.roi >= 0 ? '#4ade80' : '#f87171', fontSize: '0.68rem', fontFamily: 'IBM Plex Mono, monospace' }}>
+                        {u.roi >= 0 ? '+' : ''}{u.roi}% ROI
+                      </span>
+                    )}
+                    {u.units !== null && (
+                      <span style={{ color: u.units >= 0 ? '#4ade80' : '#f87171', fontSize: '0.68rem', fontFamily: 'IBM Plex Mono, monospace' }}>
+                        {u.units >= 0 ? '+' : ''}{u.units}u
+                      </span>
+                    )}
+                    {u.top_sport && <span style={{ color: '#94a3b8', fontSize: '0.65rem' }}>📌 {u.top_sport}</span>}
+                  </>
+                ) : (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>No picks yet</span>
+                )}
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
+                  {u.last_pick ? `active ${new Date(u.last_pick).toLocaleDateString()}` : `joined ${u.created_at ? new Date(u.created_at).toLocaleDateString() : '?'}`}
+                </span>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
               <button
@@ -434,43 +495,124 @@ function PicksAuditPanel({ userEmail }) {
 
 // ── CONTESTS TAB ──────────────────────────────────────────────────────────────
 function ContestsPanel({ userEmail }) {
-  const [contests, setContests] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  const [picks, setPicks]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+  const [actionMsg, setActionMsg] = useState('');
+  const [filter, setFilter]   = useState('all'); // all | approved | flagged | pending
 
-  useEffect(() => {
-    fetch(`/api/admin?action=contests&userEmail=${encodeURIComponent(userEmail)}`)
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/contest-audit?action=log&userEmail=${encodeURIComponent(userEmail)}`)
       .then(r => r.json())
-      .then(d => { if (d.error) setError(d.error); else setContests(d.contests || []); setLoading(false); })
+      .then(d => { if (d.error) setError(d.error); else setPicks(d.picks || []); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   }, [userEmail]);
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading contests…</div>;
+  useEffect(() => { load(); }, [load]);
+
+  async function handleOverride(pickId, status) {
+    const reason = status === 'REJECTED' ? prompt('Rejection reason:') : 'Admin approved';
+    if (status === 'REJECTED' && !reason) return;
+    setActionMsg('Processing…');
+    const res = await fetch('/api/contest-audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'override', pickId, userEmail, overrideStatus: status, overrideReason: reason }),
+    });
+    const d = await res.json();
+    if (d.error) { setActionMsg(`Error: ${d.error}`); } else { setActionMsg(`✓ Pick ${status.toLowerCase()}`); load(); }
+    setTimeout(() => setActionMsg(''), 3000);
+  }
+
+  async function handleBatchAudit() {
+    setActionMsg('Running batch audit…');
+    const res = await fetch('/api/contest-audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'batch-audit' }),
+    });
+    const d = await res.json();
+    setActionMsg(`✓ Audited ${d.audited || 0} picks`);
+    load();
+    setTimeout(() => setActionMsg(''), 4000);
+  }
+
+  const filtered = picks.filter(p =>
+    filter === 'all' || (filter === 'pending' ? !p.audit_status || p.audit_status === 'PENDING' : p.audit_status === filter.toUpperCase())
+  );
+
+  const statusColor = (s) => s === 'APPROVED' ? '#4ade80' : s === 'FLAGGED' ? '#fbbf24' : s === 'REJECTED' ? '#f87171' : '#888';
+  const statusBg = (s) => s === 'APPROVED' ? 'rgba(74,222,128,0.08)' : s === 'FLAGGED' ? 'rgba(251,191,36,0.08)' : s === 'REJECTED' ? 'rgba(248,113,113,0.08)' : 'rgba(136,136,136,0.08)';
+
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading contest audit…</div>;
 
   return (
     <div>
       {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
+      {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
 
-      <AdminSection title="All User Contests">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {contests.map(c => (
-            <div key={c.id || c.user_id} style={{ padding: '0.75rem 1rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: '150px' }}>
-                <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.85rem' }}>{c.name || 'Unnamed Contest'}</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginTop: '2px' }}>
-                  {c.profiles?.username || c.user_id?.slice(0, 12)} · Started {c.start_date || '—'} · Bankroll ${c.bankroll || '?'}
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        {[['all','All'],['approved','Approved'],['flagged','Flagged'],['pending','Pending']].map(([v,l]) => (
+          <button key={v} onClick={() => setFilter(v)} style={{
+            padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem',
+            border: `1px solid ${filter === v ? '#FFB800' : '#222'}`,
+            background: filter === v ? '#1a1200' : 'transparent',
+            color: filter === v ? '#FFB800' : '#666', fontWeight: filter === v ? 700 : 400,
+          }}>{l}</button>
+        ))}
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', flex: 1 }}>{filtered.length} contest picks</span>
+        <button onClick={handleBatchAudit} style={{
+          padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700,
+          border: '1px solid rgba(255,184,0,0.3)', background: 'rgba(255,184,0,0.08)', color: '#FFB800',
+        }}>🐐 Run AI Audit on Pending</button>
+        <button onClick={load} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', border: '1px solid #222', background: 'transparent', color: '#666' }}>↻</button>
+      </div>
+
+      {/* Contest Rules Summary */}
+      <div style={{ padding: '0.6rem 0.85rem', background: '#0a0800', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.72rem', color: '#888', lineHeight: 1.7 }}>
+        <span style={{ color: '#FFB800', fontWeight: 700 }}>OFFICIAL RULES:</span> 1 play/day · Min odds -145 · Straight bets only · Locked once posted (no edit/delete) · Reschedules ≠ void · AI audited · Admin can override
+      </div>
+
+      {/* Pick rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {filtered.map(p => (
+          <div key={p.id} style={{
+            padding: '0.65rem 0.85rem', background: 'var(--bg-elevated)',
+            border: `1px solid ${p.audit_status === 'FLAGGED' ? 'rgba(251,191,36,0.25)' : p.audit_status === 'REJECTED' ? 'rgba(248,113,113,0.25)' : 'var(--border)'}`,
+            borderRadius: '8px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '180px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 700 }}>{p.team}</span>
+                  <span style={{ color: '#60a5fa', background: '#0d1a2b', padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem', fontWeight: 600 }}>{p.sport}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 700, color: p.odds > 0 ? '#4ade80' : '#f0f0f0' }}>{p.odds > 0 ? '+' : ''}{p.odds}</span>
+                  <Badge label={p.audit_status || 'PENDING'} color={statusColor(p.audit_status)} bg={statusBg(p.audit_status)} border={`${statusColor(p.audit_status)}33`} />
+                  {p.audit_override && <Badge label="OVERRIDE" color="#ff6b9d" bg="rgba(255,107,157,0.08)" border="rgba(255,107,157,0.2)" />}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginTop: '3px' }}>
+                  {p.username} · {p.date} · {p.bet_type} · {p.units || 1}u
+                  {p.audit_reason ? <span style={{ marginLeft: '6px', color: '#888' }}>— {p.audit_reason}</span> : ''}
                 </div>
               </div>
-              <Badge label="ACTIVE" color="#4ade80" bg="rgba(74,222,128,0.08)" border="rgba(74,222,128,0.2)" />
+              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                {p.result && (
+                  <span style={{ padding: '3px 8px', borderRadius: '5px', fontSize: '0.72rem', fontWeight: 700, background: p.result === 'WIN' ? 'rgba(74,222,128,0.12)' : p.result === 'LOSS' ? 'rgba(248,113,113,0.12)' : 'rgba(148,163,184,0.12)', color: p.result === 'WIN' ? '#4ade80' : p.result === 'LOSS' ? '#f87171' : '#94a3b8' }}>{p.result}</span>
+                )}
+                <button onClick={() => handleOverride(p.id, 'APPROVED')} style={{ padding: '3px 8px', borderRadius: '5px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}>✓</button>
+                <button onClick={() => handleOverride(p.id, 'REJECTED')} style={{ padding: '3px 8px', borderRadius: '5px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(248,113,113,0.12)', color: '#f87171' }}>✕</button>
+              </div>
             </div>
-          ))}
-          {!contests.length && (
-            <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-              No contests found — may need service role key
-            </div>
-          )}
-        </div>
-      </AdminSection>
+          </div>
+        ))}
+        {!filtered.length && (
+          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            No contest picks {filter !== 'all' ? `with status "${filter}"` : 'yet'}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -480,6 +622,14 @@ function SystemPanel({ userEmail }) {
   const [announcement, setAnnouncement] = useState('');
   const [sending, setSending]           = useState(false);
   const [msg, setMsg]                   = useState('');
+  const [sysInfo, setSysInfo]           = useState(null);
+
+  useEffect(() => {
+    fetch(`/api/admin?action=system&userEmail=${encodeURIComponent(userEmail)}`)
+      .then(r => r.json())
+      .then(d => setSysInfo(d))
+      .catch(() => {});
+  }, [userEmail]);
 
   async function sendAnnouncement() {
     if (!announcement.trim()) return;
@@ -522,18 +672,25 @@ function SystemPanel({ userEmail }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
           {[
             { label: 'Admin Email', value: ADMIN_EMAIL },
-            { label: 'Environment', value: process.env.NODE_ENV || 'production' },
-            { label: 'Service Role', value: process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓ Configured' : '✗ Missing (limited access)' },
-          ].map(({ label, value }) => (
+            { label: 'Environment', value: sysInfo ? sysInfo.environment : '…' },
+            {
+              label: 'Service Role',
+              value: sysInfo === null ? '…' : (sysInfo.serviceRole ? '✓ Configured' : '✗ Missing (limited access)'),
+              color: sysInfo === null ? undefined : (sysInfo.serviceRole ? '#4ade80' : '#f87171'),
+            },
+            { label: 'Supabase URL', value: sysInfo ? sysInfo.supabaseUrl : '…' },
+          ].map(({ label, value, color }) => (
             <div key={label} style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>{label}</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono, monospace' }}>{value}</div>
+              <div style={{ color: color || 'var(--text-secondary)', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono, monospace' }}>{value}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '7px', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          <strong style={{ color: 'var(--gold)' }}>ℹ To unlock full admin access</strong> — add <code style={{ background: 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: '3px' }}>SUPABASE_SERVICE_ROLE_KEY</code> to your <code>.env.local</code> file. This grants the admin panel access to all rows regardless of RLS policies.
-        </div>
+        {sysInfo && !sysInfo.serviceRole && (
+          <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '7px', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--gold)' }}>ℹ To unlock full admin access</strong> — add <code style={{ background: 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: '3px' }}>SUPABASE_SERVICE_ROLE_KEY</code> to your Vercel environment variables (for production) or <code>.env.local</code> (for local dev). This grants the admin panel access to all rows regardless of RLS policies.
+          </div>
+        )}
       </div>
     </div>
   );

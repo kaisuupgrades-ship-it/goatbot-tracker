@@ -778,12 +778,14 @@ function ContestBanner() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {[
-                { icon: '🔒', text: 'Public profile required — enable "Show on Leaderboard" in profile settings.' },
-                { icon: '✅', text: 'Minimum 10 verified picks — submitted before game start. No backdating.' },
-                { icon: '📊', text: 'Ranked by Sharp Score: ROI × √(verified picks) ÷ 10. Both volume and accuracy matter.' },
-                { icon: '🤝', text: 'Tiebreaker: higher win rate, then more verified picks.' },
-                { icon: '📣', text: 'At least 5 public picks logged during the contest month.' },
-                { icon: '🚫', text: 'Manipulation or fake accounts = immediate disqualification.' },
+                { icon: '1️⃣', text: 'ONE PLAY PER DAY — each user gets exactly one contest pick per day. Choose wisely.' },
+                { icon: '📐', text: 'MINIMUM ODDS: -145 — no heavy favorites. Max +400. Straight bets only (Moneyline, Spread, Totals). No parlays, props, or futures.' },
+                { icon: '🔒', text: 'LOCKED ONCE POSTED — once your pick is submitted as a contest entry, it cannot be changed, edited, or deleted. Period.' },
+                { icon: '📅', text: 'RESCHEDULES ≠ VOID — if your game gets rescheduled, the pick stands for the new date. You may post a new pick for that day, but do NOT delete the original.' },
+                { icon: '✅', text: 'All contest picks are AI-audited for legitimacy — odds range, timing, and bet type are verified automatically. Flagged picks are reviewed by admin.' },
+                { icon: '📊', text: 'Ranked by Sharp Score: ROI × √(verified picks) ÷ 10. Both win rate AND volume matter — you can\'t win by going 3-1 on 4 picks.' },
+                { icon: '🛡', text: 'One account per person — duplicate accounts detected via IP and device fingerprint are permanently disqualified.' },
+                { icon: '🚫', text: 'Manipulation, backdating, or fake accounts = permanent ban from all future contests.' },
                 { icon: '💸', text: 'Winner paid via PayPal, Venmo, or Cash App within 3 business days of month end.' },
               ].map((r, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '0.45rem 0.65rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
@@ -843,9 +845,13 @@ export default function LeaderboardTab({ user, isDemo }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/leaderboard${userId && !isDemo ? `?userId=${userId}` : ''}`);
+      const params = new URLSearchParams();
+      if (isDemo) params.set('demo', '1');
+      else if (userId) params.set('userId', userId);
+      const res = await fetch(`/api/leaderboard?${params.toString()}`);
       const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      // Only throw hard errors (not empty leaderboard)
+      if (json.error && !json.leaderboard) throw new Error(json.error);
       setData(json);
     } catch (e) {
       setError(e.message);
@@ -870,6 +876,17 @@ export default function LeaderboardTab({ user, isDemo }) {
 
       {/* Monthly Contest Banner — top of page like a forum notice */}
       <ContestBanner />
+
+      {/* Demo mode notice */}
+      {(isDemo || data?.isDemo) && (
+        <div style={{
+          padding: '0.6rem 1rem', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
+          borderRadius: '8px', fontSize: '0.78rem', color: '#93c5fd', display: 'flex', gap: '8px', alignItems: 'center',
+        }}>
+          <span>👁</span>
+          <span><strong>Demo Preview</strong> — This is sample data to show how the leaderboard works. Create an account and log your picks to appear on the real leaderboard.</span>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
@@ -1012,9 +1029,9 @@ export default function LeaderboardTab({ user, isDemo }) {
         padding: '1rem', background: 'var(--bg-surface)', border: '1px solid var(--border)',
         borderRadius: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
       }}>
-        <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(verified picks) ÷ 10.
-        Higher ROI AND more picks = higher score. <strong style={{ color: 'var(--green)' }}>✓ Verified</strong> picks are submitted before game start —
-        these are timestamped server-side and can't be faked retroactively.
+        <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(verified picks) ÷ 10. High ROI alone isn't enough — you need volume and consistency.{' '}
+        <strong style={{ color: 'var(--green)' }}>✓ Verified</strong> = AI-audited, submitted before game start, odds between -145 and +400, straight bet only.{' '}
+        Contest entries are <strong style={{ color: '#FFB800' }}>locked once posted</strong> — no edits, no deletes. One pick per day. All picks auto-posted to leaderboard after audit.
       </div>
 
       {/* Profile editor modal */}

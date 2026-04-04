@@ -62,16 +62,44 @@ export async function GET(req) {
 
       if (error) throw error;
 
-      // Get pick counts per user
-      const { data: pickCounts } = await supabaseAdmin
+      // Per-user pick stats: wins, losses, pushes, units, last pick date
+      const { data: allPicks } = await supabaseAdmin
         .from('picks')
-        .select('user_id')
-        .limit(5000);
+        .select('user_id, result, profit, date, sport')
+        .limit(10000);
 
-      const counts = {};
-      (pickCounts || []).forEach(p => { counts[p.user_id] = (counts[p.user_id] || 0) + 1; });
+      const stats = {};
+      (allPicks || []).forEach(p => {
+        if (!stats[p.user_id]) stats[p.user_id] = { wins: 0, losses: 0, pushes: 0, total: 0, units: 0, lastDate: null, sports: {} };
+        const s = stats[p.user_id];
+        s.total++;
+        if (p.result === 'WIN')  s.wins++;
+        if (p.result === 'LOSS') s.losses++;
+        if (p.result === 'PUSH') s.pushes++;
+        s.units += parseFloat(p.profit) || 0;
+        if (p.date && (!s.lastDate || p.date > s.lastDate)) s.lastDate = p.date;
+        if (p.sport) s.sports[p.sport] = (s.sports[p.sport] || 0) + 1;
+      });
 
-      const users = (profiles || []).map(u => ({ ...u, pick_count: counts[u.id] || 0 }));
+      // Get emails from auth.users (requires service role)
+      let emailMap = {};
+      try {
+        const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
+        (authData?.users || []).forEach(u => { emailMap[u.id] = u.email; });
+      } catch { /* service role may not be available */ }
+
+      const users = (profiles || []).map(u => {
+        const s = stats[u.id] || { wins: 0, losses: 0, pushes: 0, total: 0, units: 0, lastDate: null, sports: {} };
+        const roi = s.total > 0 ? parseFloat(((s.units / s.total) * 100).toFixed(1)) : null;
+        const topSport = Object.entries(s.sports).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+        return {
+          ...u,
+          email: emailMap[u.id] || null,
+          wins: s.wins, losses: s.losses, pushes: s.pushes,
+          pick_count: s.total, units: parseFloat(s.units.toFixed(2)),
+          roi, last_pick: s.lastDate, top_sport: topSport,
+        };
+      });
       return NextResponse.json({ users });
     }
 
@@ -82,7 +110,7 @@ export async function GET(req) {
 
       let query = supabaseAdmin
         .from('picks')
-        .select('*, profiles(username)')
+        .select('*')
         .order('date', { ascending: false })
         .range(page * 50, page * 50 + 49);
 
@@ -91,7 +119,32 @@ export async function GET(req) {
 
       const { data: picks, error } = await query;
       if (error) throw error;
-      return NextResponse.json({ picks: picks || [] });
+
+      // Fetch usernames separately (no FK constraint between picks and profiles)
+      const userIds = [...new Set((picks || []).map(p => p.user_id).filter(Boolean))];
+      let usernameMap = {};
+      if (userIds.length > 0) {
+        const { data: profileRows } = await supabaseAdmin
+          .from('profiles')
+          .select('id, username')
+          .in('id', userIds);
+        (profileRows || []).forEach(p => { usernameMap[p.id] = p.username; });
+      }
+
+      const enrichedPicks = (picks || []).map(p => ({
+        ...p,
+        profiles: { username: usernameMap[p.user_id] || 'Unknown' },
+      }));
+
+      return NextResponse.json({ picks: enrichedPicks });
+    }
+
+    if (action === 'system') {
+      return NextResponse.json({
+        environment: process.env.NODE_ENV || 'production',
+        serviceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✓ Set' : '✗ Missing',
+      });
     }
 
     if (action === 'contests') {

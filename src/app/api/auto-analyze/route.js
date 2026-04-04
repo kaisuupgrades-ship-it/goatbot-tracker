@@ -1,0 +1,269 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const XAI_API_KEY = process.env.XAI_API_KEY;
+const XAI_BASE = 'https://api.x.ai/v1';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+/**
+ * Calculate implied probability from American odds
+ */
+function calculateImpliedProb(odds) {
+  const o = parseInt(odds);
+  if (o > 0) {
+    // Plus odds: prob = 100 / (odds + 100)
+    return (100 / (o + 100)) * 100;
+  } else {
+    // Minus odds: prob = Math.abs(odds) / (Math.abs(odds) + 100)
+    return (Math.abs(o) / (Math.abs(o) + 100)) * 100;
+  }
+}
+
+/**
+ * Generate a smart fallback analysis based on odds alone
+ */
+function generateFallbackAnalysis(odds, team, betType) {
+  const impliedProb = calculateImpliedProb(odds);
+  const o = parseInt(odds);
+
+  let confidence = 'MEDIUM';
+  let comment = '';
+
+  if (o > 0) {
+    // Plus money
+    if (impliedProb < 35) {
+      confidence = 'LOW';
+      comment = `Heavy underdog at ${o}. Implied win prob ~${impliedProb.toFixed(1)}%. Only take if you see a real edge over that.`;
+    } else if (impliedProb < 50) {
+      comment = `Underdog value at ${o}. Implied prob ~${impliedProb.toFixed(1)}%. Good spot if fundamentals align.`;
+    } else {
+      confidence = 'MEDIUM';
+      comment = `Plus money on favored side at ${o}. Implied prob ~${impliedProb.toFixed(1)}%. Fair value scenario.`;
+    }
+  } else {
+    // Minus money
+    if (impliedProb > 70) {
+      confidence = 'MEDIUM';
+      comment = `Heavy favorite at ${o}. Implied prob ~${impliedProb.toFixed(1)}%. Check for sharp action before locking in.`;
+    } else if (impliedProb > 55) {
+      comment = `Slight favorite at ${o}. Implied prob ~${impliedProb.toFixed(1)}%. Solid chalk if the matchup fits.`;
+    } else {
+      confidence = 'LOW';
+      comment = `Close to even-money favorite at ${o}. Implied prob ~${impliedProb.toFixed(1)}%. Needs a strong angle.`;
+    }
+  }
+
+  return `${team} ${betType} at ${odds} — Implied probability: ${impliedProb.toFixed(1)}%. ${comment} Confidence: ${confidence}.`;
+}
+
+/**
+ * Build concise GOAT BOT prompt
+ */
+function buildAnalysisPrompt(team, betType, odds, date, sport, notes) {
+  let prompt = `Quick analysis: ${team} ${betType} at ${odds} on ${date}. Sport: ${sport}.`;
+  if (notes?.trim()) {
+    prompt += ` ${notes}`;
+  }
+  prompt += ` Give a 2-3 sentence sharp take — is this a good bet? Key angle and confidence level (LOW/MEDIUM/HIGH).`;
+  return prompt;
+}
+
+/**
+ * Call xAI API with grok-3 for quick analysis
+ */
+async function callXAI(prompt) {
+  const payload = {
+    model: 'grok-3',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a sharp sports bettor giving quick, decisive analysis. Be concise and direct.',
+      },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.7,
+    max_tokens: 300,
+  };
+
+  const response = await fetch(`${XAI_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${XAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || '';
+}
+
+/**
+ * Retrieve cached analysis from Supabase
+ */
+async function getCachedAnalysis(pickId) {
+  const { data, error } = await supabase
+    .from('pick_analyses')
+    .select('*')
+    .eq('pick_id', pickId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    // PGRST116 = no rows found, which is fine
+    console.error('Error fetching cached analysis:', error);
+  }
+
+  return data;
+}
+
+/**
+ * Save analysis to Supabase
+ */
+async function saveAnalysis(pickId, analysis, model) {
+  const { error } = await supabase
+    .from('pick_analyses')
+    .upsert(
+      {
+        pick_id: pickId,
+        analysis,
+        model,
+        created_at: new Date().toISOString(),
+      },
+      { onConflict: 'pick_id' }
+    );
+
+  if (error) {
+    console.error('Error saving analysis:', error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/auto-analyze
+ * Accepts: { pickId, sport, team, bet_type, odds, units, date, notes }
+ */
+export async function POST(req) {
+  try {
+    const { pickId, sport, team, bet_type, odds, units, date, notes } = await req.json();
+
+    if (!pickId || !sport || !team || !bet_type || odds === undefined || !date) {
+      return NextResponse.json(
+        { error: 'Missing required fields: pickId, sport, team, bet_type, odds, date' },
+        { status: 400 }
+      );
+    }
+
+    // Check for cached analysis
+    const cached = await getCachedAnalysis(pickId);
+    if (cached) {
+      return NextResponse.json({
+        analysis: cached.analysis,
+        model: cached.model,
+        cached: true,
+      });
+    }
+
+    let analysis, model;
+
+    if (!XAI_API_KEY) {
+      // Fallback: generate analysis based on odds
+      analysis = generateFallbackAnalysis(odds, team, bet_type);
+      model = 'fallback (odds-based)';
+    } else {
+      // Call xAI with grok-3
+      const prompt = buildAnalysisPrompt(team, bet_type, odds, date, sport, notes);
+      try {
+        analysis = await callXAI(prompt);
+        model = 'grok-3';
+      } catch (err) {
+        console.error('xAI API error:', err.message);
+        // Fallback to odds-based if xAI fails
+        analysis = generateFallbackAnalysis(odds, team, bet_type);
+        model = 'fallback (xAI error)';
+      }
+    }
+
+    // Save to Supabase
+    try {
+      await saveAnalysis(pickId, analysis, model);
+    } catch (err) {
+      // Log but don't fail the response if save fails
+      console.error('Failed to save analysis to Supabase:', err.message);
+    }
+
+    return NextResponse.json({
+      analysis,
+      model,
+      cached: false,
+    });
+  } catch (err) {
+    console.error('Auto-analyze POST error:', err.message);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
+ * GET /api/auto-analyze?pickId=xxx or ?pickId=xxx,yyy,zzz (comma-separated for batch)
+ */
+export async function GET(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const pickIdParam = searchParams.get('pickId');
+
+    if (!pickIdParam) {
+      return NextResponse.json({ error: 'pickId query parameter is required' }, { status: 400 });
+    }
+
+    const pickIds = pickIdParam.split(',').map(id => id.trim()).filter(Boolean);
+
+    if (pickIds.length === 0) {
+      return NextResponse.json({ error: 'No valid pick IDs provided' }, { status: 400 });
+    }
+
+    if (pickIds.length === 1) {
+      // Single pick
+      const cached = await getCachedAnalysis(pickIds[0]);
+      if (!cached) {
+        return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
+      }
+      return NextResponse.json({
+        analysis: cached.analysis,
+        model: cached.model,
+        pickId: pickIds[0],
+      });
+    }
+
+    // Batch: return all analyses keyed by pickId
+    const { data, error } = await supabase
+      .from('pick_analyses')
+      .select('*')
+      .in('pick_id', pickIds);
+
+    if (error) {
+      console.error('Error fetching batch analyses:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const analyses = {};
+    (data || []).forEach(row => {
+      analyses[row.pick_id] = row.analysis;
+    });
+
+    return NextResponse.json({
+      analyses,
+      count: Object.keys(analyses).length,
+    });
+  } catch (err) {
+    console.error('Auto-analyze GET error:', err.message);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}

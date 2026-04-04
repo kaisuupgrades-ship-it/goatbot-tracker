@@ -119,7 +119,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           <div style={{ display: activeTab === 'odds'       ? 'block' : 'none' }}>
             <OddsTab onAnalyze={(prompt) => { setGoatPrompt(prompt); setActiveTab('analyzer'); }} />
           </div>
-          <div style={{ display: activeTab === 'trends'     ? 'block' : 'none' }}><TrendsTab     picks={picks} /></div>
+          <div style={{ display: activeTab === 'trends'     ? 'block' : 'none' }}><TrendsTab picks={picks} user={user} onNavigateToTracker={() => setActiveTab('tracker')} /></div>
           <div style={{ display: activeTab === 'history'    ? 'block' : 'none' }}>
             <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} />
           </div>

@@ -105,7 +105,7 @@ function TypeWriter({ texts, speed = 55, pause = 2000 }) {
 // ── Feature card with hover glow ─────────────────────────────────────────────
 const FEATURES = [
   { icon: '📡', label: 'Live Scores', desc: 'MLB, NBA, NFL, NHL — real-time scoreboard with smart context', color: '#FF6B35' },
-  { icon: '🐐', label: 'GOAT BOT AI', desc: 'Grok-4 powered pick analysis with live web search', color: '#FFB800' },
+  { icon: '🐐', label: 'GOAT BOT AI', desc: 'AI-powered pick analysis with live web search', color: '#FFB800' },
   { icon: '📊', label: 'Edge Finder', desc: '20+ built-in sharp betting trends and angles', color: '#4E9BF5' },
   { icon: '🏥', label: 'Injury Intel', desc: 'Real-time injury scanning from Twitter + beat reporters', color: '#00D48B' },
   { icon: '📈', label: 'Pick Tracker', desc: 'Full P/L tracking, equity curves, and heat metrics', color: '#9B6DFF' },

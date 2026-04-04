@@ -25,16 +25,17 @@ const SUPABASE_CONFIGURED =
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('userId');
+  const userId  = searchParams.get('userId');
+  const isDemo  = searchParams.get('demo') === '1';
 
-  // ── No Supabase → serve demo data immediately ─────────────────────────────
-  if (!SUPABASE_CONFIGURED) {
-    return NextResponse.json(withUserRank(DUMMY_DATA, userId));
+  // ── Demo mode or no Supabase → serve demo data ────────────────────────────
+  if (isDemo || !SUPABASE_CONFIGURED) {
+    return NextResponse.json(withUserRank(DUMMY_DATA, null, true));
   }
 
   // ── Serve from cache if fresh ─────────────────────────────────────────────
   if (cache.data && Date.now() - cache.ts < CACHE_TTL) {
-    return NextResponse.json(withUserRank(cache.data, userId));
+    return NextResponse.json(withUserRank(cache.data, userId, false));
   }
 
   // ── Try Supabase ──────────────────────────────────────────────────────────
@@ -50,26 +51,26 @@ export async function GET(req) {
 
     if (error) throw error;
 
-    const ranked = (data && data.length > 0)
-      ? data.map((row, i) => ({ ...row, rank: i + 1 }))
-      : DUMMY_DATA;
+    // Real data only — never inject dummy entries for real users
+    const ranked = (data || []).map((row, i) => ({ ...row, rank: i + 1 }));
 
     cache = { data: ranked, ts: Date.now() };
-    return NextResponse.json(withUserRank(ranked, userId));
+    return NextResponse.json(withUserRank(ranked, userId, false));
   } catch (err) {
-    console.warn('Leaderboard: Supabase unavailable, serving demo data.', err.message);
-    // Always fall back to dummy data — never show an error to the user
-    return NextResponse.json(withUserRank(DUMMY_DATA, userId));
+    console.warn('Leaderboard: Supabase error.', err.message);
+    // Still no dummy data for real users — return empty with error flag
+    return NextResponse.json({ leaderboard: [], userRank: null, userEntry: null, total: 0, error: 'Temporarily unavailable', cachedAt: new Date().toISOString() });
   }
 }
 
-function withUserRank(ranked, userId) {
+function withUserRank(ranked, userId, isDemo) {
   const userEntry = userId ? ranked.find(r => r.user_id === userId) : null;
   return {
     leaderboard: ranked,
     userRank:  userEntry?.rank  ?? null,
     userEntry: userEntry        ?? null,
     total:     ranked.length,
+    isDemo:    isDemo || false,
     cachedAt:  new Date().toISOString(),
   };
 }

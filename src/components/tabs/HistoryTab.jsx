@@ -468,6 +468,22 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   const [contestEdit, setContestEdit] = useState(contest || {});
   const [filterContest, setFilterContest] = useState(false);
 
+  // ── AI Pick Analyses ────────────────────────────────────────────────────
+  const [analyses, setAnalyses] = useState({}); // { pickId: analysisText }
+  const [expandedAnalysis, setExpandedAnalysis] = useState(null); // pickId
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+
+  // Batch-load analyses for visible picks on mount
+  useEffect(() => {
+    if (!picks?.length || isDemo) return;
+    const ids = picks.map(p => p.id).filter(Boolean).join(',');
+    if (!ids) return;
+    fetch(`/api/auto-analyze?pickId=${ids}`)
+      .then(r => r.json())
+      .then(d => { if (d.analyses) setAnalyses(d.analyses); })
+      .catch(() => {});
+  }, [picks?.length, isDemo]);
+
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
   async function handleSave() {
@@ -497,7 +513,19 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
         if (!error) setPicks(prev => prev.map(p => p.id === form.id ? data : p));
       } else {
         const { data, error } = await addPick(payload);
-        if (!error) setPicks(prev => [...prev, data]);
+        if (!error) {
+          setPicks(prev => [...prev, data]);
+          // Fire-and-forget: auto-analyze in background
+          fetch('/api/auto-analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pickId: data.id, sport: payload.sport, team: payload.team,
+              bet_type: payload.bet_type, odds: payload.odds, units: payload.units,
+              date: payload.date, notes: payload.notes,
+            }),
+          }).catch(() => {});
+        }
       }
     }
 
@@ -508,10 +536,51 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
 
   async function handleToggleContest(pick) {
     const newVal = !pick.contest_entry;
+
+    // If enabling contest entry, check daily limit + eligibility first
+    if (newVal && !isDemo) {
+      try {
+        const checkRes = await fetch(`/api/verify-pick?action=daily-check&userId=${user.id}`);
+        const checkData = await checkRes.json();
+        if (checkData.hasContestPickToday) {
+          alert('You already have a contest pick today. One play per day — no exceptions.');
+          return;
+        }
+        // Verify pick eligibility (odds range, bet type, etc.)
+        const verifyRes = await fetch('/api/verify-pick', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pick, userId: user.id, contestEntry: true }),
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.eligible) {
+          alert('Pick not eligible for contest:\n' + verifyData.issues.join('\n'));
+          return;
+        }
+      } catch {}
+    }
+
+    // If toggling OFF a contest pick — it's LOCKED, block it
+    if (!newVal && pick.contest_entry) {
+      alert('Contest picks are locked. Once posted, it cannot be removed — no changing, no editing, no deleting.');
+      return;
+    }
+
     setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: newVal } : p));
     if (!isDemo) {
       const { error } = await updatePick(pick.id, { contest_entry: newVal });
-      if (error) setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: pick.contest_entry } : p));
+      if (error) {
+        setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: pick.contest_entry } : p));
+        return;
+      }
+      // Fire-and-forget: trigger AI audit for new contest entries
+      if (newVal) {
+        fetch('/api/contest-audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'audit', pickId: pick.id }),
+        }).catch(() => {});
+      }
     } else {
       const updated = picks.map(p => p.id === pick.id ? { ...p, contest_entry: newVal } : p);
       saveDemoPicks(updated);
@@ -879,19 +948,63 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                     <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', gap: '4px' }}>
                         <button
-                          onClick={() => handleEdit(pick)}
-                          style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.75rem' }}
-                          title="Edit pick"
-                        >✏️</button>
-                        <button
-                          onClick={() => handleDelete(pick.id)}
-                          disabled={deleting === pick.id}
-                          style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.75rem', opacity: deleting === pick.id ? 0.5 : 1 }}
-                          title="Delete pick"
-                        >{deleting === pick.id ? '...' : '🗑️'}</button>
+                          onClick={async () => {
+                            if (expandedAnalysis === pick.id) { setExpandedAnalysis(null); return; }
+                            setExpandedAnalysis(pick.id);
+                            if (!analyses[pick.id]) {
+                              setAnalysisLoading(true);
+                              try {
+                                const res = await fetch('/api/auto-analyze', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ pickId: pick.id, sport: pick.sport, team: pick.team, bet_type: pick.bet_type, odds: pick.odds, units: pick.units, date: pick.date, notes: pick.notes }),
+                                });
+                                const d = await res.json();
+                                if (d.analysis) setAnalyses(prev => ({ ...prev, [pick.id]: d.analysis }));
+                              } catch {} finally { setAnalysisLoading(false); }
+                            }
+                          }}
+                          style={{ padding: '3px 8px', borderRadius: '5px', border: `1px solid ${analyses[pick.id] ? 'rgba(255,184,0,0.3)' : '#333'}`, background: expandedAnalysis === pick.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: analyses[pick.id] ? '#FFB800' : '#666', cursor: 'pointer', fontSize: '0.75rem' }}
+                          title={analyses[pick.id] ? 'View AI analysis' : 'Get AI analysis'}
+                        >🐐</button>
+                        {pick.contest_entry ? (
+                          <span style={{ fontSize: '0.62rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700, whiteSpace: 'nowrap' }} title="Contest picks are locked — no editing or deleting">🔒 LOCKED</span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEdit(pick)}
+                              style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.75rem' }}
+                              title="Edit pick"
+                            >✏️</button>
+                            <button
+                              onClick={() => handleDelete(pick.id)}
+                              disabled={deleting === pick.id}
+                              style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.75rem', opacity: deleting === pick.id ? 0.5 : 1 }}
+                              title="Delete pick"
+                            >{deleting === pick.id ? '...' : '🗑️'}</button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
+                  {/* Expandable AI Analysis Row */}
+                  {expandedAnalysis === pick.id && (
+                    <tr key={`${pick.id}-analysis`}>
+                      <td colSpan={15} style={{ padding: '0.6rem 1rem 0.8rem', background: '#0a0800', borderBottom: '1px solid rgba(255,184,0,0.15)' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>🐐</span>
+                          <div style={{ fontSize: '0.78rem', lineHeight: 1.5 }}>
+                            {analysisLoading && !analyses[pick.id]
+                              ? <span style={{ color: '#888' }}>Analyzing pick…</span>
+                              : analyses[pick.id]
+                                ? <span style={{ color: '#ccc' }}>{analyses[pick.id]}</span>
+                                : <span style={{ color: '#555' }}>No analysis available</span>
+                            }
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 ))}
               </tbody>
             </table>

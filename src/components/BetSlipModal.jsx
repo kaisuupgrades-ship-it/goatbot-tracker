@@ -129,15 +129,32 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     if (pickOpts[pickIdx]?.odds != null) setOddsVal(String(pickOpts[pickIdx].odds));
   }, [pickIdx, pickOpts]);
 
+  // ── Normalize bet type string to match our dropdown options ──────────────
+  function normalizeBetType(raw, allTypes) {
+    if (!raw) return null;
+    const r = raw.toLowerCase().trim();
+    // Exact match first
+    const exact = allTypes.find(t => t.toLowerCase() === r);
+    if (exact) return exact;
+    // Fuzzy keyword matches
+    if (/money.?line|^ml$/.test(r))               return allTypes.find(t => t === 'Moneyline')        || null;
+    if (/run.?line|^rl$/.test(r))                 return allTypes.find(t => t === 'Run Line')         || null;
+    if (/puck.?line|^pl$/.test(r))                return allTypes.find(t => t === 'Puck Line')        || null;
+    if (/\bover\b/.test(r))                        return allTypes.find(t => t.includes('Over'))       || null;
+    if (/\bunder\b/.test(r))                       return allTypes.find(t => t.includes('Under'))      || null;
+    if (/spread|ats/.test(r))                      return allTypes.find(t => t === 'Spread')           || null;
+    if (/prop/.test(r))                            return allTypes.find(t => t === 'Prop')             || null;
+    if (/parlay/.test(r))                          return allTypes.find(t => t === 'Parlay')           || null;
+    // Partial match fallback
+    return allTypes.find(t => r.includes(t.toLowerCase().split(' ')[0])) || null;
+  }
+
   // ── Apply parsed AI result to form fields ──────────────────────────────────
   const applyParsed = useCallback((parsed) => {
-    // Bet type
     const allTypes = SPORT_BET_TYPES[sport] || DEFAULT_BET_TYPES;
-    const matchedType = allTypes.find(t =>
-      t.toLowerCase() === (parsed.bet_type || '').toLowerCase()
-    ) || (parsed.bet_type?.toLowerCase().includes('over') ? allTypes.find(t => t.includes('Over'))
-       : parsed.bet_type?.toLowerCase().includes('under') ? allTypes.find(t => t.includes('Under'))
-       : null) || betType;
+
+    // Bet type — use normalizer so "money line", "ML", "moneyline" all work
+    const matchedType = normalizeBetType(parsed.bet_type, allTypes) || betType;
     setBetType(matchedType);
 
     // Odds
@@ -145,42 +162,44 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       setOddsVal(String(parseInt(parsed.odds)));
     }
 
-    // Units (if mentioned)
+    // Units — AI now returns this from "2u", "2 units" etc.
     if (parsed.units != null && !isNaN(parseFloat(parsed.units))) {
       setUnits(String(parseFloat(parsed.units)));
     }
 
     // Book
     if (parsed.book) {
-      const matchedBook = BOOKS.find(b => b.toLowerCase().includes((parsed.book || '').toLowerCase().split(' ')[0]));
+      const bookLower = (parsed.book || '').toLowerCase();
+      const matchedBook = BOOKS.find(b => b.toLowerCase().includes(bookLower.split(' ')[0]));
       if (matchedBook) setBook(matchedBook);
     }
 
     // Notes
     if (parsed.notes) setNotes(parsed.notes);
 
-    // Pick — try to match against pickOpts after betType is set
-    // We do this in a short timeout so pickOpts re-renders first
+    // Pick — match against pickOpts using team name keywords
     if (parsed.team) {
       setTimeout(() => {
         setPickOpts(currentOpts => {
           if (currentOpts.length > 0) {
-            const teamLower = (parsed.team || '').toLowerCase();
-            const matchIdx = currentOpts.findIndex(o =>
-              o.team.toLowerCase().includes(teamLower) ||
-              teamLower.includes(o.team.toLowerCase().split(' ').slice(-1)[0])
-            );
+            const teamWords = (parsed.team || '').toLowerCase().split(/\s+/);
+            // Try: any word in parsed.team appears in option team name
+            const matchIdx = currentOpts.findIndex(o => {
+              const optLower = o.team.toLowerCase();
+              return teamWords.some(w => w.length > 2 && optLower.includes(w));
+            });
             if (matchIdx >= 0) {
               setPickIdx(matchIdx);
-            } else if (parsed.team) {
+            } else {
+              // Fallback: set as manual pick (handles props, exotic picks)
               setManualPick(parsed.team);
             }
-          } else if (parsed.team) {
+          } else {
             setManualPick(parsed.team);
           }
           return currentOpts;
         });
-      }, 80);
+      }, 100);
     }
   }, [betType, sport]);
 
@@ -275,7 +294,19 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       } else {
         const { data, error } = await addPick(payload);
         if (error) throw new Error(error.message || 'Save failed');
-        if (data) setPicks(prev => [...prev, data]);
+        if (data) {
+          setPicks(prev => [...prev, data]);
+          // Fire-and-forget: auto-analyze this pick in background
+          fetch('/api/auto-analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pickId: data.id, sport: payload.sport, team: payload.team,
+              bet_type: payload.bet_type, odds: payload.odds, units: payload.units,
+              date: payload.date, notes: payload.notes,
+            }),
+          }).catch(() => {}); // silent — don't block the user
+        }
       }
       setSaved(true);
       setTimeout(onClose, 1200);

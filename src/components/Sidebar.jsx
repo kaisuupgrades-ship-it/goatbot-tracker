@@ -106,14 +106,18 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
       }}
     >
 
-      {/* Logo */}
-      <div style={{
-        padding: collapsed ? '1.1rem 0' : '1.1rem 1rem',
-        display: 'flex', alignItems: 'center', gap: '10px',
-        borderBottom: '1px solid var(--border)',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        flexShrink: 0,
-      }}>
+      {/* Logo — clickable to expand when collapsed */}
+      <div
+        onClick={() => { if (collapsed) setCollapsed(false); }}
+        style={{
+          padding: collapsed ? '1.1rem 0' : '1.1rem 1rem',
+          display: 'flex', alignItems: 'center', gap: '10px',
+          borderBottom: '1px solid var(--border)',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          flexShrink: 0,
+          cursor: collapsed ? 'pointer' : 'default',
+        }}
+      >
         <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>🐐</span>
         {!collapsed && (
           <div>
@@ -126,7 +130,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
           </div>
         )}
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={(e) => { e.stopPropagation(); setCollapsed(!collapsed); }}
           style={{
             marginLeft: 'auto', background: 'none', border: 'none',
             color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem',
@@ -162,7 +166,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
               {section.items.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => { setActiveTab(item.id); if (collapsed) setCollapsed(false); if (mobileOpen) onMobileClose?.(); }}
                   className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
                   style={{
                     justifyContent: collapsed ? 'center' : 'flex-start',
@@ -195,7 +199,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
           )}
           {collapsed && <div style={{ height: '1px', background: 'var(--border)', margin: '6px 8px' }} />}
           <button
-            onClick={() => setActiveTab('admin')}
+            onClick={() => { setActiveTab('admin'); if (collapsed) setCollapsed(false); if (mobileOpen) onMobileClose?.(); }}
             className={`nav-item ${activeTab === 'admin' ? 'active' : ''}`}
             style={{
               justifyContent: collapsed ? 'center' : 'flex-start',
@@ -266,15 +270,19 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
         </div>
       )}
 
-      {/* Collapsed toggle */}
+      {/* Collapsed expand button — prominent */}
       {collapsed && (
         <button
           onClick={() => setCollapsed(false)}
           style={{
-            background: 'none', border: 'none', color: 'var(--text-muted)',
-            cursor: 'pointer', padding: '0.75rem', textAlign: 'center',
-            fontSize: '0.85rem', borderTop: '1px solid var(--border)',
+            background: 'rgba(255,184,0,0.06)', border: 'none', color: 'var(--gold)',
+            cursor: 'pointer', padding: '0.85rem', textAlign: 'center',
+            fontSize: '1rem', borderTop: '1px solid var(--border)',
+            transition: 'background 0.15s',
           }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,184,0,0.12)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,184,0,0.06)'}
+          title="Expand sidebar"
         >
           ››
         </button>
