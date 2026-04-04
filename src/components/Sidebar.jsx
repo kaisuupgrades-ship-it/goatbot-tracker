@@ -130,16 +130,18 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
           cursor: collapsed ? 'pointer' : 'default',
         }}
       >
-        <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>🎯</span>
+        {/* Icon — shown always */}
+        <img
+          src="/icon.svg"
+          alt="BetOS"
+          style={{ width: collapsed ? '32px' : '28px', height: collapsed ? '32px' : '28px', flexShrink: 0 }}
+        />
         {!collapsed && (
-          <div>
-            <div style={{ fontWeight: 900, color: 'var(--gold)', fontSize: '1rem', letterSpacing: '-0.03em', lineHeight: 1 }}>
-              BetOS
-            </div>
-            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: '1px' }}>
-              Sports Intelligence
-            </div>
-          </div>
+          <img
+            src="/logo.svg"
+            alt="BetOS"
+            style={{ height: '36px', width: 'auto', marginLeft: '2px' }}
+          />
         )}
         <button
           onClick={(e) => { e.stopPropagation(); setCollapsed(!collapsed); }}

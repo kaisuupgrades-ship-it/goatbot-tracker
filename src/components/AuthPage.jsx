@@ -449,16 +449,9 @@ export default function AuthPage() {
           transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
           gap: '8px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-            <span style={{
-              fontSize: 'clamp(1.1rem, 4vw, 1.6rem)',
-              animation: 'goat-float 4s ease-in-out infinite',
-              lineHeight: 1,
-            }}>🎯</span>
-            <span style={{
-              fontWeight: 900, fontSize: 'clamp(0.9rem, 3.5vw, 1.2rem)', color: '#FFB800',
-              letterSpacing: '-0.04em',
-            }}>BetOS</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <img src="/icon.svg" alt="BetOS" style={{ height: 'clamp(22px, 5vw, 30px)', width: 'auto' }} />
+            <img src="/logo.svg" alt="BetOS" style={{ height: 'clamp(18px, 4vw, 26px)', width: 'auto' }} />
             <span style={{
               fontSize: '0.5rem', color: '#FFB800', border: '1px solid rgba(255,184,0,0.3)',
               borderRadius: '4px', padding: '1px 5px', fontWeight: 700, letterSpacing: '0.08em',
@@ -505,12 +498,16 @@ export default function AuthPage() {
         }}>
           {/* Brand icon */}
           <div style={{
-            fontSize: 'clamp(2.5rem, 10vw, 4.5rem)', lineHeight: 1,
             marginBottom: 'clamp(0.75rem, 3vw, 1.5rem)',
+            display: 'flex', justifyContent: 'center',
             animation: 'goat-float 5s ease-in-out infinite',
-            filter: 'drop-shadow(0 0 40px rgba(255,184,0,0.3))',
+            filter: 'drop-shadow(0 0 40px rgba(255,184,0,0.35))',
           }}>
-            🎯
+            <img
+              src="/icon.svg"
+              alt="BetOS"
+              style={{ width: 'clamp(80px, 18vw, 130px)', height: 'auto' }}
+            />
           </div>
 
           {/* Main headline */}

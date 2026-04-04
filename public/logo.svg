@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 190" width="620" height="190">
+  <defs>
+    <!-- Glow filter for the scanning arc -->
+    <filter id="arcGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Subtle glow for center dot -->
+    <filter id="centerGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Gold gradient for wordmark -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD000;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF9500;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- ═══════════════════════════════════ -->
+  <!--  ICON  (center: 95, 95)            -->
+  <!-- ═══════════════════════════════════ -->
+
+  <!-- Outermost faint ring -->
+  <circle cx="95" cy="95" r="82" fill="none" stroke="#FFB800" stroke-width="0.75" opacity="0.18"/>
+
+  <!-- Outer ring -->
+  <circle cx="95" cy="95" r="68" fill="none" stroke="#FFB800" stroke-width="1.25" opacity="0.30"/>
+
+  <!-- Middle ring -->
+  <circle cx="95" cy="95" r="50" fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.50"/>
+
+  <!-- Inner ring (dashed) -->
+  <circle cx="95" cy="95" r="28" fill="none" stroke="#FFB800" stroke-width="1.5"
+    stroke-dasharray="3.5 4.5" opacity="0.65"/>
+
+  <!-- ── Crosshair lines ── -->
+  <!-- Top -->
+  <line x1="95" y1="12"  x2="95" y2="67"  stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+  <!-- Bottom -->
+  <line x1="95" y1="123" x2="95" y2="178" stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+  <!-- Left -->
+  <line x1="12"  y1="95" x2="67"  y2="95" stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+  <!-- Right -->
+  <line x1="123" y1="95" x2="178" y2="95" stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- ── Tick marks on middle ring (12/3/6/9) ── -->
+  <line x1="95"  y1="42"  x2="95"  y2="48"  stroke="#FFB800" stroke-width="2.5" opacity="0.8"/>
+  <line x1="95"  y1="142" x2="95"  y2="148" stroke="#FFB800" stroke-width="2.5" opacity="0.8"/>
+  <line x1="42"  y1="95"  x2="48"  y2="95"  stroke="#FFB800" stroke-width="2.5" opacity="0.8"/>
+  <line x1="142" y1="95"  x2="148" y2="95"  stroke="#FFB800" stroke-width="2.5" opacity="0.8"/>
+
+  <!-- ── Corner targeting brackets ── -->
+  <!-- Top-left -->
+  <path d="M 33 64 L 33 33 L 64 33"
+    fill="none" stroke="#FFB800" stroke-width="2.75"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Top-right -->
+  <path d="M 126 33 L 157 33 L 157 64"
+    fill="none" stroke="#FFB800" stroke-width="2.75"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Bottom-left -->
+  <path d="M 33 126 L 33 157 L 64 157"
+    fill="none" stroke="#FFB800" stroke-width="2.75"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Bottom-right -->
+  <path d="M 126 157 L 157 157 L 157 126"
+    fill="none" stroke="#FFB800" stroke-width="2.75"
+    stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ── Scanning arc (top → right, clockwise, GLOWING) ── -->
+  <!-- Shadow layer -->
+  <path d="M 95 45 A 50 50 0 0 1 145 95"
+    fill="none" stroke="#FFB800" stroke-width="6" opacity="0.15"
+    stroke-linecap="round"/>
+  <!-- Main arc -->
+  <path d="M 95 45 A 50 50 0 0 1 145 95"
+    fill="none" stroke="#FFB800" stroke-width="3"
+    stroke-linecap="round" filter="url(#arcGlow)" opacity="0.95"/>
+
+  <!-- Arc endpoint dots (radar ping) -->
+  <circle cx="145" cy="95"  r="4" fill="#FFB800" opacity="0.9" filter="url(#arcGlow)"/>
+  <circle cx="95"  cy="45"  r="3" fill="#FFB800" opacity="0.55"/>
+
+  <!-- ── Circuit-board details (micro) ── -->
+  <!-- Top-right mini trace -->
+  <polyline points="108,67 108,56 119,56"
+    fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.45"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Bottom-left mini trace -->
+  <polyline points="82,123 82,134 71,134"
+    fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.45"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Right-side mini trace -->
+  <polyline points="145,82 156,82 156,72"
+    fill="none" stroke="#FFB800" stroke-width="1.25" opacity="0.35"
+    stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ── Center bull's-eye ── -->
+  <circle cx="95" cy="95" r="13" fill="url(#goldGrad)" filter="url(#centerGlow)" opacity="0.9"/>
+  <circle cx="95" cy="95" r="13" fill="#FFB800"/>
+  <circle cx="95" cy="95" r="6"  fill="#0A0A0A"/>
+  <circle cx="95" cy="95" r="2"  fill="#FFB800"/>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!--  WORDMARK                              -->
+  <!-- ═══════════════════════════════════════ -->
+
+  <!-- "Bet" — white, heavy -->
+  <text x="200" y="127"
+    font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif"
+    font-weight="900"
+    font-size="84"
+    letter-spacing="-3"
+    fill="#FFFFFF">Bet</text>
+
+  <!-- "OS" — gold gradient -->
+  <text x="360" y="127"
+    font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif"
+    font-weight="900"
+    font-size="84"
+    letter-spacing="-3"
+    fill="url(#goldGrad)">OS</text>
+
+  <!-- Thin separator under wordmark -->
+  <line x1="200" y1="143" x2="555" y2="143" stroke="#2A2A2A" stroke-width="1"/>
+
+  <!-- Tagline -->
+  <text x="202" y="163"
+    font-family="'Helvetica Neue', Arial, sans-serif"
+    font-weight="400"
+    font-size="11.5"
+    letter-spacing="4"
+    fill="#555555">AI-POWERED SPORTS INTELLIGENCE</text>
+
+  <!-- Accent dot before tagline -->
+  <circle cx="193" cy="159" r="2.5" fill="#FFB800" opacity="0.6"/>
+
+</svg>

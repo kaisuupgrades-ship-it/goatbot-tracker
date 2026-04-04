@@ -69,30 +69,26 @@ function BetOSSplash({ dataReady, onComplete }) {
         pointerEvents: 'none',
       }} />
 
-      {/* Floating logo */}
+      {/* Floating logo icon */}
       <div style={{
-        fontSize: 'clamp(2.8rem, 10vw, 4.5rem)', marginBottom: '1.4rem',
+        marginBottom: '1.4rem',
         animation: 'goat-float 2.8s ease-in-out infinite',
-        filter: 'drop-shadow(0 0 18px rgba(255,184,0,0.25))',
+        filter: 'drop-shadow(0 0 28px rgba(255,184,0,0.35))',
       }}>
-        🎯
+        <img
+          src="/icon.svg"
+          alt="BetOS"
+          style={{ width: 'clamp(90px, 18vw, 130px)', height: 'auto' }}
+        />
       </div>
 
-      {/* BetOS wordmark */}
-      <div style={{
-        fontFamily: "'Inter', sans-serif",
-        fontSize: 'clamp(1.8rem, 5vw, 2.6rem)',
-        fontWeight: 900,
-        letterSpacing: '0.18em',
-        background: 'linear-gradient(90deg, #CC9200 0%, #FFB800 40%, #FFD700 60%, #FFB800 80%, #CC9200 100%)',
-        backgroundSize: '200% auto',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text',
-        animation: 'gold-shimmer 3s linear infinite',
-        marginBottom: '0.35rem',
-      }}>
-        BetOS
+      {/* BetOS wordmark via logo SVG */}
+      <div style={{ marginBottom: '0.35rem' }}>
+        <img
+          src="/logo.svg"
+          alt="BetOS"
+          style={{ height: 'clamp(36px, 8vw, 54px)', width: 'auto' }}
+        />
       </div>
 
       {/* Subtitle */}

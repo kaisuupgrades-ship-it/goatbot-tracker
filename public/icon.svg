@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <filter id="arcGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="centerGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD000;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF9500;stop-opacity:1" />
+    </linearGradient>
+    <!-- Radial gradient for background glow -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   style="stop-color:#1A1200;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0A0A0A;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+
+  <!-- Background with subtle gold center glow -->
+  <rect width="200" height="200" fill="#0A0A0A" rx="36"/>
+  <rect width="200" height="200" fill="url(#bgGlow)" rx="36"/>
+
+  <!-- Outermost ring -->
+  <circle cx="100" cy="100" r="87" fill="none" stroke="#FFB800" stroke-width="0.75" opacity="0.15"/>
+
+  <!-- Outer ring -->
+  <circle cx="100" cy="100" r="74" fill="none" stroke="#FFB800" stroke-width="1.25" opacity="0.28"/>
+
+  <!-- Middle ring -->
+  <circle cx="100" cy="100" r="55" fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.48"/>
+
+  <!-- Inner dashed ring -->
+  <circle cx="100" cy="100" r="30" fill="none" stroke="#FFB800" stroke-width="1.5"
+    stroke-dasharray="3.5 4.5" opacity="0.62"/>
+
+  <!-- Crosshair lines -->
+  <line x1="100" y1="13"  x2="100" y2="70"  stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+  <line x1="100" y1="130" x2="100" y2="187" stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+  <line x1="13"  y1="100" x2="70"  y2="100" stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+  <line x1="130" y1="100" x2="187" y2="100" stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+
+  <!-- Tick marks on middle ring -->
+  <line x1="100" y1="42"  x2="100" y2="48"  stroke="#FFB800" stroke-width="3" opacity="0.8"/>
+  <line x1="100" y1="152" x2="100" y2="158" stroke="#FFB800" stroke-width="3" opacity="0.8"/>
+  <line x1="42"  y1="100" x2="48"  y2="100" stroke="#FFB800" stroke-width="3" opacity="0.8"/>
+  <line x1="152" y1="100" x2="158" y2="100" stroke="#FFB800" stroke-width="3" opacity="0.8"/>
+
+  <!-- Corner targeting brackets -->
+  <!-- Top-left -->
+  <path d="M 32 65 L 32 32 L 65 32"
+    fill="none" stroke="#FFB800" stroke-width="3"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Top-right -->
+  <path d="M 135 32 L 168 32 L 168 65"
+    fill="none" stroke="#FFB800" stroke-width="3"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Bottom-left -->
+  <path d="M 32 135 L 32 168 L 65 168"
+    fill="none" stroke="#FFB800" stroke-width="3"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Bottom-right -->
+  <path d="M 135 168 L 168 168 L 168 135"
+    fill="none" stroke="#FFB800" stroke-width="3"
+    stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Scanning arc (top → right) - glow shadow -->
+  <path d="M 100 45 A 55 55 0 0 1 155 100"
+    fill="none" stroke="#FFB800" stroke-width="8" opacity="0.12"
+    stroke-linecap="round"/>
+  <!-- Scanning arc - main -->
+  <path d="M 100 45 A 55 55 0 0 1 155 100"
+    fill="none" stroke="#FFB800" stroke-width="3.5"
+    stroke-linecap="round" filter="url(#arcGlow)" opacity="0.95"/>
+
+  <!-- Arc endpoint pings -->
+  <circle cx="155" cy="100" r="5" fill="#FFB800" opacity="0.9" filter="url(#arcGlow)"/>
+  <circle cx="100" cy="45"  r="3.5" fill="#FFB800" opacity="0.55"/>
+
+  <!-- Circuit micro-traces -->
+  <polyline points="113,70 113,58 125,58"
+    fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.42"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="87,130 87,142 75,142"
+    fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.42"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="155,86 166,86 166,74"
+    fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.35"
+    stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Center bull's-eye -->
+  <circle cx="100" cy="100" r="15" fill="#FFB800" filter="url(#centerGlow)" opacity="0.3"/>
+  <circle cx="100" cy="100" r="14" fill="url(#goldGrad)"/>
+  <circle cx="100" cy="100" r="7"  fill="#0A0A0A"/>
+  <circle cx="100" cy="100" r="2.5" fill="#FFB800"/>
+
+</svg>
