@@ -1,5 +1,6 @@
 'use client';
 import { useState, useMemo, useEffect, useRef } from 'react';
+import VoiceButton from '@/components/VoiceInput';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
@@ -1181,6 +1182,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
 
             {/* Fire button */}
             <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+              <VoiceButton value={prompt} onChange={setPrompt} size="md" />
               <button
                 onClick={() => runBetOS()}
                 disabled={!canFire}

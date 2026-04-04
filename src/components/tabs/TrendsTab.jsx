@@ -285,21 +285,57 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
 
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
 
-      const gamesByLeague = await Promise.all(
-        sportsToFetch.map(async (sp) => {
-          try {
-            const res = await fetch(`/api/sports?sport=${sp}&endpoint=scoreboard&date=${today}`);
-            if (!res.ok) return { sport: sp, events: [] };
-            const data = await res.json();
-            return { sport: sp, events: data.events || [] };
-          } catch { return { sport: sp, events: [] }; }
-        })
-      );
-
-      // Build a compact game list for the AI
+      // Fetch real odds from The Odds API + ESPN schedule in parallel
       const SPORT_EMOJI = { mlb: '⚾', nba: '🏀', nhl: '🏒', nfl: '🏈' };
+
+      const [oddsResults, espnResults] = await Promise.all([
+        // Real bookmaker odds via our /api/odds route (already caches 3 min)
+        Promise.allSettled(
+          sportsToFetch.map(async sp => {
+            try {
+              const res = await fetch(`/api/odds?sport=${sp}`);
+              if (!res.ok) return { sport: sp, data: [] };
+              const d = await res.json();
+              return { sport: sp, data: d.data || [] };
+            } catch { return { sport: sp, data: [] }; }
+          })
+        ),
+        // ESPN for game schedule + status
+        Promise.all(
+          sportsToFetch.map(async (sp) => {
+            try {
+              const res = await fetch(`/api/sports?sport=${sp}&endpoint=scoreboard&date=${today}`);
+              if (!res.ok) return { sport: sp, events: [] };
+              const data = await res.json();
+              return { sport: sp, events: data.events || [] };
+            } catch { return { sport: sp, events: [] }; }
+          })
+        ),
+      ]);
+
+      // Build a real-odds lookup keyed by normalized home team name
+      const oddsLookup = {};
+      for (const r of oddsResults) {
+        if (r.status !== 'fulfilled' || !r.value?.data) continue;
+        for (const game of r.value.data) {
+          const key = (game.home_team || '').toLowerCase().replace(/\s+/g, '_');
+          oddsLookup[key] = game;
+        }
+      }
+
+      function findRealOdds(homeTeam) {
+        const key = (homeTeam || '').toLowerCase().replace(/\s+/g, '_');
+        if (oddsLookup[key]) return oddsLookup[key];
+        // fuzzy: last word match
+        const last = homeTeam.split(' ').pop().toLowerCase();
+        return Object.values(oddsLookup).find(g =>
+          (g.home_team || '').toLowerCase().includes(last)
+        ) || null;
+      }
+
+      // Build compact game list — use real odds where available, ESPN as fallback
       const gameList = [];
-      for (const { sport: sp, events } of gamesByLeague) {
+      for (const { sport: sp, events } of espnResults) {
         for (const ev of events.slice(0, 12)) {
           const comp = ev.competitions?.[0];
           if (!comp) continue;
@@ -307,19 +343,50 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
           const home = teams.find(t => t.homeAway === 'home');
           const away = teams.find(t => t.homeAway === 'away');
           if (!home || !away) continue;
-          const odds = comp.odds?.[0];
-          const mlHome = odds?.homeTeamOdds?.moneyLine ?? odds?.homeTeamOdds?.current?.moneyLine ?? null;
-          const mlAway = odds?.awayTeamOdds?.moneyLine ?? odds?.awayTeamOdds?.current?.moneyLine ?? null;
-          const spread = odds?.details || null;
-          const total  = odds?.overUnder ?? null;
+
+          const homeName = home.team?.displayName || home.team?.name || '';
+          const awayName = away.team?.displayName  || away.team?.name  || '';
+
+          // Try real odds first
+          const real = findRealOdds(homeName);
+          const realML  = real?.bookmakers?.[0]?.markets?.find(m => m.key === 'h2h');
+          const realSpd = real?.bookmakers?.[0]?.markets?.find(m => m.key === 'spreads');
+          const realTot = real?.bookmakers?.[0]?.markets?.find(m => m.key === 'totals');
+
+          const mlHome = realML?.outcomes?.find(o => o.name === homeName)?.price
+            ?? null;
+          const mlAway = realML?.outcomes?.find(o => o.name === awayName)?.price
+            ?? null;
+
+          const sHome = realSpd?.outcomes?.find(o => o.name === homeName);
+          const spreadStr = sHome
+            ? `${homeName.split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
+            : (comp.odds?.[0]?.details || null);
+
+          const overOut  = realTot?.outcomes?.find(o => o.name === 'Over');
+          const underOut = realTot?.outcomes?.find(o => o.name === 'Under');
+          const total    = overOut?.point ?? comp.odds?.[0]?.overUnder ?? null;
+          const overOdds  = overOut?.price  ?? null;
+          const underOdds = underOut?.price ?? null;
+
+          // ESPN fallback odds
+          const espnOdds = comp.odds?.[0];
+          const finalMLHome = mlHome ?? espnOdds?.homeTeamOdds?.moneyLine ?? null;
+          const finalMLAway = mlAway ?? espnOdds?.awayTeamOdds?.moneyLine ?? null;
+
           gameList.push({
-            sport: sp.toUpperCase(),
-            emoji: SPORT_EMOJI[sp] || '🏆',
-            matchup: `${away.team?.abbreviation} @ ${home.team?.abbreviation}`,
-            home: home.team?.displayName || home.team?.name,
-            away: away.team?.displayName || away.team?.name,
-            mlHome, mlAway, spread, total,
-            status: ev.status?.type?.description || 'Scheduled',
+            sport:    sp.toUpperCase(),
+            emoji:    SPORT_EMOJI[sp] || '🏆',
+            matchup:  `${away.team?.abbreviation} @ ${home.team?.abbreviation}`,
+            home:     homeName,
+            away:     awayName,
+            mlHome:   finalMLHome,
+            mlAway:   finalMLAway,
+            spread:   spreadStr,
+            total,
+            overOdds,
+            underOdds,
+            status:   ev.status?.type?.description || 'Scheduled',
           });
         }
       }
@@ -340,7 +407,9 @@ ${gameList.map(g =>
   `${g.emoji} ${g.sport}: ${g.matchup} (${g.away} @ ${g.home})` +
   (g.mlAway != null ? ` | ML: Away ${g.mlAway > 0 ? '+' : ''}${g.mlAway} / Home ${g.mlHome > 0 ? '+' : ''}${g.mlHome}` : '') +
   (g.spread ? ` | Spread: ${g.spread}` : '') +
-  (g.total != null ? ` | Total: ${g.total}` : '')
+  (g.total != null ? ` | Total: ${g.total}` +
+    (g.overOdds  != null ? ` (O ${g.overOdds > 0 ? '+' : ''}${g.overOdds}` : '') +
+    (g.underOdds != null ? ` / U ${g.underOdds > 0 ? '+' : ''}${g.underOdds})` : (g.overOdds != null ? ')' : '')) : '')
 ).join('\n')}
 
 Identify the 3-6 BEST situational betting edges from this slate. For each edge, consider:

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callAI } from '@/lib/ai';
+import { fetchOddsForSports, mergeOddsIntoGameList, buildOddsLookup } from '@/lib/odds';
 
 export const maxDuration = 60;
 
@@ -52,15 +53,48 @@ async function fetchTodaysGames() {
   const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
   const gameList = [];
 
+  // ── Primary: The Odds API — real bookmaker lines, all games in one call ──
+  try {
+    const oddsMap  = await fetchOddsForSports(['mlb', 'nba', 'nhl', 'nfl']);
+    const lookup   = buildOddsLookup(oddsMap);
+
+    // Flatten all sports into a game list
+    for (const [sp, games] of Object.entries(oddsMap)) {
+      for (const g of games.slice(0, 12)) {
+        gameList.push({
+          sport:   sp.toUpperCase(),
+          emoji:   g.emoji,
+          matchup: g.matchup,
+          home:    g.home,
+          away:    g.away,
+          mlHome:  g.mlHome,
+          mlAway:  g.mlAway,
+          spread:  g.spreadHomePoint != null
+            ? `${g.home.split(' ').pop()} ${g.spreadHomePoint >= 0 ? '+' : ''}${g.spreadHomePoint}`
+            : null,
+          total:    g.total,
+          overOdds: g.overOdds,
+          underOdds: g.underOdds,
+          status:   g.status || 'Scheduled',
+          oddsSource: 'the-odds-api',
+        });
+      }
+    }
+
+    if (gameList.length > 0) return gameList;
+  } catch (err) {
+    console.warn('[fetchTodaysGames] The Odds API failed, falling back to ESPN:', err.message);
+  }
+
+  // ── Fallback: ESPN scoreboard (odds often null but gives game schedule) ──
   for (const [key, info] of Object.entries(SPORT_MAP)) {
     try {
       const url = `https://site.api.espn.com/apis/site/v2/sports/${info.sport}/${info.league}/scoreboard?dates=${today}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) continue;
       const data = await res.json();
-      const events = data.events || [];
 
-      for (const ev of events.slice(0, 12)) {
+      for (const ev of (data.events || []).slice(0, 12)) {
         const comp = ev.competitions?.[0];
         if (!comp) continue;
         const teams = comp.competitors || [];
@@ -75,18 +109,17 @@ async function fetchTodaysGames() {
         const total  = odds?.overUnder ?? null;
 
         gameList.push({
-          sport: key.toUpperCase(),
-          emoji: info.emoji,
+          sport:   key.toUpperCase(),
+          emoji:   info.emoji,
           matchup: `${away.team?.abbreviation} @ ${home.team?.abbreviation}`,
-          home: home.team?.displayName || home.team?.name,
-          away: away.team?.displayName || away.team?.name,
+          home:    home.team?.displayName || home.team?.name,
+          away:    away.team?.displayName || away.team?.name,
           mlHome, mlAway, spread, total,
-          status: ev.status?.type?.description || 'Scheduled',
+          status:  ev.status?.type?.description || 'Scheduled',
+          oddsSource: 'espn',
         });
       }
-    } catch {
-      // Skip failed league — don't block the whole scan
-    }
+    } catch { /* skip failed league */ }
   }
 
   return gameList;
@@ -100,7 +133,9 @@ ${gameList.map(g =>
   `${g.emoji} ${g.sport}: ${g.matchup} (${g.away} @ ${g.home})` +
   (g.mlAway != null ? ` | ML: Away ${g.mlAway > 0 ? '+' : ''}${g.mlAway} / Home ${g.mlHome > 0 ? '+' : ''}${g.mlHome}` : '') +
   (g.spread ? ` | Spread: ${g.spread}` : '') +
-  (g.total != null ? ` | Total: ${g.total}` : '')
+  (g.total != null ? ` | Total: ${g.total}` +
+    (g.overOdds  != null ? ` (O ${g.overOdds > 0 ? '+' : ''}${g.overOdds}`  : '') +
+    (g.underOdds != null ? ` / U ${g.underOdds > 0 ? '+' : ''}${g.underOdds})` : (g.overOdds != null ? ')' : '')) : '')
 ).join('\n')}
 
 Identify the 4-8 BEST situational betting edges from this slate. For each edge, consider:
