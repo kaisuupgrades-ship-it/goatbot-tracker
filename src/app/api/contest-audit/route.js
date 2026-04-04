@@ -137,21 +137,52 @@ export async function POST(req) {
 
   // Admin override: manually approve/reject a pick
   if (action === 'override' && userEmail === ADMIN_EMAIL && pickId) {
+    const isRejected = (overrideStatus || 'APPROVED') === 'REJECTED';
+
+    // First fetch the current pick so we can preserve contest_date on rejection
+    const { data: existing } = await supabase
+      .from('picks')
+      .select('date, contest_entry')
+      .eq('id', pickId)
+      .single();
+
+    const updatePayload = {
+      audit_status: overrideStatus || 'APPROVED',
+      audit_reason: overrideReason || 'Admin override',
+      audit_override: true,
+      audit_override_by: ADMIN_EMAIL,
+      audit_override_at: new Date().toISOString(),
+    };
+
+    if (isRejected) {
+      // Demote to personal pick so the daily contest limit is freed up
+      // Store original contest date for audit trail
+      updatePayload.contest_entry = false;
+      updatePayload.contest_rejected_date = existing?.date || null;
+      updatePayload.is_public = false;
+    } else if (overrideStatus === 'APPROVED') {
+      // Ensure approved picks are public (leaderboard-visible)
+      updatePayload.is_public = true;
+    }
+
     const { data, error } = await supabase
       .from('picks')
-      .update({
-        audit_status: overrideStatus || 'APPROVED',
-        audit_reason: overrideReason || 'Admin override',
-        audit_override: true,
-        audit_override_by: ADMIN_EMAIL,
-        audit_override_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', pickId)
       .select()
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ pick: data, overridden: true });
+    return NextResponse.json({ pick: data, overridden: true, demoted: isRejected });
+  }
+
+  // Pre-save check: AI validates a pick BEFORE it's saved to the DB
+  // Returns { status: 'APPROVED' | 'REJECTED', reason }
+  if (action === 'pre-check') {
+    const pick = body.pick;
+    if (!pick) return NextResponse.json({ error: 'pick required' }, { status: 400 });
+    const audit = await aiAuditPick(pick);
+    return NextResponse.json({ status: audit.status, reason: audit.reason, aiUsed: audit.aiUsed });
   }
 
   // Auto-audit: run AI check on a contest pick
@@ -200,15 +231,21 @@ export async function POST(req) {
     const results = [];
     for (const pick of (picks || [])) {
       const audit = await aiAuditPick(pick);
+      const batchUpdate = {
+        audit_status: audit.status,
+        audit_reason: audit.reason,
+        audit_ai_used: audit.aiUsed,
+        audited_at: new Date().toISOString(),
+        is_public: audit.status === 'APPROVED',
+      };
+      // Demote REJECTED picks so users can resubmit
+      if (audit.status === 'REJECTED') {
+        batchUpdate.contest_entry = false;
+        batchUpdate.contest_rejected_date = pick.date;
+      }
       await supabase
         .from('picks')
-        .update({
-          audit_status: audit.status,
-          audit_reason: audit.reason,
-          audit_ai_used: audit.aiUsed,
-          audited_at: new Date().toISOString(),
-          is_public: audit.status === 'APPROVED',
-        })
+        .update(batchUpdate)
         .eq('id', pick.id);
       results.push({ pickId: pick.id, ...audit });
     }

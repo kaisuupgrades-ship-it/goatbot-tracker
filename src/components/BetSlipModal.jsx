@@ -271,6 +271,9 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
   const [saveError,   setSaveError]   = useState('');
+  const [showConfirm, setShowConfirm] = useState(false); // Contest confirmation dialog
+  const [aiChecking,  setAiChecking]  = useState(false); // AI pre-save audit in progress
+  const [aiCheckResult, setAiCheckResult] = useState(null); // { ok, reason } from AI
 
   // Derived selected bet object
   const selectedBet = quickBets.flatMap(s => s.bets).find(b => b.id === selectedId) || null;
@@ -413,6 +416,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   }, [onClose]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  // ── Contest save flow: validate → confirm → AI check → save ────────────────
   const handleSave = useCallback(async () => {
     // Determine values from either quick-select or custom
     let teamValue, betTypeValue, oddsValue;
@@ -430,13 +434,44 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     const oddsNum = parseInt(oddsValue);
     if (!oddsValue || isNaN(oddsNum)) { setSaveError('Enter valid American odds (e.g. -110 or +133).'); return; }
 
-    // Contest check — must be eligible if marking as contest pick
-    if (isContest && contestResult && !contestResult.eligible) {
-      // Still allow save — but not as contest entry. Warn the user.
-      setSaveError('Pick has contest issues — saving as personal pick only (not contest entry).');
+    // Contest picks: show confirmation dialog first (if not already confirmed)
+    if (isContest && contestResult?.eligible && !showConfirm) {
+      setShowConfirm(true);
+      return;
     }
 
-    setSaving(true); setSaveError('');
+    // Not contest, or ineligible → save directly as personal pick
+    await executeSave(teamValue, betTypeValue, oddsNum);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBet, oddsVal, customTeam, customBetType, customOdds, isContest, contestResult, showConfirm, units, notes, book, user?.id, gameDate, sport, isDemo, picks, setPicks, onClose, awayAbbr, homeAbbr]);
+
+  // Called after user confirms the contest dialog (or for personal picks directly)
+  const executeSave = useCallback(async (teamValue, betTypeValue, oddsNum) => {
+    setSaving(true); setSaveError(''); setShowConfirm(false); setAiCheckResult(null);
+
+    // For contest picks: run AI pre-save audit to catch invalid picks instantly
+    let finalContestEntry = isContest && (contestResult?.eligible !== false);
+    if (finalContestEntry && !isDemo) {
+      setAiChecking(true);
+      try {
+        const auditRes = await fetch('/api/contest-audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'pre-check',
+            pick: { team: teamValue, bet_type: betTypeValue, odds: oddsNum, units: parseFloat(units) || 1, sport, date: gameDate },
+          }),
+        });
+        const auditData = await auditRes.json();
+        if (auditData.status === 'REJECTED') {
+          // AI flagged it as invalid — save as personal only, user can resubmit
+          finalContestEntry = false;
+          setAiCheckResult({ ok: false, reason: auditData.reason || 'AI flagged this pick as invalid.' });
+        }
+      } catch { /* AI check failed — allow save as contest, admin will audit */ }
+      setAiChecking(false);
+    }
+
     const payload = {
       user_id:       user?.id || 'demo',
       date:          gameDate,
@@ -450,8 +485,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       notes:         notes.trim() || null,
       book:          book,
       matchup:       `${awayAbbr} @ ${homeAbbr}`,
-      // Contest entry only if user opted in AND pick is eligible (or at least attempted)
-      contest_entry: isContest && (contestResult?.eligible !== false),
+      contest_entry: finalContestEntry,
     };
 
     try {
@@ -476,14 +510,23 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
           }).catch(() => {});
         }
       }
-      setSaved(true);
-      setTimeout(onClose, 1100);
+
+      if (aiCheckResult && !aiCheckResult.ok) {
+        // Show rejection message briefly before closing
+        setSaveError(`Contest pick rejected by AI: "${aiCheckResult.reason}" — saved as personal pick. You may resubmit a new contest pick.`);
+        setSaving(false);
+        setTimeout(onClose, 4000);
+      } else {
+        setSaved(true);
+        setTimeout(onClose, 1100);
+      }
     } catch (e) {
       setSaveError(e.message || 'Save failed. Try again.');
+      setSaving(false);
     }
     setSaving(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBet, oddsVal, customTeam, customBetType, customOdds, isContest, contestResult, units, notes, book, user?.id, gameDate, sport, isDemo, picks, setPicks, onClose, awayAbbr, homeAbbr]);
+  }, [isContest, contestResult, isDemo, units, notes, book, user?.id, gameDate, sport, picks, setPicks, onClose, awayAbbr, homeAbbr, aiCheckResult]);
 
   // ── Input styles ──────────────────────────────────────────────────────────
   const inputStyle = {
@@ -869,6 +912,70 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
           </div>
         )}
 
+        {/* ── Contest Confirmation Dialog ──────────────────────────────────── */}
+        {showConfirm && (
+          <div style={{
+            margin: '0.5rem 1.1rem',
+            padding: '1rem 1.1rem',
+            background: 'rgba(255,184,0,0.06)',
+            border: '1px solid rgba(255,184,0,0.35)',
+            borderRadius: '10px',
+          }}>
+            <div style={{ fontWeight: 800, color: '#FFB800', fontSize: '0.88rem', marginBottom: '6px' }}>
+              🏆 Lock in your contest pick?
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '12px' }}>
+              Once submitted, this pick is <strong style={{ color: '#FFB800' }}>permanent — no edits or deletes</strong>.
+              It will be audited by AI and reviewed by the admin. If it gets flagged or rejected,
+              you'll be free to resubmit a new pick for today.
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setShowConfirm(false)}
+                style={{
+                  flex: 1, padding: '0.5rem', borderRadius: '7px', border: '1px solid var(--border)',
+                  background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.82rem',
+                  fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Go Back
+              </button>
+              <button
+                onClick={() => {
+                  // Re-derive values and call executeSave
+                  const t = selectedBet ? selectedBet.team    : customTeam.trim();
+                  const bt = selectedBet ? selectedBet.bet_type : customBetType;
+                  const o = parseInt(selectedBet ? oddsVal : customOdds);
+                  executeSave(t, bt, o);
+                }}
+                style={{
+                  flex: 1, padding: '0.5rem', borderRadius: '7px', border: 'none',
+                  background: 'linear-gradient(135deg, #FFB800, #FF9500)',
+                  color: '#000', fontSize: '0.82rem', fontWeight: 800,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                ✅ Yes, Lock It In
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── AI checking overlay ──────────────────────────────────────────── */}
+        {aiChecking && (
+          <div style={{
+            margin: '0 1.1rem 0.5rem',
+            padding: '0.6rem 0.85rem',
+            background: 'rgba(96,165,250,0.06)',
+            border: '1px solid rgba(96,165,250,0.2)',
+            borderRadius: '8px',
+            fontSize: '0.75rem', color: '#60a5fa',
+            display: 'flex', alignItems: 'center', gap: '8px',
+          }}>
+            <PulsingDots /> AI is verifying your pick before locking it in…
+          </div>
+        )}
+
         {/* ── Footer ─────────────────────────────────────────────────────── */}
         <div style={{
           padding: '0.85rem 1.1rem',
@@ -896,27 +1003,25 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             ) : (
               <button
                 onClick={handleSave}
-                disabled={saving || (!hasSelection)}
+                disabled={saving || aiChecking || !hasSelection || showConfirm}
                 style={{
-                  background: saving || !hasSelection
+                  background: saving || aiChecking || !hasSelection
                     ? 'var(--bg-overlay)'
-                    : isContest && contestResult?.eligible
-                      ? 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)'
-                      : 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)',
-                  color: saving || !hasSelection ? 'var(--text-muted)' : '#0a0a0a',
+                    : 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)',
+                  color: saving || aiChecking || !hasSelection ? 'var(--text-muted)' : '#0a0a0a',
                   border: 'none', borderRadius: '8px', padding: '0.5rem 1.4rem',
                   fontSize: '0.88rem', fontWeight: 800,
-                  cursor: saving || !hasSelection ? 'not-allowed' : 'pointer',
+                  cursor: saving || aiChecking || !hasSelection || showConfirm ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit',
-                  boxShadow: saving || !hasSelection ? 'none' : '0 2px 12px rgba(255,184,0,0.35)',
+                  boxShadow: saving || aiChecking || !hasSelection ? 'none' : '0 2px 12px rgba(255,184,0,0.35)',
                   transition: 'all 0.15s',
                   display: 'flex', alignItems: 'center', gap: '6px',
-                  opacity: !hasSelection ? 0.5 : 1,
+                  opacity: !hasSelection || showConfirm ? 0.5 : 1,
                 }}
               >
-                {saving
+                {saving || aiChecking
                   ? '⟳ Saving…'
-                  : isContest
+                  : isContest && contestResult?.eligible
                     ? '🏆 Save Contest Pick'
                     : '💾 Save Bet'}
               </button>

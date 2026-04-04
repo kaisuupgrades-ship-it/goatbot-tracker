@@ -87,12 +87,14 @@ export async function GET(req) {
   // Action: check if user already has a contest pick today
   if (action === 'daily-check' && userId) {
     const today = new Date().toISOString().split('T')[0];
+    // Exclude REJECTED picks — those have been freed up for resubmission
     const { data: todayPicks } = await supabase
       .from('picks')
-      .select('id, team, odds, date, bet_type, contest_entry')
+      .select('id, team, odds, date, bet_type, contest_entry, audit_status')
       .eq('user_id', userId)
       .eq('contest_entry', true)
-      .eq('date', today);
+      .eq('date', today)
+      .neq('audit_status', 'REJECTED');
 
     return NextResponse.json({
       hasContestPickToday: (todayPicks?.length || 0) >= CONTEST_RULES.maxPicksPerDay,
@@ -133,13 +135,16 @@ export async function POST(req) {
   const result = verifyPick(pick);
 
   // If entering contest, check daily limit
+  // NOTE: REJECTED picks have contest_entry cleared to false, so they don't count.
+  // neq('audit_status', 'REJECTED') is a belt-and-suspenders guard for edge cases.
   if (contestEntry && userId && pick.date) {
     const { data: existingPicks } = await supabase
       .from('picks')
-      .select('id, team, odds')
+      .select('id, team, odds, audit_status')
       .eq('user_id', userId)
       .eq('contest_entry', true)
-      .eq('date', pick.date);
+      .eq('date', pick.date)
+      .neq('audit_status', 'REJECTED');
 
     if ((existingPicks?.length || 0) >= CONTEST_RULES.maxPicksPerDay) {
       result.eligible = false;

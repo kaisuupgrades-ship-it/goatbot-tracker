@@ -967,6 +967,15 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                           style={{ padding: '3px 8px', borderRadius: '5px', border: `1px solid ${analyses[pick.id] ? 'rgba(255,184,0,0.3)' : '#333'}`, background: expandedAnalysis === pick.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: analyses[pick.id] ? '#FFB800' : '#666', cursor: 'pointer', fontSize: '0.75rem' }}
                           title={analyses[pick.id] ? 'View AI analysis' : 'Get AI analysis'}
                         >🎯</button>
+                        {/* Rejected contest pick — show resubmit notice */}
+                        {!pick.contest_entry && pick.contest_rejected_date && (
+                          <span
+                            title={`Contest pick rejected${pick.audit_reason ? ': ' + pick.audit_reason : ''} — you may submit a new contest pick`}
+                            style={{ fontSize: '0.62rem', color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help' }}
+                          >
+                            ✕ REJECTED · Resubmit available
+                          </span>
+                        )}
                         {pick.contest_entry ? (
                           <span style={{ fontSize: '0.62rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700, whiteSpace: 'nowrap' }} title="Contest picks are locked — no editing or deleting">🔒 LOCKED</span>
                         ) : (
