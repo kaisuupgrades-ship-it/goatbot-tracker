@@ -4,84 +4,22 @@ import { callAI } from '@/lib/ai';
 
 export const maxDuration = 60;
 
+const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// Daily AI-curated edge reports — refreshed site-wide (not per-user API calls)
-// These are cached in Supabase and regenerated once per day
-const DAILY_INSIGHTS_CACHE_KEY = 'ai_daily_insights';
-const CACHE_TTL_HOURS = 6; // Refresh every 6 hours
-
-// Pre-computed insight templates (used when AI API isn't configured)
-const FALLBACK_INSIGHTS = [
-  {
-    id: 'mlb-hr-streak',
-    sport: 'MLB',
-    category: 'Home Run Trends',
-    title: 'Back-to-Back Home Run Hitters (Last 7 Days)',
-    insight: 'Hitters with 2+ HRs in last 5 games are historically undervalued in next-game anytime HR markets. The recency bias pushes lines shorter, but exit velocity and launch angle data confirm these are real hot streaks — not noise. Target hitters in favorable ball parks (Coors, Great American) on cold starts.',
-    confidence: 82,
-    edge: '+4.1% ROI (n=892, 2019-2024)',
-    sharp: true,
-    sport_icon: '⚾',
-  },
-  {
-    id: 'mlb-pitcher-debut',
-    sport: 'MLB',
-    category: 'Pitcher Matchups',
-    title: 'Bullpen Fatigue After 3+ Pitcher Game',
-    insight: 'When a starting pitcher lasts fewer than 4 innings, forcing 3+ relievers in a game, the opponent\'s offense in the NEXT game covers the over 61% of the time. The fatigue compounds: overworked arms face a rested lineup at full strength. Look for totals priced under the market expectation.',
-    confidence: 76,
-    edge: '+5.8% ROI (n=1,204, 2020-2024)',
-    sharp: true,
-    sport_icon: '⚾',
-  },
-  {
-    id: 'nfl-rest-edge',
-    sport: 'NFL',
-    category: 'Situational Spots',
-    title: 'Short Week Road Team After Primetime Win',
-    insight: 'NFL teams playing Thursday Night Football on the road after winning a Sunday Night or Monday Night game cover ATS only 38% of the time. The emotional letdown + travel + short prep = a historically reliable fade spot. The public bets the momentum — the sharp money is on the dog.',
-    confidence: 79,
-    edge: '+7.3% ROI (n=287, 2015-2024)',
-    sharp: true,
-    sport_icon: '🏈',
-  },
-  {
-    id: 'nba-b2b-unders',
-    sport: 'NBA',
-    category: 'Totals Trends',
-    title: 'Back-to-Back Unders on Road Away Team',
-    insight: 'NBA totals involving a road team on the second night of a back-to-back go under at a 58% clip since 2018. Fatigue suppresses offensive efficiency — especially in the 3rd quarter — while the home team benefits from a full rest advantage. Books adjust lines slowly on these spots; value persists.',
-    confidence: 71,
-    edge: '+3.9% ROI (n=1,847, 2018-2024)',
-    sharp: false,
-    sport_icon: '🏀',
-  },
-  {
-    id: 'mlb-wind',
-    sport: 'MLB',
-    category: 'Weather Edge',
-    title: 'Wind 15+ MPH Blowing In — Under Gold',
-    insight: 'When wind blows directly in from center field at 15+ mph, MLB totals go under at a remarkable 64% rate. This is one of the most durable weather edges in sports betting — completely free data available on weather apps before lines adjust. Focus on open-air parks: Wrigley, Guaranteed Rate, Kauffman.',
-    confidence: 88,
-    edge: '+8.1% ROI (n=412, 2019-2024)',
-    sharp: true,
-    sport_icon: '⚾',
-  },
-];
+// Keys in the settings table
+const GLOBAL_EDGES_KEY = 'ai_daily_edges';
 
 // ── RATE LIMITING ─────────────────────────────────────────────────────────────
-// Per-user AI query limits stored in Supabase
-const DAILY_AI_LIMIT = 5; // Free tier: 5 custom AI queries per day
+const DAILY_AI_LIMIT = 5;
 
 async function checkAndIncrementUsage(userId) {
   if (!userId) return { allowed: false, remaining: 0, reason: 'Not logged in' };
-
   const today = new Date().toISOString().split('T')[0];
-
   try {
     const { data: existing } = await supabase
       .from('ai_usage')
@@ -89,60 +27,145 @@ async function checkAndIncrementUsage(userId) {
       .eq('user_id', userId)
       .eq('date', today)
       .single();
-
     const currentCount = existing?.count || 0;
-
     if (currentCount >= DAILY_AI_LIMIT) {
       return { allowed: false, remaining: 0, reason: `Daily limit of ${DAILY_AI_LIMIT} AI queries reached. Resets at midnight.` };
     }
-
-    // Upsert usage count
     await supabase
       .from('ai_usage')
       .upsert([{ user_id: userId, date: today, count: currentCount + 1 }], { onConflict: 'user_id,date' });
-
     return { allowed: true, remaining: DAILY_AI_LIMIT - currentCount - 1 };
   } catch {
-    // If table doesn't exist yet, allow the query but note it
     return { allowed: true, remaining: DAILY_AI_LIMIT - 1, tableNeeded: true };
   }
 }
 
-// ── GET: Daily insights (cached, site-wide) ───────────────────────────────────
+// ── ESPN game fetcher (server-side) ──────────────────────────────────────────
+const SPORT_MAP = {
+  mlb: { sport: 'baseball',    league: 'mlb',           emoji: '⚾' },
+  nba: { sport: 'basketball',  league: 'nba',           emoji: '🏀' },
+  nhl: { sport: 'hockey',      league: 'nhl',           emoji: '🏒' },
+  nfl: { sport: 'football',    league: 'nfl',           emoji: '🏈' },
+};
+
+async function fetchTodaysGames() {
+  const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const gameList = [];
+
+  for (const [key, info] of Object.entries(SPORT_MAP)) {
+    try {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${info.sport}/${info.league}/scoreboard?dates=${today}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const events = data.events || [];
+
+      for (const ev of events.slice(0, 12)) {
+        const comp = ev.competitions?.[0];
+        if (!comp) continue;
+        const teams = comp.competitors || [];
+        const home = teams.find(t => t.homeAway === 'home');
+        const away = teams.find(t => t.homeAway === 'away');
+        if (!home || !away) continue;
+
+        const odds = comp.odds?.[0];
+        const mlHome = odds?.homeTeamOdds?.moneyLine ?? odds?.homeTeamOdds?.current?.moneyLine ?? null;
+        const mlAway = odds?.awayTeamOdds?.moneyLine ?? odds?.awayTeamOdds?.current?.moneyLine ?? null;
+        const spread = odds?.details || null;
+        const total  = odds?.overUnder ?? null;
+
+        gameList.push({
+          sport: key.toUpperCase(),
+          emoji: info.emoji,
+          matchup: `${away.team?.abbreviation} @ ${home.team?.abbreviation}`,
+          home: home.team?.displayName || home.team?.name,
+          away: away.team?.displayName || away.team?.name,
+          mlHome, mlAway, spread, total,
+          status: ev.status?.type?.description || 'Scheduled',
+        });
+      }
+    } catch {
+      // Skip failed league — don't block the whole scan
+    }
+  }
+
+  return gameList;
+}
+
+function buildEdgePrompt(gameList, dateStr) {
+  return `You are BetOS — a sharp sports betting analyst. Today is ${dateStr}.
+
+Here are today's games with current odds:
+${gameList.map(g =>
+  `${g.emoji} ${g.sport}: ${g.matchup} (${g.away} @ ${g.home})` +
+  (g.mlAway != null ? ` | ML: Away ${g.mlAway > 0 ? '+' : ''}${g.mlAway} / Home ${g.mlHome > 0 ? '+' : ''}${g.mlHome}` : '') +
+  (g.spread ? ` | Spread: ${g.spread}` : '') +
+  (g.total != null ? ` | Total: ${g.total}` : '')
+).join('\n')}
+
+Identify the 4-8 BEST situational betting edges from this slate. For each edge, consider:
+- Home/away underdog value spots
+- Back-to-back fatigue situations
+- Rest advantages
+- Weather/dome factors for totals
+- Pitcher matchup edges (MLB)
+- Line value vs market expectation
+- Public fade spots (heavy chalk that is overpriced)
+
+Return ONLY a valid JSON array. Each object must have these exact fields:
+{
+  "matchup": "AWAY @ HOME (short form)",
+  "sport": "MLB|NBA|NHL|NFL",
+  "sport_emoji": "⚾|🏀|🏒|🏈",
+  "pick": "Team name or Over/Under X",
+  "bet_type": "Moneyline|Spread|Total (Over)|Total (Under)",
+  "odds": <integer American odds or null>,
+  "confidence": "HIGH|MEDIUM|LOW",
+  "sharp": true|false,
+  "reason": "One sentence — the specific edge",
+  "analysis": "2-3 sentences of detailed analysis with the why",
+  "trend_record": "e.g. 58-42 (58%) ATS last 3 seasons or null",
+  "trend_roi": "e.g. +4.2% ROI or null",
+  "sample_size": "e.g. n=100, 2022-2024 or null"
+}
+
+Return ONLY the JSON array, no other text.`;
+}
+
+// ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const action = searchParams.get('action') || 'insights';
+  const action = searchParams.get('action') || 'usage';
   const userId = searchParams.get('userId') || '';
 
-  if (action === 'insights') {
-    // Try to get cached insights from Supabase
+  // Return the admin-generated global edge cards for today
+  if (action === 'global-edges') {
     try {
       const { data: cached } = await supabase
         .from('settings')
         .select('value, updated_at')
-        .eq('key', DAILY_INSIGHTS_CACHE_KEY)
+        .eq('key', GLOBAL_EDGES_KEY)
         .single();
 
-      if (cached?.value && cached?.updated_at) {
-        const age = (Date.now() - new Date(cached.updated_at).getTime()) / (1000 * 60 * 60);
-        if (age < CACHE_TTL_HOURS) {
+      if (cached?.value) {
+        const payload = typeof cached.value === 'string' ? JSON.parse(cached.value) : cached.value;
+        const today = new Date().toISOString().split('T')[0];
+
+        if (payload?.date === today && Array.isArray(payload?.edges) && payload.edges.length > 0) {
           return NextResponse.json({
-            insights: JSON.parse(cached.value),
+            edges: payload.edges,
+            date: payload.date,
             cached: true,
-            refreshed_at: cached.updated_at,
+            pushed_at: cached.updated_at,
           });
         }
       }
-    } catch { /* settings table may not exist — fall through to defaults */ }
+    } catch { /* settings table may not exist yet */ }
 
-    // Return fallback insights (in production, this is where AI generation would run)
-    return NextResponse.json({
-      insights: FALLBACK_INSIGHTS,
-      cached: false,
-      refreshed_at: new Date().toISOString(),
-    });
+    return NextResponse.json({ edges: [], cached: false });
   }
 
+  // Per-user daily usage count
   if (action === 'usage') {
     if (!userId) return NextResponse.json({ remaining: DAILY_AI_LIMIT, limit: DAILY_AI_LIMIT });
     const today = new Date().toISOString().split('T')[0];
@@ -163,24 +186,84 @@ export async function GET(req) {
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
 
-// ── POST: Custom AI question (rate-limited per user) ──────────────────────────
+// ── POST ──────────────────────────────────────────────────────────────────────
 export async function POST(req) {
-  const { question, userId } = await req.json();
+  const body = await req.json();
+
+  // ── Admin: Push today's edges site-wide ──────────────────────────────────
+  if (body.action === 'scan-edges') {
+    const { userEmail } = body;
+    if (userEmail !== ADMIN_EMAIL) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+    }
+
+    try {
+      // 1. Fetch today's games from ESPN
+      const gameList = await fetchTodaysGames();
+
+      if (gameList.length === 0) {
+        return NextResponse.json({ error: 'No games found for today. ESPN may not have updated yet.' }, { status: 404 });
+      }
+
+      // 2. Run AI edge analysis
+      const today = new Date().toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+      });
+      const todayISO = new Date().toISOString().split('T')[0];
+
+      const aiResult = await callAI({
+        system: 'You are BetOS, a sharp sports betting analyst. Return ONLY valid JSON arrays, no markdown or explanation.',
+        user: buildEdgePrompt(gameList, today),
+        maxTokens: 2000,
+        temperature: 0.5,
+      });
+
+      const raw     = aiResult.text || '';
+      const cleaned = raw.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
+      const edges   = JSON.parse(cleaned);
+
+      if (!Array.isArray(edges) || edges.length === 0) {
+        return NextResponse.json({ error: 'AI returned no edges. Try again shortly.' }, { status: 500 });
+      }
+
+      // 3. Save to settings table (overwrites previous)
+      const payload = JSON.stringify({ date: todayISO, edges, pushed_by: userEmail, pushed_at: new Date().toISOString() });
+
+      await supabase
+        .from('settings')
+        .upsert([{ key: GLOBAL_EDGES_KEY, value: payload }], { onConflict: 'key' });
+
+      return NextResponse.json({
+        success: true,
+        count: edges.length,
+        date: todayISO,
+        games_scanned: gameList.length,
+        provider: aiResult.provider,
+      });
+
+    } catch (err) {
+      console.error('[scan-edges]', err.message);
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+  }
+
+  // ── User: Rate-limited AI Q&A ─────────────────────────────────────────────
+  const { question, userId, isEdgeScan } = body;
 
   if (!question?.trim()) {
     return NextResponse.json({ error: 'Question is required' }, { status: 400 });
   }
 
-  // Check rate limit
-  const usage = await checkAndIncrementUsage(userId);
-  if (!usage.allowed) {
-    return NextResponse.json({ error: usage.reason, rateLimited: true }, { status: 429 });
-  }
-
-  // Use AI (xAI grok-3 first, Claude fallback)
-  try {
-    const aiResult = await callAI({
-      system: `You are BetOS Trends Analyst — a sharp sports betting researcher with deep knowledge of situational betting, line movement, and statistical edges.
+  // Edge scans from TrendsTab are not rate-limited (they use the edge prompt, not a general Q)
+  if (!isEdgeScan) {
+    const usage = await checkAndIncrementUsage(userId);
+    if (!usage.allowed) {
+      return NextResponse.json({ error: usage.reason, rateLimited: true }, { status: 429 });
+    }
+    // General analyst Q&A
+    try {
+      const aiResult = await callAI({
+        system: `You are BetOS Trends Analyst — a sharp sports betting researcher with deep knowledge of situational betting, line movement, and statistical edges.
 
 Answer questions about sports betting trends and edges. Rules:
 - Be honest about uncertainty — say "research suggests" not "proven fact" for statistical claims
@@ -189,17 +272,32 @@ Answer questions about sports betting trends and edges. Rules:
 - Never invent specific win/loss records or ROI percentages you don't actually know
 - End every response with a concrete "Bottom line:" action sentence
 - Keep responses under 220 words, direct and practical`,
+        user: question,
+        maxTokens: 350,
+        temperature: 0.6,
+      });
+      return NextResponse.json({ answer: aiResult.text, remaining: usage.remaining, source: aiResult.provider });
+    } catch (err) {
+      console.error('AI trends error:', err.message);
+      return NextResponse.json({
+        answer: 'AI analysis is temporarily unavailable. Please try again shortly.',
+        remaining: usage.remaining,
+        source: 'error',
+      });
+    }
+  }
+
+  // isEdgeScan: true → full slate scan from TrendsTab (no rate limit consumed, uses shared endpoint)
+  try {
+    const aiResult = await callAI({
+      system: 'You are BetOS, a sharp sports betting analyst. Return ONLY valid JSON arrays, no markdown or explanation.',
       user: question,
-      maxTokens: 350,
-      temperature: 0.6,
+      maxTokens: 2000,
+      temperature: 0.5,
     });
-    return NextResponse.json({ answer: aiResult.text, remaining: usage.remaining, source: aiResult.provider });
+    return NextResponse.json({ answer: aiResult.text, source: aiResult.provider });
   } catch (err) {
-    console.error('AI trends error:', err.message);
-    return NextResponse.json({
-      answer: 'AI analysis is temporarily unavailable. Please try again shortly.',
-      remaining: usage.remaining,
-      source: 'error',
-    });
+    console.error('Edge scan AI error:', err.message);
+    return NextResponse.json({ error: 'AI unavailable. Try again in a moment.' }, { status: 503 });
   }
 }

@@ -799,8 +799,10 @@ function SystemPanel({ userEmail }) {
   const [clearing, setClearing]         = useState(false);
   const [msg, setMsg]                   = useState('');
   const [sysInfo, setSysInfo]           = useState(null);
-  const [batchRunning, setBatchRunning] = useState(false);
-  const [batchResult,  setBatchResult]  = useState(null);
+  const [batchRunning,   setBatchRunning]   = useState(false);
+  const [batchResult,    setBatchResult]    = useState(null);
+  const [edgePushing,    setEdgePushing]    = useState(false);
+  const [edgePushResult, setEdgePushResult] = useState(null);
 
   async function runBatchAnalysis() {
     setBatchRunning(true);
@@ -817,6 +819,23 @@ function SystemPanel({ userEmail }) {
       setBatchResult({ error: e.message });
     }
     setBatchRunning(false);
+  }
+
+  async function pushTodaysEdges() {
+    setEdgePushing(true);
+    setEdgePushResult(null);
+    try {
+      const res  = await fetch('/api/trends', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'scan-edges', userEmail }),
+      });
+      const data = await res.json();
+      setEdgePushResult(data);
+    } catch (e) {
+      setEdgePushResult({ error: e.message });
+    }
+    setEdgePushing(false);
   }
 
   function loadSysInfo() {
@@ -868,13 +887,45 @@ function SystemPanel({ userEmail }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {msg && <div style={{ color: msg.startsWith('✓') ? '#4ade80' : '#f87171', padding: '0.5rem 0.75rem', background: msg.startsWith('✓') ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', borderRadius: '6px', fontSize: '0.8rem' }}>{msg}</div>}
 
-      {/* Batch auto-analyzer */}
-      <div className="card" style={{ padding: '1.2rem' }}>
-        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          🎯 Batch BetOS Analyzer
+      {/* ── Push Today's Edges (Trends initializer) ── */}
+      <div className="card" style={{ padding: '1.2rem', borderColor: edgePushResult?.success ? 'rgba(255,184,0,0.2)' : 'var(--border)' }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          📡 Push Today's Edges
+          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.2)', color: '#FFB800', letterSpacing: '0.07em' }}>SITE-WIDE</span>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.85rem', lineHeight: 1.6 }}>
-          Run the BetOS quick analysis on every pick that doesn't have one yet. Uses grok-3 for speed. Cached forever — won't re-run picks that are already analyzed.
+          Scan today's ESPN slate, find the best situational betting edges, and push them to <strong style={{ color: 'var(--text-secondary)' }}>all users</strong>. When users open the Trends tab they'll see your pre-generated cards instantly — no wait. Users can still re-run their own scan to get fresh cards. Cards they generate stay unique to their session; this just initializes the baseline.
+        </p>
+        {edgePushResult && (
+          <div style={{
+            padding: '0.65rem 0.85rem', borderRadius: '7px', marginBottom: '0.85rem', fontSize: '0.78rem',
+            background: edgePushResult.error ? 'rgba(248,113,113,0.06)' : 'rgba(74,222,128,0.06)',
+            border: `1px solid ${edgePushResult.error ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
+            color: edgePushResult.error ? '#f87171' : '#4ade80',
+          }}>
+            {edgePushResult.error
+              ? `Error: ${edgePushResult.error}`
+              : `✓ Pushed ${edgePushResult.count} edge cards — scanned ${edgePushResult.games_scanned} games (${edgePushResult.date})`
+            }
+          </div>
+        )}
+        <button
+          className="btn-gold"
+          onClick={pushTodaysEdges}
+          disabled={edgePushing}
+          style={{ opacity: edgePushing ? 0.7 : 1 }}
+        >
+          {edgePushing ? '📡 Scanning & pushing…' : '📡 Push Today\'s Edges to All Users'}
+        </button>
+      </div>
+
+      {/* ── Batch pick analyzer ── */}
+      <div className="card" style={{ padding: '1.2rem' }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          🎯 Batch Pick Analyzer
+        </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.85rem', lineHeight: 1.6 }}>
+          Run the BetOS quick analysis on every pick that doesn't have one yet. Skips picks that already have a report — runs are safe to repeat.
         </p>
         {batchResult && (
           <div style={{
@@ -885,7 +936,7 @@ function SystemPanel({ userEmail }) {
           }}>
             {batchResult.error
               ? `Error: ${batchResult.error}`
-              : `✓ Done — ${batchResult.processed} analyzed, ${batchResult.skipped} already had reports, ${batchResult.failed || 0} failed. Total picks: ${batchResult.total}`
+              : `✓ Done — ${batchResult.processed} analyzed, ${batchResult.skipped} already had reports, ${batchResult.failed || 0} failed`
             }
           </div>
         )}

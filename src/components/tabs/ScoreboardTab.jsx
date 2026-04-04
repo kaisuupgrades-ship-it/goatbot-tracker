@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import BetSlipModal from '@/components/BetSlipModal';
-import VoiceButton from '@/components/VoiceInput';
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
@@ -1965,7 +1964,6 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                 onFocus={e => e.target.style.borderColor = 'rgba(255,184,0,0.5)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
-              <VoiceButton value={intelQuery} onChange={setIntelQuery} size="sm" />
               <button
                 onClick={() => intelQuery.trim() && runIntelScan(sport, intelQuery)}
                 disabled={intelLoading || !intelQuery.trim()}
