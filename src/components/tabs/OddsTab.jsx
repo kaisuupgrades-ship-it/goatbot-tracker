@@ -38,6 +38,18 @@ function impliedProb(price) {
   return (p * 100).toFixed(0) + '%';
 }
 
+// Detect if a game has already started (live or completed)
+function isGameLive(game) {
+  if (game.status === 'live') return true;
+  return new Date(game.commence_time) <= new Date();
+}
+
+// Detect wildly skewed in-play odds (threshold: either side > ±500)
+function hasExtremeOdds(awayML, homeML) {
+  return (awayML != null && Math.abs(awayML) > 500) ||
+         (homeML != null && Math.abs(homeML) > 500);
+}
+
 // Get best odds for a team from a specific market across all books
 function bestOdds(bookmakers, outcomeName, marketKey) {
   let best = null;
@@ -134,10 +146,9 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
   const total   = bestTotal(books);
 
   const commenceTime = new Date(game.commence_time);
-  const isLive = game.status === 'live';
-  const timeLabel = isLive
-    ? 'LIVE'
-    : commenceTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const isLive   = isGameLive(game);
+  const extreme  = isLive && hasExtremeOdds(awayML, homeML);
+  const timeLabel = commenceTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
   // All books that have any market data
   const allBooks = books.filter(bk =>
@@ -145,7 +156,36 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
   );
 
   return (
-    <div style={{ borderBottom: '1px solid #1a1a1a' }}>
+    <div style={{
+      borderBottom: '1px solid #1a1a1a',
+      borderLeft: isLive ? '3px solid rgba(255,69,96,0.5)' : '3px solid transparent',
+      background: isLive ? 'rgba(255,69,96,0.03)' : 'transparent',
+      transition: 'background 0.1s',
+    }}>
+      {/* In-game warning banner */}
+      {isLive && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '0.3rem 1rem',
+          background: extreme ? 'rgba(255,69,96,0.08)' : 'rgba(255,69,96,0.04)',
+          borderBottom: '1px solid rgba(255,69,96,0.12)',
+        }}>
+          <span style={{
+            fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.1em',
+            color: '#FF4560', background: 'rgba(255,69,96,0.15)',
+            border: '1px solid rgba(255,69,96,0.4)',
+            borderRadius: '3px', padding: '1px 6px',
+          }}>
+            ⚡ IN-GAME
+          </span>
+          <span style={{ fontSize: '0.65rem', color: 'rgba(255,100,100,0.7)' }}>
+            {extreme
+              ? 'Extreme live odds — one team heavily favored. Not useful for pre-game betting.'
+              : 'Live odds — game in progress, lines may shift rapidly.'}
+          </span>
+        </div>
+      )}
+
       {/* Collapsed summary row */}
       <div
         onClick={onToggle}
@@ -155,14 +195,17 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
       >
         {/* Top line: teams + time */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-          <span style={{ fontWeight: 700, color: '#f0f0f0', fontSize: '0.88rem' }}>
+          <span style={{ fontWeight: 700, color: isLive ? 'rgba(240,240,240,0.6)' : '#f0f0f0', fontSize: '0.88rem' }}>
             {away.split(' ').pop()} <span style={{ color: '#555', fontWeight: 400 }}>@</span> {home.split(' ').pop()}
           </span>
           <span style={{ fontSize: '0.65rem', color: '#888', flex: 1 }}>
             {away.includes(' ') ? away.split(' ').slice(0, -1).join(' ') : ''} vs {home.includes(' ') ? home.split(' ').slice(0, -1).join(' ') : ''}
           </span>
           {isLive
-            ? <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', padding: '1px 6px' }}>● LIVE</span>
+            ? <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#FF4560', background: 'rgba(255,69,96,0.1)', border: '1px solid rgba(255,69,96,0.3)', borderRadius: '4px', padding: '1px 6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#FF4560', display: 'inline-block', animation: 'live-pulse 1.5s infinite' }} />
+                LIVE · {timeLabel}
+              </span>
             : <span style={{ fontSize: '0.65rem', color: '#666', whiteSpace: 'nowrap' }}>{timeLabel}</span>
           }
           <span style={{ color: '#444', fontSize: '0.72rem', marginLeft: '4px' }}>{expanded ? '▲' : '▼'}</span>
@@ -176,11 +219,18 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
             <div style={{ display: 'flex', gap: '8px' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Away</div>
-                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', fontWeight: 700, color: oddsColor(awayML) }}>{formatOdds(awayML)}</div>
+                <div style={{
+                  fontFamily: 'monospace', fontSize: extreme ? '0.72rem' : '0.9rem',
+                  fontWeight: 700, color: extreme ? '#444' : oddsColor(awayML),
+                  title: extreme ? 'In-game line — not useful for pre-game betting' : undefined,
+                }}>{formatOdds(awayML)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Home</div>
-                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', fontWeight: 700, color: oddsColor(homeML) }}>{formatOdds(homeML)}</div>
+                <div style={{
+                  fontFamily: 'monospace', fontSize: extreme ? '0.72rem' : '0.9rem',
+                  fontWeight: 700, color: extreme ? '#444' : oddsColor(homeML),
+                }}>{formatOdds(homeML)}</div>
               </div>
             </div>
           </div>
@@ -442,6 +492,7 @@ export default function OddsTab({ onAnalyze }) {
   const [expanded, setExpanded]     = useState(null);
   const [remaining, setRemaining]   = useState(null);
   const [search, setSearch]         = useState('');
+  const [gameFilter, setGameFilter] = useState('upcoming'); // 'all' | 'upcoming' | 'live'
 
   const load = useCallback(async (s) => {
     setLoading(true);
@@ -465,11 +516,23 @@ export default function OddsTab({ onAnalyze }) {
 
   if (!configured) return <SetupScreen />;
 
-  const filtered = games.filter(g =>
+  const searchFiltered = games.filter(g =>
     !search ||
     g.home_team.toLowerCase().includes(search.toLowerCase()) ||
     g.away_team.toLowerCase().includes(search.toLowerCase())
-  ).sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
+  );
+
+  const upcomingGames = searchFiltered
+    .filter(g => !isGameLive(g))
+    .sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
+
+  const liveGames = searchFiltered
+    .filter(g => isGameLive(g))
+    .sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
+
+  const filtered = gameFilter === 'upcoming' ? upcomingGames
+                 : gameFilter === 'live'     ? liveGames
+                 : [...upcomingGames, ...liveGames]; // 'all': upcoming first
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -487,6 +550,32 @@ export default function OddsTab({ onAnalyze }) {
                 fontWeight: sport === s.key ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit',
               }}>
               {s.emoji} {s.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filter pills */}
+        <div style={{ display: 'flex', gap: '3px' }}>
+          {[
+            { key: 'upcoming', label: `📅 Pre-game${upcomingGames.length ? ` (${upcomingGames.length})` : ''}` },
+            { key: 'live',     label: `⚡ Live${liveGames.length ? ` (${liveGames.length})` : ''}` },
+            { key: 'all',      label: 'All' },
+          ].map(f => (
+            <button key={f.key} onClick={() => setGameFilter(f.key)}
+              style={{
+                padding: '3px 9px', borderRadius: '5px', cursor: 'pointer', fontFamily: 'inherit',
+                fontSize: '0.72rem', fontWeight: gameFilter === f.key ? 700 : 400,
+                border: `1px solid ${gameFilter === f.key
+                  ? f.key === 'live' ? 'rgba(255,69,96,0.5)' : '#FFB80066'
+                  : '#222'}`,
+                background: gameFilter === f.key
+                  ? f.key === 'live' ? 'rgba(255,69,96,0.1)' : '#1a1200'
+                  : 'transparent',
+                color: gameFilter === f.key
+                  ? f.key === 'live' ? '#FF4560' : '#FFB800'
+                  : '#666',
+              }}>
+              {f.label}
             </button>
           ))}
         </div>
@@ -525,19 +614,69 @@ export default function OddsTab({ onAnalyze }) {
           {/* Header */}
           <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ color: '#888', fontSize: '0.75rem' }}>
-              {filtered.length} game{filtered.length !== 1 ? 's' : ''} · Click to compare books · <span style={{ color: '#FFB800' }}>Gold = best line</span>
+              {filtered.length} game{filtered.length !== 1 ? 's' : ''}
+              {gameFilter === 'upcoming' && ' · pre-game odds only'}
+              {gameFilter === 'live'     && ' · in-game odds'}
+              {gameFilter === 'all'      && ' · upcoming + live'}
+              {' · '}Click to compare books · <span style={{ color: '#FFB800' }}>Gold = best line</span>
             </span>
             <span style={{ color: '#555', fontSize: '0.68rem' }}>ML · Spread · O/U</span>
           </div>
-          {filtered.map(game => (
-            <GameOddsRow
-              key={game.id}
-              game={game}
-              expanded={expanded === game.id}
-              onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
-              onAnalyze={onAnalyze}
-            />
-          ))}
+
+          {/* In "All" mode: section header before live games */}
+          {gameFilter === 'all' ? (
+            <>
+              {upcomingGames.length > 0 && upcomingGames.map(game => (
+                <GameOddsRow
+                  key={game.id}
+                  game={game}
+                  expanded={expanded === game.id}
+                  onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
+                  onAnalyze={onAnalyze}
+                />
+              ))}
+              {liveGames.length > 0 && (
+                <>
+                  <div style={{
+                    padding: '0.4rem 1rem',
+                    background: 'rgba(255,69,96,0.06)',
+                    borderTop: upcomingGames.length > 0 ? '1px solid rgba(255,69,96,0.2)' : 'none',
+                    borderBottom: '1px solid rgba(255,69,96,0.15)',
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                  }}>
+                    <span style={{
+                      fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.1em',
+                      color: '#FF4560', background: 'rgba(255,69,96,0.15)',
+                      border: '1px solid rgba(255,69,96,0.4)',
+                      borderRadius: '3px', padding: '1px 6px',
+                    }}>⚡ IN-GAME</span>
+                    <span style={{ fontSize: '0.65rem', color: 'rgba(255,100,100,0.6)' }}>
+                      These games have started — odds below are live in-game lines, not pre-game betting lines
+                    </span>
+                  </div>
+                  {liveGames.map(game => (
+                    <GameOddsRow
+                      key={game.id}
+                      game={game}
+                      expanded={expanded === game.id}
+                      onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
+                      onAnalyze={onAnalyze}
+                    />
+                  ))}
+                </>
+              )}
+            </>
+          ) : (
+            filtered.map(game => (
+              <GameOddsRow
+                key={game.id}
+                game={game}
+                expanded={expanded === game.id}
+                onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
+                onAnalyze={onAnalyze}
+              />
+            ))
+          )}
         </div>
       )}
     </div>
