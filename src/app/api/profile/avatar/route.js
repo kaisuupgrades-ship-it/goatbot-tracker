@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { cookies }      from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,25 +7,18 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-async function getUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: () => {},
-      },
-    }
-  );
-  const { data: { user } } = await supabase.auth.getUser();
+async function getUser(req) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return null;
   return user;
 }
 
 export async function POST(req) {
   try {
-    const user = await getUser();
+    const user = await getUser(req);
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     const contentType = req.headers.get('content-type') || 'image/jpeg';

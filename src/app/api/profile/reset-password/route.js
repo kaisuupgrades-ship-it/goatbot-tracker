@@ -1,25 +1,32 @@
 import { NextResponse } from 'next/server';
-import { cookies }      from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 
-export async function POST() {
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+async function getUser(req) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
+export async function POST(req) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          getAll: () => cookieStore.getAll(),
-          setAll: () => {},
-        },
-      }
-    );
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUser(req);
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-    // Send password reset email via Supabase (uses the project's email template)
+    // Use the standard supabase-js client to send the reset email
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+
     const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
       redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/auth/reset`,
     });

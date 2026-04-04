@@ -1,5 +1,6 @@
 'use client';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -99,6 +100,18 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
 
   const fileInputRef = useRef(null);
 
+  // ── Session token for API auth (replaces @supabase/ssr dependency) ────────
+  const [accessToken, setAccessToken] = useState('');
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setAccessToken(data?.session?.access_token || '');
+    });
+  }, []);
+
+  function authHeaders(extra = {}) {
+    return { ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}), ...extra };
+  }
+
   // ── Avatar pick ──────────────────────────────────────────────────────────
   function handleAvatarChange(e) {
     const file = e.target.files?.[0];
@@ -129,7 +142,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
         setAvatarUploading(true);
         const uploadRes = await fetch('/api/profile/avatar', {
           method: 'POST',
-          headers: { 'Content-Type': avatarFile.type },
+          headers: authHeaders({ 'Content-Type': avatarFile.type }),
           body: avatarFile,
         });
         const uploadData = await uploadRes.json();
@@ -179,7 +192,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
       // 3. Send to API
       const res  = await fetch('/api/profile', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(updates),
       });
       const data = await res.json();
@@ -205,7 +218,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
   async function handlePasswordReset() {
     setPwSending(true); setPwError(null); setPwSuccess(null);
     try {
-      const res  = await fetch('/api/profile/reset-password', { method: 'POST' });
+      const res  = await fetch('/api/profile/reset-password', { method: 'POST', headers: authHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send reset email');
       setPwSuccess(`Reset link sent to ${currentEmail}`);
