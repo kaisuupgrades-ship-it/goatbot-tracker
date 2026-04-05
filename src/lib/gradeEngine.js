@@ -221,21 +221,56 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
 
 // ESPN sport path map — used by all grading routes
 export const SPORT_PATHS = {
-  mlb:   'baseball/mlb',
-  nfl:   'football/nfl',
-  nba:   'basketball/nba',
-  nhl:   'hockey/nhl',
-  ncaaf: 'football/college-football',
-  ncaab: 'basketball/mens-college-basketball',
-  mls:   'soccer/usa.1',
-  wnba:  'basketball/wnba',
-  ufc:   'mma/ufc',
+  mlb:              'baseball/mlb',
+  nfl:              'football/nfl',
+  nba:              'basketball/nba',
+  nhl:              'hockey/nhl',
+  ncaaf:            'football/college-football',
+  ncaab:            'basketball/mens-college-basketball',
+  mls:              'soccer/usa.1',
+  wnba:             'basketball/wnba',
+  ufc:              'mma/ufc',
+  // Soccer leagues (specific)
+  'serie a':        'soccer/ita.1',
+  'premier league': 'soccer/eng.1',
+  'la liga':        'soccer/esp.1',
+  'bundesliga':     'soccer/ger.1',
+  'ligue 1':        'soccer/fra.1',
+  'champions league': 'soccer/uefa.champions',
+  'europa league':  'soccer/uefa.europa',
+  'conference league': 'soccer/uefa.europa.conf',
+  'eredivisie':     'soccer/ned.1',
+  'brasileirao':    'soccer/bra.1',
+  'primeira liga':  'soccer/por.1',
+  'mls':            'soccer/usa.1',
 };
 
+// For generic "Soccer" picks, we try all soccer leagues in priority order
+export const SOCCER_FALLBACK_PATHS = [
+  'soccer/eng.1',       // Premier League
+  'soccer/esp.1',       // La Liga
+  'soccer/ita.1',       // Serie A
+  'soccer/ger.1',       // Bundesliga
+  'soccer/fra.1',       // Ligue 1
+  'soccer/uefa.champions',
+  'soccer/uefa.europa',
+  'soccer/ned.1',
+  'soccer/por.1',
+  'soccer/usa.1',       // MLS
+  'soccer/bra.1',
+];
+
 export async function fetchESPNScoreboard(sport, dateStr) {
-  const path = SPORT_PATHS[sport?.toLowerCase()];
-  if (!path) return null;
   const espnDate = (dateStr || '').replace(/-/g, '');
+  const sportKey = sport?.toLowerCase();
+  const path = SPORT_PATHS[sportKey];
+
+  // Generic "soccer" — try all leagues and merge events
+  if (!path && (sportKey === 'soccer' || sportKey === 'other')) {
+    return fetchESPNSoccerFallback(espnDate);
+  }
+  if (!path) return null;
+
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${espnDate}`,
@@ -246,6 +281,28 @@ export async function fetchESPNScoreboard(sport, dateStr) {
   } catch {
     return null;
   }
+}
+
+/**
+ * For generic "Soccer" picks — fan out across all major leagues,
+ * merge their events into a single synthetic scoreboard object.
+ */
+export async function fetchESPNSoccerFallback(espnDate) {
+  const results = await Promise.allSettled(
+    SOCCER_FALLBACK_PATHS.map(p =>
+      fetch(
+        `https://site.api.espn.com/apis/site/v2/sports/${p}/scoreboard?dates=${espnDate}`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      ).then(r => r.ok ? r.json() : null).catch(() => null)
+    )
+  );
+  const allEvents = [];
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value?.events?.length) {
+      allEvents.push(...r.value.events);
+    }
+  }
+  return allEvents.length ? { events: allEvents } : null;
 }
 
 /**
@@ -261,8 +318,9 @@ export function gradePicksAgainstScoreboard(picks, scoreboard) {
       const comp        = event.competitions?.[0];
       const statusName  = comp?.status?.type?.name;
 
-      // Only grade FINAL games
-      if (!['STATUS_FINAL', 'STATUS_FULL_TIME', 'STATUS_END_PERIOD'].includes(statusName)) continue;
+      // Only grade truly FINAL games — STATUS_END_PERIOD means a period just ended
+      // (NHL/NBA intermission) NOT a finished game, so we intentionally exclude it
+      if (!['STATUS_FINAL', 'STATUS_FULL_TIME'].includes(statusName)) continue;
 
       const competitors = comp?.competitors || [];
       const homeComp    = competitors.find(c => c.homeAway === 'home');

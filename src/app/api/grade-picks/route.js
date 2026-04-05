@@ -14,6 +14,7 @@ import {
   fetchESPNScoreboard,
   gradePicksAgainstScoreboard,
   SPORT_PATHS,
+  SOCCER_FALLBACK_PATHS,
 } from '@/lib/gradeEngine';
 
 export const maxDuration = 45;
@@ -54,7 +55,9 @@ export async function POST(req) {
     const groups = {};
     for (const pick of picks) {
       const sport = (pick.sport || '').toLowerCase();
-      if (!SPORT_PATHS[sport]) continue; // unsupported sport
+      // Allow generic 'soccer' and 'other' through — fetchESPNScoreboard handles fallback
+      const supported = SPORT_PATHS[sport] || sport === 'soccer' || sport === 'other';
+      if (!supported) continue;
       const key = `${sport}|${pick.date}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(pick);

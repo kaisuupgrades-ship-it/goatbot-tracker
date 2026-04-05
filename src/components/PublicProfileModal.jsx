@@ -158,14 +158,14 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
         }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Shimmer top bar */}
-        <div style={{
-          height: '3px', flexShrink: 0,
-          background: contestOnly
-            ? 'linear-gradient(90deg, transparent 0%, #FFB800 25%, #FFD700 50%, #FF9500 75%, transparent 100%)'
-            : 'linear-gradient(90deg, transparent 0%, #60a5fa 25%, #818cf8 50%, #60a5fa 75%, transparent 100%)',
-          backgroundSize: '200% auto', animation: 'prize-shimmer 2.5s linear infinite',
-        }} />
+        {/* Top accent bar — contest gets animated gold, standard gets a static subtle border */}
+        {contestOnly && (
+          <div style={{
+            height: '3px', flexShrink: 0,
+            background: 'linear-gradient(90deg, transparent 0%, #FFB800 25%, #FFD700 50%, #FF9500 75%, transparent 100%)',
+            backgroundSize: '200% auto', animation: 'prize-shimmer 2.5s linear infinite',
+          }} />
+        )}
 
         {/* Header */}
         <div style={{

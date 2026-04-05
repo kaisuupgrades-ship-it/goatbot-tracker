@@ -333,6 +333,39 @@ export async function POST(req) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === 'reset_pick') {
+      // Reset a pick back to PENDING — clears result, profit, and graded timestamps
+      const { error } = await supabaseAdmin
+        .from('picks')
+        .update({
+          result:            null,
+          profit:            null,
+          graded_at:         null,
+          graded_home_score: null,
+          graded_away_score: null,
+          admin_edited_at:   new Date().toISOString(),
+          admin_edited_by:   userEmail,
+        })
+        .eq('id', targetId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'edit_pick') {
+      // Admin can correct: team, sport, bet_type, odds, units, result, notes, is_public, contest_entry
+      const allowed = ['team', 'sport', 'bet_type', 'odds', 'units', 'result', 'notes', 'is_public', 'contest_entry', 'profit', 'date'];
+      const updates = {};
+      for (const key of allowed) {
+        if (body[key] !== undefined) updates[key] = body[key];
+      }
+      if (!Object.keys(updates).length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      updates.admin_edited_at = new Date().toISOString();
+      updates.admin_edited_by = userEmail;
+      const { error } = await supabaseAdmin.from('picks').update(updates).eq('id', targetId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === 'set_role') {
       const { error } = await supabaseAdmin
         .from('profiles')

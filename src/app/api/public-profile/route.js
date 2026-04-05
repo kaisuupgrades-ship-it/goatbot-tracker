@@ -28,12 +28,13 @@ export async function GET(req) {
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Build picks query — optionally filter to contest picks only
+  // Build picks query — show all picks for this user (no is_public filter).
+  // is_public controls leaderboard visibility, but a profile should show all picks
+  // so the record shown in the header matches what's in Pick History.
   let picksQuery = supabase
     .from('picks')
     .select('id, team, sport, bet_type, odds, units, result, notes, created_at, audit_status, is_public, contest_id')
     .eq('user_id', userId)
-    .eq('is_public', true)
     .order('created_at', { ascending: false })
     .limit(100);
   if (contestOnly) picksQuery = picksQuery.eq('contest_entry', true);

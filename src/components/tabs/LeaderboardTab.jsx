@@ -451,7 +451,7 @@ function ContestBanner() {
               { label: 'Prize',     value: '$100',       sub: 'Cash — top Sharp Score', icon: '💵' },
               { label: 'Period',    value: '1st – Last', sub: 'Resets each month',       icon: '📅' },
               { label: 'Entry',     value: 'FREE',       sub: 'No cost to compete',      icon: '🎟' },
-              { label: 'Min Picks', value: '10',         sub: 'Verified required',        icon: '✅' },
+              { label: 'Min Picks', value: '15',         sub: 'Settled required to win',  icon: '✅' },
             ].map(s => (
               <div key={s.label} style={{
                 background: 'rgba(255,184,0,0.05)', borderRadius: '8px',
@@ -478,7 +478,7 @@ function ContestBanner() {
                 { icon: '🔒', text: 'LOCKED ONCE POSTED — once your pick is submitted as a contest entry, it cannot be changed, edited, or deleted. Period.' },
                 { icon: '📅', text: 'RESCHEDULES ≠ VOID — if your game gets rescheduled, the pick stands for the new date. You may post a new pick for that day, but do NOT delete the original.' },
                 { icon: '✅', text: 'All contest picks are AI-audited for legitimacy — odds range, timing, and bet type are verified automatically. Flagged picks are reviewed by admin.' },
-                { icon: '📊', text: 'Ranked by Sharp Score: ROI × √(verified picks) ÷ 10. Both win rate AND volume matter — you can\'t win by going 3-1 on 4 picks.' },
+                { icon: '📊', text: 'Ranked by units profit. Both win rate AND volume matter — you need at least 15 settled picks to be eligible to win.' },
                 { icon: '🛡', text: 'One account per person — duplicate accounts detected via IP and device fingerprint are permanently disqualified.' },
                 { icon: '🚫', text: 'Manipulation, backdating, or fake accounts = permanent ban from all future contests.' },
                 { icon: '💸', text: 'Winner paid via PayPal, Venmo, or Cash App within 3 business days of month end.' },
@@ -527,10 +527,14 @@ function ContestBanner() {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
+const CONTEST_MIN_PICKS = 15;
+
 // ── Contest Row ───────────────────────────────────────────────────────────────
 function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
   const streakColor = entry.streak_type === 'W' ? '#4ade80' : entry.streak_type === 'L' ? '#f87171' : '#94a3b8';
   const unitColor   = entry.units > 0 ? '#4ade80' : entry.units < 0 ? '#f87171' : '#94a3b8';
+  const eligible    = entry.total_settled >= CONTEST_MIN_PICKS;
+  const picksNeeded = Math.max(0, CONTEST_MIN_PICKS - entry.total_settled);
 
   return (
     <div
@@ -541,21 +545,24 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
         alignItems: 'center',
         gap: isMobile ? '5px' : '6px',
         padding: isMobile ? '8px 10px' : '8px 12px',
-        background: isMe ? 'rgba(255,184,0,0.06)' : entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent',
+        background: isMe ? 'rgba(255,184,0,0.06)' : eligible && entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent',
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         borderLeft: isMe ? '2px solid rgba(255,184,0,0.5)' : '2px solid transparent',
         cursor: 'pointer',
         transition: 'background 0.15s',
+        opacity: eligible ? 1 : 0.55,
       }}
       onMouseEnter={e => { if (!isMe) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-      onMouseLeave={e => { if (!isMe) e.currentTarget.style.background = entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent'; }}
+      onMouseLeave={e => { if (!isMe) e.currentTarget.style.background = eligible && entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent'; }}
     >
       {/* Rank */}
       <div style={{ textAlign: 'center' }}>
-        {entry.rank === 1 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥇</span>
-          : entry.rank === 2 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥈</span>
-          : entry.rank === 3 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥉</span>
-          : <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{entry.rank}</span>}
+        {eligible
+          ? (entry.rank === 1 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥇</span>
+            : entry.rank === 2 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥈</span>
+            : entry.rank === 3 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥉</span>
+            : <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{entry.rank}</span>)
+          : <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>—</span>}
       </div>
       {/* Avatar */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -566,10 +573,12 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
         <div style={{ fontSize: isMobile ? '0.82rem' : '0.85rem', fontWeight: isMe ? 800 : 600, color: isMe ? 'var(--gold)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {entry.display_name || entry.username}
           {isMe && <span style={{ marginLeft: '4px', fontSize: '0.6rem', color: 'var(--gold)', fontWeight: 700 }}>YOU</span>}
+          {eligible && entry.rank <= 3 && <span style={{ marginLeft: '5px', fontSize: '0.58rem', color: '#4ade80', fontWeight: 700 }}>✓ ELIGIBLE</span>}
         </div>
         <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
           {entry.wins}W–{entry.losses}L{entry.pushes > 0 ? `–${entry.pushes}P` : ''}
           {!isMobile && entry.pending > 0 && <span style={{ color: '#60a5fa', marginLeft: '4px' }}>+{entry.pending} live</span>}
+          {!eligible && <span style={{ color: 'rgba(255,255,255,0.3)', marginLeft: '4px' }}>· needs {picksNeeded} more</span>}
         </div>
       </div>
       {/* Units */}
@@ -596,6 +605,58 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
             : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>—</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Announcement Banner ───────────────────────────────────────────────────────
+function AnnouncementBanner() {
+  const [announcements, setAnnouncements] = useState([]);
+  useEffect(() => {
+    fetch('/api/announcements')
+      .then(r => r.json())
+      .then(d => setAnnouncements(d.announcements || []))
+      .catch(() => {});
+  }, []);
+
+  if (!announcements.length) return null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+      {announcements.map(a => (
+        <div key={a.id} style={{
+          background: a.type === 'contest_winner'
+            ? 'linear-gradient(135deg, rgba(255,184,0,0.12) 0%, rgba(255,150,0,0.08) 100%)'
+            : 'rgba(96,165,250,0.08)',
+          border: `1px solid ${a.type === 'contest_winner' ? 'rgba(255,184,0,0.35)' : 'rgba(96,165,250,0.25)'}`,
+          borderRadius: '10px', padding: '1rem 1.25rem',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+        }}>
+          <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>
+            {a.type === 'contest_winner' ? '🏆' : '📢'}
+          </span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: '0.9rem', color: a.type === 'contest_winner' ? '#FFB800' : '#60a5fa', marginBottom: '3px' }}>
+              {a.title}
+            </div>
+            {a.type === 'contest_winner' && a.winner_display_name && (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                🎉 <strong style={{ color: 'var(--gold)' }}>{a.winner_display_name}</strong>
+                {a.winner_record && <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>{a.winner_record}</span>}
+                {a.winner_units != null && (
+                  <span style={{ color: '#4ade80', fontFamily: 'IBM Plex Mono', fontWeight: 700, marginLeft: '8px' }}>
+                    +{a.winner_units}u
+                  </span>
+                )}
+              </div>
+            )}
+            {a.body && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{a.body}</div>}
+            <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.25)', marginTop: '5px' }}>
+              {a.month ? `${a.month} · ` : ''}{new Date(a.created_at).toLocaleDateString()}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -759,6 +820,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
       {subTab === 'contest' && (
         <>
           <ContestBanner />
+          <AnnouncementBanner />
           <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} onViewProfile={(entry) => setViewEntry(entry)} isMobile={isMobile} />
         </>
       )}
