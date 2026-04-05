@@ -252,14 +252,11 @@ export async function POST(req) {
 
     if (isRejected) {
       // Demote to personal pick so the daily contest limit is freed up
-      // Store original contest date for audit trail
+      // Pick stays public — all picks are public on this platform
       updatePayload.contest_entry = false;
       updatePayload.contest_rejected_date = existing?.date || null;
-      updatePayload.is_public = false;
-    } else if (overrideStatus === 'APPROVED') {
-      // Ensure approved picks are public (leaderboard-visible)
-      updatePayload.is_public = true;
     }
+    // All picks are always public — no is_public changes needed
 
     const { data, error } = await supabase
       .from('picks')
@@ -305,12 +302,7 @@ export async function POST(req) {
       .eq('id', pickId);
 
     // If approved, ensure pick is public (visible on leaderboard)
-    if (audit.status === 'APPROVED') {
-      await supabase
-        .from('picks')
-        .update({ is_public: true })
-        .eq('id', pickId);
-    }
+    // All picks are public — audit_status drives verified badge, not visibility
 
     return NextResponse.json({ pickId, audit });
   }
@@ -332,9 +324,8 @@ export async function POST(req) {
         audit_reason: audit.reason,
         audit_ai_used: audit.aiUsed,
         audited_at: new Date().toISOString(),
-        is_public: audit.status === 'APPROVED',
       };
-      // Demote REJECTED picks so users can resubmit
+      // Demote REJECTED picks so users can resubmit — stays public
       if (audit.status === 'REJECTED') {
         batchUpdate.contest_entry = false;
         batchUpdate.contest_rejected_date = pick.date;

@@ -198,15 +198,20 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
 
   if (!result) return null;
 
-  // Calculate profit (in units, based on 1-unit risk)
-  const odds = parseInt(pick.odds || 0);
-  let profit = null;
+  // Calculate profit using the actual units the user risked.
+  // Contest 1-unit normalization happens at the leaderboard display layer
+  // (contest-leaderboard/route.js → contestProfit), NOT here.
+  // This keeps "My Picks" showing real units (e.g. hodgins 5u = +4.545u)
+  // while the contest leaderboard shows 1u scoring for everyone.
+  const odds  = parseInt(pick.odds || 0);
+  const units = parseFloat(pick.units || 1);
+  let profit  = null;
   if (result === 'WIN' && odds) {
     profit = odds > 0
-      ? parseFloat((odds / 100).toFixed(3))
-      : parseFloat((100 / Math.abs(odds)).toFixed(3));
+      ? parseFloat(((odds / 100) * units).toFixed(3))
+      : parseFloat(((100 / Math.abs(odds)) * units).toFixed(3));
   } else if (result === 'LOSS') {
-    profit = -1;
+    profit = parseFloat((-units).toFixed(3));
   } else if (result === 'PUSH') {
     profit = 0;
   }

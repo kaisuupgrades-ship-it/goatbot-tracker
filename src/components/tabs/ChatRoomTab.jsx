@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import PublicProfileModal from '../PublicProfileModal';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const POLL_INTERVAL = 6000; // 6 seconds
@@ -84,36 +85,6 @@ function ChatBubble({ msg, isMe, onDelete, onMentionClick }) {
           ✕
         </button>
       )}
-    </div>
-  );
-}
-
-// Mini profile popover when clicking a name in chat
-function ChatProfilePopover({ entry, userId, onClose, onMessage }) {
-  if (!entry) return null;
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '14px', padding: '1.25rem', maxWidth: '300px', width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Avatar userId={entry.id} emoji={entry.avatar_emoji} size={48} />
-          <div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>{entry.display_name || entry.username}</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>@{entry.username}</div>
-          </div>
-          <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem' }}>×</button>
-        </div>
-        {entry.id !== userId && (
-          <button
-            onClick={() => { onMessage(entry); onClose(); }}
-            style={{ padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.82rem', background: 'rgba(255,184,0,0.12)', border: '1px solid rgba(255,184,0,0.35)', color: 'var(--gold)', cursor: 'pointer' }}
-          >
-            💬 Send Message
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -329,13 +300,13 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
 
       {error && <div style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '4px', textAlign: 'center' }}>{error}</div>}
 
-      {/* Profile popover from clicking a name */}
+      {/* Full profile modal from clicking a name */}
       {popover && (
-        <ChatProfilePopover
-          entry={popover}
-          userId={userId}
+        <PublicProfileModal
+          entry={{ user_id: popover.id, ...popover }}
           onClose={() => setPopover(null)}
-          onMessage={(entry) => onOpenInbox?.({ id: entry.id, username: entry.username, display_name: entry.display_name, avatar_emoji: entry.avatar_emoji })}
+          onOpenInbox={onOpenInbox}
+          currentUser={user}
         />
       )}
     </div>

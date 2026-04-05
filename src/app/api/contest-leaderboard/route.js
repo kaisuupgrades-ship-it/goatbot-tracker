@@ -22,6 +22,16 @@ const DEMO_DATA = [
   { user_id: 'demo-5', username: 'DogHunter',    display_name: 'Dog Hunter',  avatar_emoji: '🦅', wins:  8, losses: 9,  pushes: 1, pending: 0, total_settled: 18, units: -1.2, roi: -6.7,  streak: 2,  streak_type: 'L' },
 ];
 
+// Contest scoring: all picks normalized to 1-unit risk regardless of actual bet size.
+// A WIN at -110 earns (100/110) = 0.909u. A LOSS is always -1u. PUSH = 0.
+function contestProfit(result, odds) {
+  const o = parseInt(odds || 0);
+  if (result === 'WIN'  && o) return o > 0 ? parseFloat((o / 100).toFixed(3)) : parseFloat((100 / Math.abs(o)).toFixed(3));
+  if (result === 'LOSS') return -1;
+  if (result === 'PUSH') return 0;
+  return 0;
+}
+
 function buildContestRows(picks, profiles) {
   const nameMap = {};
   (profiles || []).forEach(p => {
@@ -40,17 +50,18 @@ function buildContestRows(picks, profiles) {
         avatar_emoji: prof.avatar_emoji || '🎯',
         wins: 0, losses: 0, pushes: 0, pending: 0,
         total_settled: 0, units: 0,
-        last_results: [], // track order for streak
+        last_results: [],
       };
     }
 
     const u = userMap[pick.user_id];
     const result = pick.result;
-    const profit = parseFloat(pick.profit) || 0;
+    // Always 1-unit normalized profit — ignores actual pick.units
+    const profit = contestProfit(result, pick.odds);
 
-    if (result === 'WIN')  { u.wins++;   u.total_settled++; u.units += profit; u.last_results.push('W'); }
-    else if (result === 'LOSS') { u.losses++; u.total_settled++; u.units += profit; u.last_results.push('L'); }
-    else if (result === 'PUSH') { u.pushes++; u.total_settled++; u.last_results.push('P'); }
+    if (result === 'WIN')        { u.wins++;   u.total_settled++; u.units += profit; u.last_results.push('W'); }
+    else if (result === 'LOSS')  { u.losses++; u.total_settled++; u.units += profit; u.last_results.push('L'); }
+    else if (result === 'PUSH')  { u.pushes++; u.total_settled++;                    u.last_results.push('P'); }
     else { u.pending++; }
   }
 
@@ -109,7 +120,7 @@ export async function GET(req) {
     // NOTE: .neq() in Supabase excludes NULLs, so we must use .or() to include null audit_status
     let query = supabase
       .from('picks')
-      .select('user_id, result, profit, created_at, audit_status')
+      .select('user_id, result, profit, odds, created_at, audit_status')
       .eq('contest_entry', true)
       .or('audit_status.is.null,audit_status.eq.APPROVED');
 

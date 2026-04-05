@@ -27,6 +27,7 @@ export async function PATCH(req) {
     const body = await req.json();
     const {
       username, username_changed_at,
+      display_name,                   // friendly name shown in chat/leaderboard
       email,    email_changed_at,
       phone,    phone_changed_at,
       avatar_url,
@@ -57,6 +58,23 @@ export async function PATCH(req) {
       user_metadata: { ...existing, ...metaUpdate },
     });
     if (metaErr) return NextResponse.json({ error: metaErr.message }, { status: 400 });
+
+    // ── Sync to profiles table ────────────────────────────────────────────────
+    // The profiles table is the single source of truth for:
+    //   username     → @handle used in leaderboard, picks, mentions
+    //   display_name → friendly name shown in chat, profile cards
+    // Both must stay in sync with user_metadata so every surface shows the same name.
+    const profileUpdate = {};
+    if (username     !== undefined && username)     profileUpdate.username     = username.trim();
+    if (display_name !== undefined && display_name) profileUpdate.display_name = display_name.trim();
+
+    if (Object.keys(profileUpdate).length > 0) {
+      // Upsert so it works even if the row doesn't exist yet
+      await supabaseAdmin.from('profiles').upsert(
+        { id: user.id, ...profileUpdate },
+        { onConflict: 'id' }
+      );
+    }
 
     return NextResponse.json({ user: updated.user });
   } catch (err) {

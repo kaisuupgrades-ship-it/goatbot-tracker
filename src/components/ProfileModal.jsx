@@ -84,9 +84,21 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
   const phoneWait    = getTimeUntilAllowed(phoneChangedAt,    LIMITS.phone);
 
   // Form state
-  const [username, setUsername] = useState(currentUsername);
-  const [email,    setEmail]    = useState(currentEmail);
-  const [phone,    setPhone]    = useState(currentPhone);
+  const [username,    setUsername]    = useState(currentUsername);
+  const [displayName, setDisplayName] = useState(''); // loaded from profiles table below
+  const [email,       setEmail]       = useState(currentEmail);
+  const [phone,       setPhone]       = useState(currentPhone);
+
+  // Load display_name from profiles table on mount
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from('profiles').select('display_name, username').eq('id', userId).single()
+      .then(({ data }) => {
+        if (data?.display_name) setDisplayName(data.display_name);
+        // If no username in form yet, seed from profiles table
+        if (!currentUsername && data?.username) setUsername(data.username);
+      }).catch(() => {});
+  }, [userId]); // eslint-disable-line
 
   // Preferences
   const [timezone,    setTimezone]    = useState(meta.timezone    || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York');
@@ -198,7 +210,10 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
         return;
       }
 
-      // 3. Send to API
+      // Also include display_name (no rate limit — freely changeable)
+      if (displayName.trim().length > 0) updates.display_name = displayName.trim();
+
+      // 3. Send to API (updates user_metadata + profiles table)
       const res  = await fetch('/api/profile', {
         method: 'PATCH',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -385,25 +400,53 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                 />
               </div>
 
-              {/* Username */}
-              <SectionLabel>Display Name</SectionLabel>
+              {/* Identity */}
+              <SectionLabel>Identity</SectionLabel>
+
+              {/* Display Name */}
               <FieldRow
-                label="Username"
-                hint="Shown on the Leaderboard and in your picks. 3–24 characters."
-                locked={usernameWait > 0}
-                lockedMsg={usernameWait > 0 ? `changes in ${msToReadable(usernameWait)}` : null}
+                label="Display Name"
+                hint="Your name as shown in chat, profile cards, and the leaderboard."
               >
                 <input
                   type="text"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  disabled={usernameWait > 0}
-                  placeholder="e.g. SharpBettorJon"
-                  maxLength={24}
-                  style={inputStyle(usernameWait > 0)}
-                  onFocus={e => { if (!usernameWait) e.target.style.borderColor = 'var(--gold)'; }}
-                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="e.g. Kaisu Upgrades"
+                  maxLength={40}
+                  style={inputStyle(false)}
+                  onFocus={e => { e.target.style.borderColor = 'var(--gold)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
                 />
+                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
+                  {displayName.length}/40 · Can change anytime
+                </div>
+              </FieldRow>
+
+              {/* Username / @handle */}
+              <FieldRow
+                label="Username"
+                hint="Your @handle — shown on the leaderboard and in picks. 3–24 characters, no spaces."
+                locked={usernameWait > 0}
+                lockedMsg={usernameWait > 0 ? `changes in ${msToReadable(usernameWait)}` : null}
+              >
+                <div style={{ position: 'relative' }}>
+                  <span style={{
+                    position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)', fontSize: '0.85rem', pointerEvents: 'none',
+                  }}>@</span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={e => setUsername(e.target.value.replace(/\s/g, ''))}
+                    disabled={usernameWait > 0}
+                    placeholder="StatSnipe"
+                    maxLength={24}
+                    style={{ ...inputStyle(usernameWait > 0), paddingLeft: '22px' }}
+                    onFocus={e => { if (!usernameWait) e.target.style.borderColor = 'var(--gold)'; }}
+                    onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                  />
+                </div>
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
                   {username.length}/24 · Can change every 7 days
                 </div>

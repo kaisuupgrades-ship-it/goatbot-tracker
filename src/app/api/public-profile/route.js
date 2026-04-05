@@ -17,7 +17,8 @@ function calcProfit(result, odds, units = 1) {
 // GET /api/public-profile?userId=xxx
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('userId');
+  const userId      = searchParams.get('userId');
+  const contestOnly = searchParams.get('contestOnly') === 'true';
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
 
   if (!CONFIGURED) {
@@ -27,16 +28,20 @@ export async function GET(req) {
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Fetch profile + all public picks in parallel
+  // Build picks query — optionally filter to contest picks only
+  let picksQuery = supabase
+    .from('picks')
+    .select('id, team, sport, bet_type, odds, units, result, notes, created_at, audit_status, is_public, contest_id')
+    .eq('user_id', userId)
+    .eq('is_public', true)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (contestOnly) picksQuery = picksQuery.not('contest_id', 'is', null);
+
+  // Fetch profile + picks + follower count in parallel
   const [profileRes, picksRes, followCountRes] = await Promise.all([
     supabase.from('profiles').select('username, display_name, avatar_emoji, is_public').eq('id', userId).maybeSingle(),
-    supabase
-      .from('picks')
-      .select('id, team, sport, bet_type, odds, units, result, notes, created_at, audit_status, is_public')
-      .eq('user_id', userId)
-      .eq('is_public', true)
-      .order('created_at', { ascending: false })
-      .limit(50),
+    picksQuery,
     supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', userId),
   ]);
 

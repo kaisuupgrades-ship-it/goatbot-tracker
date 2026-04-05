@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { addPick, updatePick, deletePick, setPickPublic } from '@/lib/supabase';
+import { addPick, updatePick, deletePick } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { validateContestEntry, DEFAULT_CONTEST_RULES } from '@/lib/contestValidation';
@@ -185,6 +185,7 @@ const EMPTY_FORM = {
   profit: '',
   notes: '',
   contest_entry: false,
+  commence_time: null,  // populated by /api/verify-game on submit
 };
 
 function calcProfit(odds, result) {
@@ -447,6 +448,43 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
   const [notesParsing, setNotesParsing] = useState(false);
   const [notesParsed, setNotesParsed] = useState(false);
 
+  // ── Game verification ───────────────────────────────────────────────────
+  const [gameVerify, setGameVerify] = useState(null); // null | { status, game, warning, error }
+  const [verifying, setVerifying] = useState(false);
+  const verifyTimerRef = useRef(null);
+
+  // Re-verify whenever sport / team / date change (debounced 800ms)
+  useEffect(() => {
+    // Only run on new picks (no form.id = edit mode)
+    if (form.id) return;
+    const { sport, team, date } = form;
+    if (!sport || !team?.trim() || !date) { setGameVerify(null); return; }
+
+    clearTimeout(verifyTimerRef.current);
+    verifyTimerRef.current = setTimeout(async () => {
+      setVerifying(true);
+      try {
+        const res = await fetch(
+          `/api/verify-game?sport=${encodeURIComponent(sport)}&team=${encodeURIComponent(team.trim())}&date=${date}`
+        );
+        const data = await res.json();
+        setGameVerify(data);
+        // Auto-store commence_time in form so it gets saved with the pick
+        if (data.found && data.game?.commence_time) {
+          setForm(prev => ({ ...prev, commence_time: data.game.commence_time }));
+        } else {
+          setForm(prev => ({ ...prev, commence_time: null }));
+        }
+      } catch {
+        setGameVerify({ found: false, error: 'Could not reach verification service.' });
+        setForm(prev => ({ ...prev, commence_time: null }));
+      }
+      setVerifying(false);
+    }, 800);
+
+    return () => clearTimeout(verifyTimerRef.current);
+  }, [form.sport, form.team, form.date, form.id]); // eslint-disable-line
+
   function handleChange(field, val) {
     setForm(prev => {
       const updated = { ...prev, [field]: val };
@@ -652,6 +690,72 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
           })()}
         </div>
       </div>
+      {/* ── Game Verification Banner ─────────────────────────────────────── */}
+      {!form.id && (form.team?.trim() || verifying) && (
+        <div style={{ marginTop: '0.9rem' }}>
+          {verifying && (
+            <div style={{
+              padding: '8px 12px', borderRadius: '6px',
+              background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.15)',
+              display: 'flex', alignItems: 'center', gap: '8px',
+              fontSize: '0.72rem', color: 'var(--text-muted)',
+            }}>
+              <span style={{ opacity: 0.6 }}>⏳</span> Verifying game time with ESPN…
+            </div>
+          )}
+          {!verifying && gameVerify?.found && (
+            <div style={{
+              padding: '8px 12px', borderRadius: '6px',
+              background: 'rgba(0,212,139,0.06)', border: '1px solid rgba(0,212,139,0.25)',
+              display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap',
+            }}>
+              <span style={{ color: 'var(--green)', fontSize: '0.75rem', flexShrink: 0, marginTop: '1px' }}>✓</span>
+              <div style={{ flex: 1 }}>
+                <span style={{ color: 'var(--green)', fontWeight: 700, fontSize: '0.75rem' }}>
+                  Game found: {gameVerify.game.shortName || gameVerify.game.name}
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginLeft: '8px' }}>
+                  {new Date(gameVerify.game.commence_time).toLocaleString('en-US', {
+                    month: 'short', day: 'numeric',
+                    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+                  })}
+                </span>
+                {gameVerify.game.venue && (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginLeft: '8px', opacity: 0.7 }}>
+                    @ {gameVerify.game.venue}
+                  </span>
+                )}
+                {gameVerify.warning && (
+                  <div style={{ color: 'var(--gold)', fontSize: '0.68rem', marginTop: '3px', opacity: 0.85 }}>
+                    ⚠ {gameVerify.warning}
+                  </div>
+                )}
+                <div style={{ color: 'rgba(0,212,139,0.6)', fontSize: '0.65rem', marginTop: '2px' }}>
+                  Tip-off time locked — this pick will be verified if submitted now
+                </div>
+              </div>
+            </div>
+          )}
+          {!verifying && gameVerify && !gameVerify.found && !gameVerify.unsupported && form.team?.trim() && (
+            <div style={{
+              padding: '8px 12px', borderRadius: '6px',
+              background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.2)',
+              display: 'flex', alignItems: 'flex-start', gap: '8px',
+              fontSize: '0.72rem',
+            }}>
+              <span style={{ color: '#f87171', flexShrink: 0, marginTop: '1px' }}>✕</span>
+              <div>
+                <span style={{ color: '#f87171', fontWeight: 600 }}>Game not found</span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>{gameVerify.error}</span>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginTop: '2px', opacity: 0.7 }}>
+                  Pick will be saved but won't count as verified on the Sharp Board.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: '0.7rem', marginTop: '1.2rem' }}>
         <button className="btn-gold" onClick={onSave} disabled={saving}>
           {saving ? 'Saving...' : form.id ? 'Update Pick' : 'Add Pick'}
@@ -775,6 +879,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   async function handleSave() {
     if (!form.team || !form.odds) return;
     setSaving(true);
+
     const payload = {
       ...form,
       user_id: user.id,
@@ -794,23 +899,57 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       setPicks(updated);
       saveDemoPicks(updated);
     } else {
+      // Get the auth token so the server can verify user identity
+      const { supabase: sb } = await import('@/lib/supabase').then(m => ({ supabase: m.supabase })).catch(() => ({}));
+      const session = sb ? (await sb.auth.getSession())?.data?.session : null;
+      const authToken = session?.access_token || null;
+
       if (form.id) {
-        const { data, error } = await updatePick(form.id, payload);
-        if (!error) setPicks(prev => prev.map(p => p.id === form.id ? data : p));
+        // Edits: use server-side PATCH (enforces contest lock + re-verifies game time)
+        const res = await fetch('/api/picks', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pickId: form.id, updates: payload, authToken }),
+        });
+        const result = await res.json();
+        if (res.ok && result.pick) {
+          setPicks(prev => prev.map(p => p.id === form.id ? result.pick : p));
+        } else {
+          // Fall back to direct updatePick if server route unavailable
+          const { data, error } = await updatePick(form.id, payload);
+          if (!error) setPicks(prev => prev.map(p => p.id === form.id ? data : p));
+        }
       } else {
-        const { data, error } = await addPick(payload);
-        if (!error) {
-          setPicks(prev => [...prev, data]);
+        // New pick: use server-side POST — commence_time is set by server from ESPN
+        // Client-supplied commence_time is stripped server-side (no backdating exploit)
+        const res = await fetch('/api/picks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pick: payload, authToken }),
+        });
+        const result = await res.json();
+
+        if (res.ok && result.pick) {
+          setPicks(prev => [...prev, result.pick]);
           // Fire-and-forget: auto-analyze in background
           fetch('/api/auto-analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              pickId: data.id, sport: payload.sport, team: payload.team,
+              pickId: result.pick.id, sport: payload.sport, team: payload.team,
               bet_type: payload.bet_type, odds: payload.odds, units: payload.units,
               date: payload.date, notes: payload.notes,
             }),
           }).catch(() => {});
+        } else if (result.errors) {
+          // Contest validation failed — surface the errors
+          alert('Contest error:\n' + result.errors.join('\n'));
+          setSaving(false);
+          return;
+        } else {
+          // Server route unavailable — fall back to direct insert
+          const { data, error } = await addPick(payload);
+          if (!error) setPicks(prev => [...prev, data]);
         }
       }
     }
@@ -852,13 +991,11 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       return;
     }
 
-    // Contest picks are always public (paywall model: settled picks visible, pending picks paywalled)
-    const autoPublic = newVal ? true : pick.is_public;
-    setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: newVal, is_public: autoPublic } : p));
+    setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: newVal } : p));
     if (!isDemo) {
-      const { error } = await updatePick(pick.id, { contest_entry: newVal, is_public: autoPublic });
+      const { error } = await updatePick(pick.id, { contest_entry: newVal });
       if (error) {
-        setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: pick.contest_entry, is_public: pick.is_public } : p));
+        setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: pick.contest_entry } : p));
         return;
       }
       // Fire-and-forget: trigger AI audit for new contest entries
@@ -872,18 +1009,6 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
     } else {
       const updated = picks.map(p => p.id === pick.id ? { ...p, contest_entry: newVal } : p);
       saveDemoPicks(updated);
-    }
-  }
-
-  async function handleTogglePublic(pick) {
-    if (isDemo) return; // no-op in demo
-    const newVal = !pick.is_public;
-    // Optimistically update
-    setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, is_public: newVal } : p));
-    const { error } = await setPickPublic(pick.id, newVal);
-    if (error) {
-      // revert on error
-      setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, is_public: pick.is_public } : p));
     }
   }
 
@@ -1396,28 +1521,8 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         </div>
                         <span style={{ fontSize: '0.65rem', color: pick.contest_entry ? 'var(--gold)' : 'var(--text-muted)' }}>🏆</span>
                       </button>
-                      {/* Public toggle */}
-                      {!isDemo && (
-                        <button
-                          onClick={() => handleTogglePublic(pick)}
-                          title={pick.is_public ? 'Remove from leaderboard' : 'Show on leaderboard'}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                        >
-                          <div style={{
-                            width: '28px', height: '15px', borderRadius: '8px',
-                            background: pick.is_public ? 'var(--gold)' : 'var(--border)',
-                            position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-                          }}>
-                            <div style={{
-                              position: 'absolute', top: '2px',
-                              left: pick.is_public ? '15px' : '2px',
-                              width: '11px', height: '11px', borderRadius: '50%',
-                              background: 'white', transition: 'left 0.2s',
-                            }} />
-                          </div>
-                          <span style={{ fontSize: '0.65rem', color: pick.is_public ? 'var(--gold)' : 'var(--text-muted)' }}>🌐</span>
-                        </button>
-                      )}
+                      {/* All picks are public — shown on leaderboard indicator */}
+                      <span title="Public — visible on leaderboard" style={{ fontSize: '0.62rem', color: 'rgba(255,184,0,0.45)', padding: '2px 4px', letterSpacing: '0.04em' }}>PUB</span>
                     </div>
 
                     {/* Right: Action buttons */}

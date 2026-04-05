@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import PublicProfileModal from '../PublicProfileModal';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -22,13 +23,19 @@ function ResultStrip({ results = [] }) {
   );
 }
 
-function FollowedUserCard({ entry, onUnfollow, userId }) {
+function FollowedUserCard({ entry, onUnfollow, userId, onViewProfile }) {
   const roi = entry.roi ?? 0;
   return (
-    <div style={{
-      background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
-      padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px',
-    }}>
+    <div
+      onClick={(e) => { if (e.target.closest('button')) return; onViewProfile?.(entry); }}
+      style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
+        padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px',
+        cursor: 'pointer', transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(96,165,250,0.35)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
+    >
       {/* Avatar */}
       <div style={{
         width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
@@ -91,10 +98,11 @@ function FollowedUserCard({ entry, onUnfollow, userId }) {
   );
 }
 
-export default function FollowingTab({ user, isDemo }) {
-  const [following, setFollowing] = useState([]);
-  const [stats, setStats]         = useState({});
-  const [loading, setLoading]     = useState(true);
+export default function FollowingTab({ user, isDemo, onOpenInbox }) {
+  const [following,    setFollowing]    = useState([]);
+  const [stats,        setStats]        = useState({});
+  const [loading,      setLoading]      = useState(true);
+  const [viewProfile,  setViewProfile]  = useState(null);
   const userId = user?.id;
 
   useEffect(() => {
@@ -168,9 +176,19 @@ export default function FollowingTab({ user, isDemo }) {
               entry={{ ...u, user_id: u.id, ...(stats[u.id] || {}) }}
               onUnfollow={handleUnfollow}
               userId={userId}
+              onViewProfile={(entry) => setViewProfile(entry)}
             />
           ))}
         </div>
+      )}
+
+      {viewProfile && (
+        <PublicProfileModal
+          entry={viewProfile}
+          onClose={() => setViewProfile(null)}
+          onOpenInbox={onOpenInbox}
+          currentUser={user}
+        />
       )}
     </div>
   );

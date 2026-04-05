@@ -1,37 +1,120 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-// Grouped nav: sections with optional sub-items
+// ── SVG icon components — thin stroke, consistent 14×14 grid ─────────────────
+const Icons = {
+  Dashboard: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="1" width="5" height="5" rx="1"/>
+      <rect x="8" y="1" width="5" height="5" rx="1"/>
+      <rect x="1" y="8" width="5" height="5" rx="1"/>
+      <rect x="8" y="8" width="5" height="5" rx="1"/>
+    </svg>
+  ),
+  Featured: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="7,1.5 8.6,5.1 12.5,5.6 9.8,8.2 10.5,12.2 7,10.3 3.5,12.2 4.2,8.2 1.5,5.6 5.4,5.1"/>
+    </svg>
+  ),
+  Picks: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <line x1="1.5" y1="3.5" x2="12.5" y2="3.5"/>
+      <line x1="1.5" y1="7" x2="12.5" y2="7"/>
+      <line x1="1.5" y1="10.5" x2="8" y2="10.5"/>
+    </svg>
+  ),
+  Scoreboard: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7" cy="7" r="5.5"/>
+      <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+  Odds: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <rect x="1" y="1" width="12" height="12" rx="1.5"/>
+      <line x1="7" y1="1" x2="7" y2="13"/>
+      <line x1="1" y1="7" x2="13" y2="7"/>
+    </svg>
+  ),
+  Analyzer: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5.5" cy="5.5" r="4"/>
+      <line x1="8.5" y1="8.5" x2="12.5" y2="12.5"/>
+      <line x1="3.5" y1="5.5" x2="7.5" y2="5.5"/>
+      <line x1="5.5" y1="3.5" x2="5.5" y2="7.5"/>
+    </svg>
+  ),
+  Trends: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1,11 4.5,6.5 7.5,8.5 12.5,3"/>
+      <polyline points="9.5,3 12.5,3 12.5,6"/>
+    </svg>
+  ),
+  SharpBoard: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <rect x="1" y="7" width="3" height="6" rx="0.5"/>
+      <rect x="5.5" y="4" width="3" height="9" rx="0.5"/>
+      <rect x="10" y="1.5" width="3" height="11.5" rx="0.5"/>
+    </svg>
+  ),
+  Search: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <circle cx="6" cy="6" r="4.5"/>
+      <line x1="9.2" y1="9.2" x2="12.5" y2="12.5"/>
+    </svg>
+  ),
+  Following: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5" cy="4.5" r="2.5"/>
+      <path d="M1 12.5c0-2.2 1.8-4 4-4s4 1.8 4 4"/>
+      <line x1="10.5" y1="5" x2="10.5" y2="9"/>
+      <line x1="8.5" y1="7" x2="12.5" y2="7"/>
+    </svg>
+  ),
+  Chat: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.5 2.5h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5l-3 2V3.5a1 1 0 0 1 1-1z"/>
+    </svg>
+  ),
+  Messages: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="2.5" width="12" height="9" rx="1"/>
+      <polyline points="1,2.5 7,8 13,2.5"/>
+    </svg>
+  ),
+};
+
+// Grouped nav sections — no indent, uniform alignment throughout
 const NAV_SECTIONS = [
   {
     section: 'My Picks',
     items: [
-      { id: 'tracker',  label: 'Dashboard',  icon: '◈',  desc: 'Stats, trends & equity curve' },
-      { id: 'featured', label: 'Featured',   icon: '★',  desc: 'Starred games', starred: true, indent: true },
-      { id: 'history',  label: 'My Picks',   icon: '≡',  desc: 'Log & manage your bets', indent: true },
+      { id: 'tracker',  label: 'Dashboard',  Icon: Icons.Dashboard,  desc: 'Stats, trends & equity curve' },
+      { id: 'featured', label: 'Featured',   Icon: Icons.Featured,   desc: 'Starred games', starred: true },
+      { id: 'history',  label: 'My Picks',   Icon: Icons.Picks,      desc: 'Log & manage your bets' },
     ],
   },
   {
     section: 'Live Data',
     items: [
-      { id: 'scoreboard', label: 'Scoreboard', icon: '◉',  desc: 'Live scores, all sports', live: true },
-      { id: 'odds',       label: 'Odds Board', icon: '◧',  desc: 'Lines across all books' },
+      { id: 'scoreboard', label: 'Scoreboard', Icon: Icons.Scoreboard, desc: 'Live scores, all sports', live: true },
+      { id: 'odds',       label: 'Odds Board', Icon: Icons.Odds,       desc: 'Lines across all books' },
     ],
   },
   {
     section: 'Tools',
     items: [
-      { id: 'analyzer',    label: 'Analyzer',    icon: '🧠',  desc: 'BetOS + AI tools' },
-      { id: 'trends',      label: 'Trends',      icon: '📈',  desc: 'Situational edge finder' },
-      { id: 'sharpboard',  label: 'Sharp Board', icon: '📊',  desc: 'Public handicapper rankings' },
-      { id: 'usersearch',  label: 'User Search', icon: '🔍',  desc: 'Find & follow sharp bettors', indent: true },
-      { id: 'following',   label: 'Following',   icon: '👥',  desc: 'Cappers you follow', indent: true },
+      { id: 'analyzer',   label: 'Analyzer',    Icon: Icons.Analyzer,   desc: 'BetOS + AI tools' },
+      { id: 'trends',     label: 'Trends',      Icon: Icons.Trends,     desc: 'Situational edge finder' },
+      { id: 'sharpboard', label: 'Sharp Board', Icon: Icons.SharpBoard, desc: 'Public handicapper rankings' },
+      { id: 'usersearch', label: 'User Search', Icon: Icons.Search,     desc: 'Find & follow sharp bettors' },
+      { id: 'following',  label: 'Following',   Icon: Icons.Following,  desc: 'Cappers you follow' },
     ],
   },
   {
     section: 'Community',
     items: [
-      { id: 'chatroom', label: 'Chat Room', icon: '💬', desc: 'Community chat' },
+      { id: 'chatroom', label: 'Chat Room', Icon: Icons.Chat, desc: 'Community chat' },
     ],
   },
 ];
@@ -219,7 +302,15 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
             transition: 'background 0.2s, border-color 0.2s',
           }}
         >
-          <span style={{ fontSize: collapsed ? '1.1rem' : '1.05rem' }}>🏆</span>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', flexShrink: 0, color: 'var(--gold)' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 2h6v6a3 3 0 0 1-6 0V2z"/>
+              <path d="M5 4H2.5a1.5 1.5 0 0 0 0 3H5"/>
+              <path d="M11 4h2.5a1.5 1.5 0 0 1 0 3H11"/>
+              <line x1="8" y1="11" x2="8" y2="13.5"/>
+              <line x1="5" y1="13.5" x2="11" y2="13.5"/>
+            </svg>
+          </span>
           {!collapsed && (
             <>
               <span style={{ flex: 1, fontWeight: 700, fontSize: '0.88rem', color: 'var(--gold)', letterSpacing: '-0.01em' }}>
@@ -265,21 +356,23 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                   className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
                   style={{
                     justifyContent: collapsed ? 'center' : 'flex-start',
-                    padding: collapsed ? '0.5rem' : item.indent ? '0.42rem 0.75rem 0.42rem 1.4rem' : '0.45rem 0.75rem',
+                    padding: collapsed ? '0.5rem' : '0.45rem 0.75rem',
                   }}
                   title={collapsed ? item.label : undefined}
                 >
-                  <span className="nav-icon" style={{ fontSize: item.indent ? '0.85rem' : '1rem', fontStyle: 'normal', opacity: item.indent ? 0.85 : 1 }}>{item.icon}</span>
+                  <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
+                    {item.Icon ? <item.Icon /> : null}
+                  </span>
                   {!collapsed && (
                     <>
-                      <span style={{ flex: 1, fontSize: item.indent ? '0.82rem' : '0.875rem' }}>{item.label}</span>
+                      <span style={{ flex: 1, fontSize: '0.875rem' }}>{item.label}</span>
                       {item.live && <LiveCount />}
                       {item.starred && <StarredCount />}
                     </>
                   )}
                 </button>
               ))}
-              {/* Messages button — special action (opens Inbox overlay, not a tab) */}
+              {/* Messages — opens Inbox overlay, not a tab */}
               {section.section === 'Community' && !isDemo && (
                 <button
                   onClick={() => { onOpenInbox?.(); if (mobileOpen) onMobileClose?.(); }}
@@ -290,7 +383,9 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                   }}
                   title={collapsed ? 'Messages' : undefined}
                 >
-                  <span className="nav-icon" style={{ fontSize: '1rem', fontStyle: 'normal' }}>✉️</span>
+                  <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
+                    <Icons.Messages />
+                  </span>
                   {!collapsed && (
                     <>
                       <span style={{ flex: 1, fontSize: '0.875rem' }}>Messages</span>
@@ -323,7 +418,11 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
             }}
             title={collapsed ? 'Admin Panel' : undefined}
           >
-            <span className="nav-icon" style={{ fontSize: '1rem' }}>🛡</span>
+            <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 1L2 3.5v4c0 3 2.5 5 5 5.5 2.5-.5 5-2.5 5-5.5v-4L7 1z"/>
+              </svg>
+            </span>
             {!collapsed && <span style={{ flex: 1, fontSize: '0.875rem', color: 'rgba(251,191,36,0.9)' }}>Admin Panel</span>}
           </button>
         </div>

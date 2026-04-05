@@ -57,17 +57,69 @@ CREATE TRIGGER picks_submitted_at
   BEFORE INSERT ON picks
   FOR EACH ROW EXECUTE FUNCTION set_submitted_at();
 
+-- Second layer of defense: sanitize commence_time on INSERT.
+-- If a client somehow bypasses the server API and sets a bogus commence_time
+-- (e.g. far future to fake verification), this trigger nulls it out.
+-- Rules:
+--   1. commence_time must be within 3 days of the pick's date field.
+--   2. commence_time must not be more than 24h in the past (no stale times).
+-- Legitimate picks entered via /api/picks always get commence_time from ESPN
+-- and will pass these checks. Any tampered value gets wiped.
+CREATE OR REPLACE FUNCTION sanitize_commence_time()
+RETURNS TRIGGER AS $$
+DECLARE
+  pick_date_ts TIMESTAMPTZ;
+  diff_days    NUMERIC;
+BEGIN
+  IF NEW.commence_time IS NULL THEN
+    RETURN NEW;  -- nothing to sanitize
+  END IF;
+
+  -- Parse the date field to midnight UTC
+  BEGIN
+    pick_date_ts := (NEW.date::DATE)::TIMESTAMPTZ;
+  EXCEPTION WHEN OTHERS THEN
+    NEW.commence_time := NULL;
+    RETURN NEW;
+  END;
+
+  -- Must be within ±3 calendar days of the pick's date
+  diff_days := ABS(EXTRACT(EPOCH FROM (NEW.commence_time - pick_date_ts)) / 86400.0);
+  IF diff_days > 3 THEN
+    NEW.commence_time := NULL;
+    RETURN NEW;
+  END IF;
+
+  -- Must not be more than 24h in the past (prevents using old game times to appear early)
+  IF NEW.commence_time < (NOW() - INTERVAL '24 hours') THEN
+    -- Allow: pick might be entered same-day after a morning game. Keep it.
+    -- But if it's more than 24h stale, null it — that's suspicious.
+    NEW.commence_time := NULL;
+    RETURN NEW;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS picks_sanitize_commence_time ON picks;
+CREATE TRIGGER picks_sanitize_commence_time
+  BEFORE INSERT ON picks
+  FOR EACH ROW EXECUTE FUNCTION sanitize_commence_time();
+
 
 -- 3. Leaderboard stats view
--- A pick is "verified" if it was submitted before the game commenced
--- Only public picks from public profiles are ranked
+-- A pick is "verified" if submitted_at < commence_time (exact game start, required).
+-- commence_time is populated at pick submission via /api/verify-game (ESPN lookup).
+-- Picks without commence_time are unverifiable and won't count toward verified_picks.
+-- Minimum 1 settled public pick to appear on the board.
 CREATE OR REPLACE VIEW leaderboard_stats AS
 SELECT
   p.user_id,
   pr.username,
   COALESCE(pr.display_name, pr.username) AS display_name,
   pr.avatar_emoji,
-  -- Total verified settled picks
+  -- Total settled picks
   COUNT(*) FILTER (
     WHERE p.result IN ('WIN','LOSS','PUSH')
     AND p.is_public = true
@@ -100,11 +152,12 @@ SELECT
     ) * 100
     ELSE 0
   END AS roi,
-  -- Verified picks: submitted before commence_time
+  -- Verified picks: must have exact commence_time AND been submitted before it
   COUNT(*) FILTER (
     WHERE p.result IN ('WIN','LOSS','PUSH')
     AND p.is_public = true
     AND p.commence_time IS NOT NULL
+    AND p.submitted_at IS NOT NULL
     AND p.submitted_at < p.commence_time
   ) AS verified_picks,
   -- Sharp Score: ROI * sqrt(verified_count) / 10 — rewards both edge and volume
@@ -117,7 +170,13 @@ SELECT
       ) * 100
       * SQRT(
         GREATEST(
-          COUNT(*) FILTER (WHERE p.result IN ('WIN','LOSS','PUSH') AND p.is_public = true AND p.commence_time IS NOT NULL AND p.submitted_at < p.commence_time),
+          COUNT(*) FILTER (
+            WHERE p.result IN ('WIN','LOSS','PUSH')
+            AND p.is_public = true
+            AND p.commence_time IS NOT NULL
+            AND p.submitted_at IS NOT NULL
+            AND p.submitted_at < p.commence_time
+          ),
           1
         )
       ) / 10
@@ -130,7 +189,7 @@ WHERE pr.is_public = true
 GROUP BY p.user_id, pr.username, pr.display_name, pr.avatar_emoji
 HAVING COUNT(*) FILTER (
   WHERE p.result IN ('WIN','LOSS','PUSH') AND p.is_public = true
-) >= 3;
+) >= 1;
 
 -- Grant access to the view
 GRANT SELECT ON leaderboard_stats TO anon, authenticated;
