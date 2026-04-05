@@ -23,8 +23,9 @@ const NAV_SECTIONS = [
     items: [
       { id: 'analyzer',    label: 'Analyzer',    icon: '🧠',  desc: 'BetOS + AI tools' },
       { id: 'trends',      label: 'Trends',      icon: '📈',  desc: 'Situational edge finder' },
-      { id: 'leaderboard', label: 'Contest',     icon: '🏆',  desc: 'Verified picks & leaderboard' },
+      { id: 'sharpboard',  label: 'Sharp Board', icon: '📊',  desc: 'Public handicapper rankings' },
       { id: 'usersearch',  label: 'User Search', icon: '🔍',  desc: 'Find & follow sharp bettors', indent: true },
+      { id: 'following',   label: 'Following',   icon: '👥',  desc: 'Cappers you follow', indent: true },
     ],
   },
 ];
@@ -159,8 +160,54 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
         </button>
       </div>
 
+      {/* ── Contest — special glowing nav item ───────────────────────────────── */}
+      <style>{`
+        @keyframes contestPulse {
+          0%, 100% { box-shadow: 0 0 6px rgba(255,184,0,0.12), inset 0 0 8px rgba(255,184,0,0.04); border-color: rgba(255,184,0,0.22); }
+          50%       { box-shadow: 0 0 18px rgba(255,184,0,0.28), inset 0 0 12px rgba(255,184,0,0.08); border-color: rgba(255,184,0,0.5); }
+        }
+        .contest-glow-btn { animation: contestPulse 2.8s ease-in-out infinite; }
+        .contest-glow-btn:hover { animation: none !important; }
+      `}</style>
+      <div style={{ padding: collapsed ? '0.4rem 0.3rem 0' : '0.5rem 0.4rem 0' }}>
+        <button
+          onClick={() => { setActiveTab('leaderboard'); if (collapsed) setCollapsed(false); if (mobileOpen) onMobileClose?.(); }}
+          className={`contest-glow-btn${activeTab === 'leaderboard' ? ' active' : ''}`}
+          title={collapsed ? '🏆 Contest' : undefined}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center',
+            gap: collapsed ? 0 : '8px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '0.55rem' : '0.5rem 0.75rem',
+            background: activeTab === 'leaderboard'
+              ? 'linear-gradient(135deg, rgba(255,184,0,0.18), rgba(255,100,0,0.08))'
+              : 'linear-gradient(135deg, rgba(255,184,0,0.07), rgba(255,100,0,0.03))',
+            border: `1px solid ${activeTab === 'leaderboard' ? 'rgba(255,184,0,0.55)' : 'rgba(255,184,0,0.22)'}`,
+            borderRadius: '10px', cursor: 'pointer',
+            transition: 'background 0.2s, border-color 0.2s',
+          }}
+        >
+          <span style={{ fontSize: collapsed ? '1.1rem' : '1.05rem' }}>🏆</span>
+          {!collapsed && (
+            <>
+              <span style={{ flex: 1, fontWeight: 700, fontSize: '0.88rem', color: 'var(--gold)', letterSpacing: '-0.01em' }}>
+                Contest
+              </span>
+              <span style={{
+                fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.08em',
+                color: '#FFB800', background: 'rgba(255,184,0,0.12)',
+                border: '1px solid rgba(255,184,0,0.3)',
+                borderRadius: '4px', padding: '1px 5px', flexShrink: 0,
+              }}>
+                LIVE
+              </span>
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Nav Items — grouped sections */}
-      <nav style={{ flex: 1, padding: '0.5rem 0.4rem', display: 'flex', flexDirection: 'column', gap: '0', overflowY: 'auto', overflowX: 'hidden' }}>
+      <nav style={{ flex: 1, padding: '0.25rem 0.4rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0', overflowY: 'auto', overflowX: 'hidden' }}>
         {NAV_SECTIONS.map((section, si) => (
           <div key={section.section}>
             {/* Section header */}

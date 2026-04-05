@@ -13,6 +13,7 @@ import HistoryTab    from './tabs/HistoryTab';
 import AnalyzerTab      from './tabs/AnalyzerTab';
 import LeaderboardTab    from './tabs/LeaderboardTab';
 import UserSearchTab     from './tabs/UserSearchTab';
+import FollowingTab      from './tabs/FollowingTab';
 import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
 import AdminTab          from './tabs/AdminTab';
 import ProfileModal      from './ProfileModal';
@@ -104,8 +105,10 @@ const TAB_META = {
   trends:     { label: 'Trends',       sub: 'Situational edges, filter engine & backtest' },
   history:    { label: 'Pick History', sub: 'Log, edit, and analyze every bet' },
   analyzer:    { label: 'Analyzer',     sub: 'BetOS live analysis + sharp tools' },
-  leaderboard:  { label: 'Contest',          sub: 'Verified picks, sharp bettors & public rankings' },
-  usersearch:   { label: 'User Search',     sub: 'Find and follow the sharpest bettors in the community' },
+  leaderboard: { label: 'Contest',      sub: 'Monthly contest standings & verified picks' },
+  sharpboard:  { label: 'Sharp Board',  sub: 'All-time public handicapper rankings' },
+  usersearch:  { label: 'User Search',  sub: 'Find and follow the sharpest bettors in the community' },
+  following:   { label: 'Following',    sub: 'Cappers you follow — all-time stats' },
   featured:     { label: 'Featured Games',  sub: 'Your starred games & quick BetOS access' },
   admin:        { label: '🛡 Admin Panel',  sub: 'User management, analytics & system settings' },
 };
@@ -275,11 +278,19 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
               goatReport={goatReport} onGoatReportConsumed={() => setGoatReport(null)}
             />
           </div>
+          {/* Contest — standalone, always mounts Contest sub-tab */}
           <div style={{ display: activeTab === 'leaderboard' ? 'block' : 'none' }}>
-            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} />
+            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="contest" />
+          </div>
+          {/* Sharp Board — standalone sharp rankings */}
+          <div style={{ display: activeTab === 'sharpboard' ? 'block' : 'none' }}>
+            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="sharp" />
           </div>
           <div style={{ display: activeTab === 'usersearch' ? 'block' : 'none' }}>
             <UserSearchTab user={user} isDemo={isDemo} />
+          </div>
+          <div style={{ display: activeTab === 'following' ? 'block' : 'none' }}>
+            <FollowingTab user={user} isDemo={isDemo} />
           </div>
           <div style={{ display: activeTab === 'featured' ? 'block' : 'none' }}>
             <FeaturedGamesTab

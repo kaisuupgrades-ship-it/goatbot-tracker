@@ -1,110 +1,300 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-// ── Sort presets ───────────────────────────────────────────────────────────────
+// ── Sort options (independent of date range) ──────────────────────────────────
 const SORT_OPTIONS = [
-  { id: 'hot7',       label: '🔥 Hot (Last 7d)',    desc: 'Most wins in the last 7 days' },
-  { id: 'roi14',      label: '📈 Top ROI (14d)',     desc: 'Highest return on investment, last 14 days' },
-  { id: 'streak',     label: '⚡ Best Streak',       desc: 'Longest current win streak' },
-  { id: 'roi_all',    label: '💰 All-Time ROI',      desc: 'Best overall ROI, min 10 picks' },
-  { id: 'record',     label: '🏅 Best Record',       desc: 'Highest win rate, min 10 picks' },
-  { id: 'volume',     label: '📊 Most Active',       desc: 'Most picks logged overall' },
-  { id: 'contest',    label: '🏆 Contest Leaders',   desc: 'Top performers in the current contest' },
+  { id: 'hot',    label: '🔥 Hot',         desc: 'Most wins in selected period' },
+  { id: 'roi',    label: '📈 Top ROI',      desc: 'Best return on investment' },
+  { id: 'streak', label: '⚡ Best Streak',  desc: 'Longest current win streak' },
+  { id: 'units',  label: '💰 Most Units',   desc: 'Highest unit profit' },
+  { id: 'record', label: '🏅 Best Record',  desc: 'Highest win rate' },
+  { id: 'volume', label: '📊 Most Active',  desc: 'Most picks logged' },
+];
+
+// ── Date range presets ─────────────────────────────────────────────────────────
+const DATE_PRESETS = [
+  { id: '7',   label: '7d' },
+  { id: '14',  label: '14d' },
+  { id: '30',  label: '30d' },
+  { id: '90',  label: '90d' },
+  { id: '0',   label: 'All Time' },
+  { id: 'custom', label: '📅 Custom' },
 ];
 
 const SPORT_FILTERS = ['All Sports', 'MLB', 'NBA', 'NFL', 'NHL', 'NCAAF', 'NCAAB', 'Soccer', 'UFC'];
 
-function UserCard({ entry, rank, currentUserId }) {
-  const isYou = entry.user_id === currentUserId;
-  const roiColor = (entry.roi ?? 0) >= 0 ? '#4ade80' : '#f87171';
-  const streakColor = (entry.current_streak ?? 0) > 0 ? '#4ade80' : (entry.current_streak ?? 0) < 0 ? '#f87171' : '#94a3b8';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+// ── W/L/P icon strip ─────────────────────────────────────────────────────────
+function ResultStrip({ results = [] }) {
+  if (!results.length) return null;
+  return (
+    <div style={{ display: 'flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
+      {results.map((r, i) => (
+        <div
+          key={i}
+          title={r}
+          style={{
+            width: '16px', height: '16px', borderRadius: '3px', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.55rem', fontWeight: 800, letterSpacing: 0,
+            background:
+              r === 'WIN'  ? 'rgba(74,222,128,0.15)' :
+              r === 'LOSS' ? 'rgba(248,113,113,0.15)' :
+              'rgba(148,163,184,0.15)',
+            color:
+              r === 'WIN'  ? '#4ade80' :
+              r === 'LOSS' ? '#f87171' :
+              '#94a3b8',
+            border: `1px solid ${
+              r === 'WIN'  ? 'rgba(74,222,128,0.25)' :
+              r === 'LOSS' ? 'rgba(248,113,113,0.25)' :
+              'rgba(148,163,184,0.25)'
+            }`,
+          }}
+        >
+          {r === 'WIN' ? 'W' : r === 'LOSS' ? 'L' : 'P'}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── User profile modal ────────────────────────────────────────────────────────
+function UserProfileModal({ entry, currentUserId, onClose }) {
+  const [following, setFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  useEffect(() => {
+    if (!currentUserId || !entry.user_id || currentUserId === entry.user_id) return;
+    fetch(`/api/follow?followerId=${currentUserId}&followingId=${entry.user_id}`)
+      .then(r => r.json())
+      .then(d => setFollowing(d.following || false))
+      .catch(() => {});
+  }, [currentUserId, entry.user_id]);
+
+  const toggleFollow = async () => {
+    if (!currentUserId || followLoading) return;
+    setFollowLoading(true);
+    try {
+      const method = following ? 'DELETE' : 'POST';
+      await fetch('/api/follow', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ followerId: currentUserId, followingId: entry.user_id }),
+      });
+      setFollowing(f => !f);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const roi = entry.roi ?? 0;
+  const isMe = entry.user_id === currentUserId;
 
   return (
-    <div style={{
-      background: 'var(--bg-surface)',
-      border: `1px solid ${isYou ? 'rgba(255,184,0,0.35)' : 'var(--border)'}`,
-      borderLeft: `3px solid ${rank <= 3 ? ['#FFB800', '#94a3b8', '#cd7f32'][rank - 1] : 'var(--border)'}`,
-      borderRadius: '10px',
-      padding: '14px 16px',
-      display: 'flex', alignItems: 'center', gap: '14px',
-      transition: 'border-color 0.15s, box-shadow 0.15s',
-    }}
-    onMouseEnter={e => { e.currentTarget.style.borderColor = isYou ? 'rgba(255,184,0,0.6)' : 'rgba(96,165,250,0.3)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)'; }}
-    onMouseLeave={e => { e.currentTarget.style.borderColor = isYou ? 'rgba(255,184,0,0.35)' : 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* Rank */}
       <div style={{
-        width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-        background: rank <= 3 ? ['rgba(255,184,0,0.15)', 'rgba(148,163,184,0.15)', 'rgba(205,127,50,0.15)'][rank - 1] : 'var(--bg-elevated)',
-        border: `1px solid ${rank <= 3 ? ['rgba(255,184,0,0.4)', 'rgba(148,163,184,0.4)', 'rgba(205,127,50,0.4)'][rank - 1] : 'var(--border)'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.82rem',
-        color: rank <= 3 ? ['#FFB800', '#94a3b8', '#cd7f32'][rank - 1] : 'var(--text-muted)',
+        background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '16px',
+        width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+        overflow: 'hidden',
       }}>
-        {rank}
-      </div>
-
-      {/* Avatar */}
-      <div style={{
-        width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
-        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '1rem', color: 'var(--text-muted)', overflow: 'hidden',
-      }}>
-        {entry.avatar_url
-          ? <img src={entry.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : (entry.username?.[0]?.toUpperCase() || '?')}
-      </div>
-
-      {/* Name + badge */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <span style={{
-            fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        {/* Header */}
+        <div style={{
+          padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px',
+          borderBottom: '1px solid var(--border)',
+          background: 'linear-gradient(135deg, rgba(255,184,0,0.05), transparent)',
+        }}>
+          {/* Avatar */}
+          <div style={{
+            width: '56px', height: '56px', borderRadius: '50%', flexShrink: 0,
+            background: 'var(--bg-elevated)', border: '2px solid rgba(255,184,0,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.4rem', overflow: 'hidden',
           }}>
-            {entry.username || 'Anonymous'}
-          </span>
-          {isYou && (
-            <span style={{
-              fontSize: '0.62rem', color: 'var(--gold)',
-              background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.3)',
-              borderRadius: '4px', padding: '1px 5px', fontWeight: 700,
-            }}>YOU</span>
-          )}
-          {entry.verified && (
-            <span title="Verified record" style={{ fontSize: '0.75rem' }}>✓</span>
-          )}
-          {entry.sport_focus && (
-            <span style={{
-              fontSize: '0.62rem', color: '#60a5fa',
-              background: 'rgba(96,165,250,0.1)', padding: '1px 5px', borderRadius: '4px',
-            }}>{entry.sport_focus}</span>
-          )}
+            {SUPABASE_URL
+              ? <img src={`${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
+                  alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={e => { e.target.style.display = 'none'; }}
+                />
+              : null}
+            {entry.avatar_emoji || '🎯'}
+          </div>
+
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+              {entry.display_name || entry.username}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              @{entry.username}
+              {entry.sport_focus && (
+                <span style={{ marginLeft: '8px', color: '#60a5fa', fontSize: '0.72rem' }}>
+                  {entry.sport_focus} focused
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {!isMe && currentUserId && (
+              <button
+                onClick={toggleFollow}
+                disabled={followLoading}
+                style={{
+                  padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: followLoading ? 'default' : 'pointer',
+                  background: following ? 'rgba(74,222,128,0.12)' : 'rgba(255,184,0,0.12)',
+                  border: `1px solid ${following ? 'rgba(74,222,128,0.4)' : 'rgba(255,184,0,0.4)'}`,
+                  color: following ? '#4ade80' : 'var(--gold)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {following ? '✓ Following' : '+ Follow'}
+              </button>
+            )}
+            <button onClick={onClose} style={{
+              background: 'none', border: 'none', color: 'var(--text-muted)',
+              cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1,
+            }}>×</button>
+          </div>
         </div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-          {entry.wins ?? 0}W–{entry.losses ?? 0}L{(entry.pushes ?? 0) > 0 ? `–${entry.pushes}P` : ''} &nbsp;·&nbsp; {entry.total_picks ?? 0} picks
+
+        {/* Stats grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)' }}>
+          {[
+            { label: 'Record',     value: `${entry.wins}–${entry.losses}${(entry.pushes ?? 0) > 0 ? `–${entry.pushes}P` : ''}` },
+            { label: 'Win %',      value: entry.total > 0 ? `${((entry.wins / entry.total) * 100).toFixed(0)}%` : '—', color: entry.total > 0 && entry.wins / entry.total >= 0.55 ? '#4ade80' : undefined },
+            { label: 'Units',      value: `${(entry.units ?? 0) >= 0 ? '+' : ''}${(entry.units ?? 0).toFixed(2)}u`, color: (entry.units ?? 0) >= 0 ? '#4ade80' : '#f87171' },
+            { label: 'ROI',        value: `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`, color: roi >= 0 ? '#4ade80' : '#f87171' },
+          ].map(s => (
+            <div key={s.label} style={{
+              background: 'var(--bg-elevated)', padding: '12px 8px', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{s.label}</div>
+              <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.9rem', color: s.color || 'var(--text-primary)' }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Recent form strip */}
+        {(entry.recent_results || []).length > 0 && (
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+              Recent Form (last {(entry.recent_results || []).length})
+            </div>
+            <ResultStrip results={entry.recent_results || []} />
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ padding: '1rem 1.5rem', textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          {entry.total} public picks · picks marked public by this user
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Stats */}
-      <div style={{ display: 'flex', gap: '20px', flexShrink: 0 }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>ROI</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: roiColor }}>
-            {(entry.roi ?? 0) >= 0 ? '+' : ''}{(entry.roi ?? 0).toFixed(1)}%
+// ── UserCard row ─────────────────────────────────────────────────────────────
+function UserCard({ entry, rank, currentUserId, onViewProfile }) {
+  const isYou = entry.user_id === currentUserId;
+  const roi = entry.roi ?? 0;
+  const streak = entry.current_streak ?? 0;
+  const roiColor = roi >= 0 ? '#4ade80' : '#f87171';
+  const streakColor = streak > 0 ? '#4ade80' : streak < 0 ? '#f87171' : '#94a3b8';
+
+  return (
+    <div
+      onClick={() => onViewProfile(entry)}
+      style={{
+        background: 'var(--bg-surface)',
+        border: `1px solid ${isYou ? 'rgba(255,184,0,0.35)' : 'var(--border)'}`,
+        borderLeft: `3px solid ${rank <= 3 ? ['#FFB800','#94a3b8','#cd7f32'][rank-1] : 'var(--border)'}`,
+        borderRadius: '10px', cursor: 'pointer',
+        padding: '12px 16px',
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = isYou ? 'rgba(255,184,0,0.6)' : 'rgba(96,165,250,0.35)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = isYou ? 'rgba(255,184,0,0.35)' : 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Rank badge */}
+        <div style={{
+          width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
+          background: rank <= 3 ? ['rgba(255,184,0,0.15)','rgba(148,163,184,0.15)','rgba(205,127,50,0.15)'][rank-1] : 'var(--bg-elevated)',
+          border: `1px solid ${rank <= 3 ? ['rgba(255,184,0,0.4)','rgba(148,163,184,0.4)','rgba(205,127,50,0.4)'][rank-1] : 'var(--border)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.78rem',
+          color: rank <= 3 ? ['#FFB800','#94a3b8','#cd7f32'][rank-1] : 'var(--text-muted)',
+        }}>
+          {rank}
+        </div>
+
+        {/* Avatar */}
+        <div style={{
+          width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
+          background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1rem', overflow: 'hidden', position: 'relative',
+        }}>
+          {SUPABASE_URL
+            ? <img src={`${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
+                alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                onError={e => { e.target.style.display = 'none'; }}
+              />
+            : null}
+          <span style={{ position: 'relative', zIndex: 1 }}>{entry.avatar_emoji || (entry.username?.[0]?.toUpperCase() || '?')}</span>
+        </div>
+
+        {/* Name + record + strip — flex grow */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {entry.display_name || entry.username || 'Anonymous'}
+            </span>
+            {isYou && (
+              <span style={{ fontSize: '0.6rem', color: 'var(--gold)', background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.3)', borderRadius: '4px', padding: '1px 5px', fontWeight: 700 }}>
+                YOU
+              </span>
+            )}
+            {entry.sport_focus && (
+              <span style={{ fontSize: '0.6rem', color: '#60a5fa', background: 'rgba(96,165,250,0.1)', padding: '1px 5px', borderRadius: '4px', flexShrink: 0 }}>
+                {entry.sport_focus}
+              </span>
+            )}
+          </div>
+
+          {/* Record text + W/L strip */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+              {entry.wins}W–{entry.losses}L{(entry.pushes ?? 0) > 0 ? `–${entry.pushes}P` : ''} · {entry.total} picks
+            </span>
+            <ResultStrip results={entry.recent_results || []} />
           </div>
         </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>Units</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: (entry.units ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
-            {(entry.units ?? 0) >= 0 ? '+' : ''}{(entry.units ?? 0).toFixed(2)}u
+
+        {/* Stats */}
+        <div style={{ display: 'flex', gap: '16px', flexShrink: 0, alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ROI</div>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: roiColor }}>
+              {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+            </div>
           </div>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>Streak</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: streakColor }}>
-            {(entry.current_streak ?? 0) > 0 ? `W${entry.current_streak}` : (entry.current_streak ?? 0) < 0 ? `L${Math.abs(entry.current_streak)}` : '—'}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Units</div>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: (entry.units ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+              {(entry.units ?? 0) >= 0 ? '+' : ''}{(entry.units ?? 0).toFixed(2)}u
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', minWidth: '36px' }}>
+            <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Streak</div>
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: streakColor }}>
+              {streak > 0 ? `W${streak}` : streak < 0 ? `L${Math.abs(streak)}` : '—'}
+            </div>
           </div>
         </div>
       </div>
@@ -112,136 +302,221 @@ function UserCard({ entry, rank, currentUserId }) {
   );
 }
 
+// ── Main component ─────────────────────────────────────────────────────────────
 export default function UserSearchTab({ user, isDemo }) {
-  const [sort, setSort]               = useState('hot7');
+  const [sort, setSort]               = useState('hot');
+  const [datePreset, setDatePreset]   = useState('7');
+  const [dateFrom, setDateFrom]       = useState('');
+  const [dateTo, setDateTo]           = useState('');
   const [sportFilter, setSportFilter] = useState('All Sports');
   const [search, setSearch]           = useState('');
   const [entries, setEntries]         = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
+  const [viewProfile, setViewProfile] = useState(null);
+  const debounceRef = useRef(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (overrides = {}) => {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams({ sort });
-      if (sportFilter !== 'All Sports') params.set('sport', sportFilter);
+      const params = new URLSearchParams();
+      const _sort       = overrides.sort        ?? sort;
+      const _preset     = overrides.datePreset  ?? datePreset;
+      const _dateFrom   = overrides.dateFrom    ?? dateFrom;
+      const _dateTo     = overrides.dateTo      ?? dateTo;
+      const _sport      = overrides.sportFilter ?? sportFilter;
+
+      params.set('sort', _sort);
+      if (_preset === 'custom') {
+        if (_dateFrom) params.set('dateFrom', _dateFrom);
+        if (_dateTo)   params.set('dateTo',   _dateTo);
+      } else {
+        params.set('days', _preset);
+      }
+      if (_sport && _sport !== 'All Sports') params.set('sport', _sport);
       if (isDemo) params.set('demo', '1');
-      const res  = await fetch(`/api/leaderboard?${params.toString()}`);
+
+      const res  = await fetch(`/api/user-search?${params}`);
       const json = await res.json();
-      if (json.error && !json.leaderboard) throw new Error(json.error);
-      setEntries(json.leaderboard || []);
+      if (json.error && !json.entries) throw new Error(json.error);
+      setEntries(json.entries || []);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [sort, sportFilter, isDemo]);
+  }, [sort, datePreset, dateFrom, dateTo, sportFilter, isDemo]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Client-side search filter
+  // Custom date range: auto-load after user finishes typing
+  useEffect(() => {
+    if (datePreset !== 'custom') return;
+    if (!dateFrom || !dateTo) return;
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load({ datePreset: 'custom', dateFrom, dateTo }), 500);
+    return () => clearTimeout(debounceRef.current);
+  }, [dateFrom, dateTo]); // eslint-disable-line
+
+  const handleSort = (s) => { setSort(s); load({ sort: s }); };
+  const handlePreset = (p) => {
+    setDatePreset(p);
+    if (p !== 'custom') load({ datePreset: p });
+  };
+  const handleSport = (s) => { setSportFilter(s); load({ sportFilter: s }); };
+
   const filtered = search.trim()
-    ? entries.filter(e => (e.username || '').toLowerCase().includes(search.trim().toLowerCase()))
+    ? entries.filter(e => (e.username || '').toLowerCase().includes(search.trim().toLowerCase()) || (e.display_name || '').toLowerCase().includes(search.trim().toLowerCase()))
     : entries;
 
   const selectedSort = SORT_OPTIONS.find(o => o.id === sort);
 
   return (
-    <div className="fade-in">
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Header */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <h2 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f0f0f0', marginBottom: '4px' }}>
+      <div>
+        <h2 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f0f0f0', marginBottom: '2px' }}>
           🔍 User Search
         </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-          Find the sharpest bettors in the community — filter by sport, sort by performance, and see who's running hot.
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', margin: 0 }}>
+          Find the sharpest bettors — filter by sport, date range, and performance.
         </p>
       </div>
 
-      {/* Sort presets */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '1rem' }}>
+      {/* Sort pills */}
+      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
         {SORT_OPTIONS.map(opt => (
           <button
             key={opt.id}
-            onClick={() => setSort(opt.id)}
+            onClick={() => handleSort(opt.id)}
             title={opt.desc}
             style={{
-              padding: '5px 12px', borderRadius: '20px', fontSize: '0.78rem', cursor: 'pointer',
+              padding: '5px 11px', borderRadius: '20px', fontSize: '0.77rem', cursor: 'pointer',
               border: `1px solid ${sort === opt.id ? 'var(--gold)' : 'var(--border)'}`,
               background: sort === opt.id ? 'rgba(255,184,0,0.1)' : 'var(--bg-surface)',
               color: sort === opt.id ? 'var(--gold)' : 'var(--text-secondary)',
               fontWeight: sort === opt.id ? 700 : 400,
               transition: 'all 0.15s',
             }}
-          >
-            {opt.label}
-          </button>
+          >{opt.label}</button>
         ))}
       </div>
 
+      {/* Date range row */}
+      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginRight: '2px' }}>Range:</span>
+        {DATE_PRESETS.map(p => (
+          <button
+            key={p.id}
+            onClick={() => handlePreset(p.id)}
+            style={{
+              padding: '3px 10px', borderRadius: '6px', fontSize: '0.74rem', cursor: 'pointer',
+              border: `1px solid ${datePreset === p.id ? 'rgba(96,165,250,0.6)' : 'var(--border)'}`,
+              background: datePreset === p.id ? 'rgba(96,165,250,0.12)' : 'transparent',
+              color: datePreset === p.id ? '#60a5fa' : 'var(--text-muted)',
+              fontWeight: datePreset === p.id ? 700 : 400,
+              transition: 'all 0.15s',
+            }}
+          >{p.label}</button>
+        ))}
+
+        {/* Custom date inputs */}
+        {datePreset === 'custom' && (
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginLeft: '4px' }}>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              style={{ padding: '3px 8px', fontSize: '0.75rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
+            />
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>→</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              style={{ padding: '3px 8px', fontSize: '0.75rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Sport filter + search */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
         {SPORT_FILTERS.map(s => (
           <button
             key={s}
-            onClick={() => setSportFilter(s)}
+            onClick={() => handleSport(s)}
             style={{
-              padding: '4px 10px', borderRadius: '6px', fontSize: '0.74rem', cursor: 'pointer',
-              border: `1px solid ${sportFilter === s ? 'rgba(96,165,250,0.6)' : 'var(--border)'}`,
-              background: sportFilter === s ? 'rgba(96,165,250,0.1)' : 'transparent',
-              color: sportFilter === s ? '#60a5fa' : 'var(--text-muted)',
+              padding: '3px 9px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer',
+              border: `1px solid ${sportFilter === s ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`,
+              background: sportFilter === s ? 'rgba(255,184,0,0.08)' : 'transparent',
+              color: sportFilter === s ? 'var(--gold)' : 'var(--text-muted)',
               fontWeight: sportFilter === s ? 700 : 400,
+              transition: 'all 0.15s',
             }}
           >{s}</button>
         ))}
         <input
           type="text"
-          placeholder="Search by username…"
+          placeholder="Search username…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="input"
-          style={{ marginLeft: 'auto', width: '180px', padding: '5px 10px', fontSize: '0.8rem' }}
+          style={{ marginLeft: 'auto', width: '165px', padding: '4px 10px', fontSize: '0.78rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
         />
       </div>
 
       {/* Sort description */}
       {selectedSort && (
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontStyle: 'italic' }}>
+        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '-4px' }}>
           {selectedSort.desc}
+          {datePreset !== 'custom' && datePreset !== '0' && ` · last ${datePreset} days`}
+          {datePreset === 'custom' && dateFrom && dateTo && ` · ${dateFrom} → ${dateTo}`}
         </div>
       )}
 
       {/* Results */}
       {loading ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading community rankings…
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} style={{ height: '64px', background: 'var(--bg-surface)', borderRadius: '10px', border: '1px solid var(--border)', opacity: 1 - i * 0.15, animation: 'pulse 1.5s ease-in-out infinite' }} />
+          ))}
         </div>
       ) : error ? (
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#f87171' }}>
-          {error}
-        </div>
+        <div style={{ padding: '2rem', textAlign: 'center', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>
       ) : filtered.length === 0 ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          No bettors found. Try a different filter or search.
+        <div style={{ padding: '3rem 2rem', textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🔍</div>
+          <div style={{ fontWeight: 700, marginBottom: '4px' }}>No bettors found</div>
+          <div style={{ fontSize: '0.78rem' }}>Try a wider date range or different filter.</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {filtered.map((entry, i) => (
             <UserCard
               key={entry.user_id || i}
               entry={entry}
               rank={i + 1}
               currentUserId={user?.id}
+              onViewProfile={setViewProfile}
             />
           ))}
         </div>
       )}
 
-      <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-        Only bettors with public picks and 5+ verified picks are shown.
-        {isDemo && ' (Showing demo data)'}
+      <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+        Only bettors with public settled picks are shown. Click any row to view profile.
+        {isDemo && ' (Demo data)'}
       </div>
+
+      {/* Profile modal */}
+      {viewProfile && (
+        <UserProfileModal
+          entry={viewProfile}
+          currentUserId={user?.id}
+          onClose={() => setViewProfile(null)}
+        />
+      )}
     </div>
   );
 }

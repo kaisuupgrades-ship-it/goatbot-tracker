@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 export const maxDuration = 15;
 
 const CACHE_TTL = 60 * 1000; // 1 min
-let cache = { data: null, ts: 0 };
+// Separate cache buckets for 'all' and 'verified' filter modes
+let cache = { all: { data: null, ts: 0 }, verified: { data: null, ts: 0 } };
 
 // ── Demo leaderboard data ─────────────────────────────────────────────────────
 const DUMMY_DATA = [
@@ -27,17 +28,21 @@ const SUPABASE_CONFIGURED =
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const userId  = searchParams.get('userId');
-  const isDemo  = searchParams.get('demo') === '1';
+  const userId   = searchParams.get('userId');
+  const isDemo   = searchParams.get('demo') === '1';
+  // 'verified' = only audit-approved picks feed the stats
+  // 'all'      = all public settled picks (default)
+  const filter   = searchParams.get('filter') === 'verified' ? 'verified' : 'all';
 
   // ── Demo mode or no Supabase → serve demo data ────────────────────────────
   if (isDemo || !SUPABASE_CONFIGURED) {
-    return NextResponse.json(withUserRank(DUMMY_DATA, null, true));
+    return NextResponse.json(withUserRank(applyFilter(DUMMY_DATA, filter), null, true, filter));
   }
 
   // ── Serve from cache if fresh ─────────────────────────────────────────────
-  if (cache.data && Date.now() - cache.ts < CACHE_TTL) {
-    return NextResponse.json(withUserRank(cache.data, userId, false));
+  const cacheKey = filter; // separate cache entries per filter
+  if (cache[cacheKey]?.data && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
+    return NextResponse.json(withUserRank(cache[cacheKey].data, userId, false, filter));
   }
 
   // ── Try Supabase ──────────────────────────────────────────────────────────
@@ -45,27 +50,49 @@ export async function GET(req) {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    const sortCol = filter === 'verified' ? 'verified_sharp_score' : 'sharp_score';
+
     const { data, error } = await supabase
       .from('leaderboard_stats')
       .select('*')
-      .order('sharp_score', { ascending: false })
+      .order(sortCol, { ascending: false })
       .limit(100);
 
     if (error) throw error;
 
-    // Real data only — never inject dummy entries for real users
-    const ranked = (data || []).map((row, i) => ({ ...row, rank: i + 1 }));
+    // Apply filter projection and rank
+    const projected = applyFilter(data || [], filter);
+    const ranked = projected.map((row, i) => ({ ...row, rank: i + 1 }));
 
-    cache = { data: ranked, ts: Date.now() };
-    return NextResponse.json(withUserRank(ranked, userId, false));
+    cache[cacheKey] = { data: ranked, ts: Date.now() };
+    return NextResponse.json(withUserRank(ranked, userId, false, filter));
   } catch (err) {
     console.warn('Leaderboard: Supabase error.', err.message);
-    // Still no dummy data for real users — return empty with error flag
-    return NextResponse.json({ leaderboard: [], userRank: null, userEntry: null, total: 0, error: 'Temporarily unavailable', cachedAt: new Date().toISOString() });
+    return NextResponse.json({ leaderboard: [], userRank: null, userEntry: null, total: 0, filter, error: 'Temporarily unavailable', cachedAt: new Date().toISOString() });
   }
 }
 
-function withUserRank(ranked, userId, isDemo) {
+// ── Project row fields based on filter ────────────────────────────────────────
+// In 'verified' mode, swap in the verified_* columns as the primary stats
+function applyFilter(rows, filter) {
+  if (filter !== 'verified') return rows;
+  return rows.map(r => ({
+    ...r,
+    wins:        r.verified_wins   ?? r.wins,
+    losses:      r.verified_losses ?? r.losses,
+    pushes:      r.verified_pushes ?? r.pushes,
+    total:       r.verified_picks  ?? r.total,
+    units:       r.verified_units  ?? r.units,
+    roi:         r.verified_roi    ?? r.roi,
+    sharp_score: r.verified_sharp_score ?? r.sharp_score,
+    // Keep originals accessible as _all_* for tooltip reference
+    _all_wins:   r.wins,
+    _all_losses: r.losses,
+    _all_total:  (r.wins ?? 0) + (r.losses ?? 0) + (r.pushes ?? 0),
+  }));
+}
+
+function withUserRank(ranked, userId, isDemo, filter = 'all') {
   const userEntry = userId ? ranked.find(r => r.user_id === userId) : null;
   return {
     leaderboard: ranked,
@@ -73,6 +100,7 @@ function withUserRank(ranked, userId, isDemo) {
     userEntry: userEntry        ?? null,
     total:     ranked.length,
     isDemo:    isDemo || false,
+    filter,
     cachedAt:  new Date().toISOString(),
   };
 }

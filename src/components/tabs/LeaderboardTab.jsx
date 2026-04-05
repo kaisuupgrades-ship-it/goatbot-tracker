@@ -1007,8 +1007,9 @@ function ContestStandings({ userId, isDemo, refreshKey }) {
   );
 }
 
-export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
-  const [subTab, setSubTab]           = useState('contest'); // 'contest' | 'sharp'
+export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSubTab = 'contest' }) {
+  const [subTab, setSubTab]           = useState(defaultSubTab); // 'contest' | 'sharp'
+  const [sharpFilter, setSharpFilter] = useState('all');     // 'all' | 'verified'
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
@@ -1018,13 +1019,14 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
 
   const userId = user?.id;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (filter = sharpFilter) => {
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
       if (isDemo) params.set('demo', '1');
       else if (userId) params.set('userId', userId);
+      params.set('filter', filter);
       const res = await fetch(`/api/leaderboard?${params.toString()}`);
       const json = await res.json();
       // Only throw hard errors (not empty leaderboard)
@@ -1035,9 +1037,15 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
     } finally {
       setLoading(false);
     }
-  }, [userId, isDemo]);
+  }, [userId, isDemo, sharpFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Re-load when filter changes
+  const handleFilterChange = (f) => {
+    setSharpFilter(f);
+    load(f);
+  };
 
   // Re-load when a contest pick is graded (cascade from HistoryTab via Dashboard)
   useEffect(() => { if (refreshKey > 0) load(); }, [refreshKey]); // eslint-disable-line
@@ -1054,30 +1062,8 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-      {/* ── Sub-tab switcher ── */}
-      <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
-        {[
-          { id: 'contest', label: '🏆 Contest', desc: 'Monthly standings' },
-          { id: 'sharp',   label: '📊 Sharp Board', desc: 'All-time rankings' },
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setSubTab(t.id)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: '8px 16px 10px',
-              borderBottom: subTab === t.id ? '2px solid var(--gold)' : '2px solid transparent',
-              color: subTab === t.id ? 'var(--gold)' : 'var(--text-muted)',
-              fontWeight: subTab === t.id ? 800 : 500,
-              fontSize: '0.88rem',
-              transition: 'all 0.15s',
-              marginBottom: '-1px',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* ── Sub-tab switcher — only shown when both tabs are accessible (no defaultSubTab lock) */}
+      {defaultSubTab === 'contest' && false /* Contest has own nav, no switcher needed */ ? null : null}
 
       {/* ══ CONTEST TAB ══ */}
       {subTab === 'contest' && (
@@ -1111,7 +1097,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
                 Ranked by Sharp Score — ROI × verified pick volume
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               {data && (
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
                   {entries.length} ranked · {new Date(data.cachedAt).toLocaleTimeString()}
@@ -1130,6 +1116,44 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
                 }}>✎ My Profile</button>
               )}
             </div>
+          </div>
+
+          {/* ── Verified / All toggle ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Record:
+            </span>
+            {[
+              { id: 'all',      label: 'All Picks',      icon: '📋' },
+              { id: 'verified', label: '✓ Verified Only', icon: '' },
+            ].map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => handleFilterChange(opt.id)}
+                title={opt.id === 'verified'
+                  ? 'Only picks that passed AI + Pinnacle audit (submitted before game start, legit line)'
+                  : 'All public settled picks regardless of audit status'}
+                style={{
+                  background: sharpFilter === opt.id ? (opt.id === 'verified' ? 'rgba(74,222,128,0.15)' : 'var(--bg-elevated)') : 'none',
+                  border: sharpFilter === opt.id
+                    ? (opt.id === 'verified' ? '1px solid rgba(74,222,128,0.4)' : '1px solid var(--border)')
+                    : '1px solid transparent',
+                  borderRadius: '6px', padding: '4px 10px', cursor: 'pointer',
+                  color: sharpFilter === opt.id
+                    ? (opt.id === 'verified' ? '#4ade80' : 'var(--text-primary)')
+                    : 'var(--text-muted)',
+                  fontSize: '0.75rem', fontWeight: sharpFilter === opt.id ? 700 : 400,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {opt.icon} {opt.label}
+              </button>
+            ))}
+            {sharpFilter === 'verified' && (
+              <span style={{ fontSize: '0.7rem', color: '#4ade80', opacity: 0.7 }}>
+                — AI-checked picks only
+              </span>
+            )}
           </div>
 
       {/* User rank card */}
@@ -1162,9 +1186,9 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
             📣 Get on the board
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.6 }}>
-            Mark picks as <strong style={{ color: 'var(--text-secondary)' }}>Public</strong> in Pick History, then set your profile to <strong style={{ color: 'var(--text-secondary)' }}>Show on Leaderboard</strong>.
-            You need at least 3 public settled picks to appear.
-            <strong style={{ color: 'var(--gold)' }}> Verified picks</strong> (submitted before game start) carry extra weight in your Sharp Score.
+            Mark picks as <strong style={{ color: 'var(--text-secondary)' }}>Public</strong> in Pick History — that's all it takes.
+            You appear here as soon as you have <strong style={{ color: 'var(--gold)' }}>1 public settled pick</strong>.
+            <strong style={{ color: '#4ade80' }}> Verified picks</strong> (AI-audited before game start) boost your Sharp Score and show in the Verified filter.
           </div>
         </div>
       )}
@@ -1243,8 +1267,9 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
         borderRadius: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
       }}>
         <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(verified picks) ÷ 10. High ROI alone isn't enough — you need volume and consistency.{' '}
-        <strong style={{ color: 'var(--green)' }}>✓ Verified</strong> = submitted before game start, odds between -145 and +400, straight bet only.{' '}
-        Need at least <strong style={{ color: 'var(--gold)' }}>3 public settled picks</strong> to appear. Mark picks Public in History and enable your profile below.
+        <strong style={{ color: '#4ade80' }}>✓ Verified</strong> = pick passed the AI + Pinnacle audit (legit line, submitted before game start).{' '}
+        Toggle between <strong>All Picks</strong> (every public settled pick) and <strong>✓ Verified Only</strong> (AI-checked picks only) using the filter above.{' '}
+        Any user with at least <strong style={{ color: 'var(--gold)' }}>1 public settled pick</strong> appears here. Mark picks Public in Pick History to show up.
       </div>
         </>
       )}{/* end sharp tab */}
