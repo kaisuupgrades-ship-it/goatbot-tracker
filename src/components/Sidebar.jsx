@@ -340,7 +340,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
       </div>
 
       {/* Nav Items — grouped sections */}
-      <nav style={{ flex: 1, padding: '0.25rem 0.4rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0', overflowY: 'auto', overflowX: 'hidden' }}>
+      <nav style={{ flex: 1, padding: '0.25rem 0.4rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}>
         {NAV_SECTIONS.map((section, si) => (
           <div key={section.section}>
             {/* Section header */}

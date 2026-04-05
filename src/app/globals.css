@@ -521,6 +521,13 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   .sidebar-drawer {
     position: fixed !important;
     top: 0; left: 0; bottom: 0;
+    /* Override inline height:100vh — let top/bottom positioning control height
+       so iOS Safari browser chrome doesn't push footer off-screen */
+    height: auto !important;
+    /* Allow the whole sidebar to scroll if content overflows */
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
     z-index: 50;
     transform: translateX(-100%);
     box-shadow: 4px 0 24px rgba(0,0,0,0.6);
