@@ -285,15 +285,46 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
     { id: 'tenniswta', label: 'WTA (Women)', emoji: '🎾' },
   ];
 
+  const [lookAheadDays, setLookAheadDays] = useState(0); // 0 = today, >0 = peeking ahead
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      // 'atp' maps to 'tennis' key in the API; 'tenniswta' is its own key
       const sportParam = tour === 'atp' ? 'tennis' : tour;
-      const res  = await fetch(`/api/sports?sport=${sportParam}&endpoint=scoreboard`);
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
+
+      // Helper: fetch a specific date (YYYYMMDD) or today if no date given
+      async function fetchDate(dateStr) {
+        const q = dateStr ? `&date=${dateStr}` : '';
+        const res  = await fetch(`/api/sports?sport=${sportParam}&endpoint=scoreboard${q}`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        return json;
+      }
+
+      // Try today first
+      let json = await fetchDate('');
+      if ((json.events || []).length > 0) {
+        setLookAheadDays(0);
+        setData(json);
+        return;
+      }
+
+      // No matches today — look ahead up to 7 days to find upcoming tournament draws
+      for (let d = 1; d <= 7; d++) {
+        const future = new Date();
+        future.setDate(future.getDate() + d);
+        const dateStr = future.toISOString().slice(0, 10).replace(/-/g, '');
+        json = await fetchDate(dateStr);
+        if ((json.events || []).length > 0) {
+          setLookAheadDays(d);
+          setData(json);
+          return;
+        }
+      }
+
+      // Nothing found in the next week — show today's empty state
+      setLookAheadDays(0);
       setData(json);
     } catch (e) {
       setError(e.message || 'Failed to load tennis scores');
@@ -376,6 +407,17 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
         </button>
       </div>
 
+      {/* Look-ahead notice — shown when no matches today and we're peeking into the future */}
+      {lookAheadDays > 0 && (
+        <div style={{
+          marginBottom: '10px', padding: '7px 14px', borderRadius: '8px',
+          background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)',
+          fontSize: '0.78rem', color: '#93c5fd',
+        }}>
+          📅 No matches today — showing upcoming matches starting in {lookAheadDays === 1 ? 'tomorrow' : `${lookAheadDays} days`}.
+        </div>
+      )}
+
       {/* Live summary badge */}
       {liveTotal > 0 && (
         <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -398,7 +440,30 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎾</div>
-          <p>No {filter === 'all' ? '' : filter + ' '}matches available right now.</p>
+          {filter !== 'all' ? (
+            <p style={{ fontSize: '0.85rem' }}>No {filter} matches — try switching to All.</p>
+          ) : allMatches.length === 0 ? (
+            <div>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                No {tour === 'atp' ? 'ATP' : 'WTA'} matches scheduled right now.
+              </p>
+              <p style={{ fontSize: '0.78rem' }}>
+                The tour may be between events — check back soon or try the other tour.
+              </p>
+              <button
+                onClick={load}
+                style={{
+                  marginTop: '14px', padding: '6px 18px', borderRadius: '20px',
+                  background: 'rgba(132,204,22,0.1)', border: '1px solid rgba(132,204,22,0.3)',
+                  color: '#84cc16', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                }}
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: '0.85rem' }}>No matches match the current filter.</p>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

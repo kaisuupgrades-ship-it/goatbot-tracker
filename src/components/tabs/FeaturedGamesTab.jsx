@@ -590,6 +590,17 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
     };
   }, [fetchAll, interval]);
 
+  // ── My Golfers: read starred golfers from localStorage ───────────────────
+  const [starredGolfers, setStarredGolfers] = useState({});
+  useEffect(() => {
+    function syncGolfers() {
+      try { setStarredGolfers(JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}')); } catch {}
+    }
+    syncGolfers();
+    window.addEventListener('storage', syncGolfers);
+    return () => window.removeEventListener('storage', syncGolfers);
+  }, []);
+
   // ── Build sorted featured event list ─────────────────────────────────────
   const starredIds = new Set(starredList.map(g => g.id));
 
@@ -711,8 +722,123 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
         </div>
       </div>
 
+      {/* ── My Golfers widget ── */}
+      {Object.keys(starredGolfers).length > 0 && (() => {
+        const golferList = Object.values(starredGolfers);
+        function fmtScore(v) {
+          if (!v || v === '—') return '—';
+          if (v === 'E' || v === 'Even') return 'E';
+          const n = parseInt(v);
+          if (isNaN(n)) return v;
+          if (n === 0) return 'E';
+          return n > 0 ? `+${n}` : `${n}`;
+        }
+        function scoreColor(v) {
+          const n = v === 'E' ? 0 : parseInt(v);
+          if (isNaN(n)) return 'var(--text-muted)';
+          if (n < 0) return '#4ade80';
+          if (n > 0) return '#f87171';
+          return 'var(--text-muted)';
+        }
+        return (
+          <div style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid rgba(255,184,0,0.25)',
+            borderRadius: '10px',
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '10px 14px',
+              borderBottom: '1px solid rgba(255,255,255,0.05)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(255,184,0,0.04)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <span style={{ fontSize: '0.9rem' }}>⛳</span>
+                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--gold)' }}>My Golfers</span>
+                <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>{golferList.length} tracked</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                Updated from Golf tab · ★ to manage
+              </span>
+            </div>
+            {/* Golfer rows */}
+            <div>
+              {golferList.map((g, i) => {
+                const toPar = g.toPar || '—';
+                const today = g.today || '—';
+                const pos   = g.position || '—';
+                const thru  = g.thru || '—';
+                return (
+                  <div key={g.id || i} style={{
+                    display: 'grid',
+                    gridTemplateColumns: '34px 1fr 54px 44px 40px 24px',
+                    alignItems: 'center',
+                    padding: '7px 14px',
+                    borderBottom: i < golferList.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                    gap: '6px',
+                  }}>
+                    {/* Position */}
+                    <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: 700, color: pos === '1' ? '#FFB800' : 'var(--text-muted)' }}>
+                      {pos}
+                    </div>
+                    {/* Name + tournament */}
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {g.name}
+                      </div>
+                      {g.tournament && (
+                        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {g.tournament}
+                        </div>
+                      )}
+                    </div>
+                    {/* To Par */}
+                    <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.88rem', color: scoreColor(toPar) }}>
+                      {toPar !== '—' ? fmtScore(toPar) : '—'}
+                    </div>
+                    {/* Today */}
+                    <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: scoreColor(today) }}>
+                      {today !== '—' ? fmtScore(today) : '—'}
+                    </div>
+                    {/* Thru */}
+                    <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {thru}
+                    </div>
+                    {/* Unstar button */}
+                    <button
+                      onClick={() => {
+                        const updated = JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}');
+                        delete updated[g.id];
+                        localStorage.setItem('betos_starred_golfers', JSON.stringify(updated));
+                        window.dispatchEvent(new Event('storage'));
+                      }}
+                      title="Remove"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.25)', fontSize: '0.75rem', padding: '2px', lineHeight: 1 }}
+                      onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
+                    >✕</button>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Column headers row */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '34px 1fr 54px 44px 40px 24px',
+              padding: '4px 14px', borderTop: '1px solid rgba(255,255,255,0.04)',
+              background: 'rgba(255,255,255,0.01)', gap: '6px',
+            }}>
+              {['Pos', 'Player', 'Par', 'Today', 'Thru', ''].map((h, i) => (
+                <div key={i} style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', textAlign: i >= 2 ? 'center' : 'left' }}>{h}</div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Content */}
-      {starredList.length === 0 ? (
+      {starredList.length === 0 && Object.keys(starredGolfers).length === 0 ? (
         <EmptyStars />
 
       ) : loading && featuredEvents.length === 0 ? (

@@ -13,6 +13,7 @@ const SPORT_PATHS = {
   ncaaf:  'football/college-football',
   ncaab:  'basketball/mens-college-basketball',
   mls:    'soccer/usa.1',
+  soccer: 'soccer/usa.1', // overridden by ?league= param below
   wnba:   'basketball/wnba',
   ufc:    'mma/ufc',
   tennis: 'tennis/atp',
@@ -76,6 +77,10 @@ export async function GET(req) {
     if (sport === 'golf' && effectiveEndpoint === 'leaderboard') {
       const golfLeague = searchParams.get('league') || 'pga';
       path = `golf/leaderboard?league=${golfLeague}`;
+    } else if (sport === 'soccer') {
+      // Soccer uses a dynamic league param — e.g. ?league=eng.1 for Premier League
+      const soccerLeague = searchParams.get('league') || 'usa.1';
+      path = `soccer/${soccerLeague}/scoreboard`;
     } else if (endpoint === 'scoreboard' && date) {
       path += `?dates=${date}`;
     }

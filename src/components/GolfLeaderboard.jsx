@@ -1,6 +1,62 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 
+// ── Starred golfers persistence ───────────────────────────────────────────────
+const GOLF_STAR_KEY = 'betos_starred_golfers';
+
+function getStarredGolfers() {
+  try { return JSON.parse(localStorage.getItem(GOLF_STAR_KEY) || '{}'); } catch { return {}; }
+}
+
+function toggleStarGolfer(player, tournamentName) {
+  const starred = getStarredGolfers();
+  const id = player.id || player.athlete?.id;
+  if (!id) return;
+  if (starred[id]) {
+    delete starred[id];
+  } else {
+    starred[id] = {
+      id,
+      name: player.athlete?.displayName || player.athlete?.fullName || '?',
+      tournament: tournamentName || '',
+      starredAt: new Date().toISOString(),
+    };
+  }
+  try { localStorage.setItem(GOLF_STAR_KEY, JSON.stringify(starred)); } catch {}
+  window.dispatchEvent(new Event('storage'));
+}
+
+function isGolferStarred(player) {
+  const id = player.id || player.athlete?.id;
+  if (!id) return false;
+  return !!getStarredGolfers()[id];
+}
+
+// Updates position/score for all currently-starred golfers from fresh data
+function syncStarredGolferStats(players, tournamentName) {
+  const starred = getStarredGolfers();
+  let changed = false;
+  for (const p of players) {
+    const id = p.id || p.athlete?.id;
+    if (!id || !starred[id]) continue;
+    const stats = p.statistics || [];
+    starred[id] = {
+      ...starred[id],
+      tournament: tournamentName || starred[id].tournament,
+      position:  p.status?.position?.displayName || '—',
+      toPar:     stats[0]?.displayValue ?? p.score?.displayValue ?? '—',
+      thru:      p.status?.thru ?? stats[1]?.displayValue ?? '—',
+      today:     stats[2]?.displayValue ?? '—',
+      updatedAt: new Date().toISOString(),
+    };
+    changed = true;
+  }
+  if (changed) {
+    try { localStorage.setItem(GOLF_STAR_KEY, JSON.stringify(starred)); } catch {}
+    window.dispatchEvent(new Event('storage'));
+  }
+}
+
 // ── Mobile breakpoint hook ────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 640) {
   const [isMobile, setIsMobile] = useState(false);
@@ -32,7 +88,7 @@ function fmtScore(val) {
 }
 
 // ── Player row ────────────────────────────────────────────────────────────────
-function PlayerRow({ player, isMobile }) {
+function PlayerRow({ player, isMobile, tournamentName }) {
   const stats      = player.statistics || [];
   const toPar      = stats[0]?.displayValue ?? player.score?.displayValue ?? '—';
   const thru       = player.status?.thru ?? stats[1]?.displayValue ?? '—';
@@ -44,12 +100,26 @@ function PlayerRow({ player, isMobile }) {
   const isCut      = player.status?.type === 'cut';
   const pos        = player.status?.position?.displayName || '—';
 
+  const [starred, setStarred] = useState(() => isGolferStarred(player));
+  // Re-sync if localStorage changes elsewhere
+  useEffect(() => {
+    const handler = () => setStarred(isGolferStarred(player));
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [player]);
+
+  function handleStar(e) {
+    e.stopPropagation();
+    toggleStarGolfer(player, tournamentName);
+    setStarred(v => !v);
+  }
+
   return (
     <div style={{
       display: 'grid',
       gridTemplateColumns: isMobile
-        ? '30px 1fr 44px 40px 40px'
-        : '40px 32px 1fr 56px 50px 50px 60px',
+        ? '30px 1fr 44px 40px 40px 28px'
+        : '40px 32px 1fr 56px 50px 50px 60px 28px',
       alignItems: 'center',
       padding: isMobile ? '7px 12px' : '7px 14px',
       borderBottom: '1px solid rgba(255,255,255,0.04)',
@@ -93,6 +163,24 @@ function PlayerRow({ player, isMobile }) {
           {totalScore !== '—' ? totalScore : '—'}
         </div>
       )}
+      {/* Star button */}
+      <div style={{ textAlign: 'center' }}>
+        <button
+          onClick={handleStar}
+          title={starred ? 'Remove from Featured' : 'Track in Featured tab'}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+            fontSize: '0.85rem', lineHeight: 1,
+            color: starred ? '#FFB800' : 'rgba(255,255,255,0.2)',
+            transition: 'color 0.15s, transform 0.15s',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; e.currentTarget.style.transform = 'scale(1.2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = starred ? '#FFB800' : 'rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'scale(1)'; }}
+        >
+          {starred ? '★' : '☆'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -243,15 +331,15 @@ function TournamentCard({ event, defaultOpen, search, isMobile }) {
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: isMobile
-                  ? '30px 1fr 44px 40px 40px'
-                  : '40px 32px 1fr 56px 50px 50px 60px',
+                  ? '30px 1fr 44px 40px 40px 28px'
+                  : '40px 32px 1fr 56px 50px 50px 60px 28px',
                 padding: isMobile ? '5px 12px' : '5px 14px',
                 background: 'rgba(255,255,255,0.02)',
                 borderTop: '1px solid rgba(255,255,255,0.04)',
               }}>
                 {(isMobile
-                  ? ['Pos', 'Player', 'Par', 'Today', 'Thru']
-                  : ['Pos', '', 'Player', 'To Par', 'Today', 'Thru', 'Total']
+                  ? ['Pos', 'Player', 'Par', 'Today', 'Thru', '']
+                  : ['Pos', '', 'Player', 'To Par', 'Today', 'Thru', 'Total', '']
                 ).map((h, i) => (
                   <div key={i} style={{
                     fontSize: '0.57rem', textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -264,12 +352,14 @@ function TournamentCard({ event, defaultOpen, search, isMobile }) {
                 ))}
               </div>
 
-              {/* Player rows */}
+              {/* Player rows — sync starred stats on every render with fresh data */}
+              {(() => { syncStarredGolferStats(players, name); return null; })()}
               {filtered.slice(0, 60).map((player, i) => (
                 <PlayerRow
                   key={player.id || player.athlete?.id || i}
                   player={{ ...player, _isLead: i === 0 }}
                   isMobile={isMobile}
+                  tournamentName={name}
                 />
               ))}
 

@@ -5,6 +5,7 @@ import VoiceButton from '@/components/VoiceInput';
 import { getUserPrefs, formatGameTime, getTzAbbr } from '@/lib/userPrefs';
 import GolfLeaderboard from '@/components/GolfLeaderboard';
 import TennisScoreboard from '@/components/TennisScoreboard';
+import SoccerScoreboard from '@/components/SoccerScoreboard';
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
@@ -1023,8 +1024,8 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             >
               {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
             </span>
-            {/* Moneyline: away / home */}
-            {(odds.awayOdds || odds.homeOdds) && (
+            {/* Moneyline: both sides — only show when we have the full pair */}
+            {odds.awayOdds != null && odds.homeOdds != null && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                 {away.team?.abbreviation || 'AWY'}{' '}
                 <strong style={{
@@ -1043,9 +1044,10 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 </strong>
               </span>
             )}
-            {odds.spread && !(odds.awayOdds || odds.homeOdds) && (
+            {/* Spread / details string — show when full ML pair not available */}
+            {odds.spread && !(odds.awayOdds != null && odds.homeOdds != null) && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-                Spread <strong style={{ color: 'var(--gold)', fontFamily: 'IBM Plex Mono, monospace' }}>{odds.spread}</strong>
+                ML <strong style={{ color: 'var(--gold)', fontFamily: 'IBM Plex Mono, monospace' }}>{odds.spread}</strong>
               </span>
             )}
             {odds.total != null && (
@@ -2219,15 +2221,17 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           </span>
         </div>
 
-        {/* ── Golf Leaderboard (replaces game cards) ── */}
+        {/* ── Sport-specific views (golf / tennis / soccer) ── */}
         {sport === 'golf' ? (
           <GolfLeaderboard />
         ) : sport === 'tennis' || sport === 'tenniswta' ? (
           <TennisScoreboard initialTour={sport} />
+        ) : sport === 'mls' ? (
+          <SoccerScoreboard />
         ) : null}
 
-        {/* Games grid — hidden for golf/tennis which have their own views */}
-        {sport !== 'golf' && sport !== 'tennis' && sport !== 'tenniswta' && (
+        {/* Games grid — hidden for sports with dedicated views */}
+        {sport !== 'golf' && sport !== 'tennis' && sport !== 'tenniswta' && sport !== 'mls' && (
         <>
         {loading && games.length === 0 ? (
           /* First-load skeleton only — never show this on background refresh */
