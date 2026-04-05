@@ -11,7 +11,6 @@ const supabase = createClient(
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
 
-// Contest rules (same as verify-pick)
 const RULES = {
   minOdds: -145,
   maxOdds: 400,
@@ -20,21 +19,133 @@ const RULES = {
   maxPicksPerDay: 1,
 };
 
-// ── AI Audit: verify a contest pick is legitimate ───────────────────────────
+// ── Pinnacle real-time line check (free, no key) ────────────────────────────
+// Maps our sport strings to Pinnacle league IDs
+const PINNACLE_LEAGUES = {
+  MLB:   246,  NBA:   487,  NFL:  889,
+  NHL:   1456, NCAAB: 493, NCAAF: 880,
+  MLS:   2764, UFC:   906,
+};
+
+function normName(s) {
+  return (s || '').toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function teamMatches(pickTeam, pinnacleTeam) {
+  const a = normName(pickTeam), b = normName(pinnacleTeam);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const wordsA = a.split(' '), wordsB = b.split(' ');
+  const lastA = wordsA[wordsA.length - 1], lastB = wordsB[wordsB.length - 1];
+  // Last word match (mascot) is the strongest signal
+  if (lastA === lastB && lastA.length > 3) return true;
+  // Substring match for abbreviated names (e.g. "Michigan" in "Michigan Wolverines")
+  return (a.includes(lastB) && lastB.length > 4) || (b.includes(lastA) && lastA.length > 4);
+}
+
+async function checkOddsAgainstPinnacle(pick) {
+  const sport = (pick.sport || '').toUpperCase();
+  const leagueId = PINNACLE_LEAGUES[sport];
+  if (!leagueId) return null; // sport not on Pinnacle — skip check
+
+  const submittedOdds = parseInt(pick.odds);
+  if (isNaN(submittedOdds)) return null;
+
+  try {
+    const headers = { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 BetOS/1.0' };
+    const [matchupsRes, marketsRes] = await Promise.all([
+      fetch(`https://guest.api.arcadia.pinnacle.com/0.1/leagues/${leagueId}/matchups`, { headers, signal: AbortSignal.timeout(5000) }),
+      fetch(`https://guest.api.arcadia.pinnacle.com/0.1/leagues/${leagueId}/markets/straight`, { headers, signal: AbortSignal.timeout(5000) }),
+    ]);
+
+    if (!matchupsRes.ok || !marketsRes.ok) return null;
+
+    const matchups = await matchupsRes.json();
+    const markets  = await marketsRes.json();
+    if (!Array.isArray(matchups) || !Array.isArray(markets)) return null;
+
+    // Build matchup map (id → home/away names)
+    const matchupMap = {};
+    for (const m of matchups) {
+      if (m.special) continue;
+      const home = m.participants?.find(p => p.alignment === 'home')?.name;
+      const away = m.participants?.find(p => p.alignment === 'away')?.name;
+      if (home && away) matchupMap[m.id] = { home, away };
+    }
+
+    // Find the game matching pick.team (check home and away)
+    const matchedGame = Object.entries(matchupMap).find(([, g]) =>
+      teamMatches(pick.team, g.home) || teamMatches(pick.team, g.away)
+    );
+    if (!matchedGame) return { found: false, reason: 'Game not found on Pinnacle (may be too early or unavailable)' };
+
+    const [matchupId, game] = matchedGame;
+    const isHome = teamMatches(pick.team, game.home);
+
+    // Find the ML market for this game
+    const mlMarket = markets.find(m => m.matchupId === parseInt(matchupId) && m.type === 'moneyline');
+    if (!mlMarket) return { found: true, game, pinnacleOdds: null, reason: 'No ML market found on Pinnacle yet' };
+
+    const prices  = mlMarket.prices || [];
+    const side    = isHome ? 'home' : 'away';
+    const pinOdds = prices.find(p => p.designation === side)?.price;
+    if (pinOdds == null) return { found: true, game, pinnacleOdds: null };
+
+    const diff = Math.abs(submittedOdds - pinOdds);
+    return {
+      found:        true,
+      game,
+      pinnacleOdds: pinOdds,
+      submittedOdds,
+      diff,
+      // Flag if the submitted line is >20 pts off Pinnacle's sharp number
+      suspicious:   diff > 20,
+      reason:       diff > 20
+        ? `Submitted ${submittedOdds > 0 ? '+' : ''}${submittedOdds} but Pinnacle shows ${pinOdds > 0 ? '+' : ''}${pinOdds} (${diff} pts off) — line may not be real`
+        : null,
+    };
+  } catch (err) {
+    console.warn('[contest-audit] Pinnacle check failed (non-fatal):', err.message);
+    return null;
+  }
+}
+
+// ── Main audit function ─────────────────────────────────────────────────────
 async function aiAuditPick(pick) {
-  // Basic rule checks first (no AI needed)
+  // Step 1: Hard rule checks (instant, zero cost)
   const issues = [];
   const odds = parseInt(pick.odds);
   if (odds < RULES.minOdds) issues.push(`Odds ${odds} below minimum ${RULES.minOdds}`);
   if (odds > RULES.maxOdds) issues.push(`Odds +${odds} above maximum +${RULES.maxOdds}`);
   if (RULES.excludedBetTypes.includes(pick.bet_type)) issues.push(`${pick.bet_type} not allowed`);
   if (parseFloat(pick.units) > RULES.maxUnits) issues.push(`${pick.units}u exceeds ${RULES.maxUnits}u max`);
-
   if (issues.length > 0) {
     return { status: 'REJECTED', reason: issues.join('; '), confidence: 'RULE', aiUsed: false };
   }
 
-  // AI smell-test for suspicious activity (xAI first, Claude fallback)
+  // Step 2: Pinnacle real-time line check (free, no AI tokens)
+  // If the submitted odds are >20 pts off from Pinnacle's sharp number, flag immediately.
+  const pinCheck = await checkOddsAgainstPinnacle(pick);
+  if (pinCheck?.suspicious) {
+    return {
+      status: 'FLAGGED',
+      reason: pinCheck.reason,
+      confidence: 'PINNACLE',
+      aiUsed: false,
+      pinnacleOdds: pinCheck.pinnacleOdds,
+      diff: pinCheck.diff,
+    };
+  }
+
+  // Step 3: AI smell-test — only runs if Pinnacle couldn't find the game or confirmed odds are real
+  // Include Pinnacle context in the prompt so the AI has real market data
+  const pinContext = pinCheck?.found && pinCheck?.pinnacleOdds != null
+    ? `\nPinnacle (sharp book) has this team at ${pinCheck.pinnacleOdds > 0 ? '+' : ''}${pinCheck.pinnacleOdds} — submitted line is ${pinCheck.diff} pts off, which is within acceptable range.`
+    : pinCheck?.found === false
+    ? '\nGame not found on Pinnacle (may be early line or niche market).'
+    : '\nPinnacle check unavailable.';
+
   try {
     const prompt = `You are an AI auditor for a sports betting contest. Review this pick for legitimacy:
 - Team: ${pick.team}
@@ -44,21 +155,20 @@ async function aiAuditPick(pick) {
 - Sport: ${pick.sport}
 - Date: ${pick.date}
 - Submitted: ${pick.created_at || 'unknown'}
+${pinContext}
 
-Check for: suspicious timing (pick submitted after game started), implausible odds, obvious errors.
-Respond with EXACTLY one line: APPROVED or FLAGGED followed by a brief reason.
-Examples: "APPROVED - Standard moneyline bet, odds in range" or "FLAGGED - Odds seem implausible for this matchup"`;
+Check for: suspicious timing (submitted after game started), obvious data entry errors, implausible lines for the sport/matchup.
+Respond with EXACTLY one line: APPROVED or FLAGGED followed by a brief reason.`;
 
     const result = await callAI({ user: prompt, maxTokens: 100, temperature: 0.1 });
     const answer = result.text;
-
     if (answer.startsWith('FLAGGED')) {
       return { status: 'FLAGGED', reason: answer.replace('FLAGGED', '').replace(/^[\s-]+/, ''), confidence: 'AI', aiUsed: true };
     }
-    return { status: 'APPROVED', reason: answer.replace('APPROVED', '').replace(/^[\s-]+/, '') || 'Passed all checks', confidence: 'AI', aiUsed: true };
+    return { status: 'APPROVED', reason: answer.replace('APPROVED', '').replace(/^[\s-]+/, '') || 'Passed all checks', confidence: 'AI', aiUsed: true, pinnacleOdds: pinCheck?.pinnacleOdds };
   } catch (err) {
     console.warn('[contest-audit] AI check failed, approving by rules:', err.message);
-    return { status: 'APPROVED', reason: 'Passed rule checks (AI unavailable)', confidence: 'RULE', aiUsed: false };
+    return { status: 'APPROVED', reason: 'Passed rule + Pinnacle checks (AI unavailable)', confidence: 'PINNACLE', aiUsed: false, pinnacleOdds: pinCheck?.pinnacleOdds };
   }
 }
 
