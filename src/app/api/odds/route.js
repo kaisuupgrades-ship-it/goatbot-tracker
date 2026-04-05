@@ -188,9 +188,19 @@ async function fetchPinnacleLines(sportKey) {
 
       const prices = mkt.prices || [];
       if (mkt.type === 'moneyline') {
-        const h = prices.find(p => p.designation === 'home');
-        const a = prices.find(p => p.designation === 'away');
-        if (h && a) oddsMap[mid].ml = { home: h.price, away: a.price };
+        // First-wins: standard game ML comes first; later entries are alternate/live variants
+        if (!oddsMap[mid].ml) {
+          const h = prices.find(p => p.designation === 'home');
+          const a = prices.find(p => p.designation === 'away');
+          if (h && a) {
+            // Sanity-check: one side must be negative (favorite) and the other positive.
+            // If both are the same sign the data is invalid (e.g. decimal odds misread as American).
+            const homeNeg = h.price < 0, awayNeg = a.price < 0;
+            if (homeNeg !== awayNeg) {
+              oddsMap[mid].ml = { home: h.price, away: a.price };
+            }
+          }
+        }
       } else if (mkt.type === 'spread') {
         const h = prices.find(p => p.designation === 'home');
         const a = prices.find(p => p.designation === 'away');
@@ -211,11 +221,14 @@ async function fetchPinnacleLines(sportKey) {
       } else if (mkt.type === 'total') {
         const ov = prices.find(p => p.designation === 'over');
         const un = prices.find(p => p.designation === 'under');
-        // Keep highest-point total only — Pinnacle lists alternate low totals (0.5, 1.5, 5.0)
-        // in the same market type; the actual game total is always the highest value.
+        // Pick the total whose juice is CLOSEST to standard (-110 on both sides).
+        // Pinnacle lists the real game total alongside alternates (0.5, 5.0, 11.5 etc.);
+        // alternates always have extreme juice (+350/-450) while the standard line is ~-110.
+        // Previously used "highest point" which broke when Pinnacle offered an alt-high (11.5).
         if (ov && un && ov.points != null) {
-          if (!oddsMap[mid].total || ov.points > oddsMap[mid].total.point) {
-            oddsMap[mid].total = { point: ov.points, overPrice: ov.price, underPrice: un.price };
+          const juiceScore = Math.abs(Math.abs(ov.price) - 110) + Math.abs(Math.abs(un.price) - 110);
+          if (!oddsMap[mid].total || juiceScore < oddsMap[mid].total._juiceScore) {
+            oddsMap[mid].total = { point: ov.points, overPrice: ov.price, underPrice: un.price, _juiceScore: juiceScore };
           }
         }
       }
@@ -248,10 +261,14 @@ function enrichWithPinnacle(events, pinnacleGames) {
       markets: [],
     };
     if (pg.ml) {
-      pinBook.markets.push({ key: 'h2h', outcomes: [
-        { name: event.home_team, price: pg.ml.home },
-        { name: event.away_team, price: pg.ml.away },
-      ]});
+      // Only emit h2h if one side is negative (real sportsbook rule: one team must be favored)
+      const homeNeg = pg.ml.home < 0, awayNeg = pg.ml.away < 0;
+      if (homeNeg !== awayNeg) {
+        pinBook.markets.push({ key: 'h2h', outcomes: [
+          { name: event.home_team, price: pg.ml.home },
+          { name: event.away_team, price: pg.ml.away },
+        ]});
+      }
     }
     if (pg.spread) {
       pinBook.markets.push({ key: 'spreads', outcomes: [

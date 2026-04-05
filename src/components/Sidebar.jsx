@@ -107,12 +107,12 @@ const NAV_SECTIONS = [
       { id: 'analyzer',   label: 'Analyzer',    Icon: Icons.Analyzer,   desc: 'BetOS + AI tools' },
       { id: 'sharpboard', label: 'Sharp Board', Icon: Icons.SharpBoard, desc: 'Public handicapper rankings' },
       { id: 'usersearch', label: 'User Search', Icon: Icons.Search,     desc: 'Find & follow sharp bettors' },
-      { id: 'following',  label: 'Following',   Icon: Icons.Following,  desc: 'Cappers you follow' },
     ],
   },
   {
     section: 'Community',
     items: [
+      { id: 'following',  label: 'Following',   Icon: Icons.Following,  desc: 'Cappers you follow' },
       { id: 'chatroom', label: 'Chat Room', Icon: Icons.Chat, desc: 'Community chat' },
     ],
   },

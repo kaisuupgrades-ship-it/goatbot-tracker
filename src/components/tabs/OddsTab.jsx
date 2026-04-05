@@ -134,14 +134,19 @@ function bestTotal(bookmakers) {
   }
   if (best) return best;
 
-  // Pass 2: any line with a reasonable point (≥ 3.0) — picks the highest available
+  // Pass 2: wider juice window (-300 to +200) to catch books with slightly elevated vig,
+  // but still reject wild alternate-line juice (e.g. +364/-506 from Pinnacle alt totals)
   for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'totals');
     const over  = mkt?.outcomes?.find(o => o.name === 'Over');
     const under = mkt?.outcomes?.find(o => o.name === 'Under');
     if (over?.point != null && over.point >= 3) {
-      if (!best || over.point > best.line) {
-        best = { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
+      const ovOk = over.price == null || (over.price >= -300 && over.price <= 200);
+      const unOk = under?.price == null || (under.price >= -300 && under.price <= 200);
+      if (ovOk && unOk) {
+        if (!best || over.point > best.line) {
+          best = { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
+        }
       }
     }
   }
