@@ -1,270 +1,111 @@
 /**
  * /api/cron/grade-picks
- * Vercel Cron: auto-grades PENDING picks for ALL users every 30 min during game hours.
+ * Vercel Cron: grades PENDING picks for ALL users during game hours.
  *
- * Runs: every 30 minutes from 5pm–4am UTC (noon–midnight ET) — the main US sports window.
- * Vercel invokes this via GET with the CRON_SECRET header.
+ * Schedule (vercel.json):
+ *   */5 17-23 * * *  →  noon–midnight ET (main evening window)
+ *   */5 0-8 * * *    →  midnight–4am ET  (late west coast games)
  *
- * Strategy:
- *  1. Find all PENDING picks whose date <= today (across ALL users)
- *  2. Group by sport + date to minimize ESPN calls (one scoreboard fetch per group)
- *  3. Grade each pick and update Supabase
- *  4. Return a summary { graded, users, skipped }
+ * Key fixes:
+ *  - Catches result=null picks as well as result='PENDING'
+ *  - Looks back 7 days (not just yesterday) so old stuck picks get graded
+ *  - Uses shared gradeEngine so logic is identical across all grading paths
+ *  - Batches ESPN calls per sport+date — one fetch per group across all users
  */
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextResponse }   from 'next/server';
+import { createClient }   from '@supabase/supabase-js';
+import {
+  fetchESPNScoreboard,
+  gradePicksAgainstScoreboard,
+  SPORT_PATHS,
+} from '@/lib/gradeEngine';
 
-export const maxDuration = 60; // Vercel Pro allows up to 300s; 60s is plenty for cron grading
+export const maxDuration = 60;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY  // must use service role to read all users' picks
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
-
-const SPORT_PATHS = {
-  mlb:   'baseball/mlb',
-  nfl:   'football/nfl',
-  nba:   'basketball/nba',
-  nhl:   'hockey/nhl',
-  ncaaf: 'football/college-football',
-  ncaab: 'basketball/mens-college-basketball',
-  mls:   'soccer/usa.1',
-  wnba:  'basketball/wnba',
-  ufc:   'mma/ufc',
-};
-
-async function fetchScoreboard(sport, dateStr) {
-  const path = SPORT_PATHS[sport];
-  if (!path) return null;
-  try {
-    const res = await fetch(`${ESPN_BASE}/${path}/scoreboard?dates=${dateStr}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-function normalize(str) {
-  return (str || '').toLowerCase()
-    .replace(/\b(fc|sc|cf|ac|united|city|town|utd)\b/g, '')
-    .replace(/[^a-z0-9]/g, '')
-    .trim();
-}
-
-function teamMatches(espnName, pickTeam) {
-  if (!espnName || !pickTeam) return false;
-  const n1 = normalize(espnName);
-  const n2 = normalize(pickTeam);
-  if (!n1 || !n2) return false;
-  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
-}
-
-function parseMatchup(matchup) {
-  if (!matchup) return null;
-  const lower = matchup.toLowerCase();
-  const atIdx = lower.indexOf(' @ ');
-  const vsIdx = lower.indexOf(' vs ');
-  if (atIdx > -1) return { away: normalize(matchup.slice(0, atIdx)), home: normalize(matchup.slice(atIdx + 3)) };
-  if (vsIdx > -1) return { away: normalize(matchup.slice(0, vsIdx)), home: normalize(matchup.slice(vsIdx + 4)) };
-  return null;
-}
-
-function gradePick(pick, game) {
-  const comp = game.competitions?.[0];
-  if (!comp) return null;
-
-  const status = comp.status?.type?.name;
-  if (!['STATUS_FINAL', 'STATUS_FULL_TIME', 'STATUS_END_PERIOD'].includes(status)) return null;
-
-  const competitors = comp.competitors || [];
-  const home = competitors.find(c => c.homeAway === 'home');
-  const away = competitors.find(c => c.homeAway === 'away');
-  if (!home || !away) return null;
-
-  const homeScore  = parseFloat(home.score || 0);
-  const awayScore  = parseFloat(away.score || 0);
-  const totalScore = homeScore + awayScore;
-
-  const betType = (pick.bet_type || 'Moneyline').toLowerCase();
-  const pickSide = (pick.side || '').toLowerCase();
-  const line     = parseFloat(pick.line || pick.spread_line || 0);
-
-  const homeName = home.team?.displayName || home.team?.name || '';
-  const awayName = away.team?.displayName || away.team?.name || '';
-
-  let pickedHome = pickSide === 'home';
-  let pickedAway = pickSide === 'away';
-
-  if (!pickedHome && !pickedAway) {
-    pickedHome = teamMatches(homeName, pick.team);
-    pickedAway = teamMatches(awayName, pick.team);
-
-    if (!pickedHome && !pickedAway) {
-      pickedHome = pick.home_team ? teamMatches(homeName, pick.home_team) : false;
-      pickedAway = pick.away_team ? teamMatches(awayName, pick.away_team) : false;
-    }
-
-    if (!pickedHome && !pickedAway && pick.matchup) {
-      const parsed = parseMatchup(pick.matchup);
-      if (parsed) {
-        const teamN = normalize(pick.team);
-        if (parsed.away && parsed.away.length >= 2 && (teamN.includes(parsed.away) || parsed.away.includes(teamN.slice(0, 4)))) {
-          pickedAway = true;
-        } else if (parsed.home && parsed.home.length >= 2 && (teamN.includes(parsed.home) || parsed.home.includes(teamN.slice(0, 4)))) {
-          pickedHome = true;
-        }
-      }
-    }
-  }
-
-  let result = 'PENDING';
-
-  if (betType.includes('moneyline') || betType.includes('ml')) {
-    const homeWon = homeScore > awayScore;
-    if (pickedHome) result = homeWon ? 'WIN' : 'LOSS';
-    else if (pickedAway) result = !homeWon ? 'WIN' : 'LOSS';
-    if (homeScore === awayScore) result = 'PUSH';
-
-  } else if (betType.includes('spread') || betType.includes('run line') || betType.includes('puck line')) {
-    if (pickedHome) {
-      const covered = (homeScore + line) > awayScore;
-      const push    = (homeScore + line) === awayScore;
-      result = push ? 'PUSH' : covered ? 'WIN' : 'LOSS';
-    } else if (pickedAway) {
-      const covered = (awayScore + line) > homeScore;
-      const push    = (awayScore + line) === homeScore;
-      result = push ? 'PUSH' : covered ? 'WIN' : 'LOSS';
-    }
-
-  } else if (betType.includes('over') || betType.includes('total')) {
-    const isOver  = pickSide === 'over' || betType.includes('over');
-    const isUnder = pickSide === 'under' || betType.includes('under');
-    if (line > 0) {
-      if (totalScore > line)       result = isOver  ? 'WIN' : 'LOSS';
-      else if (totalScore < line)  result = isUnder ? 'WIN' : 'LOSS';
-      else                         result = 'PUSH';
-    }
-  }
-
-  return result === 'PENDING' ? null : {
-    result,
-    home_score: homeScore,
-    away_score: awayScore,
-    home_team: home.team?.displayName || home.team?.name,
-    away_team: away.team?.displayName || away.team?.name,
-  };
-}
-
 export async function GET(req) {
-  // Verify this is a legitimate Vercel Cron invocation
-  const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // ── Auth: allow both CRON_SECRET header AND Vercel's own cron invocation ──
+  const authHeader = req.headers.get('authorization') || '';
+  const cronSecret = process.env.CRON_SECRET;
+
+  // If CRON_SECRET is set, enforce it. If it's not set, allow the request
+  // (useful during initial setup before the env var is configured).
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const started = Date.now();
-  const todayStr = new Date().toISOString().split('T')[0];
-  // Also look back 1 day to catch late-finishing or timezone-edge games from yesterday
-  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const started    = Date.now();
+  const todayStr   = new Date().toISOString().split('T')[0];
+  const cutoffDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
 
-  // Fetch ALL PENDING picks across ALL users whose date is yesterday or today
+  // Fetch ALL pending picks across ALL users from the last 7 days
+  // Include both explicit 'PENDING' AND null (newly inserted picks with default)
   const { data: picks, error } = await supabase
     .from('picks')
     .select('*')
-    .eq('result', 'PENDING')
-    .gte('date', yesterdayStr)
+    .or('result.eq.PENDING,result.is.null')
+    .gte('date', cutoffDate)
     .lte('date', todayStr)
-    .limit(500); // safety cap — adjust if you get many users
+    .limit(1000);
 
   if (error) {
-    console.error('[cron/grade-picks] Supabase fetch error:', error.message);
+    console.error('[cron/grade-picks] DB error:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!picks?.length) {
-    return NextResponse.json({ graded: 0, users: 0, skipped: 0, duration_ms: Date.now() - started });
+    const summary = { graded: 0, users: 0, skipped: 0, duration_ms: Date.now() - started };
+    console.log('[cron/grade-picks] No pending picks found', summary);
+    return NextResponse.json(summary);
   }
 
-  // Group by sport + date to batch ESPN calls.
-  // Normalize sport to lowercase so SPORT_PATHS lookup works regardless of DB casing.
+  // Group by sport + date to batch ESPN calls
   const groups = {};
-  picks.forEach(pick => {
-    const key = `${(pick.sport || '').toLowerCase()}|${pick.date}`;
+  for (const pick of picks) {
+    const sport = (pick.sport || '').toLowerCase();
+    if (!SPORT_PATHS[sport]) continue;
+    const key = `${sport}|${pick.date}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(pick);
-  });
+  }
 
-  // Cache ESPN scoreboards so we don't re-fetch for same sport+date across users
   const scoreboardCache = {};
-
-  let gradedCount = 0;
+  let gradedCount  = 0;
   let skippedCount = 0;
   const affectedUsers = new Set();
 
   for (const [key, groupPicks] of Object.entries(groups)) {
     const [sport, dateStr] = key.split('|');
 
-    // Fetch (and cache) ESPN scoreboard for this sport+date
     if (!scoreboardCache[key]) {
-      const espnDate = dateStr.replace(/-/g, '');
-      scoreboardCache[key] = await fetchScoreboard(sport, espnDate);
+      scoreboardCache[key] = await fetchESPNScoreboard(sport, dateStr);
     }
     const scoreboard = scoreboardCache[key];
     if (!scoreboard?.events) { skippedCount += groupPicks.length; continue; }
 
-    for (const pick of groupPicks) {
-      // Find matching ESPN event
-      let matchedGame = null;
-      for (const event of scoreboard.events) {
-        const comps    = event.competitions?.[0]?.competitors || [];
-        const homeTeam = comps.find(c => c.homeAway === 'home')?.team;
-        const awayTeam = comps.find(c => c.homeAway === 'away')?.team;
+    const graded = gradePicksAgainstScoreboard(groupPicks, scoreboard);
+    skippedCount += groupPicks.length - graded.length;
 
-        const homeMatch = teamMatches(homeTeam?.displayName || homeTeam?.name || '', pick.team)
-          || teamMatches(homeTeam?.displayName || homeTeam?.name || '', pick.home_team || '');
-        const awayMatch = teamMatches(awayTeam?.displayName || awayTeam?.name || '', pick.team)
-          || teamMatches(awayTeam?.displayName || awayTeam?.name || '', pick.away_team || '');
-
-        if (homeMatch || awayMatch) { matchedGame = event; break; }
-      }
-
-      if (!matchedGame) { skippedCount++; continue; }
-
-      const gradeResult = gradePick(pick, matchedGame);
-      if (!gradeResult) { skippedCount++; continue; } // game not final yet
-
-      // Calculate profit
-      const odds = parseInt(pick.odds || 0);
-      let profit = null;
-      if (gradeResult.result === 'WIN' && odds) {
-        profit = odds > 0
-          ? parseFloat((odds / 100).toFixed(3))
-          : parseFloat((100 / Math.abs(odds)).toFixed(3));
-      } else if (gradeResult.result === 'LOSS') {
-        profit = -1;
-      } else if (gradeResult.result === 'PUSH') {
-        profit = 0;
-      }
-
-      await supabase
+    for (const g of graded) {
+      const { error: updateErr } = await supabase
         .from('picks')
         .update({
-          result:            gradeResult.result,
-          profit:            profit,
+          result:            g.result,
+          profit:            g.profit,
           graded_at:         new Date().toISOString(),
-          graded_home_score: gradeResult.home_score,
-          graded_away_score: gradeResult.away_score,
+          graded_home_score: g.home_score,
+          graded_away_score: g.away_score,
         })
-        .eq('id', pick.id);
+        .eq('id', g.id);
 
-      gradedCount++;
-      affectedUsers.add(pick.user_id);
+      if (!updateErr) {
+        gradedCount++;
+        affectedUsers.add(g.user_id);
+      }
     }
   }
 
@@ -276,13 +117,12 @@ export async function GET(req) {
     run_at:      new Date().toISOString(),
   };
 
-  console.log('[cron/grade-picks]', summary);
+  console.log('[cron/grade-picks]', JSON.stringify(summary));
 
-  // Store last-run stats in settings table for Admin Panel visibility
-  await supabase.from('settings').upsert(
-    [{ key: 'cron_grade_last_run', value: JSON.stringify(summary) }],
-    { onConflict: 'key' }
-  ).catch(() => {});
+  // Persist last-run stats for Admin Panel visibility
+  await supabase.from('settings')
+    .upsert([{ key: 'cron_grade_last_run', value: JSON.stringify(summary) }], { onConflict: 'key' })
+    .catch(() => {});
 
   return NextResponse.json(summary);
 }

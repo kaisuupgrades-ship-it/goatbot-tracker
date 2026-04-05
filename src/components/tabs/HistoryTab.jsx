@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { addPick, updatePick, deletePick, setPickPublic } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
+import { validateContestEntry, DEFAULT_CONTEST_RULES } from '@/lib/contestValidation';
 
 // ── Live Score Engine ─────────────────────────────────────────────────────────
 // Polls ESPN every 30s for PENDING picks whose game is today.
@@ -571,41 +572,84 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
           )}
         </div>
 
-        {/* Contest entry toggle — full width */}
+        {/* Contest entry toggle — full width with inline validation */}
         <div style={{ gridColumn: '1 / -1' }}>
-          <button
-            type="button"
-            onClick={() => handleChange('contest_entry', !form.contest_entry)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              background: form.contest_entry ? 'rgba(255,184,0,0.08)' : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${form.contest_entry ? 'rgba(255,184,0,0.4)' : 'var(--border)'}`,
-              borderRadius: '8px', padding: '0.75rem 1rem', cursor: 'pointer',
-              width: '100%', transition: 'all 0.15s',
-            }}
-          >
-            {/* Toggle switch */}
-            <div style={{
-              width: '40px', height: '22px', borderRadius: '11px', border: 'none', cursor: 'pointer',
-              background: form.contest_entry ? 'var(--gold)' : 'var(--border)',
-              position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-            }}>
-              <div style={{
-                position: 'absolute', top: '3px',
-                left: form.contest_entry ? '21px' : '3px',
-                width: '16px', height: '16px', borderRadius: '50%',
-                background: 'white', transition: 'left 0.2s',
-              }} />
-            </div>
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ color: form.contest_entry ? 'var(--gold)' : 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                🏆 Enter to Contest
-              </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>
-                {form.contest_entry ? 'This pick will count toward your contest ranking' : 'Toggle to submit this pick to the leaderboard contest'}
-              </div>
-            </div>
-          </button>
+          {(() => {
+            const cv = validateContestEntry(form, DEFAULT_CONTEST_RULES);
+            const blocked = !cv.valid && !form.contest_entry; // only block when trying to enable
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!form.contest_entry && !cv.valid) return; // blocked by validation
+                    handleChange('contest_entry', !form.contest_entry);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    background: form.contest_entry ? 'rgba(255,184,0,0.08)' : blocked ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${form.contest_entry ? 'rgba(255,184,0,0.4)' : blocked ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`,
+                    borderRadius: '8px', padding: '0.75rem 1rem',
+                    cursor: blocked ? 'not-allowed' : 'pointer',
+                    width: '100%', transition: 'all 0.15s',
+                    opacity: blocked ? 0.75 : 1,
+                  }}
+                >
+                  {/* Toggle switch */}
+                  <div style={{
+                    width: '40px', height: '22px', borderRadius: '11px', border: 'none',
+                    background: form.contest_entry ? 'var(--gold)' : blocked ? 'rgba(248,113,113,0.4)' : 'var(--border)',
+                    position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: '3px',
+                      left: form.contest_entry ? '21px' : '3px',
+                      width: '16px', height: '16px', borderRadius: '50%',
+                      background: 'white', transition: 'left 0.2s',
+                    }} />
+                  </div>
+                  <div style={{ textAlign: 'left', flex: 1 }}>
+                    <div style={{ color: form.contest_entry ? 'var(--gold)' : blocked ? '#f87171' : 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: 700 }}>
+                      🏆 Enter to Contest
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>
+                      {form.contest_entry
+                        ? 'This pick will count toward your contest ranking'
+                        : blocked
+                          ? 'Fix the issues below to enter this pick in the contest'
+                          : 'Toggle to submit this pick to the leaderboard contest'}
+                    </div>
+                  </div>
+                  {form.contest_entry && (
+                    <span style={{ fontSize: '0.65rem', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '4px', padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>
+                      ✓ ENTERED
+                    </span>
+                  )}
+                </button>
+
+                {/* Validation errors — only show when user is attempting contest entry */}
+                {cv.errors.length > 0 && (
+                  <div style={{ marginTop: '6px', padding: '8px 12px', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '6px' }}>
+                    {cv.errors.map((e, i) => (
+                      <div key={i} style={{ fontSize: '0.7rem', color: '#f87171', display: 'flex', alignItems: 'flex-start', gap: '5px', marginBottom: i < cv.errors.length - 1 ? '3px' : 0 }}>
+                        <span style={{ flexShrink: 0, marginTop: '1px' }}>✕</span> {e}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Warnings — shown even when valid */}
+                {cv.warnings.length > 0 && cv.errors.length === 0 && (
+                  <div style={{ marginTop: '6px', padding: '6px 12px', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '6px' }}>
+                    {cv.warnings.map((w, i) => (
+                      <div key={i} style={{ fontSize: '0.7rem', color: 'var(--gold)', display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
+                        <span style={{ flexShrink: 0 }}>⚠</span> {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
       <div style={{ display: 'flex', gap: '0.7rem', marginTop: '1.2rem' }}>

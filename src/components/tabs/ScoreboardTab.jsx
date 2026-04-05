@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import BetSlipModal from '@/components/BetSlipModal';
 import VoiceButton from '@/components/VoiceInput';
 import { getUserPrefs, formatGameTime, getTzAbbr } from '@/lib/userPrefs';
+import GolfLeaderboard from '@/components/GolfLeaderboard';
+import TennisScoreboard from '@/components/TennisScoreboard';
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
@@ -57,8 +59,8 @@ const SPORTS = [
   { key: 'golf',   label: 'Golf',   emoji: '⛳', color: '#22c55e' },
 ];
 
-// Sports fetched in "All" mode (skip 'all' key itself)
-const ALL_SPORTS_KEYS = SPORTS.filter(s => s.key !== 'all').map(s => s.key);
+// Sports fetched in "All" mode — exclude golf/tennis (custom views, not standard scoreboard)
+const ALL_SPORTS_KEYS = SPORTS.filter(s => s.key !== 'all' && s.key !== 'golf' && s.key !== 'tennis' && s.key !== 'tenniswta').map(s => s.key);
 
 // Merge new games into existing state by game ID, preserving object references for unchanged games
 function mergeGames(prevGames, newGames) {
@@ -2025,7 +2027,16 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           </span>
         </div>
 
-        {/* Games grid */}
+        {/* ── Golf Leaderboard (replaces game cards) ── */}
+        {sport === 'golf' ? (
+          <GolfLeaderboard />
+        ) : sport === 'tennis' || sport === 'tenniswta' ? (
+          <TennisScoreboard initialTour={sport} />
+        ) : null}
+
+        {/* Games grid — hidden for golf/tennis which have their own views */}
+        {sport !== 'golf' && sport !== 'tennis' && sport !== 'tenniswta' && (
+        <>
         {loading && games.length === 0 ? (
           /* First-load skeleton only — never show this on background refresh */
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
@@ -2071,6 +2082,8 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               </div>
             ))}
           </div>
+        )}
+        </>
         )}
       </div>
 

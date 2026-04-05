@@ -15,8 +15,14 @@ const SPORT_PATHS = {
   mls:    'soccer/usa.1',
   wnba:   'basketball/wnba',
   ufc:    'mma/ufc',
-  tennis: 'tennis/atp',   // ATP tour; scoreboard = current tournament draws
-  golf:   'golf/pga',     // PGA Tour
+  tennis: 'tennis/atp',
+  tenniswta: 'tennis/wta',
+  golf:   'golf/pga',
+};
+
+// Sports that use a non-standard endpoint (not /scoreboard)
+const SPORT_ENDPOINT_OVERRIDE = {
+  golf: 'leaderboard', // PGA uses /leaderboard?league=pga, not /scoreboard
 };
 
 // Simple in-memory cache (resets on server restart)
@@ -60,8 +66,16 @@ export async function GET(req) {
   }
 
   try {
-    let path = `${sportPath}/${endpoint}`;
-    if (endpoint === 'scoreboard' && date) path += `?dates=${date}`;
+    // Use endpoint override if the sport has a special primary endpoint
+    const effectiveEndpoint = SPORT_ENDPOINT_OVERRIDE[sport] || endpoint;
+    let path = `${sportPath}/${effectiveEndpoint}`;
+
+    // Golf leaderboard needs ?league=pga query param
+    if (sport === 'golf' && effectiveEndpoint === 'leaderboard') {
+      path += '?league=pga';
+    } else if (endpoint === 'scoreboard' && date) {
+      path += `?dates=${date}`;
+    }
 
     const data = await espnFetch(path);
     return NextResponse.json(data);
