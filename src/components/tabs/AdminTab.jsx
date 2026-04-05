@@ -541,6 +541,24 @@ function ContestsPanel({ userEmail }) {
     setTimeout(() => setActionMsg(''), 4000);
   }
 
+  async function handleTimingSweep() {
+    if (!confirm('Run timing sweep? This will auto-reject ALL contest picks that were submitted after the game started. This cannot be undone.')) return;
+    setActionMsg('Running timing sweep…');
+    const res = await fetch('/api/contest-audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'timing-sweep', userEmail }),
+    });
+    const d = await res.json();
+    if (d.error) {
+      setActionMsg(`Error: ${d.error}`);
+    } else {
+      setActionMsg(`⏱ Swept ${d.swept} picks — ${d.violations} in-game submissions rejected`);
+      load();
+    }
+    setTimeout(() => setActionMsg(''), 6000);
+  }
+
   const filtered = picks.filter(p =>
     filter === 'all' || (filter === 'pending' ? !p.audit_status || p.audit_status === 'PENDING' : p.audit_status === filter.toUpperCase())
   );
@@ -569,7 +587,11 @@ function ContestsPanel({ userEmail }) {
         <button onClick={handleBatchAudit} style={{
           padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700,
           border: '1px solid rgba(255,184,0,0.3)', background: 'rgba(255,184,0,0.08)', color: '#FFB800',
-        }}>🎯 Run AI Audit on Pending</button>
+        }}>🎯 AI Audit Pending</button>
+        <button onClick={handleTimingSweep} style={{
+          padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700,
+          border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.07)', color: '#f87171',
+        }} title="Auto-reject all picks submitted after game started">⏱ Timing Sweep</button>
         <button onClick={load} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', border: '1px solid #222', background: 'transparent', color: '#666' }}>↻</button>
       </div>
 

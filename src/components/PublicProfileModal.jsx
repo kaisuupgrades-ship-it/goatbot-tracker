@@ -3,11 +3,12 @@ import { useState, useEffect } from 'react';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-function UserAvatar({ userId, avatarEmoji, displayName, username, size = 62 }) {
+function UserAvatar({ userId, avatarUrl, avatarEmoji, displayName, username, size = 62 }) {
   const [imgErr, setImgErr] = useState(false);
-  const src = SUPABASE_URL && userId
+  // Prefer profile-stored cache-busted URL; fall back to constructed URL
+  const src = avatarUrl || (SUPABASE_URL && userId
     ? `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg`
-    : null;
+    : null);
 
   function getInitials() {
     const name = displayName || username || '?';
@@ -38,6 +39,8 @@ function UserAvatar({ userId, avatarEmoji, displayName, username, size = 62 }) {
       {src && !imgErr ? (
         <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={() => setImgErr(true)} />
+      ) : avatarEmoji ? (
+        <span style={{ fontSize: size * 0.45, lineHeight: 1, userSelect: 'none' }}>{avatarEmoji}</span>
       ) : (
         <span style={{
           fontSize: size * 0.34, fontWeight: 700, letterSpacing: '0.02em',
@@ -112,7 +115,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const sportBreakdown = profileData?.sport_breakdown || [];
   const pendingCount  = stats?.pending_count ?? 0;
 
-  const { rank, avatar_emoji, display_name, username, sharp_score } = entry;
+  const { rank, avatar_emoji, avatar_url, display_name, username, sharp_score } = entry;
   const displayName   = display_name || username || 'Anonymous';
   const displayWins   = stats?.wins   ?? entry.wins   ?? 0;
   const displayLosses = stats?.losses ?? entry.losses ?? 0;
@@ -182,7 +185,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
             {/* Left: avatar + name */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div style={{ borderRadius: '50%', boxShadow: '0 0 18px rgba(255,184,0,0.22)', display: 'inline-flex' }}>
-                <UserAvatar userId={userId} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={62} />
+                <UserAvatar userId={userId} avatarUrl={avatar_url || profileData?.profile?.avatar_url} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={62} />
               </div>
               <div>
                 <div style={{ fontWeight: 900, fontSize: '1.15rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
@@ -540,7 +543,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                   onClick={() => setViewingEntry({ user_id: person.id, username: person.username, display_name: person.display_name, avatar_emoji: person.avatar_emoji })}
                 >
-                  <UserAvatar userId={person.id} avatarEmoji={person.avatar_emoji} displayName={person.display_name} username={person.username} size={38} />
+                  <UserAvatar userId={person.id} avatarUrl={person.avatar_url} avatarEmoji={person.avatar_emoji} displayName={person.display_name} username={person.username} size={38} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                       {person.display_name || person.username}

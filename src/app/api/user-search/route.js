@@ -35,6 +35,7 @@ function groupByUser(picks) {
         username:     p.profiles?.username     || null,
         display_name: p.profiles?.display_name || null,
         avatar_emoji: p.profiles?.avatar_emoji || null,
+        avatar_url:   p.profiles?.avatar_url   || null,
         wins: 0, losses: 0, pushes: 0, total: 0,
         units: 0, wagered: 0,
         picks_by_date: [], // [{result, created_at}]
@@ -79,6 +80,7 @@ function groupByUser(picks) {
       username: u.username,
       display_name: u.display_name,
       avatar_emoji: u.avatar_emoji,
+      avatar_url:   u.avatar_url,
       wins: u.wins,
       losses: u.losses,
       pushes: u.pushes,
@@ -133,11 +135,11 @@ export async function GET(req) {
       fromDate = new Date(Date.now() - days * 86_400_000).toISOString();
     }
 
-    // Query all public settled picks in range
+    // Query all settled picks in range — no is_public gate so every
+    // user who has placed and settled a pick appears in the directory.
     let query = supabase
       .from('picks')
-      .select('user_id, result, odds, units, created_at, sport, profiles(username, display_name, avatar_emoji)')
-      .eq('is_public', true)
+      .select('user_id, result, odds, units, created_at, sport, profiles(username, display_name, avatar_emoji, avatar_url)')
       .in('result', ['WIN', 'LOSS', 'PUSH']);
 
     if (fromDate) query = query.gte('created_at', fromDate);

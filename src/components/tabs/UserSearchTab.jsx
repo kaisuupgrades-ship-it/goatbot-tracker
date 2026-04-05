@@ -104,8 +104,9 @@ function UserCard({ entry, rank, currentUserId, onViewProfile }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '1rem', overflow: 'hidden', position: 'relative',
         }}>
-          {SUPABASE_URL
-            ? <img src={`${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
+          {(entry.avatar_url || (SUPABASE_URL && entry.user_id))
+            ? <img
+                src={entry.avatar_url || `${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
                 alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
                 onError={e => { e.target.style.display = 'none'; }}
               />
@@ -369,7 +370,7 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
       )}
 
       <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-        Only bettors with public settled picks are shown. Click any row to view profile.
+        Only bettors with settled picks are shown. Click any row to view profile.
         {isDemo && ' (Demo data)'}
       </div>
 

@@ -40,7 +40,7 @@ export async function GET(req) {
 
   // Fetch profile + picks + follower count + following count in parallel
   const [profileRes, picksRes, followCountRes, followingCountRes] = await Promise.all([
-    supabase.from('profiles').select('username, display_name, avatar_emoji, is_public').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('username, display_name, avatar_emoji, avatar_url, is_public').eq('id', userId).maybeSingle(),
     picksQuery,
     supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', userId),
     supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
@@ -115,6 +115,7 @@ export async function GET(req) {
       username:     profile?.username || null,
       display_name: profile?.display_name || null,
       avatar_emoji: profile?.avatar_emoji || null,
+      avatar_url:   profile?.avatar_url   || null,
     },
     stats: {
       wins, losses, pushes,

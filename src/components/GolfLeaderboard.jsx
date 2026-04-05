@@ -868,19 +868,51 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function GolfLeaderboard() {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [search, setSearch]   = useState('');
-  const [league, setLeague]   = useState('pga');
-  const isMobile              = useIsMobile();
+const ALL_LEAGUES = [
+  { id: 'pga',  label: 'PGA Tour', emoji: '🇺🇸' },
+  { id: 'lpga', label: 'LPGA',     emoji: '👩' },
+  { id: 'euro', label: 'DP World', emoji: '🇪🇺' },
+];
 
-  const leagues = [
-    { id: 'pga',  label: 'PGA Tour', emoji: '🇺🇸' },
-    { id: 'lpga', label: 'LPGA',     emoji: '👩' },
-    { id: 'euro', label: 'DP World', emoji: '🇪🇺' },
-  ];
+export default function GolfLeaderboard() {
+  const [data, setData]               = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState('');
+  const [search, setSearch]           = useState('');
+  const [league, setLeague]           = useState('pga');
+  // Only show leagues whose ESPN endpoint responds without error
+  const [availableLeagues, setAvailableLeagues] = useState(ALL_LEAGUES);
+  const [probing, setProbing]         = useState(true);
+  const isMobile                      = useIsMobile();
+
+  // On mount: probe all leagues in parallel and hide any that return an API error
+  useEffect(() => {
+    let cancelled = false;
+    async function probe() {
+      const results = await Promise.allSettled(
+        ALL_LEAGUES.map(l =>
+          fetch(`/api/sports?sport=golf&endpoint=leaderboard&league=${l.id}`)
+            .then(r => r.json())
+            .then(json => ({ id: l.id, ok: !json.error }))
+            .catch(() => ({ id: l.id, ok: false }))
+        )
+      );
+      if (cancelled) return;
+      const available = ALL_LEAGUES.filter((l, i) => {
+        const r = results[i];
+        return r.status === 'fulfilled' && r.value.ok;
+      });
+      // Fall back to PGA if nothing is available (shouldn't happen)
+      const finalList = available.length > 0 ? available : [ALL_LEAGUES[0]];
+      setAvailableLeagues(finalList);
+      // Auto-select first available league (prefer PGA if it's in the list)
+      const pgaAvailable = finalList.some(l => l.id === 'pga');
+      setLeague(pgaAvailable ? 'pga' : finalList[0].id);
+      setProbing(false);
+    }
+    probe();
+    return () => { cancelled = true; };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -897,11 +929,12 @@ export default function GolfLeaderboard() {
     }
   }, [league]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!probing) load(); }, [load, probing]);
   useEffect(() => {
+    if (probing) return;
     const t = setInterval(load, 3 * 60 * 1000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, probing]);
 
   // ESPN golf leaderboard response nests events differently depending on version
   const events =
@@ -924,7 +957,7 @@ export default function GolfLeaderboard() {
     <div className="fade-in">
       {/* Controls */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {leagues.map(l => (
+        {availableLeagues.map(l => (
           <button key={l.id} onClick={() => { setLeague(l.id); setSearch(''); }} style={{
             padding: '5px 12px', borderRadius: '20px', fontSize: '0.78rem', cursor: 'pointer',
             border: `1px solid ${league === l.id ? '#22c55e' : 'var(--border)'}`,

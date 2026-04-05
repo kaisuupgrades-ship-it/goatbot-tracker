@@ -213,6 +213,30 @@ export async function POST(req) {
     );
   }
 
+  // ── 5b. HARD BLOCK: contest picks must be submitted BEFORE game starts ───
+  //    This is the definitive integrity check. We just fetched the real game
+  //    start from ESPN — if the clock has already passed it, the pick is dead.
+  //    We give a 2-minute grace window to account for close submissions and
+  //    clock skew, but no more.
+  if (safePayload.contest_entry && commence_time) {
+    const submittedAt = new Date();
+    const gameStart   = new Date(commence_time);
+    const GRACE_MS    = 2 * 60 * 1000; // 2-minute grace window
+
+    if (submittedAt.getTime() > gameStart.getTime() + GRACE_MS) {
+      const startedAgo = Math.round((submittedAt - gameStart) / 60000);
+      return NextResponse.json({
+        error: 'Game already started',
+        errors: [
+          `This game started ${startedAgo} minute${startedAgo !== 1 ? 's' : ''} ago — contest picks must be submitted before game time.`,
+          'You can still log it as a personal pick (uncheck "Contest Entry").',
+        ],
+        commence_time,
+        submitted_at: submittedAt.toISOString(),
+      }, { status: 422 });
+    }
+  }
+
   // ── 6. Insert via service role (trusted) ─────────────────────────────────
   const { data, error } = await supabaseAdmin
     .from('picks')

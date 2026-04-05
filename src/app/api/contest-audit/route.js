@@ -113,6 +113,25 @@ async function checkOddsAgainstPinnacle(pick) {
 
 // ── Main audit function ─────────────────────────────────────────────────────
 async function aiAuditPick(pick) {
+  // Step 0: Timing integrity check — deterministic, no AI needed.
+  //   If we have a real commence_time from ESPN AND the pick was submitted after
+  //   game start (+ 2-min grace), this is a hard REJECTED regardless of anything else.
+  //   This is the Charlie fix: no AI prompt can override a timestamp comparison.
+  if (pick.commence_time && pick.created_at) {
+    const submitted  = new Date(pick.created_at).getTime();
+    const gameStart  = new Date(pick.commence_time).getTime();
+    const GRACE_MS   = 2 * 60 * 1000; // 2-minute grace window (same as pick submission)
+    if (submitted > gameStart + GRACE_MS) {
+      const minsLate = Math.round((submitted - gameStart) / 60000);
+      return {
+        status:     'REJECTED',
+        reason:     `Submitted ${minsLate} minute${minsLate !== 1 ? 's' : ''} after game started (${new Date(pick.commence_time).toLocaleTimeString()}). Contest picks must be pre-game.`,
+        confidence: 'TIMING',
+        aiUsed:     false,
+      };
+    }
+  }
+
   // Step 1: Hard rule checks (instant, zero cost)
   const issues = [];
   const odds = parseInt(pick.odds);
@@ -338,6 +357,59 @@ export async function POST(req) {
     }
 
     return NextResponse.json({ audited: results.length, results });
+  }
+
+  // Timing sweep: scan ALL contest picks (approved + unaudited) for in-game submissions.
+  // Finds picks where created_at > commence_time + 2 min grace and auto-rejects them.
+  // This is the retroactive fix for picks like Charlie's that slipped through.
+  if (action === 'timing-sweep') {
+    if (!ADMIN_EMAILS.includes(body.userEmail?.toLowerCase())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const { data: picks } = await supabase
+      .from('picks')
+      .select('id, user_id, team, sport, date, created_at, commence_time, audit_status, odds')
+      .eq('contest_entry', true)
+      .not('commence_time', 'is', null)   // only checkable picks
+      .not('audit_status', 'eq', 'REJECTED'); // skip already-rejected
+
+    const GRACE_MS = 2 * 60 * 1000;
+    const violations = [];
+
+    for (const pick of (picks || [])) {
+      const submitted = new Date(pick.created_at).getTime();
+      const gameStart = new Date(pick.commence_time).getTime();
+      if (submitted > gameStart + GRACE_MS) {
+        const minsLate = Math.round((submitted - gameStart) / 60000);
+        await supabase
+          .from('picks')
+          .update({
+            contest_entry:          false,
+            audit_status:           'REJECTED',
+            audit_reason:           `Timing sweep: submitted ${minsLate}m after game started (${new Date(pick.commence_time).toISOString()}). Auto-rejected.`,
+            audit_ai_used:          false,
+            audited_at:             new Date().toISOString(),
+            contest_rejected_date:  pick.date,
+          })
+          .eq('id', pick.id);
+
+        violations.push({
+          pickId:    pick.id,
+          team:      pick.team,
+          sport:     pick.sport,
+          minsLate,
+          submitted: pick.created_at,
+          gameStart: pick.commence_time,
+        });
+      }
+    }
+
+    return NextResponse.json({
+      swept:      (picks || []).length,
+      violations: violations.length,
+      rejected:   violations,
+    });
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

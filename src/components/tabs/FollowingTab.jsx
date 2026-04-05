@@ -43,8 +43,9 @@ function FollowedUserCard({ entry, onUnfollow, userId, onViewProfile }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '1.1rem', overflow: 'hidden', position: 'relative',
       }}>
-        {SUPABASE_URL
-          ? <img src={`${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
+        {(entry.avatar_url || (SUPABASE_URL && entry.user_id))
+          ? <img
+              src={entry.avatar_url || `${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
               alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               onError={e => { e.target.style.display = 'none'; }}
             />
@@ -128,6 +129,7 @@ export default function FollowingTab({ user, isDemo, onOpenInbox }) {
           const uid = list[i].id;
           if (result.status === 'fulfilled' && result.value?.stats) {
             const s = result.value.stats;
+            const p = result.value.profile || {};
             statMap[uid] = {
               user_id:        uid,
               wins:           s.wins,
@@ -140,6 +142,11 @@ export default function FollowingTab({ user, isDemo, onOpenInbox }) {
               recent_results: (result.value.settled_picks || [])
                 .slice(0, 10)
                 .map(p => p.result),
+              // Pull avatar fields from profile so they're always fresh
+              avatar_emoji:   p.avatar_emoji  || null,
+              avatar_url:     p.avatar_url    || null,
+              display_name:   p.display_name  || null,
+              username:       p.username      || null,
             };
           }
         });

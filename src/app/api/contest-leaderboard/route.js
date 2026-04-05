@@ -35,7 +35,7 @@ function contestProfit(result, odds) {
 function buildContestRows(picks, profiles) {
   const nameMap = {};
   (profiles || []).forEach(p => {
-    nameMap[p.id] = { username: p.username, display_name: p.display_name || p.username, avatar_emoji: p.avatar_emoji || '🎯' };
+    nameMap[p.id] = { username: p.username, display_name: p.display_name || p.username, avatar_emoji: p.avatar_emoji || '🎯', avatar_url: p.avatar_url || null };
   });
 
   const userMap = {};
@@ -48,6 +48,7 @@ function buildContestRows(picks, profiles) {
         username:     prof.username     || 'Unknown',
         display_name: prof.display_name || 'Unknown',
         avatar_emoji: prof.avatar_emoji || '🎯',
+        avatar_url:   prof.avatar_url   || null,
         wins: 0, losses: 0, pushes: 0, pending: 0,
         total_settled: 0, units: 0,
         last_results: [],
@@ -116,11 +117,12 @@ export async function GET(req) {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Fetch all contest picks — include unaudited (null) and approved, exclude only rejected
+    // Fetch all contest picks — include unaudited (null) and approved, exclude only rejected.
+    // Also fetch commence_time so we can filter out in-game submissions at the leaderboard layer.
     // NOTE: .neq() in Supabase excludes NULLs, so we must use .or() to include null audit_status
     let query = supabase
       .from('picks')
-      .select('user_id, result, profit, odds, created_at, audit_status')
+      .select('user_id, result, profit, odds, created_at, audit_status, commence_time')
       .eq('contest_entry', true)
       .or('audit_status.is.null,audit_status.eq.APPROVED');
 
@@ -141,12 +143,24 @@ export async function GET(req) {
     if (userIds.length > 0) {
       const { data: profs } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_emoji')
+        .select('id, username, display_name, avatar_emoji, avatar_url')
         .in('id', userIds);
       profiles = profs || [];
     }
 
-    const rows = buildContestRows(picks || [], profiles);
+    // ── Timing integrity filter ───────────────────────────────────────────
+    // Remove any pick where we KNOW it was submitted after the game started.
+    // Only filter when both timestamps are present — picks with null commence_time
+    // (ESPN lookup failed) are given benefit of the doubt until audited manually.
+    const GRACE_MS = 2 * 60 * 1000;
+    const cleanPicks = (picks || []).filter(p => {
+      if (!p.commence_time || !p.created_at) return true; // can't determine — keep
+      const submitted = new Date(p.created_at).getTime();
+      const gameStart = new Date(p.commence_time).getTime();
+      return submitted <= gameStart + GRACE_MS; // keep if submitted before game + grace
+    });
+
+    const rows = buildContestRows(cleanPicks, profiles);
 
     // Store in cache
     if (!cache.data) cache.data = {};

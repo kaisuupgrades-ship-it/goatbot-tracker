@@ -17,12 +17,15 @@ function useIsMobile(breakpoint = 640) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-// ── UserAvatar: shows real photo if available, falls back to initials ─────────
-function UserAvatar({ userId, avatarEmoji, displayName, username, size = 32 }) {
+// ── UserAvatar: shows real photo if available, falls back to emoji then initials
+// avatarUrl — cache-busted URL from profiles table (preferred when available)
+// userId    — fallback to construct the storage URL
+function UserAvatar({ userId, avatarUrl, avatarEmoji, displayName, username, size = 32 }) {
   const [imgErr, setImgErr] = useState(false);
-  const src = SUPABASE_URL && userId
+  // Prefer the profile-stored URL (has ?v=timestamp cache-buster); fall back to constructed URL
+  const src = avatarUrl || (SUPABASE_URL && userId
     ? `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg`
-    : null;
+    : null);
   const showImg = src && !imgErr;
 
   // Generate initials from display name or username
@@ -60,6 +63,8 @@ function UserAvatar({ userId, avatarEmoji, displayName, username, size = 32 }) {
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={() => setImgErr(true)}
         />
+      ) : avatarEmoji ? (
+        <span style={{ fontSize: size * 0.55, lineHeight: 1, userSelect: 'none' }}>{avatarEmoji}</span>
       ) : (
         <span style={{
           fontSize: size * 0.38, fontWeight: 700, letterSpacing: '0.02em',
@@ -135,7 +140,7 @@ function SharpBar({ score, maxScore }) {
 // ── Leaderboard Row ────────────────────────────────────────────────────────────
 
 function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
-  const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, id: userId } = entry;
+  const { rank, avatar_emoji, avatar_url, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, user_id: userId } = entry;
 
   return (
     <div
@@ -162,7 +167,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
 
       {/* Name */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-        <UserAvatar userId={userId} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={isMobile ? 26 : 30} />
+        <UserAvatar userId={userId} avatarUrl={avatar_url} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={isMobile ? 26 : 30} />
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' }}>
             <span style={{ fontWeight: 700, color: isMe ? 'var(--gold)' : 'var(--text-primary)', fontSize: isMobile ? '0.84rem' : '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -554,7 +559,7 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
       </div>
       {/* Avatar */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <UserAvatar userId={entry.user_id} avatarEmoji={entry.avatar_emoji} displayName={entry.display_name} username={entry.username} size={isMobile ? 24 : 30} />
+        <UserAvatar userId={entry.user_id} avatarUrl={entry.avatar_url} avatarEmoji={entry.avatar_emoji} displayName={entry.display_name} username={entry.username} size={isMobile ? 24 : 30} />
       </div>
       {/* Name */}
       <div style={{ overflow: 'hidden' }}>

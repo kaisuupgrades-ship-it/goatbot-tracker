@@ -39,7 +39,7 @@ export async function GET(req) {
   if (followerId) {
     const { data, error } = await db
       .from('follows')
-      .select('following_id, following:profiles!following_id(username,display_name,avatar_emoji)')
+      .select('following_id, following:profiles!following_id(username,display_name,avatar_emoji,avatar_url)')
       .eq('follower_id', followerId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const users = (data || []).map(r => ({ id: r.following_id, ...r.following }));
@@ -50,7 +50,7 @@ export async function GET(req) {
   if (followingId) {
     const { data, error } = await db
       .from('follows')
-      .select('follower_id, follower:profiles!follower_id(username,display_name,avatar_emoji)')
+      .select('follower_id, follower:profiles!follower_id(username,display_name,avatar_emoji,avatar_url)')
       .eq('following_id', followingId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ users: (data || []).map(r => ({ id: r.follower_id, ...r.follower })) });
