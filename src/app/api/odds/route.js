@@ -194,11 +194,30 @@ async function fetchPinnacleLines(sportKey) {
       } else if (mkt.type === 'spread') {
         const h = prices.find(p => p.designation === 'home');
         const a = prices.find(p => p.designation === 'away');
-        if (h && a) oddsMap[mid].spread = { homePoint: h.points, homePrice: h.price, awayPoint: a.points, awayPrice: a.price };
+        // Prefer the spread closest to standard run line (±1.5 for MLB).
+        // Only overwrite if not yet set, or if this spread's |homePoint| is closer to 1.5
+        // (the most standard baseball run line) than the current one.
+        if (h && a && h.points != null) {
+          if (!oddsMap[mid].spread) {
+            oddsMap[mid].spread = { homePoint: h.points, homePrice: h.price, awayPoint: a.points, awayPrice: a.price };
+          } else {
+            const curDiff  = Math.abs(Math.abs(oddsMap[mid].spread.homePoint) - 1.5);
+            const newDiff  = Math.abs(Math.abs(h.points) - 1.5);
+            if (newDiff < curDiff) {
+              oddsMap[mid].spread = { homePoint: h.points, homePrice: h.price, awayPoint: a.points, awayPrice: a.price };
+            }
+          }
+        }
       } else if (mkt.type === 'total') {
         const ov = prices.find(p => p.designation === 'over');
         const un = prices.find(p => p.designation === 'under');
-        if (ov && un) oddsMap[mid].total = { point: ov.points, overPrice: ov.price, underPrice: un.price };
+        // Keep highest-point total only — Pinnacle lists alternate low totals (0.5, 1.5, 5.0)
+        // in the same market type; the actual game total is always the highest value.
+        if (ov && un && ov.points != null) {
+          if (!oddsMap[mid].total || ov.points > oddsMap[mid].total.point) {
+            oddsMap[mid].total = { point: ov.points, overPrice: ov.price, underPrice: un.price };
+          }
+        }
       }
     }
 

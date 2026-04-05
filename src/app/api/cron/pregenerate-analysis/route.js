@@ -163,6 +163,13 @@ export async function GET(req) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Check admin-controlled enable flag
+  const { data: enabledSetting } = await supabase
+    .from('settings').select('value').eq('key', 'cron_pregenerate_enabled').maybeSingle();
+  if (enabledSetting?.value === 'false') {
+    return NextResponse.json({ skipped: true, reason: 'Disabled by admin' });
+  }
+
   const params   = new URL(req.url).searchParams;
   const force    = params.get('force') === 'true';
   // Optional: filter to a single sport (used by admin per-sport calls to stay within timeout)

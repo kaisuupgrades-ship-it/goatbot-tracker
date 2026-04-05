@@ -36,6 +36,13 @@ export async function GET(req) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Check admin-controlled enable flag (soft disable without redeploying)
+  const { data: enabledSetting } = await supabase
+    .from('settings').select('value').eq('key', 'cron_grade_picks_enabled').maybeSingle();
+  if (enabledSetting?.value === 'false') {
+    return NextResponse.json({ skipped: true, reason: 'Disabled by admin' });
+  }
+
   const started    = Date.now();
   const todayStr   = new Date().toISOString().split('T')[0];
   const cutoffDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];

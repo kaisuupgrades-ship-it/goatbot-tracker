@@ -44,6 +44,42 @@ function isGameLive(game) {
   return new Date(game.commence_time) <= new Date();
 }
 
+// Smart time label: "Today · 7:10 PM", "Tomorrow · 1:05 PM", "Mon, Apr 7 · 1:05 PM"
+function smartTimeLabel(commenceTime) {
+  const dt   = new Date(commenceTime);
+  const now  = new Date();
+  const tom  = new Date(Date.now() + 86400000);
+  const time = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (dt.toDateString() === now.toDateString())  return `Today · ${time}`;
+  if (dt.toDateString() === tom.toDateString())  return `Tomorrow · ${time}`;
+  return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`;
+}
+
+// Group games by calendar day for date-header rendering
+function groupByDate(games) {
+  const now = new Date();
+  const tom = new Date(Date.now() + 86400000);
+  const map = {};
+  const order = [];
+  for (const g of games) {
+    const dt = new Date(g.commence_time);
+    let key, label;
+    if (dt.toDateString() === now.toDateString()) {
+      key   = 'today';
+      label = `Today — ${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
+    } else if (dt.toDateString() === tom.toDateString()) {
+      key   = 'tomorrow';
+      label = `Tomorrow — ${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
+    } else {
+      key   = dt.toDateString();
+      label = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+    if (!map[key]) { map[key] = { label, games: [] }; order.push(key); }
+    map[key].games.push(g);
+  }
+  return order.map(k => map[k]);
+}
+
 // Detect wildly skewed in-play odds (threshold: either side > ±500)
 function hasExtremeOdds(awayML, homeML) {
   return (awayML != null && Math.abs(awayML) > 500) ||
@@ -76,31 +112,41 @@ function bestSpread(bookmakers, teamName) {
   return { price: bestPrice, point: bestPoint };
 }
 
-// Get total line (O/U number) and standard over/under odds
-// Prefer lines where BOTH over AND under are near standard juice (-140 to +120)
-// to avoid showing alternate/outlier totals with extreme odds like -263/+486
+// Get total line (O/U number) and standard over/under odds.
+// Collects ALL bookmakers' lines and returns the one with the highest point value
+// among standard-juice lines — this avoids alternate low totals (0.5, 1.5, 5.0)
+// that Pinnacle and some books list alongside the real game total.
 function bestTotal(bookmakers) {
-  // Pass 1: standard-juice lines only
+  let best = null;
+
+  // Pass 1: standard-juice lines only (-140 to +120 both sides), pick the HIGHEST point
   for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'totals');
     if (!mkt) continue;
     const over  = mkt.outcomes?.find(o => o.name === 'Over');
     const under = mkt.outcomes?.find(o => o.name === 'Under');
-    if (!over?.price || !under?.price) continue;
-    // Both sides in normal juice range → this is the standard line
+    if (!over?.price || !under?.price || over.point == null) continue;
     if (over.price >= -140 && over.price <= 120 && under.price >= -140 && under.price <= 120) {
-      return { line: over.point, overPrice: over.price, underPrice: under.price };
+      if (!best || over.point > best.line) {
+        best = { line: over.point, overPrice: over.price, underPrice: under.price };
+      }
     }
   }
-  // Pass 2: any line available (fallback)
+  if (best) return best;
+
+  // Pass 2: any line with a reasonable point (≥ 3.0) — picks the highest available
   for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'totals');
     const over  = mkt?.outcomes?.find(o => o.name === 'Over');
     const under = mkt?.outcomes?.find(o => o.name === 'Under');
-    if (over?.point != null) {
-      return { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
+    if (over?.point != null && over.point >= 3) {
+      if (!best || over.point > best.line) {
+        best = { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
+      }
     }
   }
+  if (best) return best;
+
   return { line: null, overPrice: null, underPrice: null };
 }
 
@@ -148,7 +194,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
   const commenceTime = new Date(game.commence_time);
   const isLive   = isGameLive(game);
   const extreme  = isLive && hasExtremeOdds(awayML, homeML);
-  const timeLabel = commenceTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const timeLabel = smartTimeLabel(game.commence_time);
 
   // All books that have any market data
   const allBooks = books.filter(bk =>
@@ -642,60 +688,59 @@ export default function OddsTab({ onAnalyze }) {
             <span style={{ color: '#555', fontSize: '0.68rem' }}>ML · Spread · O/U</span>
           </div>
 
-          {/* In "All" mode: section header before live games */}
-          {gameFilter === 'all' ? (
-            <>
-              {upcomingGames.length > 0 && upcomingGames.map(game => (
-                <GameOddsRow
-                  key={game.id}
-                  game={game}
-                  expanded={expanded === game.id}
-                  onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
-                  onAnalyze={onAnalyze}
-                />
-              ))}
-              {liveGames.length > 0 && (
-                <>
-                  <div style={{
-                    padding: '0.4rem 1rem',
-                    background: 'rgba(255,69,96,0.06)',
-                    borderTop: upcomingGames.length > 0 ? '1px solid rgba(255,69,96,0.2)' : 'none',
-                    borderBottom: '1px solid rgba(255,69,96,0.15)',
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                  }}>
-                    <span style={{
-                      fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.1em',
-                      color: '#FF4560', background: 'rgba(255,69,96,0.15)',
-                      border: '1px solid rgba(255,69,96,0.4)',
-                      borderRadius: '3px', padding: '1px 6px',
-                    }}>⚡ IN-GAME</span>
-                    <span style={{ fontSize: '0.65rem', color: 'rgba(255,100,100,0.6)' }}>
-                      These games have started — odds below are live in-game lines, not pre-game betting lines
-                    </span>
-                  </div>
-                  {liveGames.map(game => (
-                    <GameOddsRow
-                      key={game.id}
-                      game={game}
-                      expanded={expanded === game.id}
-                      onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
-                      onAnalyze={onAnalyze}
-                    />
-                  ))}
-                </>
-              )}
-            </>
-          ) : (
-            filtered.map(game => (
-              <GameOddsRow
-                key={game.id}
-                game={game}
-                expanded={expanded === game.id}
-                onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
-                onAnalyze={onAnalyze}
-              />
-            ))
+          {/* Live section header (shown when in-game games exist + not live-only filter) */}
+          {gameFilter === 'all' && liveGames.length > 0 && upcomingGames.length > 0 && (
+            <div style={{
+              padding: '0.4rem 1rem',
+              background: 'rgba(255,69,96,0.06)',
+              borderBottom: '1px solid rgba(255,69,96,0.15)',
+              display: 'flex', alignItems: 'center', gap: '8px',
+            }}>
+              <span style={{
+                fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.1em',
+                color: '#FF4560', background: 'rgba(255,69,96,0.15)',
+                border: '1px solid rgba(255,69,96,0.4)',
+                borderRadius: '3px', padding: '1px 6px',
+              }}>⚡ IN-GAME</span>
+              <span style={{ fontSize: '0.65rem', color: 'rgba(255,100,100,0.6)' }}>
+                These games have started — odds are live in-game lines
+              </span>
+            </div>
           )}
+
+          {/* Games grouped by date */}
+          {(() => {
+            const gamesToShow = gameFilter === 'live' ? liveGames : gameFilter === 'upcoming' ? upcomingGames : [...upcomingGames, ...liveGames];
+            const groups = groupByDate(gamesToShow);
+            return groups.map((group, gi) => (
+              <div key={gi}>
+                {/* Date group header */}
+                <div style={{
+                  padding: '0.35rem 1rem',
+                  background: 'rgba(255,184,0,0.04)',
+                  borderBottom: '1px solid rgba(255,184,0,0.1)',
+                  borderTop: gi > 0 ? '1px solid rgba(255,184,0,0.12)' : 'none',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                }}>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#FFB800', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    📅 {group.label}
+                  </span>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                    {group.games.length} game{group.games.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {group.games.map(game => (
+                  <GameOddsRow
+                    key={game.id}
+                    game={game}
+                    expanded={expanded === game.id}
+                    onToggle={() => setExpanded(prev => prev === game.id ? null : game.id)}
+                    onAnalyze={onAnalyze}
+                  />
+                ))}
+              </div>
+            ));
+          })()}
         </div>
       )}
     </div>

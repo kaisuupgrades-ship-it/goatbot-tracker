@@ -27,7 +27,7 @@ export async function PATCH(req) {
     const body = await req.json();
     const {
       username, username_changed_at,
-      display_name,                   // friendly name shown in chat/leaderboard
+      display_name, display_name_changed_at,  // friendly name shown in chat/leaderboard
       email,    email_changed_at,
       phone,    phone_changed_at,
       avatar_url,
@@ -37,14 +37,15 @@ export async function PATCH(req) {
 
     // Build metadata update (merges with existing)
     const metaUpdate = {};
-    if (username    !== undefined) { metaUpdate.username            = username;    }
-    if (username_changed_at)       { metaUpdate.username_changed_at = username_changed_at; }
-    if (phone       !== undefined) { metaUpdate.phone               = phone;       }
-    if (phone_changed_at)          { metaUpdate.phone_changed_at    = phone_changed_at;    }
-    if (avatar_url  !== undefined) { metaUpdate.avatar_url          = avatar_url;  }
-    if (email_changed_at)          { metaUpdate.email_changed_at    = email_changed_at;    }
-    if (timezone    !== undefined) { metaUpdate.timezone            = timezone;    }
-    if (odds_format !== undefined) { metaUpdate.odds_format         = odds_format; }
+    if (username    !== undefined)        { metaUpdate.username               = username;               }
+    if (username_changed_at)              { metaUpdate.username_changed_at    = username_changed_at;    }
+    if (display_name_changed_at)          { metaUpdate.display_name_changed_at = display_name_changed_at; }
+    if (phone       !== undefined)        { metaUpdate.phone                  = phone;                  }
+    if (phone_changed_at)                 { metaUpdate.phone_changed_at       = phone_changed_at;       }
+    if (avatar_url  !== undefined)        { metaUpdate.avatar_url             = avatar_url;             }
+    if (email_changed_at)                 { metaUpdate.email_changed_at       = email_changed_at;       }
+    if (timezone    !== undefined)        { metaUpdate.timezone               = timezone;               }
+    if (odds_format !== undefined)        { metaUpdate.odds_format            = odds_format;            }
 
     // Email update (goes through Supabase auth separately)
     if (email && email !== user.email) {

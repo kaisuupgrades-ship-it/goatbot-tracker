@@ -9,27 +9,43 @@ function supabase() {
 }
 
 // GET /api/follow?followerId=X&followingId=Y  → check relationship
-// GET /api/follow?followerId=X                → list all IDs this user follows
+// GET /api/follow?followerId=X                → list all users this user follows
+// GET /api/follow?followingId=X               → list all users who follow this user
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const followerId  = searchParams.get('followerId');
   const followingId = searchParams.get('followingId');
 
-  if (!followerId) return NextResponse.json({ error: 'followerId required' }, { status: 400 });
-
   const db = supabase();
 
-  if (followingId) {
-    // Check single relationship
+  // Check single relationship
+  if (followerId && followingId) {
     const { data } = await db.from('follows').select('id').eq('follower_id', followerId).eq('following_id', followingId).maybeSingle();
     return NextResponse.json({ following: !!data });
   }
 
-  // List all following IDs
-  const { data, error } = await db.from('follows').select('following_id, following:profiles!following_id(username,display_name,avatar_emoji)').eq('follower_id', followerId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // List all people this user follows
+  if (followerId) {
+    const { data, error } = await db
+      .from('follows')
+      .select('following_id, following:profiles!following_id(username,display_name,avatar_emoji)')
+      .eq('follower_id', followerId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const users = (data || []).map(r => ({ id: r.following_id, ...r.following }));
+    return NextResponse.json({ users, following: users }); // 'following' kept for backward compat
+  }
 
-  return NextResponse.json({ following: (data || []).map(r => ({ id: r.following_id, ...r.following })) });
+  // List all people who follow this user
+  if (followingId) {
+    const { data, error } = await db
+      .from('follows')
+      .select('follower_id, follower:profiles!follower_id(username,display_name,avatar_emoji)')
+      .eq('following_id', followingId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ users: (data || []).map(r => ({ id: r.follower_id, ...r.follower })) });
+  }
+
+  return NextResponse.json({ error: 'followerId or followingId required' }, { status: 400 });
 }
 
 // POST /api/follow  body: { followerId, followingId }  → follow

@@ -699,8 +699,34 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-      {/* ── Sub-tab switcher — only shown when both tabs are accessible (no defaultSubTab lock) */}
-      {defaultSubTab === 'contest' && false /* Contest has own nav, no switcher needed */ ? null : null}
+      {/* ── Sub-tab switcher ── */}
+      <div style={{ display: 'flex', gap: '4px', padding: '3px', background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px solid var(--border)', alignSelf: 'flex-start' }}>
+        {[
+          { id: 'contest', label: '🏆 Contest' },
+          { id: 'sharp',   label: '📊 All Picks' },
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            style={{
+              background: subTab === t.id
+                ? (t.id === 'contest' ? 'linear-gradient(135deg, rgba(255,184,0,0.2), rgba(255,149,0,0.15))' : 'var(--bg-surface)')
+                : 'transparent',
+              border: subTab === t.id
+                ? (t.id === 'contest' ? '1px solid rgba(255,184,0,0.4)' : '1px solid var(--border)')
+                : '1px solid transparent',
+              borderRadius: '7px', padding: '6px 16px', cursor: 'pointer',
+              color: subTab === t.id
+                ? (t.id === 'contest' ? 'var(--gold)' : 'var(--text-primary)')
+                : 'var(--text-muted)',
+              fontSize: '0.8rem', fontWeight: subTab === t.id ? 700 : 400,
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {/* ══ CONTEST TAB ══ */}
       {subTab === 'contest' && (

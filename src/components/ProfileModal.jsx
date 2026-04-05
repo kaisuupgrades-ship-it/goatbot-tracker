@@ -7,9 +7,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 // Rate limit windows (milliseconds)
 const LIMITS = {
-  username:   7  * 24 * 60 * 60 * 1000, // 7 days
-  email:      30 * 24 * 60 * 60 * 1000, // 30 days
-  phone:       7 * 24 * 60 * 60 * 1000, // 7 days
+  display_name: 7  * 24 * 60 * 60 * 1000, // 7 days
+  username:     7  * 24 * 60 * 60 * 1000, // 7 days
+  email:        30 * 24 * 60 * 60 * 1000, // 30 days
+  phone:         7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
 function msToReadable(ms) {
@@ -75,17 +76,20 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
   const currentAvatar   = meta.avatar_url || null;
 
   // Rate-limit timestamps (stored in user_metadata)
-  const usernameChangedAt = meta.username_changed_at || null;
-  const emailChangedAt    = meta.email_changed_at    || null;
-  const phoneChangedAt    = meta.phone_changed_at    || null;
+  const displayNameChangedAt = meta.display_name_changed_at || null;
+  const usernameChangedAt    = meta.username_changed_at    || null;
+  const emailChangedAt       = meta.email_changed_at       || null;
+  const phoneChangedAt       = meta.phone_changed_at       || null;
 
-  const usernameWait = getTimeUntilAllowed(usernameChangedAt, LIMITS.username);
-  const emailWait    = getTimeUntilAllowed(emailChangedAt,    LIMITS.email);
-  const phoneWait    = getTimeUntilAllowed(phoneChangedAt,    LIMITS.phone);
+  const displayNameWait = getTimeUntilAllowed(displayNameChangedAt, LIMITS.display_name);
+  const usernameWait    = getTimeUntilAllowed(usernameChangedAt,    LIMITS.username);
+  const emailWait       = getTimeUntilAllowed(emailChangedAt,       LIMITS.email);
+  const phoneWait       = getTimeUntilAllowed(phoneChangedAt,       LIMITS.phone);
 
   // Form state
-  const [username,    setUsername]    = useState(currentUsername);
-  const [displayName, setDisplayName] = useState(''); // loaded from profiles table below
+  const [username,         setUsername]         = useState(currentUsername);
+  const [displayName,      setDisplayName]      = useState(''); // loaded from profiles table below
+  const [originalDisplayName, setOriginalDisplayName] = useState(''); // for change detection
   const [email,       setEmail]       = useState(currentEmail);
   const [phone,       setPhone]       = useState(currentPhone);
 
@@ -94,7 +98,10 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
     if (!userId) return;
     supabase.from('profiles').select('display_name, username').eq('id', userId).single()
       .then(({ data }) => {
-        if (data?.display_name) setDisplayName(data.display_name);
+        if (data?.display_name) {
+          setDisplayName(data.display_name);
+          setOriginalDisplayName(data.display_name);
+        }
         // If no username in form yet, seed from profiles table
         if (!currentUsername && data?.username) setUsername(data.username);
       }).catch(() => {});
@@ -172,6 +179,15 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
       const updates = {};
       const now = new Date().toISOString();
 
+      const trimmedDisplayName = displayName.trim();
+      if (trimmedDisplayName && trimmedDisplayName !== originalDisplayName) {
+        if (displayNameWait > 0) throw new Error(`Display name locked for ${msToReadable(displayNameWait)} — can change once per week.`);
+        if (trimmedDisplayName.length < 2) throw new Error('Display name must be at least 2 characters.');
+        if (trimmedDisplayName.length > 40) throw new Error('Display name must be 40 characters or less.');
+        updates.display_name = trimmedDisplayName;
+        updates.display_name_changed_at = now;
+      }
+
       if (username !== currentUsername) {
         if (usernameWait > 0) throw new Error(`Username locked for ${msToReadable(usernameWait)}.`);
         if (username.trim().length < 3) throw new Error('Username must be at least 3 characters.');
@@ -209,9 +225,6 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
         setSaving(false);
         return;
       }
-
-      // Also include display_name (no rate limit — freely changeable)
-      if (displayName.trim().length > 0) updates.display_name = displayName.trim();
 
       // 3. Send to API (updates user_metadata + profiles table)
       const res  = await fetch('/api/profile', {
@@ -406,20 +419,23 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
               {/* Display Name */}
               <FieldRow
                 label="Display Name"
-                hint="Your name as shown in chat, profile cards, and the leaderboard."
+                hint="Your name shown in chat, leaderboard, and profile cards. Separate from your @handle."
+                locked={displayNameWait > 0}
+                lockedMsg={displayNameWait > 0 ? `changes in ${msToReadable(displayNameWait)}` : null}
               >
                 <input
                   type="text"
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
-                  placeholder="e.g. Kaisu Upgrades"
+                  disabled={displayNameWait > 0}
+                  placeholder="e.g. StatSnipe"
                   maxLength={40}
-                  style={inputStyle(false)}
-                  onFocus={e => { e.target.style.borderColor = 'var(--gold)'; }}
+                  style={inputStyle(displayNameWait > 0)}
+                  onFocus={e => { if (!displayNameWait) e.target.style.borderColor = 'var(--gold)'; }}
                   onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
                 />
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
-                  {displayName.length}/40 · Can change anytime
+                  {displayName.length}/40 · Can change every 7 days
                 </div>
               </FieldRow>
 

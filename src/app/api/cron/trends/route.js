@@ -254,6 +254,13 @@ export async function GET(req) {
     }
   }
 
+  // Check admin-controlled enable flag
+  const { data: enabledSetting } = await supabase
+    .from('settings').select('value').eq('key', 'cron_trends_enabled').maybeSingle();
+  if (enabledSetting?.value === 'false') {
+    return NextResponse.json({ skipped: true, reason: 'Disabled by admin' });
+  }
+
   try {
     const result = await runTrendsPipeline();
     return NextResponse.json(result);

@@ -69,6 +69,12 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const [loadingPicks,   setLoadingPicks]   = useState(true);
   const [following,      setFollowing]      = useState(false);
   const [followLoading,  setFollowLoading]  = useState(false);
+  // People tab
+  const [peopleSubTab,   setPeopleSubTab]   = useState('followers'); // 'followers' | 'following'
+  const [peopleList,     setPeopleList]     = useState([]);
+  const [loadingPeople,  setLoadingPeople]  = useState(false);
+  // Nested profile drill-in (click a follower/following to view their profile)
+  const [viewingEntry,   setViewingEntry]   = useState(null);
 
   // Fetch real profile data
   useEffect(() => {
@@ -115,7 +121,19 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const displayRoi    = stats?.roi    ?? parseFloat(entry.roi)    ?? 0;
   const displayVerified = stats?.verified_picks ?? entry.verified_picks ?? 0;
   const displaySharp  = parseFloat(sharp_score || 0);
-  const followerCount = stats?.follower_count ?? 0;
+  const followerCount  = stats?.follower_count  ?? 0;
+  const followingCount = stats?.following_count ?? 0;
+
+  // Load people list when People tab is active
+  useEffect(() => {
+    if (activeSection !== 'people' || !userId) return;
+    setLoadingPeople(true);
+    const param = peopleSubTab === 'followers' ? `followingId=${userId}` : `followerId=${userId}`;
+    fetch(`/api/follow?${param}`)
+      .then(r => r.json())
+      .then(d => { setPeopleList(d.users || []); setLoadingPeople(false); })
+      .catch(() => setLoadingPeople(false));
+  }, [activeSection, peopleSubTab, userId]);
 
   const winRate  = displayTotal > 0 ? ((displayWins / displayTotal) * 100).toFixed(1) : '—';
   const streak   = stats?.current_streak ?? 0;
@@ -163,7 +181,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
             {/* Left: avatar + name */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div style={{ boxShadow: '0 0 14px rgba(255,184,0,0.2)' }}>
+              <div style={{ borderRadius: '50%', boxShadow: '0 0 18px rgba(255,184,0,0.22)', display: 'inline-flex' }}>
                 <UserAvatar userId={userId} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={62} />
               </div>
               <div>
@@ -172,11 +190,31 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '6px' }}>
                   @{username}
-                  {followerCount > 0 && (
-                    <span style={{ marginLeft: '8px', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-                      · {followerCount} {followerCount === 1 ? 'follower' : 'followers'}
-                    </span>
-                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => { setActiveSection('people'); setPeopleSubTab('followers'); }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                      color: 'var(--text-muted)', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '3px',
+                    }}
+                    title="View followers"
+                  >
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{followerCount}</span>
+                    <span>follower{followerCount !== 1 ? 's' : ''}</span>
+                  </button>
+                  <span style={{ color: 'var(--border)', fontSize: '0.72rem' }}>·</span>
+                  <button
+                    onClick={() => { setActiveSection('people'); setPeopleSubTab('following'); }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                      color: 'var(--text-muted)', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '3px',
+                    }}
+                    title="View following"
+                  >
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{followingCount}</span>
+                    <span>following</span>
+                  </button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   {rank && (
@@ -260,8 +298,9 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
         {/* Section tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           {[
-            { id: 'picks', label: contestOnly ? '🏆 Contest Picks' : '📋 Pick History' },
-            { id: 'stats', label: '📊 Breakdown' },
+            { id: 'picks',  label: contestOnly ? '🏆 Contest Picks' : '📋 Pick History' },
+            { id: 'stats',  label: '📊 Breakdown' },
+            { id: 'people', label: `👥 People${followerCount + followingCount > 0 ? ` (${followerCount + followingCount})` : ''}` },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveSection(tab.id)} style={{
               flex: 1, padding: '0.65rem', border: 'none', cursor: 'pointer',
@@ -456,6 +495,63 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
               )}
             </div>
           )}
+
+          {/* ── People tab ── */}
+          {activeSection === 'people' && (
+            <div>
+              {/* Sub-tab pills */}
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '1rem', padding: '3px', background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px solid var(--border)', alignSelf: 'flex-start', width: 'fit-content' }}>
+                {[
+                  { id: 'followers', label: `Followers (${followerCount})` },
+                  { id: 'following', label: `Following (${followingCount})` },
+                ].map(t => (
+                  <button key={t.id} onClick={() => setPeopleSubTab(t.id)} style={{
+                    padding: '5px 14px', borderRadius: '7px', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600,
+                    background: peopleSubTab === t.id ? 'var(--bg-surface)' : 'transparent',
+                    color: peopleSubTab === t.id ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: peopleSubTab === t.id ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+                    transition: 'all 0.15s',
+                  }}>{t.label}</button>
+                ))}
+              </div>
+
+              {loadingPeople && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} style={{ height: '52px', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', animation: 'pulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.25 }} />
+                  ))}
+                </div>
+              )}
+
+              {!loadingPeople && peopleList.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  {peopleSubTab === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}
+                </div>
+              )}
+
+              {!loadingPeople && peopleList.map(person => (
+                <div key={person.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '0.65rem 0.85rem', marginBottom: '6px',
+                  background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px',
+                  cursor: 'pointer', transition: 'border-color 0.15s',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,184,0,0.3)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  onClick={() => setViewingEntry({ user_id: person.id, username: person.username, display_name: person.display_name, avatar_emoji: person.avatar_emoji })}
+                >
+                  <UserAvatar userId={person.id} avatarEmoji={person.avatar_emoji} displayName={person.display_name} username={person.username} size={38} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                      {person.display_name || person.username}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>@{person.username}</div>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>→</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -464,8 +560,28 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
           <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
             {contestOnly ? 'Showing contest picks only.' : 'Pending picks hidden until settled.'} Only public picks are shown.
           </span>
+          {/* For own profile: quick inbox link */}
+          {isMe && onOpenInbox && (
+            <button onClick={() => { onClose(); onOpenInbox(); }} style={{
+              marginLeft: 'auto', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
+              borderRadius: '6px', color: '#60a5fa', fontSize: '0.7rem', fontWeight: 600,
+              padding: '3px 10px', cursor: 'pointer',
+            }}>
+              💬 Open Inbox
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Nested profile drill-in — when clicking a follower/following */}
+      {viewingEntry && (
+        <PublicProfileModal
+          entry={viewingEntry}
+          onClose={() => setViewingEntry(null)}
+          onOpenInbox={onOpenInbox}
+          currentUser={currentUser}
+        />
+      )}
     </div>
   );
 }

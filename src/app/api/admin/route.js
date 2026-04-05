@@ -141,6 +141,17 @@ export async function GET(req) {
       return NextResponse.json({ picks: enrichedPicks });
     }
 
+    if (action === 'cron_settings') {
+      // Fetch all cron-related settings: enabled flags + last-run summaries
+      const { data: rows } = await supabaseAdmin
+        .from('settings')
+        .select('key, value, updated_at')
+        .or('key.like.cron_%_enabled,key.like.cron_%_last_run,key.eq.cron_grade_last_run,key.eq.cron_trends_last_run,key.eq.cron_pregenerate_last_run');
+      const map = {};
+      (rows || []).forEach(r => { map[r.key] = { value: r.value, updated_at: r.updated_at }; });
+      return NextResponse.json({ settings: map });
+    }
+
     if (action === 'system') {
       // Also fetch current announcement from settings table
       const { data: announcementRow } = await supabaseAdmin
@@ -344,6 +355,37 @@ export async function POST(req) {
       }
 
       return NextResponse.json({ ok: true, userId: authData?.user?.id });
+    }
+
+    if (action === 'cron_toggle') {
+      // Enable or disable a cron job — stored as a soft flag in settings
+      const { jobKey, enabled } = body;
+      if (!jobKey) return NextResponse.json({ error: 'jobKey required' }, { status: 400 });
+      await supabaseAdmin.from('settings').upsert(
+        [{ key: `cron_${jobKey}_enabled`, value: enabled ? 'true' : 'false' }],
+        { onConflict: 'key' }
+      );
+      return NextResponse.json({ ok: true, jobKey, enabled });
+    }
+
+    if (action === 'cron_run') {
+      // Manually trigger a cron job from the admin panel
+      const { jobPath } = body;
+      if (!jobPath) return NextResponse.json({ error: 'jobPath required' }, { status: 400 });
+      // Construct absolute URL from the incoming request's origin
+      const origin = new URL(req.url).origin;
+      const secret = process.env.CRON_SECRET;
+      const headers = { 'Content-Type': 'application/json' };
+      if (secret) headers['Authorization'] = `Bearer ${secret}`;
+      try {
+        const res = await fetch(`${origin}${jobPath}`, { headers, signal: AbortSignal.timeout(55000) });
+        const text = await res.text();
+        let result;
+        try { result = JSON.parse(text); } catch { result = { raw: text.slice(0, 300) }; }
+        return NextResponse.json({ ok: true, status: res.status, result });
+      } catch (fetchErr) {
+        return NextResponse.json({ ok: false, error: fetchErr.message }, { status: 200 });
+      }
     }
 
     if (action === 'broadcast') {

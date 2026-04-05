@@ -17,6 +17,7 @@ import ChatRoomTab       from './tabs/ChatRoomTab';
 import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
 import AdminTab          from './tabs/AdminTab';
 import ProfileModal      from './ProfileModal';
+import PublicProfileModal from './PublicProfileModal';
 import InboxPanel        from './InboxPanel';
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
@@ -128,6 +129,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
   const [currentUser,     setCurrentUser]     = useState(user);
   const [inboxOpen,       setInboxOpen]       = useState(false);
   const [inboxRecipient,  setInboxRecipient]  = useState(null);
+  const [myProfileOpen,   setMyProfileOpen]   = useState(false);
 
   function openInbox(recipient = null) {
     setInboxRecipient(recipient);
@@ -226,6 +228,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         refreshing={globalRefreshing}
         onOpenInbox={openInbox}
         userId={user?.id}
+        onOpenPublicProfile={() => !isDemo && setMyProfileOpen(true)}
       />
 
       {/* Main */}
@@ -334,6 +337,21 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             setCurrentUser(updatedUser);
             setProfileOpen(false);
           }}
+        />
+      )}
+
+      {/* My Public Profile — full forum-style profile view */}
+      {myProfileOpen && !isDemo && currentUser && (
+        <PublicProfileModal
+          entry={{
+            user_id:      currentUser.id,
+            username:     currentUser.user_metadata?.username || currentUser.email?.split('@')[0],
+            display_name: currentUser.user_metadata?.display_name || null,
+            avatar_emoji: currentUser.user_metadata?.avatar_emoji || null,
+          }}
+          onClose={() => setMyProfileOpen(false)}
+          onOpenInbox={openInbox}
+          currentUser={currentUser}
         />
       )}
 

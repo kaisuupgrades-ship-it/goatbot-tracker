@@ -76,6 +76,12 @@ const Icons = {
       <polyline points="1,2.5 7,8 13,2.5"/>
     </svg>
   ),
+  Profile: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7" cy="4.5" r="2.5"/>
+      <path d="M2 12.5c0-2.8 2.2-5 5-5s5 2.2 5 5"/>
+    </svg>
+  ),
 };
 
 // Grouped nav sections — no indent, uniform alignment throughout
@@ -196,7 +202,7 @@ function avatarSrc(user) {
   return `${SUPABASE_URL}/storage/v1/object/public/avatars/${user.id}.jpg${ts ? `?v=${ts}` : ''}`;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile, onRefresh, refreshing, onOpenInbox, userId }) {
+export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile, onRefresh, refreshing, onOpenInbox, userId, onOpenPublicProfile }) {
   const [collapsed, setCollapsed] = useState(false);
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
 
@@ -365,27 +371,47 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                   )}
                 </button>
               ))}
-              {/* Messages — opens Inbox overlay, not a tab */}
+              {/* Community extras — My Profile + Messages overlays */}
               {section.section === 'Community' && !isDemo && (
-                <button
-                  onClick={() => { onOpenInbox?.(); if (mobileOpen) onMobileClose?.(); }}
-                  className="nav-item"
-                  style={{
-                    justifyContent: collapsed ? 'center' : 'flex-start',
-                    padding: collapsed ? '0.5rem' : '0.45rem 0.75rem',
-                  }}
-                  title={collapsed ? 'Messages' : undefined}
-                >
-                  <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
-                    <Icons.Messages />
-                  </span>
-                  {!collapsed && (
-                    <>
-                      <span style={{ flex: 1, fontSize: '0.875rem' }}>Messages</span>
-                      <UnreadMessages userId={userId} />
-                    </>
-                  )}
-                </button>
+                <>
+                  {/* My Profile — opens public profile view */}
+                  <button
+                    onClick={() => { onOpenPublicProfile?.(); if (mobileOpen) onMobileClose?.(); }}
+                    className="nav-item"
+                    style={{
+                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      padding: collapsed ? '0.5rem' : '0.45rem 0.75rem',
+                    }}
+                    title={collapsed ? 'My Profile' : undefined}
+                  >
+                    <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
+                      <Icons.Profile />
+                    </span>
+                    {!collapsed && (
+                      <span style={{ flex: 1, fontSize: '0.875rem' }}>My Profile</span>
+                    )}
+                  </button>
+                  {/* Messages — opens Inbox overlay */}
+                  <button
+                    onClick={() => { onOpenInbox?.(); if (mobileOpen) onMobileClose?.(); }}
+                    className="nav-item"
+                    style={{
+                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      padding: collapsed ? '0.5rem' : '0.45rem 0.75rem',
+                    }}
+                    title={collapsed ? 'Messages' : undefined}
+                  >
+                    <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
+                      <Icons.Messages />
+                    </span>
+                    {!collapsed && (
+                      <>
+                        <span style={{ flex: 1, fontSize: '0.875rem' }}>Messages</span>
+                        <UnreadMessages userId={userId} />
+                      </>
+                    )}
+                  </button>
+                </>
               )}
             </div>
           </div>

@@ -793,6 +793,212 @@ function ActivityPanel({ userEmail }) {
   );
 }
 
+// ── CRON JOBS TAB ─────────────────────────────────────────────────────────────
+const CRON_DEFS = [
+  {
+    key:      'grade_picks',
+    label:    '🏆 Grade Picks',
+    desc:     'Grades pending picks for all users by checking final ESPN scores.',
+    schedule: 'Every 5 min, 12 PM–4 AM ET',
+    path:     '/api/cron/grade-picks',
+    lastRunKey: 'cron_grade_last_run',
+  },
+  {
+    key:      'pregenerate',
+    label:    '🤖 Pre-Generate Analyses',
+    desc:     'Runs Grok-4 analysis on today\'s games and caches results so the Analyzer loads instantly.',
+    schedule: '8 AM & 4 PM ET daily',
+    path:     '/api/cron/pregenerate-analysis',
+    lastRunKey: 'cron_pregenerate_last_run',
+  },
+  {
+    key:      'trends',
+    label:    '📈 Daily Trends',
+    desc:     'Generates today\'s sharp betting edges using Grok-4 with live web search.',
+    schedule: '5 AM & 1 PM ET daily',
+    path:     '/api/cron/trends',
+    lastRunKey: 'cron_trends_last_run',
+  },
+];
+
+function ToggleSwitch({ checked, onChange, disabled }) {
+  return (
+    <div
+      onClick={() => !disabled && onChange(!checked)}
+      style={{
+        width: '42px', height: '22px', borderRadius: '11px', position: 'relative', cursor: disabled ? 'not-allowed' : 'pointer',
+        background: checked ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.15)',
+        border: `1px solid ${checked ? 'rgba(74,222,128,0.5)' : 'rgba(248,113,113,0.3)'}`,
+        transition: 'all 0.18s', flexShrink: 0, opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <div style={{
+        width: '16px', height: '16px', borderRadius: '50%',
+        background: checked ? '#4ade80' : '#f87171',
+        position: 'absolute', top: '2px',
+        left: checked ? '22px' : '2px',
+        transition: 'left 0.18s, background 0.18s',
+        boxShadow: `0 0 6px ${checked ? 'rgba(74,222,128,0.5)' : 'rgba(248,113,113,0.4)'}`,
+      }} />
+    </div>
+  );
+}
+
+function timeAgo(isoStr) {
+  if (!isoStr) return 'Never';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)   return 'Just now';
+  if (m < 60)  return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24)  return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function CronPanel({ userEmail }) {
+  const [settings, setSettings] = useState({});
+  const [loading, setLoading]   = useState(true);
+  const [running, setRunning]   = useState({});
+  const [runResults, setRunResults] = useState({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/admin?action=cron_settings&userEmail=${encodeURIComponent(userEmail)}`);
+    const d = await res.json();
+    if (!d.error && d.settings) {
+      // Flatten { key: { value, updated_at } } → { key: value }
+      const flat = {};
+      Object.entries(d.settings).forEach(([k, v]) => { flat[k] = v?.value ?? v; });
+      setSettings(flat);
+    }
+    setLoading(false);
+  }, [userEmail]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleToggle(key, newVal) {
+    await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cron_toggle', userEmail, jobKey: key, enabled: newVal }),
+    });
+    setSettings(s => ({ ...s, [`cron_${key}_enabled`]: String(newVal) }));
+  }
+
+  async function handleRun(key, path) {
+    setRunning(r => ({ ...r, [key]: true }));
+    setRunResults(r => ({ ...r, [key]: null }));
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cron_run', userEmail, jobPath: path }),
+    });
+    const d = await res.json();
+    setRunning(r => ({ ...r, [key]: false }));
+    // Unwrap: d = { ok, status, result } or { ok: false, error }
+    setRunResults(r => ({ ...r, [key]: d.ok === false ? d : (d.result || d) }));
+    load(); // refresh last-run stats
+  }
+
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading cron status…</div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem 0.75rem', background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.12)', borderRadius: '8px' }}>
+        ℹ Toggling pauses the job without redeploying. "Run Now" triggers it immediately regardless of schedule.
+      </div>
+
+      {CRON_DEFS.map(job => {
+        const enabledVal = settings[`cron_${job.key}_enabled`];
+        const enabled    = enabledVal !== 'false'; // default on if never set
+        const lastRunRaw = settings[job.lastRunKey];
+        const lastRun    = lastRunRaw ? (() => { try { return JSON.parse(lastRunRaw); } catch { return null; } })() : null;
+        const isRunning  = !!running[job.key];
+        const result     = runResults[job.key];
+
+        return (
+          <div key={job.key} style={{
+            background: 'var(--bg-elevated)', border: `1px solid ${enabled ? 'var(--border)' : 'rgba(248,113,113,0.2)'}`,
+            borderRadius: '10px', padding: '1rem 1.1rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.6rem' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.88rem' }}>{job.label}</span>
+                  <span style={{
+                    fontSize: '0.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px',
+                    background: enabled ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+                    color: enabled ? '#4ade80' : '#f87171',
+                    border: `1px solid ${enabled ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
+                  }}>{enabled ? 'ENABLED' : 'PAUSED'}</span>
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginTop: '2px' }}>{job.desc}</div>
+              </div>
+              <ToggleSwitch checked={enabled} onChange={val => handleToggle(job.key, val)} disabled={isRunning} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '0.7rem' }}>
+              <div>
+                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1px' }}>Schedule</div>
+                <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono, monospace' }}>🕐 {job.schedule}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1px' }}>Last Run</div>
+                <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono, monospace' }}>
+                  {lastRun ? timeAgo(lastRun.last_run_at || lastRun.run_at || lastRun.generated_at) : '—'}
+                </div>
+              </div>
+              {lastRun && (
+                <div>
+                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1px' }}>Result</div>
+                  <div style={{ fontSize: '0.73rem', fontFamily: 'IBM Plex Mono, monospace' }}>
+                    {lastRun.graded   != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.graded} graded</span>}
+                    {lastRun.edges    != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.edges} edges</span>}
+                    {lastRun.generated != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.generated} games</span>}
+                    {lastRun.errors   != null && lastRun.errors > 0 && <span style={{ color: '#f87171', marginLeft: '8px' }}>⚠ {lastRun.errors} errors</span>}
+                    {lastRun.error    && <span style={{ color: '#f87171' }}>✗ {String(lastRun.error).slice(0, 60)}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => handleRun(job.key, job.path)}
+                disabled={isRunning}
+                style={{
+                  padding: '5px 14px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, cursor: isRunning ? 'wait' : 'pointer',
+                  border: 'none', fontFamily: 'inherit',
+                  background: isRunning ? '#222' : 'linear-gradient(135deg, #FFB800, #FF9500)',
+                  color: isRunning ? '#555' : '#000',
+                }}
+              >
+                {isRunning ? '⏳ Running…' : '▶ Run Now'}
+              </button>
+              {result && (
+                <span style={{
+                  fontSize: '0.7rem', fontFamily: 'IBM Plex Mono, monospace',
+                  color: result.error ? '#f87171' : '#4ade80',
+                  background: result.error ? 'rgba(248,113,113,0.07)' : 'rgba(74,222,128,0.07)',
+                  padding: '3px 8px', borderRadius: '5px',
+                  border: `1px solid ${result.error ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
+                }}>
+                  {result.error
+                    ? `✗ ${String(result.error).slice(0, 80)}`
+                    : result.graded   != null ? `✓ ${result.graded} picks graded in ${result.duration_ms}ms`
+                    : result.edges    != null ? `✓ ${result.edges} edges generated in ${result.duration_ms}ms`
+                    : result.generated != null ? `✓ ${result.generated} analyses in ${result.duration_ms}ms`
+                    : '✓ Done'}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── SYSTEM TAB ────────────────────────────────────────────────────────────────
 function SystemPanel({ userEmail }) {
   const [announcement, setAnnouncement] = useState('');
@@ -1121,6 +1327,7 @@ const ADMIN_TABS = [
   { id: 'picks',     label: '📋 Picks Audit',   desc: 'View and moderate all picks' },
   { id: 'contests',  label: '🏆 Contests',      desc: 'Active contests and participants' },
   { id: 'backtest',  label: '📈 Backtester',    desc: 'Import historical data, run backtests, save sharp edges' },
+  { id: 'cron',      label: '⏱ Cron Jobs',       desc: 'View scheduled jobs, toggle on/off, and trigger manually' },
   { id: 'system',    label: '⚙️ System',         desc: 'Announcements and system settings' },
 ];
 
@@ -1186,6 +1393,7 @@ export default function AdminTab({ user }) {
       {active === 'picks'     && <PicksAuditPanel userEmail={user.email} />}
       {active === 'contests'  && <ContestsPanel   userEmail={user.email} />}
       {active === 'backtest'  && <BacktestPanel   userEmail={user.email} />}
+      {active === 'cron'      && <CronPanel       userEmail={user.email} />}
       {active === 'system'    && <SystemPanel     userEmail={user.email} />}
     </div>
   );

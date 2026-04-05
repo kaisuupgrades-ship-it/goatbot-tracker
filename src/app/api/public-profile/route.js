@@ -38,11 +38,12 @@ export async function GET(req) {
     .limit(100);
   if (contestOnly) picksQuery = picksQuery.not('contest_id', 'is', null);
 
-  // Fetch profile + picks + follower count in parallel
-  const [profileRes, picksRes, followCountRes] = await Promise.all([
+  // Fetch profile + picks + follower count + following count in parallel
+  const [profileRes, picksRes, followCountRes, followingCountRes] = await Promise.all([
     supabase.from('profiles').select('username, display_name, avatar_emoji, is_public').eq('id', userId).maybeSingle(),
     picksQuery,
     supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', userId),
+    supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
   ]);
 
   if (profileRes.error) return NextResponse.json({ error: profileRes.error.message }, { status: 500 });
@@ -123,7 +124,8 @@ export async function GET(req) {
       verified_picks,
       current_streak: streak,
       pending_count:  pending.length,
-      follower_count: followCountRes.count || 0,
+      follower_count:  followCountRes.count  || 0,
+      following_count: followingCountRes.count || 0,
     },
     settled_picks: settledWithProfit,
     sport_breakdown,
