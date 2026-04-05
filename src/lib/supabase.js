@@ -80,8 +80,31 @@ export async function fetchPicks(userId) {
 }
 
 export async function addPick(pick) {
-  const { data, error } = await supabase.from('picks').insert([pick]).select().single();
-  return { data, error };
+  // Route through /api/picks so server-side contest validation runs
+  // (daily limit, odds range, game-start block, ESPN commence_time lookup).
+  // Direct Supabase inserts bypass all of these checks.
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return { data: null, error: { message: 'Not authenticated' } };
+
+    const res = await fetch('/api/picks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ pick }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      return { data: null, error: { message: json.errors?.[0] || json.error || 'Save failed' } };
+    }
+    return { data: json.pick, error: null };
+  } catch (err) {
+    return { data: null, error: { message: err.message || 'Network error' } };
+  }
 }
 
 export async function updatePick(id, updates) {

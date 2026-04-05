@@ -16,18 +16,19 @@ function timeLabel(dateStr) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function Avatar({ userId, emoji, size = 34 }) {
+function Avatar({ userId, avatarUrl, emoji, size = 34 }) {
   const [err, setErr] = useState(false);
-  const src = SUPABASE_URL && userId ? `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg` : null;
+  const hasPhoto = !!avatarUrl && !err;
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
       background: 'var(--bg-elevated)', border: '1px solid var(--border)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.42, overflow: 'hidden', position: 'relative',
+      fontSize: size * 0.42, overflow: 'hidden',
     }}>
-      {src && !err && <img src={src} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setErr(true)} />}
-      <span style={{ position: 'relative', zIndex: 1 }}>{emoji || '👤'}</span>
+      {hasPhoto
+        ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setErr(true)} />
+        : <span>{emoji || '👤'}</span>}
     </div>
   );
 }

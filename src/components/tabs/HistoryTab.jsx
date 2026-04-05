@@ -905,27 +905,33 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       const authToken = session?.access_token || null;
 
       if (form.id) {
-        // Edits: use server-side PATCH (enforces contest lock + re-verifies game time)
+        // Edits: use server-side PATCH (enforces game-start lock + re-verifies game time)
         const res = await fetch('/api/picks', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+          },
           body: JSON.stringify({ pickId: form.id, updates: payload, authToken }),
         });
         const result = await res.json();
         if (res.ok && result.pick) {
           setPicks(prev => prev.map(p => p.id === form.id ? result.pick : p));
-        } else {
-          // Fall back to direct updatePick if server route unavailable
-          const { data, error } = await updatePick(form.id, payload);
-          if (!error) setPicks(prev => prev.map(p => p.id === form.id ? data : p));
+        } else if (result.error) {
+          alert(result.error);
+          setSaving(false);
+          return;
         }
       } else {
         // New pick: use server-side POST — commence_time is set by server from ESPN
         // Client-supplied commence_time is stripped server-side (no backdating exploit)
         const res = await fetch('/api/picks', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pick: payload, authToken }),
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({ pick: payload }),
         });
         const result = await res.json();
 
@@ -1561,23 +1567,36 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                           style={{ fontSize: '0.6rem', color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '4px', padding: '2px 5px', fontWeight: 700, cursor: 'help' }}
                         >✕</span>
                       )}
-                      {pick.contest_entry ? (
-                        <span title="Contest pick — locked" style={{ fontSize: '0.65rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🔒</span>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleEdit(pick)}
-                            title="Edit pick"
-                            style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.72rem' }}
-                          >✏️</button>
-                          <button
-                            onClick={() => handleDelete(pick.id)}
-                            disabled={deleting === pick.id}
-                            title="Delete pick"
-                            style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.72rem', opacity: deleting === pick.id ? 0.5 : 1 }}
-                          >{deleting === pick.id ? '…' : '🗑️'}</button>
-                        </>
+                      {/* Contest badge */}
+                      {pick.contest_entry && (
+                        <span title="Contest entry" style={{ fontSize: '0.65rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🏆</span>
                       )}
+                      {/* Edit / Delete — available on all PENDING picks before game starts */}
+                      {(() => {
+                        const isSettled = pick.result && pick.result !== 'PENDING';
+                        const gameStarted = pick.commence_time && Date.now() > new Date(pick.commence_time).getTime() + 120000;
+                        if (isSettled) return null; // graded — no edits
+                        if (gameStarted) return (
+                          <span title="Game started — locked" style={{ fontSize: '0.65rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🔒</span>
+                        );
+                        return (
+                          <>
+                            <button
+                              onClick={() => handleEdit(pick)}
+                              title={pick.contest_entry ? 'Edit pick (team name & notes only for contest picks)' : 'Edit pick'}
+                              style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >✏️</button>
+                            {!pick.contest_entry && (
+                              <button
+                                onClick={() => handleDelete(pick.id)}
+                                disabled={deleting === pick.id}
+                                title="Delete pick"
+                                style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.72rem', opacity: deleting === pick.id ? 0.5 : 1 }}
+                              >{deleting === pick.id ? '…' : '🗑️'}</button>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 

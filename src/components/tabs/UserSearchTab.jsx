@@ -26,6 +26,47 @@ const SPORT_FILTERS = ['All Sports', 'MLB', 'NBA', 'NFL', 'NHL', 'NCAAF', 'NCAAB
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
+// ── Avatar (only shows uploaded photo when avatar_url is explicitly set) ─────
+const AVATAR_BG_COLORS = [
+  'rgba(99,102,241,0.25)', 'rgba(20,184,166,0.25)', 'rgba(245,158,11,0.22)',
+  'rgba(239,68,68,0.22)',  'rgba(59,130,246,0.25)', 'rgba(168,85,247,0.22)',
+  'rgba(16,185,129,0.22)', 'rgba(251,146,60,0.22)',
+];
+function UserSearchAvatar({ entry, size = 36 }) {
+  const [imgErr, setImgErr] = useState(false);
+  const hasPhoto = !!entry.avatar_url && !imgErr;
+
+  function getBg() {
+    const name = entry.username || entry.display_name || '';
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xfffff;
+    return AVATAR_BG_COLORS[Math.abs(h) % AVATAR_BG_COLORS.length];
+  }
+  function getInitials() {
+    const name = entry.display_name || entry.username || '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: hasPhoto ? 'var(--bg-elevated)' : getBg(),
+      border: '1px solid var(--border)',
+    }}>
+      {hasPhoto ? (
+        <img src={entry.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setImgErr(true)} />
+      ) : entry.avatar_emoji ? (
+        <span style={{ fontSize: size * 0.55, lineHeight: 1, userSelect: 'none' }}>{entry.avatar_emoji}</span>
+      ) : (
+        <span style={{ fontSize: size * 0.38, fontWeight: 700, color: 'var(--text-primary)', userSelect: 'none' }}>{getInitials()}</span>
+      )}
+    </div>
+  );
+}
+
 // ── W/L/P icon strip ─────────────────────────────────────────────────────────
 function ResultStrip({ results = [] }) {
   if (!results.length) return null;
@@ -97,22 +138,8 @@ function UserCard({ entry, rank, currentUserId, onViewProfile }) {
           {rank}
         </div>
 
-        {/* Avatar */}
-        <div style={{
-          width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-          background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1rem', overflow: 'hidden', position: 'relative',
-        }}>
-          {(entry.avatar_url || (SUPABASE_URL && entry.user_id))
-            ? <img
-                src={entry.avatar_url || `${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
-                alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
-                onError={e => { e.target.style.display = 'none'; }}
-              />
-            : null}
-          <span style={{ position: 'relative', zIndex: 1 }}>{entry.avatar_emoji || (entry.username?.[0]?.toUpperCase() || '?')}</span>
-        </div>
+        {/* Avatar — only show uploaded photo if avatar_url is explicitly set */}
+        <UserSearchAvatar entry={entry} />
 
         {/* Name + record + strip — flex grow */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>

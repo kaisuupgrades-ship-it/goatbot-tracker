@@ -3,24 +3,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-function avatarSrc(userId) {
-  if (!userId || !SUPABASE_URL) return null;
-  return `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg`;
-}
-
-function Avatar({ userId, emoji, size = 36 }) {
+function Avatar({ userId, avatarUrl, emoji, size = 36 }) {
   const [err, setErr] = useState(false);
+  // Only show a photo if an explicit avatar_url was provided — never speculatively
+  // construct one from userId because the storage bucket returns a default goat logo
+  // for users who haven't uploaded a photo.
+  const hasPhoto = !!avatarUrl && !err;
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
       background: 'var(--bg-elevated)', border: '1px solid var(--border)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.4, overflow: 'hidden', position: 'relative',
+      fontSize: size * 0.4, overflow: 'hidden',
     }}>
-      {avatarSrc(userId) && !err && (
-        <img src={avatarSrc(userId)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setErr(true)} />
-      )}
-      <span style={{ position: 'relative', zIndex: 1 }}>{emoji || '👤'}</span>
+      {hasPhoto
+        ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setErr(true)} />
+        : <span>{emoji || '👤'}</span>}
     </div>
   );
 }

@@ -252,7 +252,10 @@ export async function POST(req) {
   return NextResponse.json({ pick: data, commence_time_found: !!commence_time });
 }
 
-// ── PATCH /api/picks — update a pick (non-contest only) ─────────────────────
+// ── PATCH /api/picks — update a pick ─────────────────────────────────────────
+// Users can edit picks BEFORE the game starts (fixes typos, etc.).
+// If the game has already started the edit is blocked — the pick stays as-is.
+// Already-graded picks (result != null) cannot be edited.
 export async function PATCH(req) {
   const body = await req.json().catch(() => ({}));
   const { pickId, updates, authToken } = body;
@@ -273,10 +276,10 @@ export async function PATCH(req) {
     } catch { /* fall through */ }
   }
 
-  // Fetch the existing pick to confirm ownership + check it's not locked
+  // Fetch the existing pick to confirm ownership + check lock status
   const { data: existing, error: fetchErr } = await supabaseAdmin
     .from('picks')
-    .select('user_id, contest_entry, audit_status')
+    .select('user_id, contest_entry, audit_status, result, commence_time, sport, team, date')
     .eq('id', pickId)
     .single();
 
@@ -289,10 +292,20 @@ export async function PATCH(req) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Contest picks are LOCKED after submission — no edits allowed
-  if (existing.contest_entry && existing.audit_status !== 'REJECTED') {
+  // Already-graded picks cannot be edited
+  if (existing.result && existing.result !== 'PENDING') {
+    return NextResponse.json({ error: 'This pick has already been graded and cannot be edited.' }, { status: 403 });
+  }
+
+  // Check if game has started — if so, block the edit
+  const GRACE_MS = 2 * 60 * 1000; // 2-minute grace window
+  let gameStarted = false;
+  if (existing.commence_time) {
+    gameStarted = Date.now() > new Date(existing.commence_time).getTime() + GRACE_MS;
+  }
+  if (gameStarted) {
     return NextResponse.json({
-      error: 'Contest picks cannot be edited after submission.',
+      error: 'This game has already started — edits are locked to protect your verified record.',
     }, { status: 403 });
   }
 
@@ -303,19 +316,25 @@ export async function PATCH(req) {
   delete safeUpdates.user_id;
   delete safeUpdates.id;
   delete safeUpdates.audit_status;
+  delete safeUpdates.result;
+  delete safeUpdates.profit;
 
-  // If team/sport/date changed, re-verify game time
+  // Contest picks: only allow cosmetic edits (notes, typos in team name).
+  // Cannot change sport, bet_type, odds, or contest_entry flag.
+  if (existing.contest_entry && existing.audit_status !== 'REJECTED') {
+    delete safeUpdates.sport;
+    delete safeUpdates.bet_type;
+    delete safeUpdates.odds;
+    delete safeUpdates.units;
+    delete safeUpdates.contest_entry;
+    delete safeUpdates.date;
+  }
+
+  // If team/sport/date changed, re-verify game time from ESPN
   if (safeUpdates.sport || safeUpdates.team || safeUpdates.date) {
-    const { data: currentPick } = await supabaseAdmin
-      .from('picks')
-      .select('sport, team, date')
-      .eq('id', pickId)
-      .single();
-
-    const sport = safeUpdates.sport || currentPick?.sport;
-    const team  = safeUpdates.team  || currentPick?.team;
-    const date  = safeUpdates.date  || currentPick?.date;
-
+    const sport = safeUpdates.sport || existing.sport;
+    const team  = safeUpdates.team  || existing.team;
+    const date  = safeUpdates.date  || existing.date;
     safeUpdates.commence_time = await lookupCommenceTime(sport, team, date);
   }
 
