@@ -130,7 +130,7 @@ export async function POST(req) {
     const { userId, force = false } = body;
     if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
 
-    // Grade picks whose game_date <= today (not just yesterday).
+    // Grade picks whose date <= today (not just yesterday).
     // gradePick() already checks ESPN for STATUS_FINAL so in-progress games are skipped safely.
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -138,7 +138,7 @@ export async function POST(req) {
       .from('picks')
       .select('*')
       .eq('user_id', userId)
-      .lte('game_date', todayStr)
+      .lte('date', todayStr)
       .limit(100);
 
     // Normal mode: only PENDING picks. Force mode: re-check recent picks too (last 7 days).
@@ -148,8 +148,8 @@ export async function POST(req) {
         .from('picks')
         .select('*')
         .eq('user_id', userId)
-        .gte('game_date', weekAgo)
-        .lte('game_date', todayStr)
+        .gte('date', weekAgo)
+        .lte('date', todayStr)
         .limit(100);
     } else {
       query = query.eq('result', 'PENDING');
@@ -163,7 +163,7 @@ export async function POST(req) {
     // Group picks by sport + date to minimize ESPN calls
     const groups = {};
     picks.forEach(pick => {
-      const key = `${pick.sport}|${pick.game_date}`;
+      const key = `${pick.sport}|${pick.date}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(pick);
     });

@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/trends",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/grade-picks",
+      "schedule": "*/30 17-23 * * *"
+    },
+    {
+      "path": "/api/cron/grade-picks",
+      "schedule": "*/30 0-4 * * *"
     }
   ],
   "redirects": [

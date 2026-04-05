@@ -268,8 +268,11 @@ export async function GET(req) {
   if (THE_ODDS_KEY) {
     try {
       const result = await fetchFromTheOddsAPI(sportKey);
-      setMemCache(cacheKey, result);
-      await setSupabaseCache(sportKey, result);
+      // Only cache if we got actual data back
+      if (result?.data?.length >= 0) {  // 0 games is valid (off-season), errors are not
+        setMemCache(cacheKey, result);
+        await setSupabaseCache(sportKey, result);
+      }
       return NextResponse.json({ ...result, cached: false });
     } catch (err) {
       console.warn('[/api/odds] The Odds API failed, trying legacy:', err.message);
@@ -280,14 +283,19 @@ export async function GET(req) {
   if (LEGACY_KEY) {
     try {
       const result = await fetchFromLegacy(sportKey);
-      setMemCache(cacheKey, result);
-      await setSupabaseCache(sportKey, result);
+      // Only cache successful responses with actual data — never cache errors or empty fallbacks
+      if (result?.data?.length > 0) {
+        setMemCache(cacheKey, result);
+        await setSupabaseCache(sportKey, result);
+      }
       return NextResponse.json({ ...result, cached: false });
     } catch (err) {
+      // Log the failure server-side only — don't surface raw error strings to the UI
       console.error('[/api/odds] Both odds providers failed:', err.message);
-      return NextResponse.json({ error: err.message, configured: true, data: [] }, { status: 500 });
+      // Return graceful empty response so UI shows "—" instead of an ugly error
+      return NextResponse.json({ configured: true, data: [], total: 0, source: 'none', cached: false });
     }
   }
 
-  return NextResponse.json({ error: 'No odds key available', configured: false, data: [] }, { status: 503 });
+  return NextResponse.json({ configured: false, data: [], total: 0, source: 'none', cached: false });
 }
