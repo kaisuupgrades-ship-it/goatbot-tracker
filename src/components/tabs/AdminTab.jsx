@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import BacktestPanel from './admin/BacktestPanel';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
@@ -1460,6 +1460,169 @@ function SystemPanel({ userEmail }) {
 }
 
 // ── MAIN ADMIN TAB ────────────────────────────────────────────────────────────
+// ── AI CHAT PANEL ─────────────────────────────────────────────────────────────
+function AIChatPanel({ userEmail }) {
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: 'Hey! Ask me anything about the app — bugs, data, features, code, or anything BetOS-related.' }
+  ]);
+  const [input, setInput]     = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+  const messagesEndRef         = React.useRef(null);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || loading) return;
+
+    const newMessages = [...messages, { role: 'user', content: text }];
+    setMessages(newMessages);
+    setInput('');
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages, userEmail }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply, model: data.model, provider: data.provider }]);
+    } catch (e) {
+      setError(e.message);
+      // Remove the optimistically-added user message so they can retry
+      setMessages(prev => prev.slice(0, -1));
+      setInput(text);
+    }
+    setLoading(false);
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  function clearChat() {
+    setMessages([{ role: 'assistant', content: 'Chat cleared. What do you need?' }]);
+    setError('');
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* Message thread */}
+      <div style={{
+        background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '12px',
+        padding: '1rem', minHeight: '380px', maxHeight: '520px', overflowY: 'auto',
+        display: 'flex', flexDirection: 'column', gap: '0.75rem',
+      }}>
+        {messages.map((msg, i) => (
+          <div key={i} style={{
+            display: 'flex', flexDirection: 'column',
+            alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+          }}>
+            <div style={{
+              maxWidth: '80%',
+              background: msg.role === 'user' ? 'rgba(255,184,0,0.12)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${msg.role === 'user' ? 'rgba(255,184,0,0.25)' : 'var(--border)'}`,
+              borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+              padding: '0.65rem 0.9rem',
+              fontSize: '0.85rem',
+              color: 'var(--text-primary)',
+              lineHeight: '1.55',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}>
+              {msg.content}
+            </div>
+            {msg.role === 'assistant' && msg.model && (
+              <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '3px', paddingLeft: '2px' }}>
+                {msg.provider === 'xai' ? '⚡ Grok' : '🤖 Claude'} · {msg.model}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+            <div style={{
+              background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+              borderRadius: '12px 12px 12px 2px', padding: '0.65rem 0.9rem',
+            }}>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                {[0,1,2].map(d => (
+                  <div key={d} style={{
+                    width: '6px', height: '6px', borderRadius: '50%',
+                    background: 'var(--text-muted)',
+                    animation: 'pulse 1.2s ease-in-out infinite',
+                    animationDelay: `${d * 0.2}s`,
+                  }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)',
+            borderRadius: '8px', padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: '#f87171',
+          }}>
+            ⚠ {error} — message restored above, try again.
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input row */}
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKey}
+          placeholder="Ask about bugs, users, data, code… (Enter to send, Shift+Enter for newline)"
+          rows={2}
+          style={{
+            flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+            borderRadius: '8px', color: 'var(--text-primary)', padding: '0.65rem 0.85rem',
+            fontSize: '0.85rem', resize: 'none', fontFamily: 'inherit', lineHeight: '1.45',
+            outline: 'none',
+          }}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <button
+            onClick={send}
+            disabled={loading || !input.trim()}
+            style={{
+              padding: '0.6rem 1.1rem', borderRadius: '8px', cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+              background: loading || !input.trim() ? 'rgba(255,184,0,0.1)' : 'rgba(255,184,0,0.15)',
+              border: '1px solid rgba(255,184,0,0.35)', color: loading || !input.trim() ? 'rgba(255,184,0,0.4)' : 'var(--gold)',
+              fontWeight: 700, fontSize: '0.82rem', transition: 'all 0.12s', whiteSpace: 'nowrap',
+            }}
+          >
+            {loading ? '…' : 'Send ↵'}
+          </button>
+          <button
+            onClick={clearChat}
+            style={{
+              padding: '0.4rem 0.6rem', borderRadius: '8px', cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--border)',
+              color: 'var(--text-muted)', fontSize: '0.72rem', transition: 'all 0.12s',
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ADMIN_TABS = [
   { id: 'overview',  label: '📊 Overview',     desc: 'Site-wide stats and recent activity' },
   { id: 'users',     label: '👥 Users',         desc: 'Manage user accounts, roles & bans' },
@@ -1469,6 +1632,7 @@ const ADMIN_TABS = [
   { id: 'backtest',  label: '📈 Backtester',    desc: 'Import historical data, run backtests, save sharp edges' },
   { id: 'cron',      label: '⏱ Cron Jobs',       desc: 'View scheduled jobs, toggle on/off, and trigger manually' },
   { id: 'system',    label: '⚙️ System',         desc: 'Announcements and system settings' },
+  { id: 'chat',      label: '🤖 AI Chat',        desc: 'Chat directly with the BetOS AI assistant' },
 ];
 
 export default function AdminTab({ user }) {
@@ -1539,6 +1703,7 @@ export default function AdminTab({ user }) {
       {active === 'backtest'  && <BacktestPanel   userEmail={user.email} />}
       {active === 'cron'      && <CronPanel       userEmail={user.email} />}
       {active === 'system'    && <SystemPanel     userEmail={user.email} />}
+      {active === 'chat'      && <AIChatPanel     userEmail={user.email} />}
     </div>
   );
 }

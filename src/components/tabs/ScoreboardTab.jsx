@@ -1674,7 +1674,7 @@ function dateLabel(dateStr) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo, highlightGame, onHighlightConsumed }) {
+export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo, highlightGame, onHighlightConsumed, activeSport, onSportChange }) {
   const todayStr = toLocalDateStr(new Date());
   const userPrefs = useMemo(() => getUserPrefs(user), [user]);
 
@@ -1686,6 +1686,12 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const gameCardRefs = useRef({});
 
   const [sport, setSport]       = useState('mlb');
+  // Sync with Dashboard's shared activeSport (e.g. when Odds Board changes sport)
+  useEffect(() => {
+    if (activeSport && activeSport !== sport && SPORTS.find(s => s.key === activeSport)) {
+      setSport(activeSport);
+    }
+  }, [activeSport]); // eslint-disable-line react-hooks/exhaustive-deps
   const [games, setGames]       = useState([]);
   const [news,  setNews]        = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -2130,7 +2136,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         {/* Sport selector */}
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
           {SPORTS.map(s => (
-            <button key={s.key} onClick={() => setSport(s.key)}
+            <button key={s.key} onClick={() => { setSport(s.key); onSportChange?.(s.key); }}
               style={{
                 padding: '5px 12px', borderRadius: '20px', border: 'none', cursor: 'pointer',
                 background: sport === s.key ? s.color : '#1a1a1a',

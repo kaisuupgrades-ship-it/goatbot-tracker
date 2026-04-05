@@ -39,9 +39,17 @@ function impliedProb(price) {
 }
 
 // Detect if a game has already started (live or completed)
+// How long after scheduled start before we consider a game "in progress".
+// Games rarely start exactly on time — this buffer keeps pre-game odds visible
+// for a few extra minutes so the board doesn't flash empty while the game is
+// warming up. Also prevents games with delayed starts from being hidden early.
+const LIVE_BUFFER_MS = 20 * 60 * 1000; // 20 minutes
+
 function isGameLive(game) {
   if (game.status === 'live') return true;
-  return new Date(game.commence_time) <= new Date();
+  // A game is only considered live once it's at least LIVE_BUFFER_MS past its
+  // scheduled commence_time — not the instant the clock ticks past it.
+  return new Date(game.commence_time) <= new Date(Date.now() - LIVE_BUFFER_MS);
 }
 
 // Smart time label: "Today · 7:10 PM", "Tomorrow · 1:05 PM", "Mon, Apr 7 · 1:05 PM"
@@ -97,19 +105,55 @@ function bestOdds(bookmakers, outcomeName, marketKey) {
   return best;
 }
 
-// Get best spread point + juice for a team
-function bestSpread(bookmakers, teamName) {
-  let bestPrice = null;
-  let bestPoint = null;
-  bookmakers.forEach(bk => {
+// Get the market spread (standard ATS line) from a single bookmaker.
+// Returns both sides together so they ALWAYS come from the same book with
+// matching/complementary points — fixing the bug where independently picking
+// the "best price" for each side would mix books and produce nonsense like
+// both teams at -1.5 or +1.5 at +810.
+//
+// Strategy (mirrors bestTotal):
+//   Pass 1: standard juice (-140 to +125 on BOTH sides) → pick closest to -110/-110
+//   Pass 2: wider window (-250 to +150) to catch elevated-vig books; still rejects alt lines
+function marketSpread(bookmakers) {
+  let best = null;
+
+  // Lower score = closer to standard -110/-110 juice
+  const juiceScore = (p1, p2) =>
+    Math.abs(Math.abs(p1) - 110) + Math.abs(Math.abs(p2) - 110);
+
+  // Pass 1: standard juice only
+  for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'spreads');
-    const outcome = mkt?.outcomes?.find(o => o.name === teamName);
-    if (outcome?.price != null && (bestPrice === null || outcome.price > bestPrice)) {
-      bestPrice = outcome.price;
-      bestPoint = outcome.point;
+    if (!mkt) continue;
+    const outcomes = mkt.outcomes || [];
+    if (outcomes.length < 2) continue;
+    const [o1, o2] = outcomes;
+    if (o1.price == null || o2.price == null || o1.point == null) continue;
+    // Reject alt lines: both sides must be within standard juice range
+    if (o1.price < -140 || o1.price > 125 || o2.price < -140 || o2.price > 125) continue;
+    const s = juiceScore(o1.price, o2.price);
+    if (!best || s < best.score) {
+      best = { awayPoint: o1.point, awayPrice: o1.price, homePoint: o2.point, homePrice: o2.price, score: s };
     }
-  });
-  return { price: bestPrice, point: bestPoint };
+  }
+  if (best) return best;
+
+  // Pass 2: slightly wider juice — catches real lines with elevated vig, still rejects wild alt lines
+  for (const bk of bookmakers) {
+    const mkt = bk.markets?.find(m => m.key === 'spreads');
+    if (!mkt) continue;
+    const outcomes = mkt.outcomes || [];
+    if (outcomes.length < 2) continue;
+    const [o1, o2] = outcomes;
+    if (o1.price == null || o2.price == null || o1.point == null) continue;
+    if (o1.price < -250 || o1.price > 150 || o2.price < -250 || o2.price > 150) continue;
+    const s = juiceScore(o1.price, o2.price);
+    if (!best || s < best.score) {
+      best = { awayPoint: o1.point, awayPrice: o1.price, homePoint: o2.point, homePrice: o2.price, score: s };
+    }
+  }
+
+  return best || { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
 }
 
 // Get total line (O/U number) and standard over/under odds.
@@ -171,12 +215,11 @@ function buildUnifiedPrompt(game) {
 
   const awayML  = bestOdds(books, away, 'h2h');
   const homeML  = bestOdds(books, home, 'h2h');
-  const awaySpr = bestSpread(books, away);
-  const homeSpr = bestSpread(books, home);
+  const spr     = marketSpread(books);
   const total   = bestTotal(books);
 
   const mlStr  = awayML != null && homeML != null ? `ML: ${away.split(' ').pop()} ${formatOdds(awayML)} / ${home.split(' ').pop()} ${formatOdds(homeML)}` : '';
-  const sprStr = awaySpr.point != null ? `Spread: ${away.split(' ').pop()} ${awaySpr.point > 0 ? '+' : ''}${awaySpr.point} (${formatOdds(awaySpr.price)})` : '';
+  const sprStr = spr.awayPoint != null ? `Spread: ${away.split(' ').pop()} ${spr.awayPoint > 0 ? '+' : ''}${spr.awayPoint} (${formatOdds(spr.awayPrice)}) / ${home.split(' ').pop()} ${spr.homePoint > 0 ? '+' : ''}${spr.homePoint} (${formatOdds(spr.homePrice)})` : '';
   const totStr = total.line != null ? `O/U: ${total.line} (O ${formatOdds(total.overPrice)} / U ${formatOdds(total.underPrice)})` : '';
   const oddsStr = [mlStr, sprStr, totStr].filter(Boolean).join(' · ');
 
@@ -192,8 +235,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 
   const awayML  = bestOdds(books, away, 'h2h');
   const homeML  = bestOdds(books, home, 'h2h');
-  const awaySpr = bestSpread(books, away);
-  const homeSpr = bestSpread(books, home);
+  const spr     = marketSpread(books);
   const total   = bestTotal(books);
 
   const commenceTime = new Date(game.commence_time);
@@ -308,20 +350,20 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
             <div style={{ display: 'flex', gap: '8px' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Away</div>
-                {awaySpr.point != null
+                {spr.awayPoint != null
                   ? <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: '#f0f0f0' }}>
-                      {awaySpr.point > 0 ? '+' : ''}{awaySpr.point}
-                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(awaySpr.price)})</span>
+                      {spr.awayPoint > 0 ? '+' : ''}{spr.awayPoint}
+                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(spr.awayPrice)})</span>
                     </div>
                   : <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#444' }}>—</div>
                 }
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Home</div>
-                {homeSpr.point != null
+                {spr.homePoint != null
                   ? <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: '#f0f0f0' }}>
-                      {homeSpr.point > 0 ? '+' : ''}{homeSpr.point}
-                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(homeSpr.price)})</span>
+                      {spr.homePoint > 0 ? '+' : ''}{spr.homePoint}
+                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(spr.homePrice)})</span>
                     </div>
                   : <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#444' }}>—</div>
                 }
@@ -433,7 +475,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                       {awaySprOut?.price != null
                         ? <>
                             <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{awaySprOut.point > 0 ? '+' : ''}{awaySprOut.point}</span>
-                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: awaySprOut.price === awaySpr.price ? '#FFB800' : oddsColor(awaySprOut.price), background: awaySprOut.price === awaySpr.price ? 'rgba(255,184,0,0.1)' : 'transparent', padding: awaySprOut.price === awaySpr.price ? '1px 4px' : '0', borderRadius: '3px' }}>
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: awaySprOut.price === spr.awayPrice ? '#FFB800' : oddsColor(awaySprOut.price), background: awaySprOut.price === spr.awayPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: awaySprOut.price === spr.awayPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
                               {formatOdds(awaySprOut.price)}
                             </span>
                           </>
@@ -444,7 +486,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                       {homeSprOut?.price != null
                         ? <>
                             <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{homeSprOut.point > 0 ? '+' : ''}{homeSprOut.point}</span>
-                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: homeSprOut.price === homeSpr.price ? '#FFB800' : oddsColor(homeSprOut.price), background: homeSprOut.price === homeSpr.price ? 'rgba(255,184,0,0.1)' : 'transparent', padding: homeSprOut.price === homeSpr.price ? '1px 4px' : '0', borderRadius: '3px' }}>
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: homeSprOut.price === spr.homePrice ? '#FFB800' : oddsColor(homeSprOut.price), background: homeSprOut.price === spr.homePrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: homeSprOut.price === spr.homePrice ? '1px 4px' : '0', borderRadius: '3px' }}>
                               {formatOdds(homeSprOut.price)}
                             </span>
                           </>
@@ -491,9 +533,9 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
               </span>
             )}
             {/* Best spread */}
-            {awaySpr.point != null && (
+            {spr.awayPoint != null && (
               <span style={{ padding: '3px 8px', background: '#0d1a0d', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', color: '#4ade80', fontSize: '0.7rem' }}>
-                📐 Spread: {away.split(' ').pop()} {awaySpr.point > 0 ? '+' : ''}{awaySpr.point} ({formatOdds(awaySpr.price)})
+                📐 Spread: {away.split(' ').pop()} {spr.awayPoint > 0 ? '+' : ''}{spr.awayPoint} ({formatOdds(spr.awayPrice)}) / {home.split(' ').pop()} {spr.homePoint > 0 ? '+' : ''}{spr.homePoint} ({formatOdds(spr.homePrice)})
               </span>
             )}
             {/* Best total */}
@@ -553,8 +595,16 @@ function SetupScreen() {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function OddsTab({ onAnalyze }) {
+export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [sport, setSport]           = useState('mlb');
+  // Sync with Dashboard's shared activeSport (e.g. when Scoreboard changes sport).
+  // Only switch if OddsTab supports that sport — Scoreboard has golf/tennis which we don't.
+  useEffect(() => {
+    if (activeSport && activeSport !== sport && SPORTS.find(s => s.key === activeSport)) {
+      setSport(activeSport);
+    }
+  }, [activeSport]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [games, setGames]           = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
@@ -574,15 +624,29 @@ export default function OddsTab({ onAnalyze }) {
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.error);
       setConfigured(true);
-      setGames(data.data || []);
+      const games = data.data || [];
+      setGames(games);
       setRemaining(data.remaining ?? null);
+
+      // Auto-advance filter: if pre-game is empty but live games exist, switch to Live
+      // so the board is never blank on arrival. Reset to upcoming when switching sports.
+      setGameFilter(prev => {
+        const hasUpcoming = games.some(g => !isGameLive(g));
+        const hasLive     = games.some(g => isGameLive(g));
+        // If we're on upcoming (default) and there's nothing upcoming but there are live games → go Live
+        if (prev === 'upcoming' && !hasUpcoming && hasLive) return 'live';
+        // If we previously switched to Live but now there ARE upcoming games (e.g. next morning) → go back
+        if (prev === 'live' && hasUpcoming) return 'upcoming';
+        return prev;
+      });
     } catch (e) {
       setError(e.message);
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(sport); }, [sport, load]);
+  // Reset filter to upcoming whenever the sport changes so each sport starts fresh
+  useEffect(() => { setGameFilter('upcoming'); load(sport); }, [sport, load]);
 
   if (!configured) return <SetupScreen />;
 
@@ -613,7 +677,7 @@ export default function OddsTab({ onAnalyze }) {
         {/* Sport tabs */}
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           {SPORTS.map(s => (
-            <button key={s.key} onClick={() => { setSport(s.key); setExpanded(null); }}
+            <button key={s.key} onClick={() => { setSport(s.key); setExpanded(null); onSportChange?.(s.key); }}
               style={{
                 padding: '4px 10px', borderRadius: '6px', border: `1px solid ${sport === s.key ? '#FFB800' : '#222'}`,
                 background: sport === s.key ? '#1a1200' : 'transparent',

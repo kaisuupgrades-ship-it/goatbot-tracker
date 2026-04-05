@@ -188,6 +188,8 @@ const TAB_META = {
 export default function Dashboard({ user, initialPicks, initialContest, isDemo }) {
   const router = useRouter();
   const [activeTab, setActiveTab]   = useState('tracker');
+  // Shared sport selection — kept in sync between Scoreboard and Odds Board
+  const [activeSport, setActiveSport] = useState('mlb');
   const [picks, setPicks]           = useState(initialPicks || []);
   const [contest, setContest]       = useState(initialContest || {
     name: 'My Picks',
@@ -348,10 +350,16 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
               isDemo={isDemo}
               highlightGame={scoreboardGame}
               onHighlightConsumed={() => setScoreboardGame(null)}
+              activeSport={activeSport}
+              onSportChange={setActiveSport}
             />
           </div>
           <div style={{ display: activeTab === 'odds'       ? 'block' : 'none' }}>
-            <OddsTab onAnalyze={(prompt) => { setGoatPrompt(prompt); setActiveTab('analyzer'); }} />
+            <OddsTab
+              onAnalyze={(prompt) => { setGoatPrompt(prompt); setActiveTab('analyzer'); }}
+              activeSport={activeSport}
+              onSportChange={setActiveSport}
+            />
           </div>
           <div style={{ display: activeTab === 'history'    ? 'block' : 'none' }}>
             <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} onLeaderboardRefresh={() => setLeaderboardRefreshKey(k => k + 1)} />
