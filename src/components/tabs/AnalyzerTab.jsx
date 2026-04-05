@@ -362,67 +362,144 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
 }
 
 // ── Team logo helpers ─────────────────────────────────────────────────────────
-const TEAM_ABBR_MAP = {
+
+// Map each team name to its sport — used to detect correct sport from team names
+const TEAM_SPORT_MAP = {
   // MLB
-  'Arizona Diamondbacks':'ari','Atlanta Braves':'atl','Baltimore Orioles':'bal',
-  'Boston Red Sox':'bos','Chicago Cubs':'chc','Chicago White Sox':'chw',
-  'Cincinnati Reds':'cin','Cleveland Guardians':'cle','Colorado Rockies':'col',
-  'Detroit Tigers':'det','Houston Astros':'hou','Kansas City Royals':'kc',
-  'Los Angeles Angels':'laa','Los Angeles Dodgers':'lad','Miami Marlins':'mia',
-  'Milwaukee Brewers':'mil','Minnesota Twins':'min','New York Mets':'nym',
-  'New York Yankees':'nyy','Oakland Athletics':'oak','Athletics':'oak',
-  'Philadelphia Phillies':'phi','Pittsburgh Pirates':'pit','San Diego Padres':'sd',
-  'San Francisco Giants':'sf','Seattle Mariners':'sea','St. Louis Cardinals':'stl',
-  'Tampa Bay Rays':'tb','Texas Rangers':'tex','Toronto Blue Jays':'tor',
-  'Washington Nationals':'wsh',
+  'Arizona Diamondbacks':'mlb','Atlanta Braves':'mlb','Baltimore Orioles':'mlb',
+  'Boston Red Sox':'mlb','Chicago Cubs':'mlb','Chicago White Sox':'mlb',
+  'Cincinnati Reds':'mlb','Cleveland Guardians':'mlb','Colorado Rockies':'mlb',
+  'Detroit Tigers':'mlb','Houston Astros':'mlb','Kansas City Royals':'mlb',
+  'Los Angeles Angels':'mlb','Los Angeles Dodgers':'mlb','Miami Marlins':'mlb',
+  'Milwaukee Brewers':'mlb','Minnesota Twins':'mlb','New York Mets':'mlb',
+  'New York Yankees':'mlb','Oakland Athletics':'mlb','Athletics':'mlb',
+  'Philadelphia Phillies':'mlb','Pittsburgh Pirates':'mlb','San Diego Padres':'mlb',
+  'San Francisco Giants':'mlb','Seattle Mariners':'mlb','St. Louis Cardinals':'mlb',
+  'Tampa Bay Rays':'mlb','Texas Rangers':'mlb','Toronto Blue Jays':'mlb',
+  'Washington Nationals':'mlb',
   // NBA
-  'Atlanta Hawks':'atl','Boston Celtics':'bos','Brooklyn Nets':'bkn',
-  'Charlotte Hornets':'cha','Chicago Bulls':'chi','Cleveland Cavaliers':'cle',
-  'Dallas Mavericks':'dal','Denver Nuggets':'den','Detroit Pistons':'det',
-  'Golden State Warriors':'gs','Houston Rockets':'hou','Indiana Pacers':'ind',
-  'Los Angeles Clippers':'lac','Los Angeles Lakers':'lal','Memphis Grizzlies':'mem',
-  'Miami Heat':'mia','Milwaukee Bucks':'mil','Minnesota Timberwolves':'min',
-  'New Orleans Pelicans':'no','New York Knicks':'ny','Oklahoma City Thunder':'okc',
-  'Orlando Magic':'orl','Philadelphia 76ers':'phi','Phoenix Suns':'phx',
-  'Portland Trail Blazers':'por','Sacramento Kings':'sac','San Antonio Spurs':'sa',
-  'Toronto Raptors':'tor','Utah Jazz':'utah','Washington Wizards':'wsh',
+  'Atlanta Hawks':'nba','Boston Celtics':'nba','Brooklyn Nets':'nba',
+  'Charlotte Hornets':'nba','Chicago Bulls':'nba','Cleveland Cavaliers':'nba',
+  'Dallas Mavericks':'nba','Denver Nuggets':'nba','Detroit Pistons':'nba',
+  'Golden State Warriors':'nba','Houston Rockets':'nba','Indiana Pacers':'nba',
+  'Los Angeles Clippers':'nba','Los Angeles Lakers':'nba','Memphis Grizzlies':'nba',
+  'Miami Heat':'nba','Milwaukee Bucks':'nba','Minnesota Timberwolves':'nba',
+  'New Orleans Pelicans':'nba','New York Knicks':'nba','Oklahoma City Thunder':'nba',
+  'Orlando Magic':'nba','Philadelphia 76ers':'nba','Phoenix Suns':'nba',
+  'Portland Trail Blazers':'nba','Sacramento Kings':'nba','San Antonio Spurs':'nba',
+  'Toronto Raptors':'nba','Utah Jazz':'nba','Washington Wizards':'nba',
   // NFL
-  'Arizona Cardinals':'ari','Atlanta Falcons':'atl','Baltimore Ravens':'bal',
-  'Buffalo Bills':'buf','Carolina Panthers':'car','Chicago Bears':'chi',
-  'Cincinnati Bengals':'cin','Cleveland Browns':'cle','Dallas Cowboys':'dal',
-  'Denver Broncos':'den','Detroit Lions':'det','Green Bay Packers':'gb',
-  'Houston Texans':'hou','Indianapolis Colts':'ind','Jacksonville Jaguars':'jax',
-  'Kansas City Chiefs':'kc','Las Vegas Raiders':'lv','Los Angeles Chargers':'lac',
-  'Los Angeles Rams':'lar','Miami Dolphins':'mia','Minnesota Vikings':'min',
-  'New England Patriots':'ne','New Orleans Saints':'no','New York Giants':'nyg',
-  'New York Jets':'nyj','Philadelphia Eagles':'phi','Pittsburgh Steelers':'pit',
-  'San Francisco 49ers':'sf','Seattle Seahawks':'sea','Tampa Bay Buccaneers':'tb',
-  'Tennessee Titans':'ten','Washington Commanders':'wsh',
+  'Arizona Cardinals':'nfl','Atlanta Falcons':'nfl','Baltimore Ravens':'nfl',
+  'Buffalo Bills':'nfl','Carolina Panthers':'nfl','Chicago Bears':'nfl',
+  'Cincinnati Bengals':'nfl','Cleveland Browns':'nfl','Dallas Cowboys':'nfl',
+  'Denver Broncos':'nfl','Detroit Lions':'nfl','Green Bay Packers':'nfl',
+  'Houston Texans':'nfl','Indianapolis Colts':'nfl','Jacksonville Jaguars':'nfl',
+  'Kansas City Chiefs':'nfl','Las Vegas Raiders':'nfl','Los Angeles Chargers':'nfl',
+  'Los Angeles Rams':'nfl','Miami Dolphins':'nfl','Minnesota Vikings':'nfl',
+  'New England Patriots':'nfl','New Orleans Saints':'nfl','New York Giants':'nfl',
+  'New York Jets':'nfl','Philadelphia Eagles':'nfl','Pittsburgh Steelers':'nfl',
+  'San Francisco 49ers':'nfl','Seattle Seahawks':'nfl','Tampa Bay Buccaneers':'nfl',
+  'Tennessee Titans':'nfl','Washington Commanders':'nfl',
   // NHL
-  'Anaheim Ducks':'ana','Arizona Coyotes':'ari','Boston Bruins':'bos',
-  'Buffalo Sabres':'buf','Calgary Flames':'cgy','Carolina Hurricanes':'car',
-  'Chicago Blackhawks':'chi','Colorado Avalanche':'col','Columbus Blue Jackets':'cbj',
-  'Dallas Stars':'dal','Detroit Red Wings':'det','Edmonton Oilers':'edm',
-  'Florida Panthers':'fla','Los Angeles Kings':'lak','Minnesota Wild':'min',
-  'Montreal Canadiens':'mtl','Nashville Predators':'nsh','New Jersey Devils':'njd',
-  'New York Islanders':'nyi','New York Rangers':'nyr','Ottawa Senators':'ott',
-  'Philadelphia Flyers':'phi','Pittsburgh Penguins':'pit','San Jose Sharks':'sjs',
-  'Seattle Kraken':'sea','St. Louis Blues':'stl','Tampa Bay Lightning':'tb',
-  'Toronto Maple Leafs':'tor','Utah Hockey Club':'utah','Vancouver Canucks':'van',
-  'Vegas Golden Knights':'vgk','Washington Capitals':'wsh','Winnipeg Jets':'wpg',
+  'Anaheim Ducks':'nhl','Arizona Coyotes':'nhl','Boston Bruins':'nhl',
+  'Buffalo Sabres':'nhl','Calgary Flames':'nhl','Carolina Hurricanes':'nhl',
+  'Chicago Blackhawks':'nhl','Colorado Avalanche':'nhl','Columbus Blue Jackets':'nhl',
+  'Dallas Stars':'nhl','Detroit Red Wings':'nhl','Edmonton Oilers':'nhl',
+  'Florida Panthers':'nhl','Los Angeles Kings':'nhl','Minnesota Wild':'nhl',
+  'Montreal Canadiens':'nhl','Nashville Predators':'nhl','New Jersey Devils':'nhl',
+  'New York Islanders':'nhl','New York Rangers':'nhl','Ottawa Senators':'nhl',
+  'Philadelphia Flyers':'nhl','Pittsburgh Penguins':'nhl','San Jose Sharks':'nhl',
+  'Seattle Kraken':'nhl','St. Louis Blues':'nhl','Tampa Bay Lightning':'nhl',
+  'Toronto Maple Leafs':'nhl','Utah Hockey Club':'nhl','Vancouver Canucks':'nhl',
+  'Vegas Golden Knights':'nhl','Washington Capitals':'nhl','Winnipeg Jets':'nhl',
 };
 
-function getTeamAbbr(name) {
+// Per-sport abbr maps so we never cross-contaminate (e.g. 'det' in mlb vs nhl)
+const SPORT_ABBR_MAP = {
+  mlb: {
+    'Arizona Diamondbacks':'ari','Atlanta Braves':'atl','Baltimore Orioles':'bal',
+    'Boston Red Sox':'bos','Chicago Cubs':'chc','Chicago White Sox':'chw',
+    'Cincinnati Reds':'cin','Cleveland Guardians':'cle','Colorado Rockies':'col',
+    'Detroit Tigers':'det','Houston Astros':'hou','Kansas City Royals':'kc',
+    'Los Angeles Angels':'laa','Los Angeles Dodgers':'lad','Miami Marlins':'mia',
+    'Milwaukee Brewers':'mil','Minnesota Twins':'min','New York Mets':'nym',
+    'New York Yankees':'nyy','Oakland Athletics':'oak','Athletics':'oak',
+    'Philadelphia Phillies':'phi','Pittsburgh Pirates':'pit','San Diego Padres':'sd',
+    'San Francisco Giants':'sf','Seattle Mariners':'sea','St. Louis Cardinals':'stl',
+    'Tampa Bay Rays':'tb','Texas Rangers':'tex','Toronto Blue Jays':'tor',
+    'Washington Nationals':'wsh',
+  },
+  nba: {
+    'Atlanta Hawks':'atl','Boston Celtics':'bos','Brooklyn Nets':'bkn',
+    'Charlotte Hornets':'cha','Chicago Bulls':'chi','Cleveland Cavaliers':'cle',
+    'Dallas Mavericks':'dal','Denver Nuggets':'den','Detroit Pistons':'det',
+    'Golden State Warriors':'gs','Houston Rockets':'hou','Indiana Pacers':'ind',
+    'Los Angeles Clippers':'lac','Los Angeles Lakers':'lal','Memphis Grizzlies':'mem',
+    'Miami Heat':'mia','Milwaukee Bucks':'mil','Minnesota Timberwolves':'min',
+    'New Orleans Pelicans':'no','New York Knicks':'ny','Oklahoma City Thunder':'okc',
+    'Orlando Magic':'orl','Philadelphia 76ers':'phi','Phoenix Suns':'phx',
+    'Portland Trail Blazers':'por','Sacramento Kings':'sac','San Antonio Spurs':'sa',
+    'Toronto Raptors':'tor','Utah Jazz':'utah','Washington Wizards':'wsh',
+  },
+  nfl: {
+    'Arizona Cardinals':'ari','Atlanta Falcons':'atl','Baltimore Ravens':'bal',
+    'Buffalo Bills':'buf','Carolina Panthers':'car','Chicago Bears':'chi',
+    'Cincinnati Bengals':'cin','Cleveland Browns':'cle','Dallas Cowboys':'dal',
+    'Denver Broncos':'den','Detroit Lions':'det','Green Bay Packers':'gb',
+    'Houston Texans':'hou','Indianapolis Colts':'ind','Jacksonville Jaguars':'jax',
+    'Kansas City Chiefs':'kc','Las Vegas Raiders':'lv','Los Angeles Chargers':'lac',
+    'Los Angeles Rams':'lar','Miami Dolphins':'mia','Minnesota Vikings':'min',
+    'New England Patriots':'ne','New Orleans Saints':'no','New York Giants':'nyg',
+    'New York Jets':'nyj','Philadelphia Eagles':'phi','Pittsburgh Steelers':'pit',
+    'San Francisco 49ers':'sf','Seattle Seahawks':'sea','Tampa Bay Buccaneers':'tb',
+    'Tennessee Titans':'ten','Washington Commanders':'wsh',
+  },
+  nhl: {
+    'Anaheim Ducks':'ana','Arizona Coyotes':'ari','Boston Bruins':'bos',
+    'Buffalo Sabres':'buf','Calgary Flames':'cgy','Carolina Hurricanes':'car',
+    'Chicago Blackhawks':'chi','Colorado Avalanche':'col','Columbus Blue Jackets':'cbj',
+    'Dallas Stars':'dal','Detroit Red Wings':'det','Edmonton Oilers':'edm',
+    'Florida Panthers':'fla','Los Angeles Kings':'lak','Minnesota Wild':'min',
+    'Montreal Canadiens':'mtl','Nashville Predators':'nsh','New Jersey Devils':'njd',
+    'New York Islanders':'nyi','New York Rangers':'nyr','Ottawa Senators':'ott',
+    'Philadelphia Flyers':'phi','Pittsburgh Penguins':'pit','San Jose Sharks':'sjs',
+    'Seattle Kraken':'sea','St. Louis Blues':'stl','Tampa Bay Lightning':'tb',
+    'Toronto Maple Leafs':'tor','Utah Hockey Club':'utah','Vancouver Canucks':'van',
+    'Vegas Golden Knights':'vgk','Washington Capitals':'wsh','Winnipeg Jets':'wpg',
+  },
+};
+
+// Detect sport from team name — searches per-sport maps with exact → case-insensitive → partial
+function detectTeamSport(name) {
   if (!name) return null;
-  if (TEAM_ABBR_MAP[name]) return TEAM_ABBR_MAP[name];
+  if (TEAM_SPORT_MAP[name]) return TEAM_SPORT_MAP[name];
   const lower = name.toLowerCase();
-  for (const [k, v] of Object.entries(TEAM_ABBR_MAP)) {
+  for (const [k, v] of Object.entries(TEAM_SPORT_MAP)) {
     if (k.toLowerCase() === lower) return v;
   }
-  // Partial: check if last word matches a known team nickname
+  // Partial: last word match within each sport map (sport-scoped to avoid cross-contamination)
   const lastWord = name.trim().split(/\s+/).pop()?.toLowerCase();
-  if (lastWord) {
-    for (const [k, v] of Object.entries(TEAM_ABBR_MAP)) {
+  if (lastWord && lastWord.length > 3) {
+    for (const [k, v] of Object.entries(TEAM_SPORT_MAP)) {
+      if (k.toLowerCase().endsWith(lastWord)) return v;
+    }
+  }
+  return null;
+}
+
+function getTeamAbbrForSport(sport, name) {
+  if (!name || !sport) return null;
+  const map = SPORT_ABBR_MAP[sport.toLowerCase()];
+  if (!map) return null;
+  if (map[name]) return map[name];
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(map)) {
+    if (k.toLowerCase() === lower) return v;
+  }
+  // Partial: last word only (sport-scoped)
+  const lastWord = name.trim().split(/\s+/).pop()?.toLowerCase();
+  if (lastWord && lastWord.length > 3) {
+    for (const [k, v] of Object.entries(map)) {
       if (k.toLowerCase().endsWith(lastWord)) return v;
     }
   }
@@ -430,9 +507,13 @@ function getTeamAbbr(name) {
 }
 
 function teamLogoUrl(sport, name) {
-  const abbr = getTeamAbbr(name);
-  if (!abbr || !sport) return null;
-  return `https://a.espncdn.com/i/teamlogos/${sport.toLowerCase()}/500/${abbr}.png`;
+  if (!name) return null;
+  // Derive the correct sport from the team name itself — never trust the default 'mlb' fallback
+  const resolvedSport = detectTeamSport(name) || sport?.toLowerCase();
+  if (!resolvedSport) return null;
+  const abbr = getTeamAbbrForSport(resolvedSport, name);
+  if (!abbr) return null;
+  return `https://a.espncdn.com/i/teamlogos/${resolvedSport}/500/${abbr}.png`;
 }
 
 // Extract "Away @ Home" matchup from a prompt string

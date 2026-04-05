@@ -1619,12 +1619,19 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
   // ── Injury Intel sidebar ──────────────────────────────────────────────────
   const [sidebarTab,   setSidebarTab]   = useState('headlines'); // 'headlines' | 'intel'
-  const [intelText,    setIntelText]    = useState('');
+  // Restore persisted intel from sessionStorage (survives tab switches, clears on page refresh)
+  const [intelText,    setIntelText]    = useState(() => {
+    try { return sessionStorage.getItem('intelText') || ''; } catch { return ''; }
+  });
   const [intelLoading, setIntelLoading] = useState(false);
   const [intelError,   setIntelError]   = useState('');
-  const [intelTs,      setIntelTs]      = useState(null);   // timestamp of last scan
+  const [intelTs,      setIntelTs]      = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('intelTs');
+      return saved ? new Date(saved) : null;
+    } catch { return null; }
+  });
   const [intelQuery,   setIntelQuery]   = useState('');     // custom query input
-  const INTEL_REFRESH = 5 * 60 * 1000; // auto-scan every 5 min
 
   const runIntelScan = useCallback(async (s, customQuery = '') => {
     if (intelLoading) return; // debounce — don't fire while already scanning
@@ -1645,7 +1652,17 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
       });
       const data = await res.json();
       if (data.error) { setIntelError(data.error); }
-      else { setIntelText(data.intel || ''); setIntelTs(new Date()); }
+      else {
+        const text = data.intel || '';
+        const ts = new Date();
+        setIntelText(text);
+        setIntelTs(ts);
+        // Persist so results survive tab switches within this session
+        try {
+          sessionStorage.setItem('intelText', text);
+          sessionStorage.setItem('intelTs', ts.toISOString());
+        } catch {}
+      }
     } catch (e) {
       setIntelError('Scan failed — check your connection');
     } finally {
@@ -1847,14 +1864,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     }
   }, [games, highlightGame]); // eslint-disable-line
 
-  // Auto-scan injury intel when tab is active or sport changes, refresh every 5 min
-  useEffect(() => {
-    if (sidebarTab !== 'intel') return;
-    runIntelScan(sport);
-    const t = setInterval(() => runIntelScan(sport), INTEL_REFRESH);
-    return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sidebarTab, sport]);
+  // Injury Intel is manual-only — no auto-scan or interval
 
   const isAllMode = sport === 'all';
 
@@ -2273,7 +2283,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                 </div>
                 {intelTs && (
                   <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                    Scanned {intelTs.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · auto-refresh 5m
+                    Scanned {intelTs.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 )}
               </div>
