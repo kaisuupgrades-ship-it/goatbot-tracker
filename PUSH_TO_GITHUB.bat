@@ -18,7 +18,7 @@ git config user.email "kaisuupgrades@gmail.com"
 git config user.name "kaisuupgrades-ship-it"
 
 git add -A
-git commit -m "Analyzer cache, click-to-scoreboard, grade every 5min, injury intel, AI cascade"
+git commit -m "Add Admin Panel trigger for analyzer pre-generation cache"
 git push origin main
 
 echo.

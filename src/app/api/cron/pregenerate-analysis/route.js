@@ -269,3 +269,27 @@ export async function GET(req) {
 
   return NextResponse.json(summary);
 }
+
+/**
+ * POST /api/cron/pregenerate-analysis
+ * Admin-only manual trigger — same logic as GET but authenticated via admin email.
+ * Called from the Admin Panel "Pre-Generate Analyses" button.
+ */
+export async function POST(req) {
+  const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+  try {
+    const { userEmail, force = true } = await req.json();
+    if (userEmail?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+    }
+    // Reuse the same GET logic by constructing a fake request with the cron secret
+    const fakeUrl = new URL('http://localhost/api/cron/pregenerate-analysis');
+    if (force) fakeUrl.searchParams.set('force', 'true');
+    const fakeReq = new Request(fakeUrl.toString(), {
+      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+    });
+    return GET(fakeReq);
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

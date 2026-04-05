@@ -805,6 +805,9 @@ function SystemPanel({ userEmail }) {
   const [edgePushing,    setEdgePushing]    = useState(false);
   const [edgePushResult, setEdgePushResult] = useState(null);
   const [cronLog,        setCronLog]        = useState(null);
+  const [pregenRunning,  setPregenRunning]  = useState(false);
+  const [pregenResult,   setPregenResult]   = useState(null);
+  const [pregenLog,      setPregenLog]      = useState(null);
 
   async function runBatchAnalysis() {
     setBatchRunning(true);
@@ -854,6 +857,36 @@ function SystemPanel({ userEmail }) {
       .catch(() => {});
   }
 
+  function loadPregenLog() {
+    fetch('/api/settings?key=cron_pregenerate_last_run')
+      .then(r => r.json())
+      .then(d => {
+        if (d.value) {
+          try { setPregenLog(typeof d.value === 'string' ? JSON.parse(d.value) : d.value); }
+          catch { /* ignore */ }
+        }
+      })
+      .catch(() => {});
+  }
+
+  async function runPregenAnalysis() {
+    setPregenRunning(true);
+    setPregenResult(null);
+    try {
+      const res = await fetch('/api/cron/pregenerate-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail, force: true }),
+      });
+      const data = await res.json();
+      setPregenResult(data);
+      if (!data.error) loadPregenLog();
+    } catch (e) {
+      setPregenResult({ error: e.message });
+    }
+    setPregenRunning(false);
+  }
+
   function loadSysInfo() {
     fetch(`/api/admin?action=system&userEmail=${encodeURIComponent(userEmail)}`)
       .then(r => r.json())
@@ -861,7 +894,7 @@ function SystemPanel({ userEmail }) {
       .catch(() => {});
   }
 
-  useEffect(() => { loadSysInfo(); loadCronLog(); }, [userEmail]);
+  useEffect(() => { loadSysInfo(); loadCronLog(); loadPregenLog(); }, [userEmail]);
 
   async function sendAnnouncement() {
     if (!announcement.trim()) return;
@@ -947,6 +980,50 @@ function SystemPanel({ userEmail }) {
           style={{ opacity: edgePushing ? 0.7 : 1 }}
         >
           {edgePushing ? '🤖 Grok 4 analyzing slate…' : '🔄 Regenerate Now (Manual)'}
+        </button>
+      </div>
+
+      {/* ── Analyzer Pre-Generation ── */}
+      <div className="card" style={{ padding: '1.2rem', borderColor: pregenResult && !pregenResult.error ? 'rgba(96,165,250,0.2)' : 'var(--border)' }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          ⚡ Analyzer Pre-Generation Cache
+          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa', letterSpacing: '0.07em' }}>GROK 4 + WEB SEARCH</span>
+          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', letterSpacing: '0.07em' }}>AUTO 8AM + 4PM ET</span>
+        </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.85rem', lineHeight: 1.6 }}>
+          Pre-generates BetOS analysis reports for every game on today's slate. When users hit Analyze, they get the cached report instantly + a quick news-delta check instead of waiting 60–90s. Cron auto-runs at <strong style={{ color: 'var(--text-secondary)' }}>8 AM ET</strong> and <strong style={{ color: 'var(--text-secondary)' }}>4 PM ET</strong>.
+        </p>
+        {pregenLog && (
+          <div style={{ marginBottom: '0.85rem', padding: '0.6rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.15)', borderRadius: '7px', fontSize: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+              <span style={{ color: '#60a5fa' }}>⏱ Last run: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</strong></span>
+              <span style={{ color: '#86efac' }}>✅ {pregenLog.generated} generated</span>
+              <span style={{ color: 'var(--text-muted)' }}>⏭ {pregenLog.skipped} skipped (fresh)</span>
+              {pregenLog.errors > 0 && <span style={{ color: '#f87171' }}>⚠️ {pregenLog.errors} errors</span>}
+              <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
+            </div>
+          </div>
+        )}
+        {pregenResult && (
+          <div style={{
+            padding: '0.65rem 0.85rem', borderRadius: '7px', marginBottom: '0.85rem', fontSize: '0.78rem',
+            background: pregenResult.error ? 'rgba(248,113,113,0.06)' : 'rgba(74,222,128,0.06)',
+            border: `1px solid ${pregenResult.error ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
+            color: pregenResult.error ? '#f87171' : '#4ade80',
+          }}>
+            {pregenResult.error
+              ? `Error: ${pregenResult.error}`
+              : `✓ Generated ${pregenResult.generated} reports, skipped ${pregenResult.skipped} (already fresh) in ${Math.round((pregenResult.duration_ms || 0) / 1000)}s`
+            }
+          </div>
+        )}
+        <button
+          className="btn-gold"
+          onClick={runPregenAnalysis}
+          disabled={pregenRunning}
+          style={{ opacity: pregenRunning ? 0.7 : 1 }}
+        >
+          {pregenRunning ? '⚡ Pre-generating all games… (takes 2–5 min)' : '⚡ Pre-Generate Today\'s Analyses Now'}
         </button>
       </div>
 
