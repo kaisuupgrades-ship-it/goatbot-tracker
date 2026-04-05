@@ -1730,6 +1730,9 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const [injuryLoading,   setInjuryLoading]   = useState(false);
   const [injuryError,     setInjuryError]     = useState('');
   const [injurySport,     setInjurySport]     = useState('');  // tracks which sport was last loaded
+  const [playerNewsOpen,  setPlayerNewsOpen]  = useState(null);  // player name currently expanded
+  const [playerNewsData,  setPlayerNewsData]  = useState({});    // { 'LeBron James': { status, summary, updates, ... } }
+  const [playerNewsLoading, setPlayerNewsLoading] = useState(''); // player name currently loading
 
   const loadInjuryNews = useCallback(async (s) => {
     if (injuryLoading) return;
@@ -1755,6 +1758,28 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
       loadInjuryNews(sport);
     }
   }, [sidebarTab, sport]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch latest news/tweets for a specific injured player via Grok web search
+  const loadPlayerNews = useCallback(async (playerName, teamAbbr) => {
+    const key = playerName;
+    // Toggle off if already open
+    if (playerNewsOpen === key) { setPlayerNewsOpen(null); return; }
+    setPlayerNewsOpen(key);
+    // Skip refetch if we already have data less than 5 min old
+    if (playerNewsData[key] && (Date.now() - (playerNewsData[key]._ts || 0)) < 300000) return;
+    setPlayerNewsLoading(key);
+    try {
+      const s = injurySport || sport;
+      const res = await fetch(`/api/injury-intel/player-news?player=${encodeURIComponent(playerName)}&team=${encodeURIComponent(teamAbbr || '')}&sport=${encodeURIComponent(s)}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setPlayerNewsData(prev => ({ ...prev, [key]: { ...data, _ts: Date.now() } }));
+    } catch (e) {
+      setPlayerNewsData(prev => ({ ...prev, [key]: { error: e.message, _ts: Date.now() } }));
+    } finally {
+      setPlayerNewsLoading('');
+    }
+  }, [playerNewsOpen, playerNewsData, injurySport, sport]);
 
   const loadGames = useCallback(async (s, dateStr) => {
     // Golf / Tennis / Soccer have their own components — nothing to fetch here
@@ -2374,7 +2399,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                🏥 {isAllMode ? 'MLB' : currentSport?.label} Injury News
+                🏥 {isAllMode ? 'MLB' : currentSport?.label} Injury Intel
               </div>
               <button
                 onClick={() => loadInjuryNews(sport)}
@@ -2391,107 +2416,236 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               </button>
             </div>
 
-            {/* Player status chips (from ESPN injuries endpoint) */}
-            {injuryPlayers.length > 0 && (
-              <div style={{ marginBottom: '0.6rem' }}>
-                <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '5px' }}>
-                  Current Injury Report
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', maxHeight: '160px', overflowY: 'auto' }}>
-                  {injuryPlayers.map((p, i) => {
-                    const statusLower = (p.status || '').toLowerCase();
-                    const statusColor = statusLower.includes('out') ? '#f87171'
-                      : statusLower.includes('doubtful') ? '#fb923c'
-                      : statusLower.includes('question') || statusLower.includes('day-to-day') ? '#facc15'
-                      : statusLower.includes('probable') ? '#86efac'
-                      : 'var(--text-secondary)';
-                    return (
-                      <div key={i} style={{
-                        display: 'flex', alignItems: 'center', gap: '6px',
-                        background: 'var(--bg-elevated)', borderRadius: '5px',
-                        padding: '4px 7px',
-                        borderLeft: `2px solid ${statusColor}`,
-                      }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {p.name}
-                          </span>
-                          {p.detail && (
-                            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                              {p.side ? `${p.side} ` : ''}{p.detail}
-                            </span>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: statusColor, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {p.status}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* News articles */}
-            {injuryLoading && injuryArticles.length === 0 ? (
+            {/* Loading state */}
+            {injuryLoading && injuryPlayers.length === 0 && injuryArticles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
                 <div style={{ fontSize: '1.2rem', marginBottom: '6px', opacity: 0.5 }}>🏥</div>
-                <div style={{ fontSize: '0.72rem' }}>Loading injury news…</div>
+                <div style={{ fontSize: '0.72rem' }}>Loading injury intel…</div>
               </div>
             ) : injuryError ? (
               <div style={{ padding: '0.6rem', background: 'var(--red-subtle)', borderRadius: '7px', color: 'var(--red)', fontSize: '0.72rem' }}>
                 ⚠️ {injuryError}
               </div>
-            ) : injuryArticles.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>🏥</div>
-                <div style={{ fontSize: '0.75rem' }}>No injury news found</div>
-              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
-                {injuryArticles.map((article, i) => {
-                  const pubDate  = article.published ? new Date(article.published) : null;
-                  const ageHours = pubDate ? (Date.now() - pubDate.getTime()) / 3600000 : 999;
-                  const dateStr  = pubDate
-                    ? ageHours < 1  ? 'Just now'
-                    : ageHours < 24 ? `${Math.floor(ageHours)}h ago`
-                    : pubDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                    : '';
-                  return (
-                    <a key={i} href={article.url || '#'} target="_blank" rel="noreferrer"
-                      style={{ display: 'block', textDecoration: 'none' }}>
-                      <div style={{
-                        background: 'var(--bg-elevated)', borderRadius: '7px',
-                        border: '1px solid var(--border)',
-                        borderLeft: `3px solid ${article.isInjury ? '#f87171' : '#E31937'}`,
-                        padding: '0.55rem 0.65rem',
-                        transition: 'background 0.12s',
-                      }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-overlay)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                      >
-                        {article.team && (
-                          <div style={{ fontSize: '0.57rem', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            {article.team}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
+
+                {/* ── Key Injuries List with "Update News" buttons ─────── */}
+                {injuryPlayers.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--gold, #FFB800)', marginBottom: '6px', fontWeight: 700 }}>
+                      Injury Report — tap player for latest intel
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      {injuryPlayers.map((p, i) => {
+                        const statusLower = (p.status || '').toLowerCase();
+                        const statusColor = statusLower.includes('out') ? '#f87171'
+                          : statusLower.includes('doubtful') ? '#fb923c'
+                          : statusLower.includes('question') || statusLower.includes('day-to-day') ? '#facc15'
+                          : statusLower.includes('probable') ? '#86efac'
+                          : 'var(--text-secondary)';
+                        const isExpanded = playerNewsOpen === p.name;
+                        const newsData = playerNewsData[p.name];
+                        const isLoadingThis = playerNewsLoading === p.name;
+                        return (
+                          <div key={i}>
+                            {/* Player row */}
+                            <div
+                              onClick={() => loadPlayerNews(p.name, p.team)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                background: isExpanded ? 'var(--bg-overlay)' : 'var(--bg-elevated)',
+                                borderRadius: isExpanded ? '5px 5px 0 0' : '5px',
+                                padding: '5px 7px',
+                                borderLeft: `2px solid ${statusColor}`,
+                                cursor: 'pointer',
+                                transition: 'background 0.12s',
+                              }}
+                              onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'var(--bg-overlay)'; }}
+                              onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+                            >
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {p.name}
+                                  </span>
+                                  {p.team && (
+                                    <span style={{ fontSize: '0.56rem', color: 'var(--text-muted)', fontWeight: 600, opacity: 0.7 }}>
+                                      {p.team}
+                                    </span>
+                                  )}
+                                </div>
+                                {p.detail && (
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'block' }}>
+                                    {p.side ? `${p.side} ` : ''}{p.detail}
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '0.58rem', fontWeight: 700, color: statusColor, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                {p.status}
+                              </span>
+                              <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.6 }}>
+                                {isLoadingThis ? '⏳' : isExpanded ? '▲' : '▼'}
+                              </span>
+                            </div>
+
+                            {/* Expanded player news panel */}
+                            {isExpanded && (
+                              <div style={{
+                                background: 'var(--bg-overlay)', borderRadius: '0 0 5px 5px',
+                                borderLeft: `2px solid ${statusColor}`,
+                                padding: '8px 8px 10px',
+                                borderTop: '1px solid var(--border)',
+                              }}>
+                                {isLoadingThis ? (
+                                  <div style={{ textAlign: 'center', padding: '10px 0', color: 'var(--text-muted)', fontSize: '0.68rem' }}>
+                                    <div style={{ marginBottom: '4px' }}>🔍</div>
+                                    Scanning X/Twitter and news for {p.name}…
+                                  </div>
+                                ) : newsData?.error ? (
+                                  <div style={{ fontSize: '0.68rem', color: '#f87171' }}>
+                                    ⚠️ {newsData.error}
+                                  </div>
+                                ) : newsData ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {/* AI status badge */}
+                                    {newsData.status && newsData.status !== 'Unknown' && (
+                                      <div style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                        background: newsData.status === 'Out' ? 'rgba(248,113,113,0.15)' :
+                                          newsData.status === 'Doubtful' ? 'rgba(251,146,60,0.15)' :
+                                          newsData.status === 'Questionable' || newsData.status === 'Day-to-Day' ? 'rgba(250,204,21,0.12)' :
+                                          newsData.status === 'Active' || newsData.status === 'Probable' ? 'rgba(134,239,172,0.12)' :
+                                          'rgba(255,255,255,0.06)',
+                                        padding: '3px 8px', borderRadius: '4px',
+                                        fontSize: '0.62rem', fontWeight: 700,
+                                        color: newsData.status === 'Out' ? '#f87171' :
+                                          newsData.status === 'Doubtful' ? '#fb923c' :
+                                          newsData.status === 'Questionable' || newsData.status === 'Day-to-Day' ? '#facc15' :
+                                          newsData.status === 'Active' || newsData.status === 'Probable' ? '#86efac' : 'var(--text-secondary)',
+                                        alignSelf: 'flex-start',
+                                      }}>
+                                        AI Status: {newsData.status}
+                                        {newsData.returnTimeline && (
+                                          <span style={{ fontWeight: 400, opacity: 0.8 }}> · ETA: {newsData.returnTimeline}</span>
+                                        )}
+                                      </div>
+                                    )}
+                                    {/* Summary */}
+                                    {newsData.summary && (
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-primary)', lineHeight: 1.45 }}>
+                                        {newsData.summary}
+                                      </div>
+                                    )}
+                                    {/* Individual updates/tweets */}
+                                    {newsData.updates?.length > 0 && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
+                                        {newsData.updates.slice(0, 5).map((u, j) => (
+                                          <div key={j} style={{
+                                            background: 'rgba(255,255,255,0.03)', borderRadius: '4px',
+                                            padding: '5px 7px', borderLeft: '2px solid rgba(99,102,241,0.4)',
+                                          }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px' }}>
+                                              <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                                {u.platform === 'X' ? '𝕏' : u.platform === 'ESPN' ? '📺' : u.platform === 'Team' ? '🏟️' : '📰'} {u.source}
+                                              </span>
+                                              {u.time && (
+                                                <span style={{ fontSize: '0.54rem', color: 'var(--text-muted)', opacity: 0.6 }}>
+                                                  {u.time}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div style={{ fontSize: '0.64rem', color: 'var(--text-secondary)', lineHeight: 1.35 }}>
+                                              {u.text}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {/* Provider tag */}
+                                    <div style={{ fontSize: '0.52rem', color: 'var(--text-muted)', opacity: 0.5, textAlign: 'right' }}>
+                                      via {newsData.provider === 'xai' ? 'Grok' : 'Claude'} {newsData.fallback ? '(fallback)' : ''} · {newsData.lastUpdated || 'just now'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.68rem' }}>
+                                    Tap to load latest news
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        )}
-                        <div style={{ fontSize: '0.73rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35, marginBottom: '3px' }}>
-                          {article.headline}
-                        </div>
-                        {article.description && (
-                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                            {article.description}
-                          </div>
-                        )}
-                        {dateStr && (
-                          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '4px', opacity: 0.65 }}>
-                            {ageHours < 6 ? '🔴 ' : ageHours < 24 ? '🟡 ' : ''}{dateStr}
-                          </div>
-                        )}
-                      </div>
-                    </a>
-                  );
-                })}
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Divider between injuries and news ─────────────────── */}
+                {injuryPlayers.length > 0 && injuryArticles.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+                )}
+
+                {/* ── Related News Articles (secondary) ───────────────── */}
+                {injuryArticles.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
+                      Related Headlines
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      {injuryArticles.slice(0, 10).map((article, i) => {
+                        const pubDate  = article.published ? new Date(article.published) : null;
+                        const ageHours = pubDate ? (Date.now() - pubDate.getTime()) / 3600000 : 999;
+                        const dateStr  = pubDate
+                          ? ageHours < 1  ? 'Just now'
+                          : ageHours < 24 ? `${Math.floor(ageHours)}h ago`
+                          : pubDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          : '';
+                        return (
+                          <a key={i} href={article.url || '#'} target="_blank" rel="noreferrer"
+                            style={{ display: 'block', textDecoration: 'none' }}>
+                            <div style={{
+                              background: 'var(--bg-elevated)', borderRadius: '7px',
+                              border: '1px solid var(--border)',
+                              borderLeft: `3px solid ${article.isInjury ? '#f87171' : '#E31937'}`,
+                              padding: '0.45rem 0.6rem',
+                              transition: 'background 0.12s',
+                            }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-overlay)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+                            >
+                              {article.team && (
+                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                  {article.team}
+                                </div>
+                              )}
+                              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35, marginBottom: '2px' }}>
+                                {article.headline}
+                              </div>
+                              {article.description && (
+                                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                  {article.description}
+                                </div>
+                              )}
+                              {dateStr && (
+                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '3px', opacity: 0.65 }}>
+                                  {ageHours < 6 ? '🔴 ' : ageHours < 24 ? '🟡 ' : ''}{dateStr}
+                                </div>
+                              )}
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {injuryPlayers.length === 0 && injuryArticles.length === 0 && !injuryLoading && (
+                  <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>🏥</div>
+                    <div style={{ fontSize: '0.75rem' }}>No injury data found</div>
+                  </div>
+                )}
               </div>
             )}
           </div>

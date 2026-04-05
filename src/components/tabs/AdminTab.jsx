@@ -863,6 +863,26 @@ function ContestsPanel({ userEmail }) {
     setTimeout(() => setActionMsg(''), 6000);
   }
 
+  async function handleBackfillCommenceTime(dryRun = false) {
+    const label = dryRun ? 'dry run' : 'backfill';
+    if (!dryRun && !confirm('Backfill commence_time on all historical picks using ESPN? This looks up game start times and updates the database.')) return;
+    setActionMsg(`Running ${label}…`);
+    try {
+      const res = await adminFetch('/api/admin/backfill-commence-time', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun }),
+      });
+      const d = await res.json();
+      if (d.error) { setActionMsg(`Error: ${d.error}`); }
+      else {
+        setActionMsg(`${dryRun ? '🔍 Dry run' : '✅ Backfill'}: ${d.updated} updated, ${d.skipped} not found, ${d.failed} failed (${d.espnCalls || 0} ESPN calls)`);
+      }
+    } catch (e) {
+      setActionMsg(`Error: ${e.message}`);
+    }
+    setTimeout(() => setActionMsg(''), 10000);
+  }
+
   function handleSavedPick(updated) {
     setPicks(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
     setActionMsg('✓ Pick updated');
@@ -917,6 +937,7 @@ function ContestsPanel({ userEmail }) {
         <button onClick={() => setShowDeclare(true)} style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.5)', background: 'rgba(255,184,0,0.12)', color: '#FFB800' }}>🏆 Declare Winner</button>
         <button onClick={handleBatchAudit} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.25)', background: 'rgba(255,184,0,0.06)', color: '#FFB800' }}>🎯 AI Audit</button>
         <button onClick={handleTimingSweep} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.07)', color: '#f87171' }} title="Auto-reject picks submitted after game start">⏱ Timing</button>
+        <button onClick={() => handleBackfillCommenceTime(false)} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(20,184,166,0.35)', background: 'rgba(20,184,166,0.07)', color: '#14b8a6' }} title="Backfill commence_time from ESPN for historical picks">🕐 Backfill</button>
         <button onClick={load} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', border: '1px solid #222', background: 'transparent', color: '#666' }}>↻</button>
       </div>
 

@@ -86,18 +86,43 @@ export async function GET(req) {
   }));
 
   // ── Parse injury roster ───────────────────────────────────────────────────
-  const rawInjuries = injuryResult.status === 'fulfilled'
-    ? (injuryResult.value.injuries || [])
-    : [];
+  // ESPN injuries endpoint nests data as: { seasons: [{ teams: [{ injuries: [...] }] }] }
+  // OR sometimes as flat { injuries: [...] } depending on sport. Handle both.
+  let rawInjuries = [];
+  if (injuryResult.status === 'fulfilled') {
+    const injData = injuryResult.value;
+    if (Array.isArray(injData.injuries)) {
+      rawInjuries = injData.injuries;
+    } else if (Array.isArray(injData.seasons)) {
+      // Flatten: seasons → teams → injuries
+      for (const season of injData.seasons) {
+        for (const teamObj of (season.teams || [])) {
+          const teamName = teamObj.team?.abbreviation || teamObj.team?.shortName || '';
+          for (const inj of (teamObj.injuries || [])) {
+            rawInjuries.push({ ...inj, _team: teamName });
+          }
+        }
+      }
+    }
+  }
 
-  const players = rawInjuries.slice(0, 20).map(entry => ({
-    name:   entry.athlete?.displayName || entry.athlete?.shortName || '?',
-    team:   entry.team?.abbreviation || entry.team?.name || '',
-    status: entry.status || entry.type || '',
-    detail: entry.details?.detail || entry.details?.type || '',
+  // Prioritize key statuses: Out > Doubtful > Questionable > Day-to-Day > other
+  const STATUS_PRIORITY = { out: 0, doubtful: 1, questionable: 2, 'day-to-day': 3 };
+  const players = rawInjuries.map(entry => ({
+    name:   entry.athlete?.displayName || entry.athlete?.shortName || entry.displayName || '?',
+    team:   entry.team?.abbreviation || entry._team || '',
+    status: entry.status || entry.type?.name || entry.type || '',
+    detail: entry.details?.detail || entry.details?.type || entry.longComment || entry.shortComment || '',
     side:   entry.details?.side || '',
     date:   entry.date || null,
-  })).filter(p => p.name !== '?');
+  }))
+    .filter(p => p.name !== '?')
+    .sort((a, b) => {
+      const pa = STATUS_PRIORITY[a.status.toLowerCase()] ?? 99;
+      const pb = STATUS_PRIORITY[b.status.toLowerCase()] ?? 99;
+      return pa - pb;
+    })
+    .slice(0, 40);
 
   return NextResponse.json({ articles, players, sport });
 }
