@@ -70,9 +70,12 @@ export async function GET(req) {
     const effectiveEndpoint = SPORT_ENDPOINT_OVERRIDE[sport] || endpoint;
     let path = `${sportPath}/${effectiveEndpoint}`;
 
-    // Golf leaderboard needs ?league=pga query param
+    // Golf leaderboard: ESPN requires the league as a query param at the top-level
+    // path, NOT as a sub-path — correct URL is golf/leaderboard?league=pga
+    // (NOT golf/pga/leaderboard?league=pga which 404s)
     if (sport === 'golf' && effectiveEndpoint === 'leaderboard') {
-      path += '?league=pga';
+      const golfLeague = searchParams.get('league') || 'pga';
+      path = `golf/leaderboard?league=${golfLeague}`;
     } else if (endpoint === 'scoreboard' && date) {
       path += `?dates=${date}`;
     }

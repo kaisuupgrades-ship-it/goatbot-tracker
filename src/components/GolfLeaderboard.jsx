@@ -1,6 +1,18 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 
+// ── Mobile breakpoint hook ────────────────────────────────────────────────────
+function useIsMobile(breakpoint = 640) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth <= breakpoint); }
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 function scoreColor(score) {
   if (score === null || score === undefined || score === 'E') return '#94a3b8';
   const n = typeof score === 'string' ? parseInt(score) : score;
@@ -18,7 +30,7 @@ function fmtScore(score) {
   return n > 0 ? `+${n}` : `${n}`;
 }
 
-function PlayerRow({ player, rank, highlight }) {
+function PlayerRow({ player, rank, highlight, isMobile }) {
   const toPar      = player.statistics?.[0]?.displayValue ?? player.score?.displayValue ?? '—';
   const thru       = player.status?.thru ?? player.statistics?.[1]?.displayValue ?? '—';
   const todayScore = player.statistics?.[2]?.displayValue ?? '—';
@@ -33,9 +45,9 @@ function PlayerRow({ player, rank, highlight }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '36px 36px 1fr 52px 46px 46px 60px',
+      gridTemplateColumns: isMobile ? '30px 1fr 44px 40px 40px' : '36px 36px 1fr 52px 46px 46px 60px',
       alignItems: 'center',
-      padding: '7px 12px',
+      padding: isMobile ? '6px 10px' : '7px 12px',
       borderBottom: '1px solid rgba(255,255,255,0.04)',
       background: highlight ? 'rgba(255,184,0,0.05)' : isLead ? 'rgba(74,222,128,0.04)' : 'transparent',
       opacity: isCut ? 0.45 : 1,
@@ -45,12 +57,14 @@ function PlayerRow({ player, rank, highlight }) {
         {player.status?.position?.displayName || rank}
       </div>
 
-      {/* Flag/Country */}
-      <div style={{ fontSize: '1rem', textAlign: 'center' }}>
-        {player.athlete?.flag?.href
-          ? <img src={player.athlete.flag.href} alt="" style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '1px' }} />
-          : '🏌️'}
-      </div>
+      {/* Flag/Country — desktop only */}
+      {!isMobile && (
+        <div style={{ fontSize: '1rem', textAlign: 'center' }}>
+          {player.athlete?.flag?.href
+            ? <img src={player.athlete.flag.href} alt="" style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '1px' }} />
+            : '🏌️'}
+        </div>
+      )}
 
       {/* Name */}
       <div style={{ overflow: 'hidden' }}>
@@ -61,7 +75,7 @@ function PlayerRow({ player, rank, highlight }) {
       </div>
 
       {/* To Par */}
-      <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: scoreColor(toParNum) }}>
+      <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: isMobile ? '0.85rem' : '0.92rem', color: scoreColor(toParNum) }}>
         {fmtScore(toPar)}
       </div>
 
@@ -75,10 +89,12 @@ function PlayerRow({ player, rank, highlight }) {
         {thru}
       </div>
 
-      {/* Total strokes */}
-      <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-        {totalScore !== '—' ? totalScore : '—'}
-      </div>
+      {/* Total strokes — desktop only */}
+      {!isMobile && (
+        <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          {totalScore !== '—' ? totalScore : '—'}
+        </div>
+      )}
     </div>
   );
 }
@@ -90,6 +106,7 @@ export default function GolfLeaderboard() {
   const [search, setSearch]   = useState('');
   const [league, setLeague]   = useState('pga'); // pga | lpga | euro | korn
   const [showAll, setShowAll] = useState(false);
+  const isMobile = useIsMobile();
 
   const leagues = [
     { id: 'pga',  label: 'PGA Tour',    emoji: '🇺🇸' },
@@ -101,13 +118,9 @@ export default function GolfLeaderboard() {
     setLoading(true);
     setError('');
     try {
-      // The golf leaderboard route now handles ?league=pga automatically
-      // For LPGA/DP World, pass a custom endpoint
-      let url = '/api/sports?sport=golf&endpoint=scoreboard';
-      if (league !== 'pga') {
-        // Use the ESPN leaderboard with different league param
-        url = `/api/golf-leaderboard?league=${league}`;
-      }
+      // All leagues use the same sports route with ?league= param.
+      // The API overrides the endpoint to 'leaderboard' and appends ?league=
+      const url = `/api/sports?sport=golf&endpoint=leaderboard&league=${league}`;
       const res  = await fetch(url);
       const json = await res.json();
       if (json.error) throw new Error(json.error);
@@ -220,13 +233,13 @@ export default function GolfLeaderboard() {
               {/* Column headers */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '36px 36px 1fr 52px 46px 46px 60px',
-                padding: '6px 12px',
+                gridTemplateColumns: isMobile ? '30px 1fr 44px 40px 40px' : '36px 36px 1fr 52px 46px 46px 60px',
+                padding: isMobile ? '6px 10px' : '6px 12px',
                 background: 'rgba(255,255,255,0.03)',
                 borderBottom: '1px solid var(--border)',
               }}>
-                {['Pos', '', 'Player', 'To Par', 'Today', 'Thru', 'Total'].map((h, i) => (
-                  <div key={i} style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', textAlign: i >= 3 ? 'center' : 'left', ...(i === 6 ? { textAlign: 'right' } : {}) }}>
+                {(isMobile ? ['Pos', 'Player', 'To Par', 'Today', 'Thru'] : ['Pos', '', 'Player', 'To Par', 'Today', 'Thru', 'Total']).map((h, i) => (
+                  <div key={i} style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', textAlign: i >= 3 ? 'center' : 'left', ...(i === 6 && !isMobile ? { textAlign: 'right' } : {}) }}>
                     {h}
                   </div>
                 ))}
@@ -238,6 +251,7 @@ export default function GolfLeaderboard() {
                   player={player}
                   rank={i + 1}
                   highlight={false}
+                  isMobile={isMobile}
                 />
               ))}
 

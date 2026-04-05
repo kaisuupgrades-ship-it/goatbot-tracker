@@ -3,6 +3,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { fetchProfile, upsertProfile } from '@/lib/supabase';
 import PublicProfileModal from '../PublicProfileModal';
 
+// ── Mobile breakpoint hook ────────────────────────────────────────────────────
+function useIsMobile(breakpoint = 640) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth <= breakpoint); }
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 // ── UserAvatar: shows real photo if available, falls back to initials ─────────
@@ -122,7 +134,7 @@ function SharpBar({ score, maxScore }) {
 
 // ── Leaderboard Row ────────────────────────────────────────────────────────────
 
-function LeaderRow({ entry, maxScore, isMe, onViewProfile }) {
+function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
   const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, id: userId } = entry;
 
   return (
@@ -130,10 +142,10 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile }) {
       onClick={onViewProfile}
       style={{
         display: 'grid',
-        gridTemplateColumns: '44px 1fr 80px 90px 80px 90px 100px',
+        gridTemplateColumns: isMobile ? '36px 1fr 70px 65px' : '44px 1fr 80px 90px 80px 90px 100px',
         alignItems: 'center',
-        gap: '8px',
-        padding: '0.75rem 1rem',
+        gap: isMobile ? '6px' : '8px',
+        padding: isMobile ? '0.65rem 0.75rem' : '0.75rem 1rem',
         borderRadius: '8px',
         background: isMe ? 'rgba(255,184,0,0.07)' : 'var(--bg-surface)',
         border: isMe ? '1px solid rgba(255,184,0,0.35)' : '1px solid var(--border)',
@@ -150,51 +162,58 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile }) {
 
       {/* Name */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-        <UserAvatar userId={userId} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={30} />
+        <UserAvatar userId={userId} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={isMobile ? 26 : 30} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 700, color: isMe ? 'var(--gold)' : 'var(--text-primary)', fontSize: '0.9rem', truncate: true }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+            <span style={{ fontWeight: 700, color: isMe ? 'var(--gold)' : 'var(--text-primary)', fontSize: isMobile ? '0.84rem' : '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {display_name || username}
             </span>
-            {isMe && <span style={{ fontSize: '0.65rem', color: 'var(--gold)', fontWeight: 700, letterSpacing: '0.05em' }}>YOU</span>}
-            <VerifiedBadge count={verified_picks} />
+            {isMe && <span style={{ fontSize: '0.6rem', color: 'var(--gold)', fontWeight: 700, flexShrink: 0 }}>YOU</span>}
+            {!isMobile && <VerifiedBadge count={verified_picks} />}
           </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>@{username}</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isMobile ? `${wins}–${losses} · ${winPct(wins, total)}` : `@${username}`}
+          </div>
         </div>
       </div>
 
-      {/* Record */}
-      <span style={{
-        fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
-        color: wins > losses ? 'var(--green)' : losses > wins ? 'var(--red)' : 'var(--text-secondary)',
-      }}>
-        {wins}–{losses}
-      </span>
+      {/* Record — desktop only */}
+      {!isMobile && (
+        <span style={{
+          fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
+          color: wins > losses ? 'var(--green)' : losses > wins ? 'var(--red)' : 'var(--text-secondary)',
+        }}>
+          {wins}–{losses}
+        </span>
+      )}
 
-      {/* Win % */}
-      <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-        {winPct(wins, total)}
-      </span>
+      {/* Win % — desktop only */}
+      {!isMobile && (
+        <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+          {winPct(wins, total)}
+        </span>
+      )}
 
       {/* Units */}
       <span style={{
-        fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
+        fontFamily: 'IBM Plex Mono', fontSize: isMobile ? '0.82rem' : '0.85rem',
         color: parseFloat(units) >= 0 ? 'var(--green)' : 'var(--red)',
-        fontWeight: 700,
+        fontWeight: 700, textAlign: 'right',
       }}>
         {fmt(units)}u
       </span>
 
       {/* ROI */}
       <span style={{
-        fontFamily: 'IBM Plex Mono', fontSize: '0.82rem',
+        fontFamily: 'IBM Plex Mono', fontSize: isMobile ? '0.78rem' : '0.82rem',
         color: parseFloat(roi) >= 0 ? 'var(--green)' : 'var(--red)',
+        textAlign: 'right',
       }}>
         {fmt(roi, 1)}%
       </span>
 
-      {/* Sharp Score */}
-      <SharpBar score={sharp_score} maxScore={maxScore} />
+      {/* Sharp Score — desktop only */}
+      {!isMobile && <SharpBar score={sharp_score} maxScore={maxScore} />}
     </div>
   );
 }
@@ -504,7 +523,7 @@ function ContestBanner() {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 // ── Contest Row ───────────────────────────────────────────────────────────────
-function ContestRow({ entry, isMe, onViewProfile }) {
+function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
   const streakColor = entry.streak_type === 'W' ? '#4ade80' : entry.streak_type === 'L' ? '#f87171' : '#94a3b8';
   const unitColor   = entry.units > 0 ? '#4ade80' : entry.units < 0 ? '#f87171' : '#94a3b8';
 
@@ -513,10 +532,10 @@ function ContestRow({ entry, isMe, onViewProfile }) {
       onClick={onViewProfile}
       style={{
         display: 'grid',
-        gridTemplateColumns: '36px 36px 1fr 70px 65px 55px 60px',
+        gridTemplateColumns: isMobile ? '28px 28px 1fr 62px 50px' : '36px 36px 1fr 70px 65px 55px 60px',
         alignItems: 'center',
-        gap: '6px',
-        padding: '8px 12px',
+        gap: isMobile ? '5px' : '6px',
+        padding: isMobile ? '8px 10px' : '8px 12px',
         background: isMe ? 'rgba(255,184,0,0.06)' : entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent',
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         borderLeft: isMe ? '2px solid rgba(255,184,0,0.5)' : '2px solid transparent',
@@ -528,52 +547,56 @@ function ContestRow({ entry, isMe, onViewProfile }) {
     >
       {/* Rank */}
       <div style={{ textAlign: 'center' }}>
-        {entry.rank === 1 ? <span style={{ fontSize: '1.1rem' }}>🥇</span>
-          : entry.rank === 2 ? <span style={{ fontSize: '1.1rem' }}>🥈</span>
-          : entry.rank === 3 ? <span style={{ fontSize: '1.1rem' }}>🥉</span>
-          : <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: 'var(--text-muted)' }}>#{entry.rank}</span>}
+        {entry.rank === 1 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥇</span>
+          : entry.rank === 2 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥈</span>
+          : entry.rank === 3 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥉</span>
+          : <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{entry.rank}</span>}
       </div>
-      {/* Avatar — real photo with initials fallback */}
+      {/* Avatar */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <UserAvatar userId={entry.user_id} avatarEmoji={entry.avatar_emoji} displayName={entry.display_name} username={entry.username} size={30} />
+        <UserAvatar userId={entry.user_id} avatarEmoji={entry.avatar_emoji} displayName={entry.display_name} username={entry.username} size={isMobile ? 24 : 30} />
       </div>
       {/* Name */}
       <div style={{ overflow: 'hidden' }}>
-        <div style={{ fontSize: '0.85rem', fontWeight: isMe ? 800 : 600, color: isMe ? 'var(--gold)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: isMobile ? '0.82rem' : '0.85rem', fontWeight: isMe ? 800 : 600, color: isMe ? 'var(--gold)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {entry.display_name || entry.username}
-          {isMe && <span style={{ marginLeft: '5px', fontSize: '0.62rem', color: 'var(--gold)', fontWeight: 700 }}>YOU</span>}
+          {isMe && <span style={{ marginLeft: '4px', fontSize: '0.6rem', color: 'var(--gold)', fontWeight: 700 }}>YOU</span>}
         </div>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
           {entry.wins}W–{entry.losses}L{entry.pushes > 0 ? `–${entry.pushes}P` : ''}
-          {entry.pending > 0 && <span style={{ color: '#60a5fa', marginLeft: '4px' }}>+{entry.pending} live</span>}
+          {!isMobile && entry.pending > 0 && <span style={{ color: '#60a5fa', marginLeft: '4px' }}>+{entry.pending} live</span>}
         </div>
       </div>
       {/* Units */}
-      <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.88rem', color: unitColor }}>
+      <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: isMobile ? '0.82rem' : '0.88rem', color: unitColor }}>
         {entry.units > 0 ? '+' : ''}{entry.units}u
       </div>
       {/* ROI */}
-      <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: unitColor }}>
+      <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: isMobile ? '0.75rem' : '0.78rem', color: unitColor }}>
         {entry.roi > 0 ? '+' : ''}{entry.roi}%
       </div>
-      {/* Win% */}
-      <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        {entry.total_settled > 0 ? ((entry.wins / entry.total_settled) * 100).toFixed(0) + '%' : '—'}
-      </div>
-      {/* Streak */}
-      <div style={{ textAlign: 'right' }}>
-        {entry.streak > 0 && entry.streak_type
-          ? <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: streakColor, fontWeight: 700 }}>
-              {entry.streak_type}{entry.streak}
-            </span>
-          : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>—</span>}
-      </div>
+      {/* Win% — desktop only */}
+      {!isMobile && (
+        <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          {entry.total_settled > 0 ? ((entry.wins / entry.total_settled) * 100).toFixed(0) + '%' : '—'}
+        </div>
+      )}
+      {/* Streak — desktop only */}
+      {!isMobile && (
+        <div style={{ textAlign: 'right' }}>
+          {entry.streak > 0 && entry.streak_type
+            ? <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: streakColor, fontWeight: 700 }}>
+                {entry.streak_type}{entry.streak}
+              </span>
+            : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>—</span>}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Contest Standings Block ────────────────────────────────────────────────────
-function ContestStandings({ userId, isDemo, refreshKey, onViewProfile }) {
+function ContestStandings({ userId, isDemo, refreshKey, onViewProfile, isMobile }) {
   const [cData, setCData]   = useState(null);
   const [cLoad, setCLoad]   = useState(true);
 
@@ -620,8 +643,8 @@ function ContestStandings({ userId, isDemo, refreshKey, onViewProfile }) {
 
       {/* Column labels */}
       {entries.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '36px 36px 1fr 70px 65px 55px 60px', gap: '6px', padding: '5px 12px 4px', background: 'rgba(255,255,255,0.02)' }}>
-          {['', '', 'Player', 'Units', 'ROI', 'Win%', 'Streak'].map((h, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '28px 28px 1fr 62px 50px' : '36px 36px 1fr 70px 65px 55px 60px', gap: isMobile ? '5px' : '6px', padding: isMobile ? '5px 10px 4px' : '5px 12px 4px', background: 'rgba(255,255,255,0.02)' }}>
+          {(isMobile ? ['', '', 'Player', 'Units', 'ROI'] : ['', '', 'Player', 'Units', 'ROI', 'Win%', 'Streak']).map((h, i) => (
             <div key={i} style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: i >= 3 ? 'right' : 'left' }}>{h}</div>
           ))}
         </div>
@@ -640,7 +663,7 @@ function ContestStandings({ userId, isDemo, refreshKey, onViewProfile }) {
         </div>
       ) : (
         entries.map(entry => (
-          <ContestRow key={entry.user_id} entry={entry} isMe={entry.user_id === userId} onViewProfile={() => onViewProfile?.(entry)} />
+          <ContestRow key={entry.user_id} entry={entry} isMe={entry.user_id === userId} onViewProfile={() => onViewProfile?.(entry)} isMobile={isMobile} />
         ))
       )}
     </div>
@@ -659,6 +682,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
   const [viewEntry, setViewEntry]     = useState(null); // for PublicProfileModal
 
   const userId = user?.id;
+  const isMobile = useIsMobile();
 
   const load = useCallback(async (filter = sharpFilter) => {
     setLoading(true);
@@ -730,7 +754,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
       {subTab === 'contest' && (
         <>
           <ContestBanner />
-          <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} onViewProfile={(entry) => setViewEntry(entry)} />
+          <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} onViewProfile={(entry) => setViewEntry(entry)} isMobile={isMobile} />
         </>
       )}
 
@@ -831,11 +855,12 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
       {entries.length > 0 && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '44px 1fr 80px 90px 80px 90px 100px',
-          gap: '8px', padding: '0 1rem',
+          gridTemplateColumns: isMobile ? '36px 1fr 70px 65px' : '44px 1fr 80px 90px 80px 90px 100px',
+          gap: isMobile ? '6px' : '8px',
+          padding: isMobile ? '0 0.75rem' : '0 1rem',
         }}>
-          {['', 'Handicapper', 'Record', 'Win %', 'Units', 'ROI', 'Sharp Score'].map(h => (
-            <span key={h} style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          {(isMobile ? ['', 'Handicapper', 'Units', 'ROI'] : ['', 'Handicapper', 'Record', 'Win %', 'Units', 'ROI', 'Sharp Score']).map((h, i) => (
+            <span key={h} style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: isMobile && i >= 2 ? 'right' : 'left' }}>
               {h}
             </span>
           ))}
@@ -890,6 +915,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               maxScore={maxScore}
               isMe={entry.user_id === userId}
               onViewProfile={() => setViewEntry(entry)}
+              isMobile={isMobile}
             />
           ))}
         </div>

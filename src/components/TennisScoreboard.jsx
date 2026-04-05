@@ -184,7 +184,9 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
     setLoading(true);
     setError('');
     try {
-      const res  = await fetch(`/api/sports?sport=${tour}&endpoint=scoreboard`);
+      // 'atp' maps to the 'tennis' key in the API; 'tenniswta' is its own key
+      const sportParam = tour === 'atp' ? 'tennis' : tour;
+      const res  = await fetch(`/api/sports?sport=${sportParam}&endpoint=scoreboard`);
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setData(json);
