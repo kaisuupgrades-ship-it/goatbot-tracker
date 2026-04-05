@@ -1820,17 +1820,46 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           );
       if (!realGame) return event;
 
-      const book    = realGame.bookmakers?.[0];
-      const h2h     = book?.markets?.find(m => m.key === 'h2h');
-      const spreads = book?.markets?.find(m => m.key === 'spreads');
-      const totals  = book?.markets?.find(m => m.key === 'totals');
+      // Scan all bookmakers to find the best available data for each market.
+      // bookmakers[0] may be missing one side (e.g. book suspended COL's ML),
+      // so we prefer any book that has BOTH sides of h2h, then fall back to partial.
+      const books = realGame.bookmakers || [];
 
-      const homeH2h  = h2h?.outcomes?.find(o => o.name === realGame.home_team);
-      const awayH2h  = h2h?.outcomes?.find(o => o.name === realGame.away_team);
-      const sHome    = spreads?.outcomes?.find(o => o.name === realGame.home_team);
-      const sAway    = spreads?.outcomes?.find(o => o.name === realGame.away_team);
-      const tOver    = totals?.outcomes?.find(o => o.name === 'Over');
-      const tUnder   = totals?.outcomes?.find(o => o.name === 'Under');
+      // h2h: prefer a book that has both home AND away prices
+      let h2h = null, homeH2h = null, awayH2h = null, h2hBook = null;
+      for (const bk of books) {
+        const mkt = bk.markets?.find(m => m.key === 'h2h');
+        if (!mkt) continue;
+        const ho = mkt.outcomes?.find(o => o.name === realGame.home_team);
+        const ao = mkt.outcomes?.find(o => o.name === realGame.away_team);
+        if (ho && ao) { h2h = mkt; homeH2h = ho; awayH2h = ao; h2hBook = bk; break; }
+        // Partial fallback — keep if we haven't found anything yet
+        if (!h2h && (ho || ao)) { h2h = mkt; homeH2h = ho; awayH2h = ao; h2hBook = bk; }
+      }
+
+      // spreads: prefer a book with both sides
+      let spreads = null, sHome = null, sAway = null;
+      for (const bk of books) {
+        const mkt = bk.markets?.find(m => m.key === 'spreads');
+        if (!mkt) continue;
+        const ho = mkt.outcomes?.find(o => o.name === realGame.home_team);
+        const ao = mkt.outcomes?.find(o => o.name === realGame.away_team);
+        if (ho && ao) { spreads = mkt; sHome = ho; sAway = ao; break; }
+        if (!spreads && (ho || ao)) { spreads = mkt; sHome = ho; sAway = ao; }
+      }
+
+      // totals: prefer a book with both over and under
+      let totals = null, tOver = null, tUnder = null;
+      for (const bk of books) {
+        const mkt = bk.markets?.find(m => m.key === 'totals');
+        if (!mkt) continue;
+        const ov = mkt.outcomes?.find(o => o.name === 'Over');
+        const un = mkt.outcomes?.find(o => o.name === 'Under');
+        if (ov && un) { totals = mkt; tOver = ov; tUnder = un; break; }
+        if (!totals && (ov || un)) { totals = mkt; tOver = ov; tUnder = un; }
+      }
+
+      const book = h2hBook || books[0];
 
       const existingOdds = event.competitions?.[0]?.odds?.[0] || {};
       const mergedOdds = {
