@@ -1,17 +1,15 @@
-/**
- * /api/cron/grade-picks
- * Vercel Cron: grades PENDING picks for ALL users during game hours.
- *
- * Schedule (vercel.json):
- *   */5 17-23 * * *  →  noon–midnight ET (main evening window)
- *   */5 0-8 * * *    →  midnight–4am ET  (late west coast games)
- *
- * Key fixes:
- *  - Catches result=null picks as well as result='PENDING'
- *  - Looks back 7 days (not just yesterday) so old stuck picks get graded
- *  - Uses shared gradeEngine so logic is identical across all grading paths
- *  - Batches ESPN calls per sport+date — one fetch per group across all users
- */
+// /api/cron/grade-picks
+// Vercel Cron: grades PENDING picks for ALL users during game hours.
+//
+// Schedule (vercel.json):
+//   every 5 min, 17-23 UTC  →  noon-midnight ET (main evening window)
+//   every 5 min, 0-8 UTC    →  midnight-4am ET  (late west coast games)
+//
+// Key fixes:
+//  - Catches result=null picks as well as result='PENDING'
+//  - Looks back 7 days (not just yesterday) so old stuck picks get graded
+//  - Uses shared gradeEngine so logic is identical across all grading paths
+//  - Batches ESPN calls per sport+date — one fetch per group across all users
 import { NextResponse }   from 'next/server';
 import { createClient }   from '@supabase/supabase-js';
 import {
