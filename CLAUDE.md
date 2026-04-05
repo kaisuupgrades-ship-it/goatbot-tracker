@@ -200,6 +200,40 @@ All cron routes require `Authorization: Bearer <CRON_SECRET>` header.
 
 ---
 
+## Known Security Issues (Audit: April 5 2026)
+
+### CRITICAL — Fix Immediately
+- **`.env.local` may be in git history** — if ever committed, rotate ALL keys (xAI, Anthropic, Odds API, Groq, Supabase). Ensure `.env.local` is in `.gitignore`.
+- **Admin email hardcoded in 6 routes** — `kaisuupgrades@gmail.com` is in `admin/route.js`, `backtest/route.js`, `contest-audit/route.js`, `cron/pregenerate-analysis/route.js`, `cron/trends/route.js`, `trends/route.js`. Move to `ADMIN_EMAILS` env var.
+
+### HIGH — Auth Gaps
+- **chat, follow, messages, picks routes accept spoofed user IDs** — these accept `userId` from request body without JWT verification. Add Supabase auth token validation.
+- **Cron routes silently allow unauthenticated access if `CRON_SECRET` is unset** — change to fail-closed: if `!cronSecret`, return 503.
+- **9 routes use service role key unnecessarily** — chat, follow, messages, contest-leaderboard, leaderboard, odds, goatbot, auto-analyze, backtest should use anon key + RLS.
+
+### MEDIUM — Input Validation & Rate Limiting
+- **No rate limiting on `/api/goatbot` and `/api/injury-intel`** — expensive AI calls, vulnerable to abuse.
+- **SSRF risk in `/api/parse-slip`** — fetches arbitrary URLs from user input. Add domain allowlist or block internal IPs.
+- **Avatar upload has no magic-byte validation** — only checks file size, not actual file type.
+- **Multiple routes lack input validation** — admin, backtest, contest-audit, user-search accept unvalidated query params.
+
+### Patterns to Follow When Adding New Routes
+- Always require JWT auth for user-modifying operations
+- Use anon key + RLS for public reads; reserve service role for admin/cron only
+- Validate all query params against allowed values
+- Add rate limiting for any route that calls external APIs
+- Never hardcode emails/secrets — use env vars
+
+---
+
+## Known Operational Issues (Health Check: April 5 2026)
+- **`game_analyses` table is empty** — pregenerate cron appears to not be firing or is failing silently
+- **Daily trends/edges are 12+ hours stale** — trends cron at 09:00 UTC may not be running
+- **Zero cron log entries in settings table** — logging writes may be failing even when crons execute
+- **Pick grading IS working** — despite no logs, picks are being graded (suggests grade-picks cron runs but doesn't log)
+
+---
+
 ## What NOT to Do
 - Never use a flat cross-sport `TEAM_ABBR_MAP` — always use sport-scoped lookup to avoid wrong logos
 - Never check only `bookmakers[0]` for odds — scan all bookmakers
@@ -208,3 +242,6 @@ All cron routes require `Authorization: Bearer <CRON_SECRET>` header.
 - Never add auto-refresh to Injury Intel — user explicitly removed it
 - Never use `del` in Git Bash — use `rm`
 - Never use `localStorage` in components — use `sessionStorage` for per-session persistence
+- Never hardcode admin emails — use `ADMIN_EMAILS` env var
+- Never use service role key for public/unauthenticated endpoints — use anon key + RLS
+- Never accept `userId` from request body without JWT verification
