@@ -8,7 +8,6 @@ import Sidebar       from './Sidebar';
 import TrackerTab    from './tabs/TrackerTab';
 import ScoreboardTab from './tabs/ScoreboardTab';
 import OddsTab       from './tabs/OddsTab';
-import TrendsTab     from './tabs/TrendsTab';
 import HistoryTab    from './tabs/HistoryTab';
 import AnalyzerTab      from './tabs/AnalyzerTab';
 import LeaderboardTab    from './tabs/LeaderboardTab';
@@ -104,7 +103,6 @@ const TAB_META = {
   tracker:    { label: 'My Picks',     sub: 'Track your picks and ROI' },
   scoreboard: { label: 'Scoreboard',   sub: 'Live scores across all sports' },
   odds:       { label: 'Odds Board',   sub: 'Compare lines across books in real time' },
-  trends:     { label: 'Trends',       sub: 'Situational edges, filter engine & backtest' },
   history:    { label: 'Pick History', sub: 'Log, edit, and analyze every bet' },
   analyzer:    { label: 'Analyzer',     sub: 'BetOS live analysis + sharp tools' },
   leaderboard: { label: 'Contest',      sub: 'Monthly contest standings & verified picks' },
@@ -279,7 +277,6 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           <div style={{ display: activeTab === 'odds'       ? 'block' : 'none' }}>
             <OddsTab onAnalyze={(prompt) => { setGoatPrompt(prompt); setActiveTab('analyzer'); }} />
           </div>
-          <div style={{ display: activeTab === 'trends'     ? 'block' : 'none' }}><TrendsTab picks={picks} user={user} onNavigateToTracker={() => setActiveTab('tracker')} /></div>
           <div style={{ display: activeTab === 'history'    ? 'block' : 'none' }}>
             <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} onLeaderboardRefresh={() => setLeaderboardRefreshKey(k => k + 1)} />
           </div>

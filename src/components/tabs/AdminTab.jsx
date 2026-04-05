@@ -802,9 +802,6 @@ function SystemPanel({ userEmail }) {
   const [sysInfo, setSysInfo]           = useState(null);
   const [batchRunning,   setBatchRunning]   = useState(false);
   const [batchResult,    setBatchResult]    = useState(null);
-  const [edgePushing,    setEdgePushing]    = useState(false);
-  const [edgePushResult, setEdgePushResult] = useState(null);
-  const [cronLog,        setCronLog]        = useState(null);
   const [pregenRunning,  setPregenRunning]  = useState(false);
   const [pregenResult,   setPregenResult]   = useState(null);
   const [pregenLog,      setPregenLog]      = useState(null);
@@ -824,37 +821,6 @@ function SystemPanel({ userEmail }) {
       setBatchResult({ error: e.message });
     }
     setBatchRunning(false);
-  }
-
-  async function pushTodaysEdges() {
-    setEdgePushing(true);
-    setEdgePushResult(null);
-    try {
-      // Use the new cron endpoint which runs Grok 4 + web search
-      const res  = await fetch('/api/cron/trends', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail }),
-      });
-      const data = await res.json();
-      setEdgePushResult(data);
-      if (data.success) loadCronLog(); // refresh status
-    } catch (e) {
-      setEdgePushResult({ error: e.message });
-    }
-    setEdgePushing(false);
-  }
-
-  function loadCronLog() {
-    fetch('/api/settings?key=cron_trends_last_run')
-      .then(r => r.json())
-      .then(d => {
-        if (d.value) {
-          try { setCronLog(typeof d.value === 'string' ? JSON.parse(d.value) : d.value); }
-          catch { /* ignore */ }
-        }
-      })
-      .catch(() => {});
   }
 
   function loadPregenLog() {
@@ -920,7 +886,7 @@ function SystemPanel({ userEmail }) {
       .catch(() => {});
   }
 
-  useEffect(() => { loadSysInfo(); loadCronLog(); loadPregenLog(); }, [userEmail]);
+  useEffect(() => { loadSysInfo(); loadPregenLog(); }, [userEmail]);
 
   async function sendAnnouncement() {
     if (!announcement.trim()) return;
@@ -961,53 +927,6 @@ function SystemPanel({ userEmail }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {msg && <div style={{ color: msg.startsWith('✓') ? '#4ade80' : '#f87171', padding: '0.5rem 0.75rem', background: msg.startsWith('✓') ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', borderRadius: '6px', fontSize: '0.8rem' }}>{msg}</div>}
-
-      {/* ── Automated Trends Engine ── */}
-      <div className="card" style={{ padding: '1.2rem', borderColor: edgePushResult?.success ? 'rgba(255,184,0,0.2)' : 'var(--border)' }}>
-        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          🤖 Automated Trends Engine
-          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.2)', color: '#FFB800', letterSpacing: '0.07em' }}>GROK 4 + WEB SEARCH</span>
-          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', letterSpacing: '0.07em' }}>AUTO 2×/DAY</span>
-        </div>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.85rem', lineHeight: 1.6 }}>
-          Vercel Cron runs this automatically at <strong style={{ color: 'var(--text-secondary)' }}>9 AM UTC (5 AM ET)</strong> and <strong style={{ color: 'var(--text-secondary)' }}>5 PM UTC (1 PM ET)</strong> every day. Uses Grok 4 with live web search (injury reports, line movement, weather) to generate the best edges for all users. Click below to trigger a manual refresh.
-        </p>
-
-        {/* Cron status */}
-        {cronLog && (
-          <div style={{ marginBottom: '0.85rem', padding: '0.6rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.15)', borderRadius: '7px', fontSize: '0.75rem' }}>
-            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-              <span style={{ color: '#60a5fa' }}>⏱ Last run: <strong>{new Date(cronLog.last_run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</strong></span>
-              <span style={{ color: '#86efac' }}>⚡ {cronLog.edge_count} edges</span>
-              <span style={{ color: 'var(--text-muted)' }}>📅 {cronLog.game_count} games</span>
-              <span style={{ color: 'var(--text-muted)' }}>🤖 {cronLog.ai_model || cronLog.ai_provider}</span>
-              <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((cronLog.duration_ms || 0) / 1000)}s</span>
-            </div>
-          </div>
-        )}
-
-        {edgePushResult && (
-          <div style={{
-            padding: '0.65rem 0.85rem', borderRadius: '7px', marginBottom: '0.85rem', fontSize: '0.78rem',
-            background: edgePushResult.error ? 'rgba(248,113,113,0.06)' : 'rgba(74,222,128,0.06)',
-            border: `1px solid ${edgePushResult.error ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
-            color: edgePushResult.error ? '#f87171' : '#4ade80',
-          }}>
-            {edgePushResult.error
-              ? `Error: ${edgePushResult.error}`
-              : `✓ Generated ${edgePushResult.edges} edges from ${edgePushResult.games} games via ${edgePushResult.model || edgePushResult.provider} in ${Math.round((edgePushResult.duration_ms || 0) / 1000)}s`
-            }
-          </div>
-        )}
-        <button
-          className="btn-gold"
-          onClick={pushTodaysEdges}
-          disabled={edgePushing}
-          style={{ opacity: edgePushing ? 0.7 : 1 }}
-        >
-          {edgePushing ? '🤖 Grok 4 analyzing slate…' : '🔄 Regenerate Now (Manual)'}
-        </button>
-      </div>
 
       {/* ── Analyzer Pre-Generation ── */}
       <div className="card" style={{ padding: '1.2rem', borderColor: pregenResult && !pregenResult.error ? 'rgba(96,165,250,0.2)' : 'var(--border)' }}>

@@ -44,12 +44,6 @@ const Icons = {
       <line x1="5.5" y1="3.5" x2="5.5" y2="7.5"/>
     </svg>
   ),
-  Trends: () => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="1,11 4.5,6.5 7.5,8.5 12.5,3"/>
-      <polyline points="9.5,3 12.5,3 12.5,6"/>
-    </svg>
-  ),
   SharpBoard: () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
       <rect x="1" y="7" width="3" height="6" rx="0.5"/>
@@ -105,7 +99,6 @@ const NAV_SECTIONS = [
     section: 'Tools',
     items: [
       { id: 'analyzer',   label: 'Analyzer',    Icon: Icons.Analyzer,   desc: 'BetOS + AI tools' },
-      { id: 'trends',     label: 'Trends',      Icon: Icons.Trends,     desc: 'Situational edge finder' },
       { id: 'sharpboard', label: 'Sharp Board', Icon: Icons.SharpBoard, desc: 'Public handicapper rankings' },
       { id: 'usersearch', label: 'User Search', Icon: Icons.Search,     desc: 'Find & follow sharp bettors' },
       { id: 'following',  label: 'Following',   Icon: Icons.Following,  desc: 'Cappers you follow' },
