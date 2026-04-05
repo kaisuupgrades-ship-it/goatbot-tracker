@@ -112,7 +112,8 @@ export function sortAllSportsEvents(events) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function formatGameTime(dateStr) {
+// Simple time formatter used only by getGameState (no timezone awareness needed there)
+function fmtTimeBasic(dateStr) {
   try {
     const d = new Date(dateStr);
     return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
@@ -124,7 +125,7 @@ function getGameState(event) {
   if (!status) return { state: 'pre', label: 'Scheduled', color: '#60a5fa' };
   if (status.state === 'in') return { state: 'live', label: status.shortDetail || 'LIVE', color: '#4ade80' };
   if (status.state === 'post') return { state: 'final', label: status.shortDetail || 'Final', color: '#888' };
-  return { state: 'pre', label: formatGameTime(event.date), color: '#60a5fa' };
+  return { state: 'pre', label: fmtTimeBasic(event.date), color: '#60a5fa' };
 }
 
 function getCompetitors(event) {
@@ -814,9 +815,16 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 boxShadow: '0 0 6px #4ade80', animation: 'live-pulse 2s infinite',
               }} />
             )}
-            <span style={{ color: gameState.color, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
-              {gameState.label}
-            </span>
+            {/* For upcoming games: show timezone-aware start time; for live/final: show status label */}
+            {gameState.state === 'pre' && event.date ? (
+              <span style={{ color: '#60a5fa', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                {formatGameTime(event.date, timezone)} {getTzAbbr(timezone)}
+              </span>
+            ) : (
+              <span style={{ color: gameState.color, fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+                {gameState.label}
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
             {broadcast && (
@@ -1880,28 +1888,30 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
             style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
           >‹</button>
 
-          {/* Quick presets */}
-          {[
-            { label: 'Yesterday', offset: -1 },
-            { label: 'Today',     offset:  0 },
-            { label: 'Tomorrow',  offset:  1 },
-          ].map(({ label, offset }) => {
+          {/* Quick presets: Yesterday + Today + next 6 days */}
+          <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px', flexShrink: 1 }}>
+          {[-1, 0, 1, 2, 3, 4, 5, 6].map(offset => {
             const d = new Date(Date.now() + offset * 86400000);
             const ds = toLocalDateStr(d);
             const isActive = selectedDate === ds;
+            const label = offset === -1 ? 'Yesterday'
+              : offset === 0 ? 'Today'
+              : offset === 1 ? 'Tomorrow'
+              : d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
             return (
-              <button key={label} onClick={() => setSelectedDate(ds)}
+              <button key={offset} onClick={() => setSelectedDate(ds)}
                 style={{
-                  padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: isActive ? 700 : 400,
+                  padding: '4px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', fontWeight: isActive ? 700 : 400,
                   border: `1px solid ${isActive ? 'rgba(255,184,0,0.6)' : 'var(--border)'}`,
                   background: isActive ? 'rgba(255,184,0,0.1)' : 'transparent',
-                  color: isActive ? 'var(--gold)' : 'var(--text-muted)',
-                  transition: 'all 0.12s',
+                  color: isActive ? 'var(--gold)' : offset > 0 ? 'var(--text-secondary)' : 'var(--text-muted)',
+                  transition: 'all 0.12s', whiteSpace: 'nowrap', flexShrink: 0,
                 }}>
                 {label}
               </button>
             );
           })}
+          </div>
 
           {/* Custom date picker */}
           <input
