@@ -146,15 +146,75 @@ function getLastHole(player) {
   return withType[withType.length - 1];
 }
 
-// ── Scorecard Modal ───────────────────────────────────────────────────────────
-function ScorecardModal({ player, eventId, league, onClose }) {
-  const [rounds, setRounds] = useState(null);
+// ── Score cell — colored circle matching Flashscore style ────────────────────
+function ScoreCell({ hole }) {
+  const meta  = scoreTypeMeta(hole?.scoreType?.name);
+  const score = hole?.displayValue ?? (hole?.score != null ? String(hole.score) : null);
+  if (score == null) return <span style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.68rem' }}>–</span>;
+
+  // Eagle/albatross: double circle (two nested squares visually done with outline + fill)
+  // Birdie: single filled circle
+  // Par: just the number
+  // Bogey: single square outline
+  // Double bogey: double square
+  const isEagle  = meta && (meta.label === 'Eagle' || meta.label === '2-Eagle' || meta.label === 'Albatross');
+  const isBirdie = meta?.label === 'Birdie';
+  const isBogey  = meta?.label === 'Bogey';
+  const isDblBog = meta?.label === 'Dbl Bogey' || meta?.label === 'Triple+';
+  const isPar    = meta?.label === 'Par';
+
+  const baseStyle = {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.72rem',
+    width: '22px', height: '22px', lineHeight: 1,
+    color: meta?.color || 'var(--text-secondary)',
+    position: 'relative',
+  };
+
+  if (isEagle) {
+    return (
+      <span style={{ ...baseStyle, borderRadius: '50%', background: meta.bg, border: `2px solid ${meta.color}`, outline: `1px solid ${meta.color}`, outlineOffset: '2px' }}>
+        {score}
+      </span>
+    );
+  }
+  if (isBirdie) {
+    return (
+      <span style={{ ...baseStyle, borderRadius: '50%', background: meta.bg, border: `1.5px solid ${meta.color}` }}>
+        {score}
+      </span>
+    );
+  }
+  if (isDblBog) {
+    return (
+      <span style={{ ...baseStyle, borderRadius: '2px', background: meta.bg, border: `2px solid ${meta.color}`, outline: `1px solid ${meta.color}`, outlineOffset: '2px' }}>
+        {score}
+      </span>
+    );
+  }
+  if (isBogey) {
+    return (
+      <span style={{ ...baseStyle, borderRadius: '2px', background: meta.bg, border: `1.5px solid ${meta.color}` }}>
+        {score}
+      </span>
+    );
+  }
+  // Par or unknown
+  return <span style={{ ...baseStyle, color: isPar ? '#94a3b8' : 'var(--text-secondary)' }}>{score}</span>;
+}
+
+// ── Inline scorecard panel ─────────────────────────────────────────────────────
+function InlineScorecardPanel({ player, eventId, league, onClose }) {
+  const [rounds, setRounds]   = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
-  const overlayRef = useRef(null);
+  const [error, setError]     = useState('');
+  const [activeRound, setActiveRound] = useState(0);
 
   const athleteId = player.id || player.athlete?.id;
   const name      = player.athlete?.displayName || player.athlete?.fullName || 'Player';
+  const stats     = player.statistics || [];
+  const toPar     = stats[0]?.displayValue ?? '—';
+  const thru      = player.status?.thru ?? stats[1]?.displayValue ?? '—';
 
   useEffect(() => {
     if (!athleteId || !eventId) { setLoading(false); return; }
@@ -163,188 +223,284 @@ function ScorecardModal({ player, eventId, league, onClose }) {
       .then(r => r.json())
       .then(d => {
         if (d.error) throw new Error(d.error);
-        // ESPN scorecard returns rounds array
         const r = d.rounds || d.player?.rounds || [];
         setRounds(r);
+        // Default to last round (most current)
+        if (r.length > 0) setActiveRound(r.length - 1);
       })
       .catch(e => setError(e.message || 'Could not load scorecard'))
       .finally(() => setLoading(false));
   }, [athleteId, eventId, league]);
 
-  // Also try to build scorecard from linescores if API fails
-  const linescoredRounds = (() => {
-    if (rounds?.length) return null; // use API data
+  // Build from linescores as fallback
+  const fallbackRounds = (() => {
+    if (rounds?.length) return null;
     const ls = player.linescores || [];
     if (!ls.length) return null;
-    return [{ number: 'Current', holes: ls.map((h, i) => ({
-      number: h.period || (i + 1),
-      par: h.par,
-      score: h.value,
-      displayValue: h.displayValue,
-      scoreType: h.scoreType,
-    }))}];
+    // linescores from leaderboard are typically round totals not hole-by-hole
+    // Check if they have scoreType (hole-by-hole)
+    if (ls[0]?.scoreType) {
+      return [{ number: 'Current', holes: ls.map((h, i) => ({
+        number: h.period || (i + 1), par: h.par,
+        score: h.value, displayValue: h.displayValue, scoreType: h.scoreType,
+      })) }];
+    }
+    return null;
   })();
 
-  const displayRounds = rounds?.length ? rounds : (linescoredRounds || []);
+  const displayRounds = rounds?.length ? rounds : (fallbackRounds || []);
+  const round = displayRounds[activeRound] || displayRounds[0];
+  const holes = round?.holes || [];
 
-  function hdlOverlay(e) { if (e.target === overlayRef.current) onClose(); }
+  // Split front 9 / back 9
+  const front9 = holes.filter(h => h.number <= 9);
+  const back9  = holes.filter(h => h.number >= 10);
+  const front9Par   = front9.reduce((s, h) => s + (h.par || 0), 0);
+  const back9Par    = back9.reduce((s, h) => s + (h.par || 0), 0);
+  const front9Score = front9.reduce((s, h) => s + (h.score ?? 0), 0);
+  const back9Score  = back9.reduce((s, h) => s + (h.score ?? 0), 0);
+  const hasPar  = holes.some(h => h.par != null);
+
+  // Row style builder
+  function rowStyle(isHeader) {
+    return {
+      display: 'flex', alignItems: 'center',
+      background: isHeader ? 'rgba(255,255,255,0.03)' : 'transparent',
+      borderBottom: '1px solid rgba(255,255,255,0.04)',
+    };
+  }
+  const cellBase = {
+    fontFamily: 'IBM Plex Mono', fontSize: '0.7rem',
+    textAlign: 'center', flexShrink: 0,
+    width: '26px', padding: '4px 1px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
+  const labelCell = { ...cellBase, width: '44px', textAlign: 'left', paddingLeft: '8px', fontWeight: 700, fontSize: '0.65rem', color: 'var(--text-muted)' };
+  const subtotalCell = { ...cellBase, width: '34px', fontWeight: 800, borderLeft: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)' };
+
+  // Scorecard row for a set of holes
+  function ScorecardRow({ type, holeSet, subtotal, subtotalPar }) {
+    const isHeader = type === 'header';
+    const isPar    = type === 'par';
+    const isScore  = type === 'score';
+    const isSubPar = type === 'sub-par';
+
+    return (
+      <div style={rowStyle(isHeader)}>
+        <div style={labelCell}>
+          {isHeader ? 'Hole' : isPar ? 'Par' : isScore ? 'Score' : ''}
+        </div>
+        {holeSet.map((h, i) => {
+          const val = isHeader ? h.number : isPar ? (h.par ?? '—') : isScore ? null : null;
+          return (
+            <div key={i} style={{ ...cellBase, color: isPar ? '#94a3b8' : 'var(--text-primary)', fontWeight: isHeader ? 700 : 500 }}>
+              {isHeader && <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{h.number}</span>}
+              {isPar && <span>{h.par ?? '—'}</span>}
+              {isScore && <ScoreCell hole={h} />}
+            </div>
+          );
+        })}
+        {/* Subtotal */}
+        {subtotal !== undefined && (
+          <div style={{
+            ...subtotalCell,
+            color: isHeader ? 'var(--text-muted)' : isPar ? '#94a3b8' : scoreColor(subtotalPar != null && subtotal != null ? subtotal - subtotalPar : 0),
+          }}>
+            {isHeader ? (holeSet[0]?.number <= 9 ? 'OUT' : 'IN') : (subtotal || '—')}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const roundToParNum = round?.value ?? (round?.total != null && round?.par != null ? round.total - round.par : null);
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={hdlOverlay}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '16px',
-      }}
-    >
-      <div style={{
-        background: 'var(--bg-surface, #1a1a2e)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '12px',
-        width: '100%', maxWidth: '660px',
-        maxHeight: '85vh', overflow: 'hidden',
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-      }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)',
-          background: 'rgba(255,255,255,0.02)',
-        }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary, #fff)' }}>{name}</div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted, #94a3b8)', marginTop: '2px' }}>Scorecard</div>
-          </div>
-          <button onClick={onClose} style={{
-            background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted, #94a3b8)',
-            borderRadius: '6px', cursor: 'pointer', padding: '4px 10px', fontSize: '0.78rem',
-          }}>✕ Close</button>
-        </div>
-
-        {/* Body */}
-        <div style={{ overflowY: 'auto', padding: '12px 14px' }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted, #94a3b8)' }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⛳</div>
-              <p style={{ fontSize: '0.82rem' }}>Loading scorecard…</p>
-            </div>
-          ) : error && !displayRounds.length ? (
-            <div style={{ padding: '1rem', color: '#f87171', fontSize: '0.82rem', textAlign: 'center' }}>
-              <div style={{ marginBottom: '6px' }}>⚠️ {error}</div>
-              <div style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '0.72rem' }}>
-                Detailed scorecard may not be available yet. Check back during or after the round.
-              </div>
-            </div>
-          ) : !displayRounds.length ? (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontSize: '0.82rem' }}>
-              No scorecard data available yet. Check back once the round starts.
-            </div>
-          ) : (
-            displayRounds.map((round, ri) => (
-              <div key={ri} style={{ marginBottom: '18px' }}>
-                <div style={{
-                  fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-                  color: '#22c55e', marginBottom: '8px',
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                }}>
-                  Round {round.number}
-                  {round.total != null && (
-                    <span style={{ fontFamily: 'IBM Plex Mono', color: scoreColor(round.total - (round.par || 72)), fontWeight: 800, textTransform: 'none', fontSize: '0.78rem' }}>
-                      {round.displayTotal || fmtScore(round.total - (round.par || 72))}
-                    </span>
-                  )}
-                </div>
-
-                {/* Hole grid */}
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: '0.72rem' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        <th style={{ padding: '4px 6px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, textAlign: 'left', whiteSpace: 'nowrap', minWidth: '36px' }}>Hole</th>
-                        {(round.holes || []).map(h => (
-                          <th key={h.number} style={{ padding: '4px 5px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, textAlign: 'center', minWidth: '28px' }}>
-                            {h.number}
-                          </th>
-                        ))}
-                        <th style={{ padding: '4px 6px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, textAlign: 'center' }}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {/* Par row */}
-                      {(round.holes || []).some(h => h.par != null) && (
-                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <td style={{ padding: '3px 6px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, fontSize: '0.65rem' }}>Par</td>
-                          {(round.holes || []).map(h => (
-                            <td key={h.number} style={{ padding: '3px 5px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontFamily: 'IBM Plex Mono' }}>
-                              {h.par ?? '—'}
-                            </td>
-                          ))}
-                          <td style={{ padding: '3px 6px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontFamily: 'IBM Plex Mono' }}>
-                            {(round.holes || []).reduce((s, h) => s + (h.par || 0), 0) || round.par || '—'}
-                          </td>
-                        </tr>
-                      )}
-                      {/* Score row */}
-                      <tr>
-                        <td style={{ padding: '5px 6px', fontWeight: 700, fontSize: '0.68rem', color: 'var(--text-secondary, #cbd5e1)' }}>Score</td>
-                        {(round.holes || []).map(h => {
-                          const meta = scoreTypeMeta(h.scoreType?.name);
-                          const score = h.displayValue ?? (h.score != null ? String(h.score) : null);
-                          return (
-                            <td key={h.number} style={{ padding: '3px 3px', textAlign: 'center' }}>
-                              {score != null ? (
-                                <span style={{
-                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                  width: '22px', height: '22px', borderRadius: '50%',
-                                  fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.75rem',
-                                  background: meta?.bg || 'transparent',
-                                  color: meta?.color || 'var(--text-primary, #fff)',
-                                  border: meta ? `1px solid ${meta.border}` : 'none',
-                                }}>
-                                  {score}
-                                </span>
-                              ) : (
-                                <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.65rem' }}>–</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td style={{ padding: '5px 6px', textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, color: round.total != null ? scoreColor(round.total - (round.par || 72)) : 'var(--text-muted, #94a3b8)' }}>
-                          {round.total ?? '—'}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Score type legend for this round */}
-                {(round.holes || []).some(h => h.scoreType?.name) && (
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
-                    {['Eagle', 'Birdie', 'Par', 'Bogey', 'Dbl Bogey'].map(label => {
-                      const meta = scoreTypeMeta(label === 'Dbl Bogey' ? 'double bogey' : label.toLowerCase());
-                      if (!meta) return null;
-                      return (
-                        <span key={label} style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '4px',
-                          fontSize: '0.6rem', color: meta.color, padding: '1px 6px',
-                          background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '10px',
-                        }}>
-                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: meta.color, display: 'inline-block' }} />
-                          {label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))
+    <div style={{
+      gridColumn: '1 / -1', // span all columns in the parent grid
+      background: 'rgba(34,197,94,0.04)',
+      borderTop: '1px solid rgba(34,197,94,0.15)',
+      borderBottom: '1px solid rgba(34,197,94,0.15)',
+      padding: '10px 12px',
+    }}>
+      {/* Header: player name + round total + close */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>{name}</span>
+          <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.82rem', color: scoreColor(toPar === 'E' ? 0 : parseInt(toPar)) }}>
+            {fmtScore(toPar)}
+          </span>
+          {thru && thru !== '—' && (
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Thru {thru}</span>
           )}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Round tabs */}
+          {displayRounds.length > 1 && displayRounds.map((r, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveRound(i)}
+              style={{
+                padding: '2px 8px', borderRadius: '5px', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 700,
+                border: `1px solid ${activeRound === i ? 'rgba(34,197,94,0.5)' : 'var(--border)'}`,
+                background: activeRound === i ? 'rgba(34,197,94,0.12)' : 'transparent',
+                color: activeRound === i ? '#22c55e' : 'var(--text-muted)',
+              }}
+            >
+              R{r.number}
+              {r.value != null && (
+                <span style={{ marginLeft: '3px', color: scoreColor(r.value) }}>
+                  {fmtScore(r.value)}
+                </span>
+              )}
+            </button>
+          ))}
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px' }}
+          >
+            ▲ collapse
+          </button>
+        </div>
       </div>
+
+      {/* Scorecard body */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+          ⛳ Loading scorecard…
+        </div>
+      ) : error && !displayRounds.length ? (
+        <div style={{ padding: '0.75rem', color: '#f87171', fontSize: '0.75rem', background: 'rgba(248,113,113,0.06)', borderRadius: '6px' }}>
+          ⚠️ Scorecard not available yet — check back during or after the round.
+        </div>
+      ) : !displayRounds.length ? (
+        <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+          No hole-by-hole data available yet.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: '480px' }}>
+            {/* Round score summary pill */}
+            {round && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                  Round {round.number}
+                </span>
+                {roundToParNum != null && (
+                  <span style={{
+                    fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.8rem',
+                    color: scoreColor(roundToParNum),
+                    background: roundToParNum < 0 ? 'rgba(74,222,128,0.08)' : roundToParNum > 0 ? 'rgba(248,113,113,0.08)' : 'rgba(148,163,184,0.08)',
+                    border: `1px solid ${roundToParNum < 0 ? 'rgba(74,222,128,0.25)' : roundToParNum > 0 ? 'rgba(248,113,113,0.25)' : 'rgba(148,163,184,0.2)'}`,
+                    borderRadius: '6px', padding: '1px 8px',
+                  }}>
+                    {fmtScore(roundToParNum)}
+                  </span>
+                )}
+                {round.total != null && (
+                  <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {round.total} strokes
+                  </span>
+                )}
+              </div>
+            )}
+
+            {holes.length === 0 ? (
+              <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem', textAlign: 'center' }}>
+                Hole-by-hole data will appear once this round starts.
+              </div>
+            ) : (
+              <>
+                {/* Front 9 */}
+                {front9.length > 0 && (
+                  <div style={{ marginBottom: '8px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', overflow: 'hidden' }}>
+                    {/* Header */}
+                    <div style={rowStyle(true)}>
+                      <div style={labelCell}>Hole</div>
+                      {front9.map(h => <div key={h.number} style={{ ...cellBase, color: 'var(--text-muted)', fontWeight: 700 }}>{h.number}</div>)}
+                      <div style={{ ...subtotalCell, color: 'var(--text-muted)', fontWeight: 700 }}>OUT</div>
+                    </div>
+                    {/* Par row */}
+                    {hasPar && (
+                      <div style={rowStyle(false)}>
+                        <div style={labelCell}>Par</div>
+                        {front9.map(h => <div key={h.number} style={{ ...cellBase, color: '#94a3b8' }}>{h.par ?? '—'}</div>)}
+                        <div style={{ ...subtotalCell, color: '#94a3b8' }}>{front9Par || '—'}</div>
+                      </div>
+                    )}
+                    {/* Score row */}
+                    <div style={{ ...rowStyle(false), background: 'rgba(255,255,255,0.015)' }}>
+                      <div style={{ ...labelCell, color: 'var(--text-secondary)', fontWeight: 700 }}>Score</div>
+                      {front9.map(h => <div key={h.number} style={{ ...cellBase }}><ScoreCell hole={h} /></div>)}
+                      <div style={{
+                        ...subtotalCell,
+                        fontWeight: 800,
+                        color: hasPar && front9Par ? scoreColor(front9Score - front9Par) : 'var(--text-primary)',
+                      }}>
+                        {front9.some(h => h.score != null) ? front9Score : '—'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Back 9 */}
+                {back9.length > 0 && (
+                  <div style={{ marginBottom: '8px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', overflow: 'hidden' }}>
+                    <div style={rowStyle(true)}>
+                      <div style={labelCell}>Hole</div>
+                      {back9.map(h => <div key={h.number} style={{ ...cellBase, color: 'var(--text-muted)', fontWeight: 700 }}>{h.number}</div>)}
+                      <div style={{ ...subtotalCell, color: 'var(--text-muted)', fontWeight: 700 }}>IN</div>
+                    </div>
+                    {hasPar && (
+                      <div style={rowStyle(false)}>
+                        <div style={labelCell}>Par</div>
+                        {back9.map(h => <div key={h.number} style={{ ...cellBase, color: '#94a3b8' }}>{h.par ?? '—'}</div>)}
+                        <div style={{ ...subtotalCell, color: '#94a3b8' }}>{back9Par || '—'}</div>
+                      </div>
+                    )}
+                    <div style={{ ...rowStyle(false), background: 'rgba(255,255,255,0.015)' }}>
+                      <div style={{ ...labelCell, color: 'var(--text-secondary)', fontWeight: 700 }}>Score</div>
+                      {back9.map(h => <div key={h.number} style={{ ...cellBase }}><ScoreCell hole={h} /></div>)}
+                      <div style={{
+                        ...subtotalCell,
+                        fontWeight: 800,
+                        color: hasPar && back9Par ? scoreColor(back9Score - back9Par) : 'var(--text-primary)',
+                      }}>
+                        {back9.some(h => h.score != null) ? back9Score : '—'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Legend */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  {[
+                    { label: 'Eagle', desc: '2+ under', color: '#FFB800', shape: 'circle-double' },
+                    { label: 'Birdie', desc: '1 under', color: '#4ade80', shape: 'circle' },
+                    { label: 'Par', desc: 'Even', color: '#94a3b8', shape: 'none' },
+                    { label: 'Bogey', desc: '1 over', color: '#fb923c', shape: 'square' },
+                    { label: 'Dbl+', desc: '2+ over', color: '#f87171', shape: 'square-double' },
+                  ].map(({ label, color, shape }) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: '14px', height: '14px', fontSize: '0.6rem', fontFamily: 'IBM Plex Mono', fontWeight: 800,
+                        color,
+                        borderRadius: shape.includes('circle') ? '50%' : shape === 'none' ? 0 : '2px',
+                        border: shape === 'none' ? 'none' : `1.5px solid ${color}`,
+                        outline: shape.includes('double') ? `1px solid ${color}` : 'none',
+                        outlineOffset: shape.includes('double') ? '2px' : 0,
+                      }}>
+                        {label === 'Par' ? '4' : label === 'Birdie' ? '3' : label === 'Eagle' ? '2' : label === 'Bogey' ? '5' : '6'}
+                      </span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -366,8 +522,8 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
   const lastHole   = getLastHole(player);
   const lastMeta   = lastHole ? scoreTypeMeta(lastHole.scoreType?.name) : null;
 
-  const [starred, setStarred]         = useState(() => isGolferStarred(player));
-  const [showScorecard, setScorecard] = useState(false);
+  const [starred, setStarred]           = useState(() => isGolferStarred(player));
+  const [showScorecard, setScorecard]   = useState(false);
 
   useEffect(() => {
     const handler = () => setStarred(isGolferStarred(player));
@@ -481,9 +637,9 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
         </div>
       </div>
 
-      {/* Scorecard modal */}
+      {/* Inline scorecard — spans full width below this row */}
       {showScorecard && (
-        <ScorecardModal
+        <InlineScorecardPanel
           player={player}
           eventId={eventId}
           league={league}

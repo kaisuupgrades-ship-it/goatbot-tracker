@@ -94,6 +94,9 @@ const SPORTS = [
 // Sports fetched in "All" mode — exclude soccer/golf/tennis (custom views, not standard scoreboard)
 const ALL_SPORTS_KEYS = SPORTS.filter(s => s.key !== 'all' && s.key !== 'golf' && s.key !== 'tennis' && s.key !== 'tenniswta' && s.key !== 'soccer').map(s => s.key);
 
+// Sports that render their own dedicated component — no ESPN scoreboard fetch needed
+const DEDICATED_VIEW_SPORTS = new Set(['golf', 'tennis', 'tenniswta', 'soccer']);
+
 // Merge new games into existing state by game ID, preserving object references for unchanged games
 function mergeGames(prevGames, newGames) {
   if (!prevGames.length) return newGames; // first load, just set
@@ -1769,6 +1772,13 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   }, [intelLoading]);
 
   const loadGames = useCallback(async (s, dateStr) => {
+    // Golf / Tennis / Soccer have their own components — nothing to fetch here
+    if (DEDICATED_VIEW_SPORTS.has(s)) {
+      setLoading(false);
+      setGames([]);
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -1801,6 +1811,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   }, [todayStr]);
 
   const loadNews = useCallback(async (s) => {
+    if (DEDICATED_VIEW_SPORTS.has(s)) { setNews([]); setNewsLoading(false); return; }
     setNewsLoading(true);
     try {
       if (s === 'all') {
@@ -1835,7 +1846,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
   // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill
   const loadRealOdds = useCallback(async (s) => {
-    if (s === 'all') return; // skip in multi-sport mode
+    if (s === 'all' || DEDICATED_VIEW_SPORTS.has(s)) return;
     try {
       const res = await fetch(`/api/odds?sport=${s}`);
       if (!res.ok) return;
@@ -1850,7 +1861,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   }, []);
 
   const loadInjuries = useCallback(async (s) => {
-    if (s === 'all') return; // Skip injuries in All mode — too many parallel calls
+    if (s === 'all' || DEDICATED_VIEW_SPORTS.has(s)) return;
     try {
       const res = await fetch(`/api/sports?sport=${s}&endpoint=injuries`);
       const data = await res.json();
