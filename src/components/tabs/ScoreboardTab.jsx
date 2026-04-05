@@ -965,7 +965,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   color: odds.awayOdds > 0 ? 'var(--green)' : 'var(--text-secondary)',
                   fontFamily: 'IBM Plex Mono, monospace',
                 }}>
-                  {odds.awayOdds != null ? (odds.awayOdds > 0 ? `+${odds.awayOdds}` : odds.awayOdds) : '–'}
+                  {formatOdds(odds.awayOdds, oddsFormat)}
                 </strong>
                 {' / '}
                 {home.team?.abbreviation || 'HME'}{' '}
@@ -973,7 +973,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   color: odds.homeOdds > 0 ? 'var(--green)' : 'var(--text-secondary)',
                   fontFamily: 'IBM Plex Mono, monospace',
                 }}>
-                  {odds.homeOdds != null ? (odds.homeOdds > 0 ? `+${odds.homeOdds}` : odds.homeOdds) : '–'}
+                  {formatOdds(odds.homeOdds, oddsFormat)}
                 </strong>
               </span>
             )}
@@ -1713,10 +1713,11 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     if (selectedDate !== todayStr) return;
     if (liveCount === 0) return;
 
-    // Live games detected — poll every 20s
-    const liveInterval = setInterval(() => loadGames(sport, selectedDate), REFRESH_LIVE);
-    return () => clearInterval(liveInterval);
-  }, [liveCount, sport, selectedDate, loadGames, todayStr]);
+    // Live games detected — poll scores every 20s, odds every 3 min
+    const liveInterval  = setInterval(() => loadGames(sport, selectedDate), REFRESH_LIVE);
+    const oddsInterval  = setInterval(() => loadRealOdds(sport), 3 * 60 * 1000);
+    return () => { clearInterval(liveInterval); clearInterval(oddsInterval); };
+  }, [liveCount, sport, selectedDate, loadGames, loadRealOdds, todayStr]);
 
   // Countdown timer — shows seconds until next refresh
   useEffect(() => {

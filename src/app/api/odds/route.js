@@ -117,7 +117,12 @@ async function fetchFromTheOddsAPI(sportKey) {
   url.searchParams.set('regions', 'us');
   url.searchParams.set('markets', 'h2h,spreads,totals');
   url.searchParams.set('oddsFormat', 'american');
-  url.searchParams.set('daysFrom', '2'); // today + tomorrow
+  // commenceTimeFrom = 12 h ago so live/in-progress games (past commence_time) are included
+  // commenceTimeTo   = 2 days from now to cover upcoming games
+  const from = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  const to   = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  url.searchParams.set('commenceTimeFrom', from);
+  url.searchParams.set('commenceTimeTo',   to);
 
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
 
