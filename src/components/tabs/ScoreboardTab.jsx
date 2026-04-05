@@ -1724,58 +1724,37 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   }, [selectedDate, todayStr]); // eslint-disable-line
 
   // ── Injury Intel sidebar ──────────────────────────────────────────────────
-  const [sidebarTab,   setSidebarTab]   = useState('headlines'); // 'headlines' | 'intel'
-  // Restore persisted intel from sessionStorage (survives tab switches, clears on page refresh)
-  const [intelText,    setIntelText]    = useState(() => {
-    try { return sessionStorage.getItem('intelText') || ''; } catch { return ''; }
-  });
-  const [intelLoading, setIntelLoading] = useState(false);
-  const [intelError,   setIntelError]   = useState('');
-  const [intelTs,      setIntelTs]      = useState(() => {
+  const [sidebarTab,      setSidebarTab]      = useState('headlines'); // 'headlines' | 'intel'
+  const [injuryArticles,  setInjuryArticles]  = useState([]);
+  const [injuryPlayers,   setInjuryPlayers]   = useState([]);
+  const [injuryLoading,   setInjuryLoading]   = useState(false);
+  const [injuryError,     setInjuryError]     = useState('');
+  const [injurySport,     setInjurySport]     = useState('');  // tracks which sport was last loaded
+
+  const loadInjuryNews = useCallback(async (s) => {
+    if (injuryLoading) return;
+    setInjuryLoading(true);
+    setInjuryError('');
     try {
-      const saved = sessionStorage.getItem('intelTs');
-      return saved ? new Date(saved) : null;
-    } catch { return null; }
-  });
-  const [intelQuery,   setIntelQuery]   = useState('');     // custom query input
-
-  const runIntelScan = useCallback(async (s, customQuery = '') => {
-    if (intelLoading) return; // debounce — don't fire while already scanning
-    setIntelLoading(true);
-    setIntelError('');
-
-    // Client-side safety timeout: always clear spinner after 60s
-    const safetyTimer = setTimeout(() => {
-      setIntelLoading(false);
-      setIntelError('Scan timed out — AI is slow right now. Try again in a moment.');
-    }, 60_000);
-
-    try {
-      const res = await fetch('/api/injury-intel', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ sport: s === 'all' ? 'mlb' : s, query: customQuery }),
-      });
+      const res  = await fetch(`/api/injury-intel?sport=${s === 'all' ? 'mlb' : s}`);
       const data = await res.json();
-      if (data.error) { setIntelError(data.error); }
-      else {
-        const text = data.intel || '';
-        const ts = new Date();
-        setIntelText(text);
-        setIntelTs(ts);
-        // Persist so results survive tab switches within this session
-        try {
-          sessionStorage.setItem('intelText', text);
-          sessionStorage.setItem('intelTs', ts.toISOString());
-        } catch {}
-      }
+      if (data.error) throw new Error(data.error);
+      setInjuryArticles(data.articles || []);
+      setInjuryPlayers(data.players   || []);
+      setInjurySport(s);
     } catch (e) {
-      setIntelError('Scan failed — check your connection');
+      setInjuryError(e.message || 'Failed to load injury news');
     } finally {
-      clearTimeout(safetyTimer);
-      setIntelLoading(false);
+      setInjuryLoading(false);
     }
-  }, [intelLoading]);
+  }, [injuryLoading]);
+
+  // Auto-load injury news whenever the user opens the Intel tab or the sport changes
+  useEffect(() => {
+    if (sidebarTab === 'intel' && (injuryArticles.length === 0 || injurySport !== sport)) {
+      loadInjuryNews(sport);
+    }
+  }, [sidebarTab, sport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadGames = useCallback(async (s, dateStr) => {
     // Golf / Tennis / Soccer have their own components — nothing to fetch here
@@ -2392,112 +2371,127 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         {/* ── Injury Intel Tab ────────────────────────────────────────── */}
         {sidebarTab === 'intel' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            {/* Intel header */}
+            {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {isAllMode ? 'Multi-Sport' : currentSport?.label} Injury & Lineup Intel
-                </div>
-                {intelTs && (
-                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                    Scanned {intelTs.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                )}
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                🏥 {isAllMode ? 'MLB' : currentSport?.label} Injury News
               </div>
               <button
-                onClick={() => runIntelScan(sport)}
-                disabled={intelLoading}
+                onClick={() => loadInjuryNews(sport)}
+                disabled={injuryLoading}
                 style={{
-                  background: intelLoading ? 'var(--bg-elevated)' : 'rgba(255,184,0,0.1)',
-                  border: '1px solid rgba(255,184,0,0.25)',
-                  borderRadius: '6px', padding: '3px 8px',
-                  color: 'var(--gold)', fontSize: '0.66rem', fontWeight: 700,
-                  cursor: intelLoading ? 'not-allowed' : 'pointer', opacity: intelLoading ? 0.5 : 1,
-                  fontFamily: 'inherit',
+                  background: 'none', border: '1px solid var(--border)',
+                  borderRadius: '6px', padding: '2px 8px',
+                  color: 'var(--text-muted)', fontSize: '0.65rem',
+                  cursor: injuryLoading ? 'not-allowed' : 'pointer',
+                  opacity: injuryLoading ? 0.4 : 1, fontFamily: 'inherit',
                 }}
               >
-                {intelLoading ? '⟳ Scanning…' : '⚡ Scan Now'}
+                {injuryLoading ? '↻' : '↻ Refresh'}
               </button>
             </div>
 
-            {/* Custom query box */}
-            <div style={{ display: 'flex', gap: '5px', marginBottom: '0.6rem' }}>
-              <input
-                value={intelQuery}
-                onChange={e => setIntelQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && intelQuery.trim()) runIntelScan(sport, intelQuery); }}
-                placeholder="Ask about a player or rumor…"
-                style={{
-                  flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                  borderRadius: '6px', padding: '5px 8px',
-                  color: 'var(--text-primary)', fontSize: '0.72rem', fontFamily: 'inherit',
-                  outline: 'none',
-                }}
-                onFocus={e => e.target.style.borderColor = 'rgba(255,184,0,0.5)'}
-                onBlur={e => e.target.style.borderColor = 'var(--border)'}
-              />
-              <VoiceButton value={intelQuery} onChange={setIntelQuery} size="sm" />
-              <button
-                onClick={() => intelQuery.trim() && runIntelScan(sport, intelQuery)}
-                disabled={intelLoading || !intelQuery.trim()}
-                style={{
-                  background: 'var(--gold)', color: '#0a0a0a',
-                  border: 'none', borderRadius: '6px', padding: '5px 10px',
-                  fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer',
-                  opacity: (intelLoading || !intelQuery.trim()) ? 0.4 : 1,
-                  fontFamily: 'inherit',
-                }}
-              >→</button>
-            </div>
+            {/* Player status chips (from ESPN injuries endpoint) */}
+            {injuryPlayers.length > 0 && (
+              <div style={{ marginBottom: '0.6rem' }}>
+                <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '5px' }}>
+                  Current Injury Report
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', maxHeight: '160px', overflowY: 'auto' }}>
+                  {injuryPlayers.map((p, i) => {
+                    const statusLower = (p.status || '').toLowerCase();
+                    const statusColor = statusLower.includes('out') ? '#f87171'
+                      : statusLower.includes('doubtful') ? '#fb923c'
+                      : statusLower.includes('question') || statusLower.includes('day-to-day') ? '#facc15'
+                      : statusLower.includes('probable') ? '#86efac'
+                      : 'var(--text-secondary)';
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        background: 'var(--bg-elevated)', borderRadius: '5px',
+                        padding: '4px 7px',
+                        borderLeft: `2px solid ${statusColor}`,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.name}
+                          </span>
+                          {p.detail && (
+                            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                              {p.side ? `${p.side} ` : ''}{p.detail}
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: statusColor, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {p.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-            {/* Results */}
-            {intelLoading && !intelText && (
+            {/* News articles */}
+            {injuryLoading && injuryArticles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '8px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</div>
-                <div style={{ fontSize: '0.75rem' }}>Scanning Twitter/X,<br/>ESPN & beat reporters…</div>
+                <div style={{ fontSize: '1.2rem', marginBottom: '6px', opacity: 0.5 }}>🏥</div>
+                <div style={{ fontSize: '0.72rem' }}>Loading injury news…</div>
               </div>
-            )}
-            {intelError && (
+            ) : injuryError ? (
               <div style={{ padding: '0.6rem', background: 'var(--red-subtle)', borderRadius: '7px', color: 'var(--red)', fontSize: '0.72rem' }}>
-                ⚠️ {intelError}
+                ⚠️ {injuryError}
               </div>
-            )}
-            {intelText && !intelLoading && (
-              <div style={{ overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
-                {/* Render response with status word highlighting */}
-                {intelText.split('\n').map((line, i) => {
-                  if (!line.trim()) return <div key={i} style={{ height: '4px' }} />;
-                  const isHeader = line.startsWith('🏥') || line.startsWith('⚡');
-                  const isPlayer = line.startsWith('•') || line.match(/^[A-Z][a-z]+ [A-Z]/);
-                  const isSource = line.includes('📡');
-                  // Color-code status keywords
-                  const colorLine = line
-                    .replace(/\b(OUT|SCRATCHED|OUT FOR SEASON)\b/g, '<span style="color:#f87171;font-weight:800;">$1</span>')
-                    .replace(/\b(DOUBTFUL)\b/g, '<span style="color:#fb923c;font-weight:800;">$1</span>')
-                    .replace(/\b(QUESTIONABLE|DAY-TO-DAY|DTD)\b/g, '<span style="color:#facc15;font-weight:800;">$1</span>')
-                    .replace(/\b(PROBABLE|GAME-TIME)\b/g, '<span style="color:#86efac;font-weight:700;">$1</span>')
-                    .replace(/\b(STARTING|ACTIVE)\b/g, '<span style="color:#4ade80;font-weight:700;">$1</span>');
+            ) : injuryArticles.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>🏥</div>
+                <div style={{ fontSize: '0.75rem' }}>No injury news found</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
+                {injuryArticles.map((article, i) => {
+                  const pubDate  = article.published ? new Date(article.published) : null;
+                  const ageHours = pubDate ? (Date.now() - pubDate.getTime()) / 3600000 : 999;
+                  const dateStr  = pubDate
+                    ? ageHours < 1  ? 'Just now'
+                    : ageHours < 24 ? `${Math.floor(ageHours)}h ago`
+                    : pubDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : '';
                   return (
-                    <div key={i} style={{
-                      fontSize: isHeader ? '0.72rem' : isSource ? '0.62rem' : '0.74rem',
-                      color: isHeader ? 'var(--gold)' : isSource ? 'var(--text-muted)' : 'var(--text-secondary)',
-                      fontWeight: isHeader ? 800 : isPlayer ? 600 : 400,
-                      marginBottom: isHeader ? '6px' : '2px',
-                      marginTop: isHeader ? '8px' : 0,
-                      lineHeight: 1.45,
-                      paddingLeft: isSource ? '12px' : 0,
-                    }}
-                      dangerouslySetInnerHTML={{ __html: colorLine }}
-                    />
+                    <a key={i} href={article.url || '#'} target="_blank" rel="noreferrer"
+                      style={{ display: 'block', textDecoration: 'none' }}>
+                      <div style={{
+                        background: 'var(--bg-elevated)', borderRadius: '7px',
+                        border: '1px solid var(--border)',
+                        borderLeft: `3px solid ${article.isInjury ? '#f87171' : '#E31937'}`,
+                        padding: '0.55rem 0.65rem',
+                        transition: 'background 0.12s',
+                      }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-overlay)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+                      >
+                        {article.team && (
+                          <div style={{ fontSize: '0.57rem', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            {article.team}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '0.73rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35, marginBottom: '3px' }}>
+                          {article.headline}
+                        </div>
+                        {article.description && (
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {article.description}
+                          </div>
+                        )}
+                        {dateStr && (
+                          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '4px', opacity: 0.65 }}>
+                            {ageHours < 6 ? '🔴 ' : ageHours < 24 ? '🟡 ' : ''}{dateStr}
+                          </div>
+                        )}
+                      </div>
+                    </a>
                   );
                 })}
-              </div>
-            )}
-            {!intelText && !intelLoading && !intelError && (
-              <div style={{ textAlign: 'center', padding: '2.5rem 0', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: '1.8rem', marginBottom: '10px', opacity: 0.4 }}>🏥</div>
-                <div style={{ fontSize: '0.78rem', marginBottom: '6px', fontWeight: 600 }}>No scan yet</div>
-                <div style={{ fontSize: '0.68rem' }}>Click "Scan Now" or ask about<br/>a specific player above</div>
               </div>
             )}
           </div>

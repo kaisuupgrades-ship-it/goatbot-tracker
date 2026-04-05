@@ -29,7 +29,7 @@ function formatOdds(price) {
 
 function oddsColor(price) {
   if (price == null) return '#555';
-  return price > 0 ? '#4ade80' : '#f0f0f0';
+  return price > 0 ? '#4ade80' : '#c8c8c8';
 }
 
 function impliedProb(price) {
@@ -38,17 +38,11 @@ function impliedProb(price) {
   return (p * 100).toFixed(0) + '%';
 }
 
-// Detect if a game has already started (live or completed)
 // How long after scheduled start before we consider a game "in progress".
-// Games rarely start exactly on time — this buffer keeps pre-game odds visible
-// for a few extra minutes so the board doesn't flash empty while the game is
-// warming up. Also prevents games with delayed starts from being hidden early.
 const LIVE_BUFFER_MS = 20 * 60 * 1000; // 20 minutes
 
 function isGameLive(game) {
   if (game.status === 'live') return true;
-  // A game is only considered live once it's at least LIVE_BUFFER_MS past its
-  // scheduled commence_time — not the instant the clock ticks past it.
   return new Date(game.commence_time) <= new Date(Date.now() - LIVE_BUFFER_MS);
 }
 
@@ -88,13 +82,11 @@ function groupByDate(games) {
   return order.map(k => map[k]);
 }
 
-// Detect wildly skewed in-play odds (threshold: either side > ±500)
 function hasExtremeOdds(awayML, homeML) {
   return (awayML != null && Math.abs(awayML) > 500) ||
          (homeML != null && Math.abs(homeML) > 500);
 }
 
-// Get best odds for a team from a specific market across all books
 function bestOdds(bookmakers, outcomeName, marketKey) {
   let best = null;
   bookmakers.forEach(bk => {
@@ -105,23 +97,13 @@ function bestOdds(bookmakers, outcomeName, marketKey) {
   return best;
 }
 
-// Get the market spread (standard ATS line) from a single bookmaker.
-// Returns both sides together so they ALWAYS come from the same book with
-// matching/complementary points — fixing the bug where independently picking
-// the "best price" for each side would mix books and produce nonsense like
-// both teams at -1.5 or +1.5 at +810.
-//
-// Strategy (mirrors bestTotal):
-//   Pass 1: standard juice (-140 to +125 on BOTH sides) → pick closest to -110/-110
-//   Pass 2: wider window (-250 to +150) to catch elevated-vig books; still rejects alt lines
+// Get the market spread — both sides from the same book to prevent alt-line mixing.
+// Pass 1: standard juice (-140 to +125); Pass 2: wider (-250 to +150).
 function marketSpread(bookmakers) {
   let best = null;
-
-  // Lower score = closer to standard -110/-110 juice
   const juiceScore = (p1, p2) =>
     Math.abs(Math.abs(p1) - 110) + Math.abs(Math.abs(p2) - 110);
 
-  // Pass 1: standard juice only
   for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'spreads');
     if (!mkt) continue;
@@ -129,7 +111,6 @@ function marketSpread(bookmakers) {
     if (outcomes.length < 2) continue;
     const [o1, o2] = outcomes;
     if (o1.price == null || o2.price == null || o1.point == null) continue;
-    // Reject alt lines: both sides must be within standard juice range
     if (o1.price < -140 || o1.price > 125 || o2.price < -140 || o2.price > 125) continue;
     const s = juiceScore(o1.price, o2.price);
     if (!best || s < best.score) {
@@ -138,7 +119,6 @@ function marketSpread(bookmakers) {
   }
   if (best) return best;
 
-  // Pass 2: slightly wider juice — catches real lines with elevated vig, still rejects wild alt lines
   for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'spreads');
     if (!mkt) continue;
@@ -156,14 +136,9 @@ function marketSpread(bookmakers) {
   return best || { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
 }
 
-// Get total line (O/U number) and standard over/under odds.
-// Collects ALL bookmakers' lines and returns the one with the highest point value
-// among standard-juice lines — this avoids alternate low totals (0.5, 1.5, 5.0)
-// that Pinnacle and some books list alongside the real game total.
+// Best total line — highest standard-juice point value (avoids alt 0.5/1.5 lines).
 function bestTotal(bookmakers) {
   let best = null;
-
-  // Pass 1: standard-juice lines only (-140 to +120 both sides), pick the HIGHEST point
   for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'totals');
     if (!mkt) continue;
@@ -178,8 +153,6 @@ function bestTotal(bookmakers) {
   }
   if (best) return best;
 
-  // Pass 2: wider juice window (-300 to +200) to catch books with slightly elevated vig,
-  // but still reject wild alternate-line juice (e.g. +364/-506 from Pinnacle alt totals)
   for (const bk of bookmakers) {
     const mkt = bk.markets?.find(m => m.key === 'totals');
     const over  = mkt?.outcomes?.find(o => o.name === 'Over');
@@ -194,12 +167,10 @@ function bestTotal(bookmakers) {
       }
     }
   }
-  if (best) return best;
 
-  return { line: null, overPrice: null, underPrice: null };
+  return best || { line: null, overPrice: null, underPrice: null };
 }
 
-// Build BetOS prompt incorporating all three markets
 function buildUnifiedPrompt(game) {
   const commence   = new Date(game.commence_time);
   const today      = new Date();
@@ -227,200 +198,210 @@ function buildUnifiedPrompt(game) {
   return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
 }
 
-// ── Unified Game Row ──────────────────────────────────────────────────────────
+// ── Game Card ─────────────────────────────────────────────────────────────────
 function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
-  const books = game.bookmakers || [];
-  const away  = game.away_team;
-  const home  = game.home_team;
+  const books  = game.bookmakers || [];
+  const away   = game.away_team;
+  const home   = game.home_team;
 
   const awayML  = bestOdds(books, away, 'h2h');
   const homeML  = bestOdds(books, home, 'h2h');
   const spr     = marketSpread(books);
   const total   = bestTotal(books);
 
-  const commenceTime = new Date(game.commence_time);
-  const isLive   = isGameLive(game);
-  const extreme  = isLive && hasExtremeOdds(awayML, homeML);
+  const isLive  = isGameLive(game);
+  const extreme = isLive && hasExtremeOdds(awayML, homeML);
   const timeLabel = smartTimeLabel(game.commence_time);
 
-  // All books that have any market data
   const allBooks = books.filter(bk =>
-    bk.markets?.some(m => ['h2h','spreads','totals'].includes(m.key))
+    bk.markets?.some(m => ['h2h', 'spreads', 'totals'].includes(m.key))
   );
+
+  // Split "City Nickname" → city + nickname
+  const awayParts = away.split(' ');
+  const awayNick  = awayParts.pop();
+  const awayCity  = awayParts.join(' ');
+  const homeParts = home.split(' ');
+  const homeNick  = homeParts.pop();
+  const homeCity  = homeParts.join(' ');
+
+  const dimText = '#3e3e3e';
+  const colW = { team: '1fr', ml: '72px', spread: '108px', total: '88px' };
+  const gridCols = `${colW.team} ${colW.ml} ${colW.spread} ${colW.total}`;
 
   return (
     <div style={{
-      borderBottom: '1px solid #1a1a1a',
-      borderLeft: isLive ? '3px solid rgba(255,69,96,0.5)' : '3px solid transparent',
-      background: isLive ? 'rgba(255,69,96,0.03)' : 'transparent',
-      transition: 'background 0.1s',
+      background: '#111',
+      border: `1px solid ${isLive ? 'rgba(255,69,96,0.22)' : '#1c1c1c'}`,
+      borderRadius: '10px',
+      overflow: 'hidden',
     }}>
-      {/* In-game warning banner */}
-      {isLive && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '0.3rem 1rem',
-          background: extreme ? 'rgba(255,69,96,0.08)' : 'rgba(255,69,96,0.04)',
-          borderBottom: '1px solid rgba(255,69,96,0.12)',
-        }}>
+
+      {/* ── Card header: time + badges ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '0.45rem 0.9rem',
+        background: isLive ? 'rgba(255,69,96,0.05)' : 'rgba(255,255,255,0.015)',
+        borderBottom: `1px solid ${isLive ? 'rgba(255,69,96,0.1)' : '#191919'}`,
+      }}>
+        {isLive && (
           <span style={{
-            fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.1em',
-            color: '#FF4560', background: 'rgba(255,69,96,0.15)',
-            border: '1px solid rgba(255,69,96,0.4)',
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            fontSize: '0.58rem', fontWeight: 900, letterSpacing: '0.1em',
+            color: '#FF4560', background: 'rgba(255,69,96,0.14)',
+            border: '1px solid rgba(255,69,96,0.35)',
             borderRadius: '3px', padding: '1px 6px',
           }}>
-            ⚡ IN-GAME
+            <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#FF4560', display: 'inline-block' }} />
+            LIVE
           </span>
-          <span style={{ fontSize: '0.65rem', color: 'rgba(255,100,100,0.7)' }}>
-            {extreme
-              ? 'Extreme live odds — one team heavily favored. Not useful for pre-game betting.'
-              : 'Live odds — game in progress, lines may shift rapidly.'}
-          </span>
-        </div>
-      )}
+        )}
+        <span style={{ fontSize: '0.7rem', color: isLive ? 'rgba(255,100,100,0.55)' : '#555' }}>
+          {timeLabel}
+        </span>
+        {game.suspectOdds && (
+          <span title="Lines diverge from Pinnacle sharp number — verify before betting" style={{
+            fontSize: '0.58rem', fontWeight: 800, color: '#f59e0b',
+            background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.28)',
+            borderRadius: '3px', padding: '1px 5px', cursor: 'help', whiteSpace: 'nowrap',
+          }}>⚠ LINE CHECK</span>
+        )}
+        {game.pinnacle && !game.suspectOdds && (
+          <span style={{ fontSize: '0.62rem', color: '#4ade80', opacity: 0.45 }}>⚡ sharp</span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: '0.62rem', color: dimText }}>
+          {allBooks.length} book{allBooks.length !== 1 ? 's' : ''}
+        </span>
+      </div>
 
-      {/* Collapsed summary row */}
+      {/* ── Clickable odds body ── */}
       <div
         onClick={onToggle}
-        style={{ padding: '0.75rem 1rem', cursor: 'pointer', transition: 'background 0.1s' }}
-        onMouseEnter={e => e.currentTarget.style.background = '#141414'}
+        style={{ cursor: 'pointer', padding: '0.6rem 0.9rem 0' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.018)'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
-        {/* Top line: teams + time */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-          <span style={{ fontWeight: 700, color: isLive ? 'rgba(240,240,240,0.6)' : '#f0f0f0', fontSize: '0.88rem' }}>
-            {away.split(' ').pop()} <span style={{ color: '#555', fontWeight: 400 }}>@</span> {home.split(' ').pop()}
-          </span>
-          <span style={{ fontSize: '0.65rem', color: '#888', flex: 1 }}>
-            {away.includes(' ') ? away.split(' ').slice(0, -1).join(' ') : ''} vs {home.includes(' ') ? home.split(' ').slice(0, -1).join(' ') : ''}
-          </span>
-          {isLive
-            ? <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#FF4560', background: 'rgba(255,69,96,0.1)', border: '1px solid rgba(255,69,96,0.3)', borderRadius: '4px', padding: '1px 6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#FF4560', display: 'inline-block', animation: 'live-pulse 1.5s infinite' }} />
-                LIVE · {timeLabel}
-              </span>
-            : <span style={{ fontSize: '0.65rem', color: '#666', whiteSpace: 'nowrap' }}>{timeLabel}</span>
-          }
-          {game.suspectOdds && (
-            <span title="One or more book lines diverge >15pts from Pinnacle's sharp number — verify before betting" style={{
-              fontSize: '0.6rem', fontWeight: 800, color: '#f59e0b',
-              background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)',
-              borderRadius: '4px', padding: '1px 6px', whiteSpace: 'nowrap', cursor: 'help',
-            }}>⚠ LINE CHECK</span>
-          )}
-          {game.pinnacle && !game.suspectOdds && (
-            <span title="Pinnacle sharp line matches — odds look clean" style={{
-              fontSize: '0.6rem', color: '#4ade80',
-              opacity: 0.6, whiteSpace: 'nowrap',
-            }}>⚡ sharp</span>
-          )}
-          <span style={{ color: '#444', fontSize: '0.72rem', marginLeft: '4px' }}>{expanded ? '▲' : '▼'}</span>
-        </div>
-
-        {/* Bottom line: ML | Spread | O/U inline */}
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          {/* Moneyline column */}
-          <div style={{ minWidth: '90px' }}>
-            <div style={{ fontSize: '0.58rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>Moneyline</div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Away</div>
-                <div style={{
-                  fontFamily: 'monospace', fontSize: extreme ? '0.72rem' : '0.9rem',
-                  fontWeight: 700, color: extreme ? '#444' : oddsColor(awayML),
-                  title: extreme ? 'In-game line — not useful for pre-game betting' : undefined,
-                }}>{formatOdds(awayML)}</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Home</div>
-                <div style={{
-                  fontFamily: 'monospace', fontSize: extreme ? '0.72rem' : '0.9rem',
-                  fontWeight: 700, color: extreme ? '#444' : oddsColor(homeML),
-                }}>{formatOdds(homeML)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div style={{ width: '1px', background: '#1f1f1f', alignSelf: 'stretch' }} />
-
-          {/* Spread column */}
-          <div style={{ minWidth: '110px' }}>
-            <div style={{ fontSize: '0.58rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>Spread</div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Away</div>
-                {spr.awayPoint != null
-                  ? <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: '#f0f0f0' }}>
-                      {spr.awayPoint > 0 ? '+' : ''}{spr.awayPoint}
-                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(spr.awayPrice)})</span>
-                    </div>
-                  : <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#444' }}>—</div>
-                }
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Home</div>
-                {spr.homePoint != null
-                  ? <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: '#f0f0f0' }}>
-                      {spr.homePoint > 0 ? '+' : ''}{spr.homePoint}
-                      <span style={{ color: '#777', fontSize: '0.72rem', marginLeft: '2px' }}>({formatOdds(spr.homePrice)})</span>
-                    </div>
-                  : <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#444' }}>—</div>
-                }
-              </div>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div style={{ width: '1px', background: '#1f1f1f', alignSelf: 'stretch' }} />
-
-          {/* O/U column */}
-          <div style={{ minWidth: '100px' }}>
-            <div style={{ fontSize: '0.58rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>
-              O/U {total.line != null ? <span style={{ color: '#FFB800', fontWeight: 700 }}>{total.line}</span> : ''}
-            </div>
+        {/* Column labels */}
+        <div style={{ display: 'grid', gridTemplateColumns: gridCols, marginBottom: '0.35rem' }}>
+          <div />
+          <div style={{ textAlign: 'center', fontSize: '0.58rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.07em' }}>ML</div>
+          <div style={{ textAlign: 'center', fontSize: '0.58rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Spread</div>
+          <div style={{ textAlign: 'center', fontSize: '0.58rem', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
             {total.line != null
-              ? <div style={{ display: 'flex', gap: '8px' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Over</div>
-                    <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: oddsColor(total.overPrice) }}>{formatOdds(total.overPrice)}</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.6rem', color: '#666', marginBottom: '1px' }}>Under</div>
-                    <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: oddsColor(total.underPrice) }}>{formatOdds(total.underPrice)}</div>
-                  </div>
-                </div>
-              : <div style={{ color: '#444', fontSize: '0.8rem' }}>—</div>
+              ? <><span style={{ color: '#444' }}>O/U </span><span style={{ color: '#FFB800', fontWeight: 700 }}>{total.line}</span></>
+              : <span style={{ color: '#444' }}>O/U</span>
             }
           </div>
+        </div>
 
-          <div style={{ marginLeft: 'auto', color: '#444', fontSize: '0.65rem', alignSelf: 'center', whiteSpace: 'nowrap' }}>
-            {allBooks.length} book{allBooks.length !== 1 ? 's' : ''}
+        {/* Away row */}
+        <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
+          <div style={{ paddingRight: '8px' }}>
+            {awayCity && <div style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{awayCity}</div>}
+            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{awayNick}</div>
           </div>
+          <div style={{ textAlign: 'center' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: '0.92rem', fontWeight: 700, color: extreme ? '#3a3a3a' : oddsColor(awayML) }}>
+              {formatOdds(awayML)}
+            </span>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            {spr.awayPoint != null
+              ? <span style={{ fontFamily: 'monospace', fontSize: '0.84rem', color: '#bbb' }}>
+                  {spr.awayPoint > 0 ? '+' : ''}{spr.awayPoint}
+                  <span style={{ color: '#4a4a4a', fontSize: '0.72rem', marginLeft: '3px' }}>({formatOdds(spr.awayPrice)})</span>
+                </span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
+            }
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            {total.line != null
+              ? <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: oddsColor(total.overPrice) }}>
+                  O {formatOdds(total.overPrice)}
+                </span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
+            }
+          </div>
+        </div>
+
+        {/* Row divider */}
+        <div style={{ height: '1px', background: '#1a1a1a' }} />
+
+        {/* Home row */}
+        <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
+          <div style={{ paddingRight: '8px' }}>
+            {homeCity && <div style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{homeCity}</div>}
+            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{homeNick}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: '0.92rem', fontWeight: 700, color: extreme ? '#3a3a3a' : oddsColor(homeML) }}>
+              {formatOdds(homeML)}
+            </span>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            {spr.homePoint != null
+              ? <span style={{ fontFamily: 'monospace', fontSize: '0.84rem', color: '#bbb' }}>
+                  {spr.homePoint > 0 ? '+' : ''}{spr.homePoint}
+                  <span style={{ color: '#4a4a4a', fontSize: '0.72rem', marginLeft: '3px' }}>({formatOdds(spr.homePrice)})</span>
+                </span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
+            }
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            {total.line != null
+              ? <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: oddsColor(total.underPrice) }}>
+                  U {formatOdds(total.underPrice)}
+                </span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
+            }
+          </div>
+        </div>
+
+        {/* Expand toggle footer */}
+        <div style={{
+          borderTop: '1px solid #191919',
+          padding: '0.3rem 0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ fontSize: '0.62rem', color: dimText }}>
+            {expanded ? 'Hide book comparison' : 'Compare all books'}
+          </span>
+          <span style={{ color: dimText, fontSize: '0.6rem' }}>{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
-      {/* Expanded: book-by-book table (all 3 markets) */}
+      {/* ── Expanded: book-by-book breakdown ── */}
       {expanded && (
-        <div style={{ background: '#0d0d0d', borderTop: '1px solid #1a1a1a', padding: '0.75rem 1rem', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem', minWidth: '520px' }}>
+        <div style={{ background: '#0d0d0d', borderTop: '1px solid #191919', padding: '0.75rem 0.9rem', overflowX: 'auto' }}>
+
+          {extreme && (
+            <div style={{
+              marginBottom: '0.6rem', padding: '6px 10px',
+              background: 'rgba(255,69,96,0.06)', border: '1px solid rgba(255,69,96,0.15)',
+              borderRadius: '6px', fontSize: '0.7rem', color: 'rgba(255,100,100,0.7)',
+            }}>
+              ⚡ Extreme live odds — one team heavily favored. Not reliable for pre-game betting.
+            </div>
+          )}
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem', minWidth: '500px' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1f1f1f' }}>
-                <th style={{ padding: '4px 8px', color: '#555', fontWeight: 600, textAlign: 'left', fontSize: '0.68rem', textTransform: 'uppercase' }}>Book</th>
-                <th colSpan={2} style={{ padding: '4px 8px', color: '#888', fontWeight: 600, textAlign: 'center', fontSize: '0.68rem', textTransform: 'uppercase', borderLeft: '1px solid #1f1f1f' }}>Moneyline</th>
-                <th colSpan={2} style={{ padding: '4px 8px', color: '#888', fontWeight: 600, textAlign: 'center', fontSize: '0.68rem', textTransform: 'uppercase', borderLeft: '1px solid #1f1f1f' }}>Spread</th>
-                <th colSpan={2} style={{ padding: '4px 8px', color: '#888', fontWeight: 600, textAlign: 'center', fontSize: '0.68rem', textTransform: 'uppercase', borderLeft: '1px solid #1f1f1f' }}>O/U</th>
-                <th style={{ padding: '4px 6px', color: '#555', fontWeight: 600, textAlign: 'right', fontSize: '0.65rem', textTransform: 'uppercase' }}>Updated</th>
-              </tr>
               <tr style={{ borderBottom: '1px solid #222' }}>
-                <th style={{ padding: '2px 8px' }} />
-                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center', borderLeft: '1px solid #1f1f1f' }}>{away.split(' ').pop()}</th>
-                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center' }}>{home.split(' ').pop()}</th>
-                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center', borderLeft: '1px solid #1f1f1f' }}>Away</th>
-                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center' }}>Home</th>
-                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center', borderLeft: '1px solid #1f1f1f' }}>Over</th>
-                <th style={{ padding: '2px 8px', color: '#555', fontSize: '0.62rem', textAlign: 'center' }}>Under</th>
-                <th style={{ padding: '2px 6px' }} />
+                <th style={{ padding: '4px 8px 4px 0', color: '#444', fontWeight: 600, textAlign: 'left', fontSize: '0.64rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Book</th>
+                <th colSpan={2} style={{ padding: '4px 8px', color: '#555', fontWeight: 600, textAlign: 'center', fontSize: '0.64rem', textTransform: 'uppercase', borderLeft: '1px solid #222' }}>Moneyline</th>
+                <th colSpan={2} style={{ padding: '4px 8px', color: '#555', fontWeight: 600, textAlign: 'center', fontSize: '0.64rem', textTransform: 'uppercase', borderLeft: '1px solid #222' }}>Spread</th>
+                <th colSpan={2} style={{ padding: '4px 8px', color: '#555', fontWeight: 600, textAlign: 'center', fontSize: '0.64rem', textTransform: 'uppercase', borderLeft: '1px solid #222' }}>O/U</th>
+                <th style={{ padding: '4px 0 4px 8px', color: '#333', fontWeight: 500, textAlign: 'right', fontSize: '0.62rem', textTransform: 'uppercase' }}>Updated</th>
+              </tr>
+              <tr style={{ borderBottom: '1px solid #1e1e1e' }}>
+                <th style={{ padding: '2px 0' }} />
+                <th style={{ padding: '2px 8px', color: '#3a3a3a', fontSize: '0.6rem', textAlign: 'center', fontWeight: 500, borderLeft: '1px solid #222' }}>{awayNick}</th>
+                <th style={{ padding: '2px 8px', color: '#3a3a3a', fontSize: '0.6rem', textAlign: 'center', fontWeight: 500 }}>{homeNick}</th>
+                <th style={{ padding: '2px 8px', color: '#3a3a3a', fontSize: '0.6rem', textAlign: 'center', fontWeight: 500, borderLeft: '1px solid #222' }}>Away</th>
+                <th style={{ padding: '2px 8px', color: '#3a3a3a', fontSize: '0.6rem', textAlign: 'center', fontWeight: 500 }}>Home</th>
+                <th style={{ padding: '2px 8px', color: '#3a3a3a', fontSize: '0.6rem', textAlign: 'center', fontWeight: 500, borderLeft: '1px solid #222' }}>Over</th>
+                <th style={{ padding: '2px 8px', color: '#3a3a3a', fontSize: '0.6rem', textAlign: 'center', fontWeight: 500 }}>Under</th>
+                <th style={{ padding: '2px 0' }} />
               </tr>
             </thead>
             <tbody>
@@ -436,12 +417,12 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                 const overOut      = totals?.outcomes?.find(o => o.name === 'Over');
                 const underOut     = totals?.outcomes?.find(o => o.name === 'Under');
 
-                function Cell({ price, isBest, point }) {
-                  if (price == null) return <td style={{ padding: '6px 8px', textAlign: 'center', color: '#333' }}>—</td>;
+                function OddsCell({ price, isBest, point }) {
+                  if (price == null) return <td style={{ padding: '5px 8px', textAlign: 'center', color: '#2a2a2a' }}>—</td>;
                   return (
-                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                    <td style={{ padding: '5px 8px', textAlign: 'center' }}>
                       {point != null && (
-                        <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>
+                        <span style={{ color: '#4a4a4a', fontSize: '0.7rem', marginRight: '3px' }}>
                           {point > 0 ? '+' : ''}{point}
                         </span>
                       )}
@@ -450,7 +431,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                         background: isBest ? '#FFB800' : 'transparent',
                         padding: isBest ? '1px 5px' : '0',
                         borderRadius: isBest ? '3px' : '0',
-                        fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem',
+                        fontWeight: 700, fontFamily: 'monospace', fontSize: '0.8rem',
                       }}>
                         {formatOdds(price)}
                       </span>
@@ -461,62 +442,62 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                 const isPinnacle = bk.key === 'pinnacle';
                 return (
                   <tr key={bk.key} style={{
-                    borderBottom: '1px solid #1a1a1a',
-                    background: isPinnacle ? 'rgba(74,222,128,0.04)' : 'transparent',
-                    borderLeft: isPinnacle ? '2px solid rgba(74,222,128,0.4)' : '2px solid transparent',
+                    borderBottom: '1px solid #181818',
+                    background: isPinnacle ? 'rgba(74,222,128,0.03)' : 'transparent',
+                    borderLeft: isPinnacle ? '2px solid rgba(74,222,128,0.35)' : '2px solid transparent',
                   }}>
-                    <td style={{ padding: '6px 8px', color: isPinnacle ? '#4ade80' : '#888', fontWeight: isPinnacle ? 700 : 500, whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '5px 8px 5px 4px', color: isPinnacle ? '#4ade80' : '#777', fontWeight: isPinnacle ? 700 : 400, whiteSpace: 'nowrap', fontSize: '0.76rem' }}>
                       {BOOK_LABELS[bk.key] || bk.title}
-                      {isPinnacle && <span style={{ fontSize: '0.58rem', color: '#4ade80', opacity: 0.7, marginLeft: '4px' }}>sharp ref</span>}
+                      {isPinnacle && <span style={{ fontSize: '0.56rem', color: '#4ade80', opacity: 0.6, marginLeft: '4px' }}>sharp ref</span>}
                     </td>
-                    <Cell price={awayMLPrice} isBest={awayMLPrice === awayML} />
-                    <Cell price={homeMLPrice} isBest={homeMLPrice === homeML} />
-                    <td style={{ padding: '6px 8px', textAlign: 'center', borderLeft: '1px solid #1a1a1a' }}>
+                    <OddsCell price={awayMLPrice} isBest={awayMLPrice === awayML} />
+                    <OddsCell price={homeMLPrice} isBest={homeMLPrice === homeML} />
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderLeft: '1px solid #1a1a1a' }}>
                       {awaySprOut?.price != null
                         ? <>
-                            <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{awaySprOut.point > 0 ? '+' : ''}{awaySprOut.point}</span>
-                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: awaySprOut.price === spr.awayPrice ? '#FFB800' : oddsColor(awaySprOut.price), background: awaySprOut.price === spr.awayPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: awaySprOut.price === spr.awayPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
+                            <span style={{ color: '#4a4a4a', fontSize: '0.7rem', marginRight: '3px' }}>{awaySprOut.point > 0 ? '+' : ''}{awaySprOut.point}</span>
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.8rem', color: awaySprOut.price === spr.awayPrice ? '#FFB800' : oddsColor(awaySprOut.price), background: awaySprOut.price === spr.awayPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: awaySprOut.price === spr.awayPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
                               {formatOdds(awaySprOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#333' }}>—</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                    <td style={{ padding: '5px 8px', textAlign: 'center' }}>
                       {homeSprOut?.price != null
                         ? <>
-                            <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{homeSprOut.point > 0 ? '+' : ''}{homeSprOut.point}</span>
-                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: homeSprOut.price === spr.homePrice ? '#FFB800' : oddsColor(homeSprOut.price), background: homeSprOut.price === spr.homePrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: homeSprOut.price === spr.homePrice ? '1px 4px' : '0', borderRadius: '3px' }}>
+                            <span style={{ color: '#4a4a4a', fontSize: '0.7rem', marginRight: '3px' }}>{homeSprOut.point > 0 ? '+' : ''}{homeSprOut.point}</span>
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.8rem', color: homeSprOut.price === spr.homePrice ? '#FFB800' : oddsColor(homeSprOut.price), background: homeSprOut.price === spr.homePrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: homeSprOut.price === spr.homePrice ? '1px 4px' : '0', borderRadius: '3px' }}>
                               {formatOdds(homeSprOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#333' }}>—</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'center', borderLeft: '1px solid #1a1a1a' }}>
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderLeft: '1px solid #1a1a1a' }}>
                       {overOut?.price != null
                         ? <>
-                            {overOut.point != null && <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{overOut.point}</span>}
-                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: overOut.price === total.overPrice ? '#FFB800' : oddsColor(overOut.price), background: overOut.price === total.overPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: overOut.price === total.overPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
+                            {overOut.point != null && <span style={{ color: '#4a4a4a', fontSize: '0.7rem', marginRight: '3px' }}>{overOut.point}</span>}
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.8rem', color: overOut.price === total.overPrice ? '#FFB800' : oddsColor(overOut.price), background: overOut.price === total.overPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: overOut.price === total.overPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
                               {formatOdds(overOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#333' }}>—</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                    <td style={{ padding: '5px 8px', textAlign: 'center' }}>
                       {underOut?.price != null
                         ? <>
-                            {underOut.point != null && <span style={{ color: '#777', fontSize: '0.72rem', marginRight: '3px' }}>{underOut.point}</span>}
-                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem', color: underOut.price === total.underPrice ? '#FFB800' : oddsColor(underOut.price), background: underOut.price === total.underPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: underOut.price === total.underPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
+                            {underOut.point != null && <span style={{ color: '#4a4a4a', fontSize: '0.7rem', marginRight: '3px' }}>{underOut.point}</span>}
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.8rem', color: underOut.price === total.underPrice ? '#FFB800' : oddsColor(underOut.price), background: underOut.price === total.underPrice ? 'rgba(255,184,0,0.1)' : 'transparent', padding: underOut.price === total.underPrice ? '1px 4px' : '0', borderRadius: '3px' }}>
                               {formatOdds(underOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#333' }}>—</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
-                    <td style={{ padding: '6px 6px', color: '#555', fontSize: '0.65rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {bk.last_update ? new Date(bk.last_update).toLocaleTimeString() : '—'}
+                    <td style={{ padding: '5px 0 5px 8px', color: '#333', fontSize: '0.62rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {bk.last_update ? new Date(bk.last_update).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}
                     </td>
                   </tr>
                 );
@@ -524,44 +505,25 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
             </tbody>
           </table>
 
-          {/* Best lines summary + BetOS */}
-          <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            {/* Best ML */}
-            {awayML != null && (
-              <span style={{ padding: '3px 8px', background: '#1a1200', border: '1px solid #FFB80044', borderRadius: '4px', color: '#FFB800', fontSize: '0.7rem' }}>
-                🏆 Best ML: {away.split(' ').pop()} <strong>{formatOdds(awayML)}</strong> / {home.split(' ').pop()} <strong>{formatOdds(homeML)}</strong>
-              </span>
-            )}
-            {/* Best spread */}
-            {spr.awayPoint != null && (
-              <span style={{ padding: '3px 8px', background: '#0d1a0d', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', color: '#4ade80', fontSize: '0.7rem' }}>
-                📐 Spread: {away.split(' ').pop()} {spr.awayPoint > 0 ? '+' : ''}{spr.awayPoint} ({formatOdds(spr.awayPrice)}) / {home.split(' ').pop()} {spr.homePoint > 0 ? '+' : ''}{spr.homePoint} ({formatOdds(spr.homePrice)})
-              </span>
-            )}
-            {/* Best total */}
-            {total.line != null && (
-              <span style={{ padding: '3px 8px', background: '#0d0d1a', border: '1px solid rgba(96,165,250,0.2)', borderRadius: '4px', color: '#60a5fa', fontSize: '0.7rem' }}>
-                🎯 O/U {total.line}: O {formatOdds(total.overPrice)} / U {formatOdds(total.underPrice)}
-              </span>
-            )}
-            {/* BetOS button */}
-            {onAnalyze && (
+          {/* BetOS analyze */}
+          {onAnalyze && (
+            <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 onClick={e => { e.stopPropagation(); onAnalyze(buildUnifiedPrompt(game)); }}
                 style={{
-                  marginLeft: 'auto', padding: '5px 14px', borderRadius: '7px',
-                  border: '1px solid rgba(255,184,0,0.4)', background: 'rgba(255,184,0,0.08)',
-                  color: '#FFB800', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.12s',
-                  whiteSpace: 'nowrap', fontFamily: 'inherit',
+                  padding: '6px 16px', borderRadius: '7px',
+                  border: '1px solid rgba(255,184,0,0.35)', background: 'rgba(255,184,0,0.07)',
+                  color: '#FFB800', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: '5px',
+                  fontFamily: 'inherit', transition: 'background 0.12s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.18)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.08)'; }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.16)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.07)'; }}
               >
                 🎯 Analyze with BetOS
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -571,24 +533,24 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 // ── Setup Screen ──────────────────────────────────────────────────────────────
 function SetupScreen() {
   return (
-    <div style={{ maxWidth: '600px', margin: '3rem auto', textAlign: 'center' }}>
+    <div style={{ maxWidth: '560px', margin: '3rem auto', textAlign: 'center' }}>
       <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📈</div>
       <h2 style={{ fontWeight: 800, color: '#f0f0f0', marginBottom: '0.5rem' }}>Odds Board</h2>
-      <p style={{ color: '#888', marginBottom: '1.5rem', lineHeight: 1.6 }}>
-        The Odds Board pulls live lines from FanDuel and DraftKings — all in one place, updated every 3 minutes.
+      <p style={{ color: '#666', marginBottom: '1.5rem', lineHeight: 1.7, fontSize: '0.9rem' }}>
+        Pull live lines from FanDuel, DraftKings, and more — all in one place, updated every 3 minutes.
       </p>
       <div className="card" style={{ padding: '1.5rem', textAlign: 'left', marginBottom: '1rem' }}>
-        <p style={{ color: '#FFB800', fontWeight: 700, marginBottom: '0.8rem' }}>⚡ Quick Setup (2 minutes)</p>
-        <ol style={{ color: '#888', fontSize: '0.85rem', lineHeight: 2, paddingLeft: '1.2rem' }}>
+        <p style={{ color: '#FFB800', fontWeight: 700, marginBottom: '0.8rem', fontSize: '0.85rem' }}>⚡ Quick Setup (2 min)</p>
+        <ol style={{ color: '#777', fontSize: '0.84rem', lineHeight: 2.1, paddingLeft: '1.2rem' }}>
           <li>Go to <a href="https://odds-api.io" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>odds-api.io</a> → Sign up free</li>
           <li>Copy your API key from the dashboard</li>
-          <li>Open <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#f0f0f0' }}>goatbot-app/.env.local</code></li>
-          <li>Add: <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#4ade80' }}>ODDS_API_KEY=your-key-here</code></li>
-          <li>Restart the server: <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#f0f0f0' }}>Ctrl+C</code> then <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#f0f0f0' }}>npm run dev</code></li>
+          <li>Open <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#ddd', fontSize: '0.8rem' }}>goatbot-app/.env.local</code></li>
+          <li>Add: <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#4ade80', fontSize: '0.8rem' }}>ODDS_API_KEY=your-key-here</code></li>
+          <li>Restart the server: <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#ddd', fontSize: '0.8rem' }}>npm run dev</code></li>
         </ol>
       </div>
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-        Free tier includes FanDuel &amp; DraftKings lines — with 3-min caching, you'll have plenty of quota for daily use.
+      <p style={{ color: '#444', fontSize: '0.74rem' }}>
+        Free tier includes FanDuel &amp; DraftKings — with 3-min caching, you&apos;ll have plenty of quota.
       </p>
     </div>
   );
@@ -597,8 +559,8 @@ function SetupScreen() {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [sport, setSport]           = useState('mlb');
-  // Sync with Dashboard's shared activeSport (e.g. when Scoreboard changes sport).
-  // Only switch if OddsTab supports that sport — Scoreboard has golf/tennis which we don't.
+
+  // Sync with Dashboard's shared activeSport — only if OddsTab supports it
   useEffect(() => {
     if (activeSport && activeSport !== sport && SPORTS.find(s => s.key === activeSport)) {
       setSport(activeSport);
@@ -612,13 +574,12 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [expanded, setExpanded]     = useState(null);
   const [remaining, setRemaining]   = useState(null);
   const [search, setSearch]         = useState('');
-  const [gameFilter, setGameFilter] = useState('upcoming'); // 'all' | 'upcoming' | 'live'
+  const [gameFilter, setGameFilter] = useState('upcoming');
 
   const load = useCallback(async (s) => {
     setLoading(true);
     setError('');
     try {
-      // Fetch all markets in one call (market param not needed — API returns all)
       const res  = await fetch(`/api/odds?sport=${s}&market=all`);
       const data = await res.json();
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
@@ -628,14 +589,10 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
       setGames(games);
       setRemaining(data.remaining ?? null);
 
-      // Auto-advance filter: if pre-game is empty but live games exist, switch to Live
-      // so the board is never blank on arrival. Reset to upcoming when switching sports.
       setGameFilter(prev => {
         const hasUpcoming = games.some(g => !isGameLive(g));
         const hasLive     = games.some(g => isGameLive(g));
-        // If we're on upcoming (default) and there's nothing upcoming but there are live games → go Live
         if (prev === 'upcoming' && !hasUpcoming && hasLive) return 'live';
-        // If we previously switched to Live but now there ARE upcoming games (e.g. next morning) → go back
         if (prev === 'live' && hasUpcoming) return 'upcoming';
         return prev;
       });
@@ -645,7 +602,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
     setLoading(false);
   }, []);
 
-  // Reset filter to upcoming whenever the sport changes so each sport starts fresh
+  // Reset filter + reload on sport change
   useEffect(() => { setGameFilter('upcoming'); load(sport); }, [sport, load]);
 
   if (!configured) return <SetupScreen />;
@@ -664,7 +621,6 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
     .filter(g => isGameLive(g))
     .sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
 
-  // 'all' mode: live games first (they're time-sensitive), then upcoming by start time
   const filtered = gameFilter === 'upcoming' ? upcomingGames
                  : gameFilter === 'live'     ? liveGames
                  : [...liveGames, ...upcomingGames];
@@ -672,17 +628,21 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* ── Controls ── */}
+      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+
         {/* Sport tabs */}
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
           {SPORTS.map(s => (
-            <button key={s.key} onClick={() => { setSport(s.key); setExpanded(null); onSportChange?.(s.key); }}
+            <button key={s.key}
+              onClick={() => { setSport(s.key); setExpanded(null); onSportChange?.(s.key); }}
               style={{
-                padding: '4px 10px', borderRadius: '6px', border: `1px solid ${sport === s.key ? '#FFB800' : '#222'}`,
-                background: sport === s.key ? '#1a1200' : 'transparent',
-                color: sport === s.key ? '#FFB800' : '#666',
-                fontWeight: sport === s.key ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit',
+                padding: '4px 10px', borderRadius: '6px', fontFamily: 'inherit',
+                border: `1px solid ${sport === s.key ? '#FFB800' : '#1e1e1e'}`,
+                background: sport === s.key ? 'rgba(255,184,0,0.08)' : 'transparent',
+                color: sport === s.key ? '#FFB800' : '#555',
+                fontWeight: sport === s.key ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer',
+                transition: 'all 0.1s',
               }}>
               {s.emoji} {s.label}
             </button>
@@ -692,132 +652,119 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
         {/* Filter pills */}
         <div style={{ display: 'flex', gap: '3px' }}>
           {[
-            { key: 'upcoming', label: `📅 Pre-game${upcomingGames.length ? ` (${upcomingGames.length})` : ''}` },
-            { key: 'live',     label: `⚡ Live${liveGames.length ? ` (${liveGames.length})` : ''}` },
+            { key: 'upcoming', label: `Pre-game${upcomingGames.length ? ` (${upcomingGames.length})` : ''}` },
+            { key: 'live',     label: `Live${liveGames.length ? ` (${liveGames.length})` : ''}` },
             { key: 'all',      label: 'All' },
           ].map(f => (
             <button key={f.key} onClick={() => setGameFilter(f.key)}
               style={{
-                padding: '3px 9px', borderRadius: '5px', cursor: 'pointer', fontFamily: 'inherit',
-                fontSize: '0.72rem', fontWeight: gameFilter === f.key ? 700 : 400,
+                padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit',
+                fontSize: '0.74rem', fontWeight: gameFilter === f.key ? 700 : 400,
                 border: `1px solid ${gameFilter === f.key
-                  ? f.key === 'live' ? 'rgba(255,69,96,0.5)' : '#FFB80066'
-                  : '#222'}`,
+                  ? f.key === 'live' ? 'rgba(255,69,96,0.45)' : 'rgba(255,184,0,0.45)'
+                  : '#1e1e1e'}`,
                 background: gameFilter === f.key
-                  ? f.key === 'live' ? 'rgba(255,69,96,0.1)' : '#1a1200'
+                  ? f.key === 'live' ? 'rgba(255,69,96,0.08)' : 'rgba(255,184,0,0.06)'
                   : 'transparent',
                 color: gameFilter === f.key
                   ? f.key === 'live' ? '#FF4560' : '#FFB800'
-                  : '#666',
+                  : '#555',
+                transition: 'all 0.1s',
               }}>
+              {f.key === 'live' && gameFilter === f.key && (
+                <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#FF4560', marginRight: '5px', verticalAlign: 'middle' }} />
+              )}
               {f.label}
             </button>
           ))}
         </div>
 
         {/* Search */}
-        <input className="input" placeholder="Search team..." value={search}
+        <input className="input" placeholder="Search team…" value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ width: '160px', padding: '4px 10px', fontSize: '0.8rem' }} />
+          style={{ width: '150px', padding: '4px 10px', fontSize: '0.8rem' }} />
 
-        {remaining != null && (
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginLeft: 'auto' }}>
-            API: {remaining} req remaining
-          </span>
-        )}
-        <button onClick={() => load(sport)}
-          style={{ background: 'none', border: '1px solid #2a2a2a', borderRadius: '6px', color: 'var(--text-secondary)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit' }}>
-          ↻ Refresh
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {remaining != null && (
+            <span style={{ color: '#3a3a3a', fontSize: '0.7rem' }}>
+              {remaining} API req left
+            </span>
+          )}
+          <button onClick={() => load(sport)}
+            style={{ background: 'none', border: '1px solid #1e1e1e', borderRadius: '6px', color: '#555', padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', transition: 'border-color 0.1s' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = '#333'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}>
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Table */}
+      {/* ── Content ── */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: '4rem', color: '#3a3a3a', fontSize: '0.85rem' }}>
           Loading odds…
         </div>
       ) : error ? (
-        <div style={{ padding: '1rem', background: '#2b0d0d', border: '1px solid #991b1b', borderRadius: '8px', color: '#f87171', fontSize: '0.85rem' }}>
+        <div style={{ padding: '1rem', background: '#1a0a0a', border: '1px solid #3a1a1a', borderRadius: '8px', color: '#f87171', fontSize: '0.84rem' }}>
           ⚠️ {error}
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: '4rem', color: '#444', fontSize: '0.85rem' }}>
           {gameFilter === 'upcoming' && liveGames.length > 0
-            ? <span>All today&apos;s games are already in progress —{' '}
-                <button onClick={() => setGameFilter('live')} style={{ color: '#FF4560', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', textDecoration: 'underline' }}>
-                  switch to Live
-                </button>
-                {' '}or{' '}
-                <button onClick={() => setGameFilter('all')} style={{ color: '#FFB800', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', textDecoration: 'underline' }}>
-                  view All
+            ? <span>All today&apos;s games are in progress —{' '}
+                <button onClick={() => setGameFilter('live')} style={{ color: '#FF4560', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', padding: 0 }}>
+                  view live
                 </button>
               </span>
             : gameFilter === 'live' && upcomingGames.length > 0
             ? <span>No live games right now —{' '}
-                <button onClick={() => setGameFilter('upcoming')} style={{ color: '#FFB800', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', textDecoration: 'underline' }}>
+                <button onClick={() => setGameFilter('upcoming')} style={{ color: '#FFB800', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', padding: 0 }}>
                   view upcoming
                 </button>
               </span>
             : search
             ? 'No games match your search.'
-            : 'No lines posted yet for this sport.'}
+            : 'No lines posted yet for this sport.'
+          }
         </div>
       ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {/* Header */}
-          <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ color: '#888', fontSize: '0.75rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Summary line */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.72rem', color: '#3a3a3a' }}>
               {filtered.length} game{filtered.length !== 1 ? 's' : ''}
-              {gameFilter === 'upcoming' && ' · pre-game odds only'}
-              {gameFilter === 'live'     && ' · in-game odds'}
+              {gameFilter === 'upcoming' && ' · pre-game'}
+              {gameFilter === 'live'     && ' · in-game'}
               {gameFilter === 'all'      && ' · upcoming + live'}
-              {' · '}Click to compare books · <span style={{ color: '#FFB800' }}>Gold = best line</span>
+              {' · '}
+              <span style={{ color: '#FFB800', opacity: 0.7 }}>gold = best line</span>
             </span>
-            <span style={{ color: '#555', fontSize: '0.68rem' }}>ML · Spread · O/U</span>
+            <span style={{ fontSize: '0.65rem', color: '#2e2e2e' }}>ML · Spread · O/U</span>
           </div>
-
-          {/* Live section header (shown when in-game games exist + not live-only filter) */}
-          {gameFilter === 'all' && liveGames.length > 0 && upcomingGames.length > 0 && (
-            <div style={{
-              padding: '0.4rem 1rem',
-              background: 'rgba(255,69,96,0.06)',
-              borderBottom: '1px solid rgba(255,69,96,0.15)',
-              display: 'flex', alignItems: 'center', gap: '8px',
-            }}>
-              <span style={{
-                fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.1em',
-                color: '#FF4560', background: 'rgba(255,69,96,0.15)',
-                border: '1px solid rgba(255,69,96,0.4)',
-                borderRadius: '3px', padding: '1px 6px',
-              }}>⚡ IN-GAME</span>
-              <span style={{ fontSize: '0.65rem', color: 'rgba(255,100,100,0.6)' }}>
-                These games have started — odds are live in-game lines
-              </span>
-            </div>
-          )}
 
           {/* Games grouped by date */}
           {(() => {
-            // live first in 'all' mode so in-progress games are prominent
-            const gamesToShow = gameFilter === 'live' ? liveGames : gameFilter === 'upcoming' ? upcomingGames : [...liveGames, ...upcomingGames];
+            const gamesToShow = gameFilter === 'live' ? liveGames
+                              : gameFilter === 'upcoming' ? upcomingGames
+                              : [...liveGames, ...upcomingGames];
             const groups = groupByDate(gamesToShow);
             return groups.map((group, gi) => (
-              <div key={gi}>
-                {/* Date group header */}
+              <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {/* Date section header */}
                 <div style={{
-                  padding: '0.35rem 1rem',
-                  background: 'rgba(255,184,0,0.04)',
-                  borderBottom: '1px solid rgba(255,184,0,0.1)',
-                  borderTop: gi > 0 ? '1px solid rgba(255,184,0,0.12)' : 'none',
                   display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '0.2rem 0',
                 }}>
-                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#FFB800', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                    📅 {group.label}
+                  <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#FFB800', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                    {group.label}
                   </span>
-                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  <span style={{ height: '1px', flex: 1, background: 'rgba(255,184,0,0.08)' }} />
+                  <span style={{ fontSize: '0.6rem', color: '#2e2e2e' }}>
                     {group.games.length} game{group.games.length !== 1 ? 's' : ''}
                   </span>
                 </div>
+
+                {/* Game cards */}
                 {group.games.map(game => (
                   <GameOddsRow
                     key={game.id}

@@ -114,14 +114,35 @@ export default function FollowingTab({ user, isDemo, onOpenInbox }) {
         const list = data.following || [];
         setFollowing(list);
         if (list.length === 0) { setLoading(false); return; }
-        // 2. Get stats for each followed user from user-search (all-time)
-        const ids = list.map(u => u.id).join(',');
-        const res = await fetch(`/api/user-search?days=0&sort=roi`);
-        const json = await res.json();
+        // 2. Fetch authoritative stats for each user from public-profile —
+        //    same endpoint the profile modal uses, so stats are always in sync.
+        const profiles = await Promise.allSettled(
+          list.map(u =>
+            fetch(`/api/public-profile?userId=${u.id}`)
+              .then(r => r.json())
+              .catch(() => null)
+          )
+        );
         const statMap = {};
-        for (const e of json.entries || []) {
-          if (list.find(u => u.id === e.user_id)) statMap[e.user_id] = e;
-        }
+        profiles.forEach((result, i) => {
+          const uid = list[i].id;
+          if (result.status === 'fulfilled' && result.value?.stats) {
+            const s = result.value.stats;
+            statMap[uid] = {
+              user_id:        uid,
+              wins:           s.wins,
+              losses:         s.losses,
+              pushes:         s.pushes,
+              total:          s.total,
+              units:          s.units,
+              roi:            s.roi,
+              current_streak: s.current_streak,
+              recent_results: (result.value.settled_picks || [])
+                .slice(0, 10)
+                .map(p => p.result),
+            };
+          }
+        });
         setStats(statMap);
         setLoading(false);
       })

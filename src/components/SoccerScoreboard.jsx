@@ -81,11 +81,53 @@ function MatchCard({ match, leagueId }) {
   const venue    = comp.venue?.fullName || '';
   const city     = comp.venue?.address?.city || '';
 
-  // Live possession / shot stats from situation
+  // Live possession / shot stats
   const situation = comp.situation || {};
   const possession = situation.possession; // 'away' | 'home'
-  const awayShots  = away.statistics?.find(s => s.name === 'shotsOnTarget')?.displayValue;
-  const homeShots  = home.statistics?.find(s => s.name === 'shotsOnTarget')?.displayValue;
+
+  // Helper to pull a statistic by name from team stats array
+  function stat(team, name) {
+    return team.statistics?.find(s => s.name === name)?.displayValue ?? null;
+  }
+
+  const awayShots      = stat(away, 'shotsOnTarget');
+  const homeShots      = stat(home, 'shotsOnTarget');
+  const awayShotsTotal = stat(away, 'shots');
+  const homeShotsTotal = stat(home, 'shots');
+  const awayPoss       = stat(away, 'possessionPct') ?? stat(away, 'possession');
+  const homePoss       = stat(home, 'possessionPct') ?? stat(home, 'possession');
+  const awayCorners    = stat(away, 'cornerKicks') ?? stat(away, 'corners');
+  const homeCorners    = stat(home, 'cornerKicks') ?? stat(home, 'corners');
+  const awayFouls      = stat(away, 'foulsCommitted') ?? stat(away, 'fouls');
+  const homeFouls      = stat(home, 'foulsCommitted') ?? stat(home, 'fouls');
+  const awayYellow     = stat(away, 'yellowCards');
+  const homeYellow     = stat(home, 'yellowCards');
+  const awayRed        = stat(away, 'redCards');
+  const homeRed        = stat(home, 'redCards');
+  const awaySaves      = stat(away, 'saves');
+  const homeSaves      = stat(home, 'saves');
+  const awayOffsides   = stat(away, 'offsides');
+  const homeOffsides   = stat(home, 'offsides');
+
+  // Period scores (linescores): ESPN soccer uses competitor.linescores[]
+  // Each entry has a `period` (int) and `value` (score string) or `displayValue`
+  function getPeriodScores(competitor) {
+    if (!competitor.linescores?.length) return [];
+    return competitor.linescores.map(ls => ({
+      period: ls.period || ls.type || null,
+      value:  ls.value  ?? ls.displayValue ?? null,
+    }));
+  }
+  const awayPeriods = getPeriodScores(away);
+  const homePeriods = getPeriodScores(home);
+  const maxPeriods  = Math.max(awayPeriods.length, homePeriods.length);
+
+  // Goal / event details (scorers, cards) from comp.details
+  const details = (comp.details || []).filter(d =>
+    d.type?.text?.toLowerCase().includes('goal') ||
+    d.type?.text?.toLowerCase().includes('card') ||
+    d.type?.text?.toLowerCase().includes('own')
+  );
 
   // Competition/matchday note
   const compNote = comp.notes?.[0]?.headline || match.season?.displayName || '';
@@ -229,34 +271,162 @@ function MatchCard({ match, leagueId }) {
       {open && (
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '10px 12px', background: 'rgba(255,255,255,0.012)' }}>
 
-          {/* Venue */}
-          {venue && (
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              📍 {venue}{city ? `, ${city}` : ''}
+          {/* Venue / competition info */}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            {venue && (
+              <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>
+                📍 {venue}{city ? `, ${city}` : ''}
+              </span>
+            )}
+            {compNote && (
+              <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>
+                🏆 {compNote}
+              </span>
+            )}
+          </div>
+
+          {/* ── Period score table (HT / FT) ── */}
+          {maxPeriods > 0 && (
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '5px' }}>
+                Score by Period
+              </div>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.74rem', fontFamily: 'IBM Plex Mono, monospace' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.6rem' }} />
+                    {Array.from({ length: maxPeriods }, (_, i) => (
+                      <th key={i} style={{ textAlign: 'center', padding: '2px 8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.6rem', minWidth: '32px' }}>
+                        {i === 0 ? '1H' : i === 1 ? '2H' : i === 2 ? 'ET' : `P${i + 1}`}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: 'center', padding: '2px 8px', color: 'var(--gold)', fontWeight: 800, fontSize: '0.6rem', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>FT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { name: awayName.split(' ').slice(-1)[0], abbr: away.team?.abbreviation, periods: awayPeriods, total: awayScore, win: awayWin },
+                    { name: homeName.split(' ').slice(-1)[0], abbr: home.team?.abbreviation, periods: homePeriods, total: homeScore, win: homeWin },
+                  ].map((side, ri) => (
+                    <tr key={ri} style={{ borderTop: ri > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                      <td style={{ padding: '3px 6px 3px 0', color: side.win ? '#4ade80' : 'var(--text-secondary)', fontWeight: side.win ? 700 : 400, fontSize: '0.72rem', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+                        {side.abbr || side.name}
+                      </td>
+                      {Array.from({ length: maxPeriods }, (_, i) => (
+                        <td key={i} style={{ textAlign: 'center', padding: '3px 8px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                          {side.periods[i]?.value ?? '—'}
+                        </td>
+                      ))}
+                      <td style={{ textAlign: 'center', padding: '3px 8px', fontWeight: 800, color: side.win ? '#4ade80' : isDraw ? '#FFB800' : 'var(--text-secondary)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
+                        {(isLive || isFinal) && side.total != null ? side.total : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
-          {/* Competition name / matchday */}
-          {compNote && (
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              🏆 {compNote}
+          {/* ── Goal / event log ── */}
+          {details.length > 0 && (
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '5px' }}>
+                Match Events
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                {details.map((d, i) => {
+                  const clock = d.clock?.displayValue || d.clock?.value || '';
+                  const type  = d.type?.text || '';
+                  const athletes = (d.athletesInvolved || []).map(a => a.displayName || a.shortName || '').filter(Boolean);
+                  const isGoal = type.toLowerCase().includes('goal') || type.toLowerCase().includes('own');
+                  const isCard = type.toLowerCase().includes('card');
+                  const isAway = d.team?.id === away.team?.id;
+                  const icon   = isGoal ? '⚽' : type.toLowerCase().includes('yellow') ? '🟨' : type.toLowerCase().includes('red') ? '🟥' : '•';
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', minWidth: '26px', flexShrink: 0 }}>
+                        {clock ? `${clock}'` : ''}
+                      </span>
+                      <span>{icon}</span>
+                      <span style={{ color: isGoal ? '#4ade80' : 'var(--text-secondary)', fontWeight: isGoal ? 700 : 400 }}>
+                        {athletes.join(', ') || type}
+                      </span>
+                      {isAway !== null && (
+                        <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                          {isAway ? away.team?.abbreviation : home.team?.abbreviation}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          {/* Odds block */}
+          {/* ── Match stats comparison ── */}
+          {(isLive || isFinal) && (awayShots != null || awayPoss != null || awayCorners != null) && (
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                Match Stats
+              </div>
+              {/* Away / Home label row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '4px', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textAlign: 'left' }}>{away.team?.abbreviation || 'Away'}</span>
+                <span />
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textAlign: 'right' }}>{home.team?.abbreviation || 'Home'}</span>
+              </div>
+
+              {[
+                { label: 'Shots (SOT)',  away: awayShotsTotal != null ? `${awayShotsTotal} (${awayShots ?? '?'})` : awayShots, home: homeShotsTotal != null ? `${homeShotsTotal} (${homeShots ?? '?'})` : homeShots },
+                { label: 'Possession',  away: awayPoss != null ? `${awayPoss}%` : null,  home: homePoss != null ? `${homePoss}%` : null, isBar: true, awayNum: parseFloat(awayPoss), homeNum: parseFloat(homePoss) },
+                { label: 'Corners',     away: awayCorners, home: homeCorners },
+                { label: 'Fouls',       away: awayFouls,   home: homeFouls },
+                { label: 'Saves',       away: awaySaves,   home: homeSaves },
+                { label: 'Offsides',    away: awayOffsides, home: homeOffsides },
+                { label: 'Yellow',      away: awayYellow != null ? `🟨 ${awayYellow}` : null, home: homeYellow != null ? `🟨 ${homeYellow}` : null },
+                { label: 'Red',         away: awayRed    != null ? `🟥 ${awayRed}`    : null, home: homeRed    != null ? `🟥 ${homeRed}`    : null },
+              ].filter(r => r.away != null || r.home != null).map((row, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '4px', alignItems: 'center', marginBottom: '4px' }}>
+                  {row.isBar ? (
+                    <>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'left' }}>{row.away ?? '—'}</span>
+                      <div style={{ width: '80px', height: '5px', borderRadius: '3px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden', display: 'flex' }}>
+                        {!isNaN(row.awayNum) && (
+                          <>
+                            <div style={{ width: `${row.awayNum}%`, background: '#4ade80', borderRadius: '3px 0 0 3px' }} />
+                            <div style={{ flex: 1, background: '#60a5fa', borderRadius: '0 3px 3px 0' }} />
+                          </>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }}>{row.home ?? '—'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'left' }}>{row.away ?? '—'}</span>
+                      <span style={{ fontSize: '0.56rem', color: 'var(--text-muted)', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{row.label}</span>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }}>{row.home ?? '—'}</span>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Possession ball indicator (live only) */}
+          {isLive && possession && (
+            <div style={{ marginBottom: '8px', fontSize: '0.63rem', color: '#4ade80' }}>
+              ⚽ {possession === 'away' ? awayName : homeName} in possession
+            </div>
+          )}
+
+          {/* ── Odds block ── */}
           {odds && (
-            <div style={{ marginBottom: '8px' }}>
+            <div>
               <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '5px' }}>Match Odds</div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {odds.awayML && (
-                  <OddsChip label={away.team?.abbreviation || 'Away'} value={odds.awayML} />
-                )}
-                {odds.drawML && (
-                  <OddsChip label="Draw" value={odds.drawML} />
-                )}
-                {odds.homeML && (
-                  <OddsChip label={home.team?.abbreviation || 'Home'} value={odds.homeML} />
-                )}
+                {odds.awayML && <OddsChip label={away.team?.abbreviation || 'Away'} value={odds.awayML} />}
+                {odds.drawML && <OddsChip label="Draw" value={odds.drawML} />}
+                {odds.homeML && <OddsChip label={home.team?.abbreviation || 'Home'} value={odds.homeML} />}
                 {odds.ou && (
                   <OddsChip label={`O/U ${odds.ou}`} value={odds.overML && odds.underML ? `o${odds.overML} / u${odds.underML}` : null} neutral />
                 )}
@@ -264,25 +434,6 @@ function MatchCard({ match, leagueId }) {
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{odds.details}</span>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Live: shots on target */}
-          {isLive && (awayShots != null || homeShots != null) && (
-            <div style={{ marginTop: '6px' }}>
-              <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '4px' }}>Shots on Target</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontFamily: 'IBM Plex Mono', fontWeight: 700 }}>
-                <span style={{ color: 'var(--text-primary)', minWidth: '24px', textAlign: 'right' }}>{awayShots ?? '—'}</span>
-                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>SOT</span>
-                <span style={{ color: 'var(--text-primary)', minWidth: '24px' }}>{homeShots ?? '—'}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Possession indicator */}
-          {isLive && possession && (
-            <div style={{ marginTop: '5px', fontSize: '0.65rem', color: '#4ade80' }}>
-              ⚽ {possession === 'away' ? awayName : homeName} in possession
             </div>
           )}
         </div>
