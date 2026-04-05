@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 
-function setScoreCell(score, won) {
-  // score is a set score like "6", "7", "3"; won indicates if this player won the set
+// ── Set score cell ─────────────────────────────────────────────────────────────
+function SetCell({ score, won }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -20,7 +20,9 @@ function setScoreCell(score, won) {
   );
 }
 
+// ── Match card ────────────────────────────────────────────────────────────────
 function MatchCard({ match }) {
+  const [expanded, setExpanded] = useState(false);
   const comp = match.competitions?.[0];
   if (!comp) return null;
 
@@ -28,49 +30,56 @@ function MatchCard({ match }) {
   const p1 = competitors[0] || {};
   const p2 = competitors[1] || {};
 
-  const status = comp.status?.type;
-  const isLive = status?.state === 'in';
-  const isFinal = status?.state === 'post';
-  const statusLabel = status?.shortDetail || (isLive ? 'LIVE' : isFinal ? 'Final' : 'Scheduled');
+  const status     = comp.status?.type;
+  const isLive     = status?.state === 'in';
+  const isFinal    = status?.state === 'post';
+  const isPre      = status?.state === 'pre';
+  const statusLabel = status?.shortDetail || (isLive ? 'LIVE' : isFinal ? 'Final' : 'Upcoming');
 
-  // Parse set scores from linescores
-  const p1Sets = p1.linescores || [];
-  const p2Sets = p2.linescores || [];
+  const p1Sets  = p1.linescores || [];
+  const p2Sets  = p2.linescores || [];
+  const p1SetsWon = (isFinal || isLive) ? parseInt(p1.score || 0) : null;
+  const p2SetsWon = (isFinal || isLive) ? parseInt(p2.score || 0) : null;
 
-  const p1SetsWon = isFinal || isLive ? parseInt(p1.score || 0) : null;
-  const p2SetsWon = isFinal || isLive ? parseInt(p2.score || 0) : null;
+  const p1Name  = p1.athlete?.displayName || p1.athlete?.fullName || 'Player 1';
+  const p2Name  = p2.athlete?.displayName || p2.athlete?.fullName || 'Player 2';
+  const p1Rank  = p1.athlete?.seed ?? p1.rank;
+  const p2Rank  = p2.athlete?.seed ?? p2.rank;
+  const p1Won   = isFinal && p1SetsWon > p2SetsWon;
+  const p2Won   = isFinal && p2SetsWon > p1SetsWon;
 
-  const surface = comp.venue?.description || match.competitions?.[0]?.neutralSite ? '' : '';
-  const tournament = match.competitions?.[0]?.series?.name || match.name?.split(' - ')?.[0] || '';
+  // Round label — extract from series name or competition note
+  const round   = comp.series?.name || comp.notes?.[0]?.headline || match.name?.split(' - ').slice(-1)[0] || '';
 
-  const p1Name = p1.athlete?.displayName || p1.athlete?.fullName || 'Player 1';
-  const p2Name = p2.athlete?.displayName || p2.athlete?.fullName || 'Player 2';
-  const p1Rank = p1.athlete?.seed ?? p1.rank;
-  const p2Rank = p2.athlete?.seed ?? p2.rank;
-  const p1Won  = isFinal && p1SetsWon > p2SetsWon;
-  const p2Won  = isFinal && p2SetsWon > p1SetsWon;
+  // Scheduled time
+  const startTime = comp.date ? new Date(comp.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const startDay  = comp.date ? new Date(comp.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
 
   return (
     <div style={{
       background: 'var(--bg-surface)',
       border: `1px solid ${isLive ? 'rgba(74,222,128,0.25)' : 'var(--border)'}`,
-      borderRadius: '10px',
+      borderRadius: '9px',
       overflow: 'hidden',
-      boxShadow: isLive ? '0 2px 12px rgba(74,222,128,0.08)' : '0 2px 6px rgba(0,0,0,0.2)',
+      boxShadow: isLive ? '0 2px 10px rgba(74,222,128,0.07)' : 'none',
     }}>
-      {/* Header */}
+      {/* ── Match header ── */}
       <div style={{
         padding: '6px 12px',
-        background: isLive ? 'rgba(74,222,128,0.06)' : 'rgba(255,255,255,0.02)',
+        background: isLive ? 'rgba(74,222,128,0.05)' : 'rgba(255,255,255,0.015)',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px',
       }}>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-          {tournament || 'ATP Singles'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+          {round && (
+            <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', padding: '1px 5px', flexShrink: 0 }}>
+              {round}
+            </span>
+          )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
           {isLive && (
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 5px #4ade80', animation: 'pulse 1.5s ease-in-out infinite', display: 'inline-block' }} />
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 5px #4ade80', animation: 'live-pulse 1.5s ease-in-out infinite', display: 'inline-block' }} />
           )}
           <span style={{
             fontSize: '0.65rem', fontWeight: 700,
@@ -78,32 +87,35 @@ function MatchCard({ match }) {
           }}>
             {statusLabel}
           </span>
+          {isPre && startTime && (
+            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{startDay} {startTime}</span>
+          )}
         </div>
       </div>
 
-      {/* Players + Scores */}
-      <div style={{ padding: '8px 12px' }}>
-        {[{ player: p1, name: p1Name, rank: p1Rank, won: p1Won, sets: p1Sets, setsWon: p1SetsWon, opponentSets: p2Sets },
-          { player: p2, name: p2Name, rank: p2Rank, won: p2Won, sets: p2Sets, setsWon: p2SetsWon, opponentSets: p1Sets }].map((side, idx) => (
+      {/* ── Players + scores ── */}
+      <div style={{ padding: '9px 12px' }}>
+        {[
+          { player: p1, name: p1Name, rank: p1Rank, won: p1Won, sets: p1Sets, setsWon: p1SetsWon, opponentSets: p2Sets },
+          { player: p2, name: p2Name, rank: p2Rank, won: p2Won, sets: p2Sets, setsWon: p2SetsWon, opponentSets: p1Sets },
+        ].map((side, idx) => (
           <div key={idx} style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             paddingBottom: idx === 0 ? '6px' : 0,
             paddingTop: idx === 1 ? '6px' : 0,
             borderTop: idx === 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-            opacity: isFinal && !side.won ? 0.6 : 1,
+            opacity: isFinal && !side.won ? 0.55 : 1,
           }}>
-            {/* Rank seed */}
+            {/* Seed */}
             <div style={{ width: '18px', fontSize: '0.6rem', color: 'var(--text-muted)', textAlign: 'center', flexShrink: 0 }}>
               {side.rank ? `(${side.rank})` : ''}
             </div>
-
-            {/* Country flag */}
+            {/* Flag */}
             <div style={{ width: '18px', flexShrink: 0 }}>
               {side.player.athlete?.flag?.href
                 ? <img src={side.player.athlete.flag.href} alt="" style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '1px' }} />
                 : null}
             </div>
-
             {/* Name */}
             <div style={{
               flex: 1, fontSize: '0.85rem', fontWeight: side.won ? 800 : 500,
@@ -113,18 +125,13 @@ function MatchCard({ match }) {
               {side.name}
               {side.won && <span style={{ marginLeft: '5px', fontSize: '0.65rem', color: '#4ade80' }}>✓</span>}
             </div>
-
             {/* Set scores */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1px', flexShrink: 0 }}>
               {side.sets.length > 0
                 ? side.sets.map((set, si) => {
-                    const oppSet = side.opponentSets[si];
-                    const wonSet = parseInt(set.displayValue || 0) > parseInt(oppSet?.displayValue || 0);
-                    return (
-                      <span key={si}>
-                        {setScoreCell(set.displayValue, wonSet)}
-                      </span>
-                    );
+                    const opp = side.opponentSets[si];
+                    const wonSet = parseInt(set.displayValue || 0) > parseInt(opp?.displayValue || 0);
+                    return <SetCell key={si} score={set.displayValue} won={wonSet} />;
                   })
                 : (isFinal || isLive) && side.setsWon !== null
                   ? <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.92rem', color: side.won ? '#4ade80' : 'var(--text-muted)' }}>
@@ -136,47 +143,127 @@ function MatchCard({ match }) {
         ))}
       </div>
 
-      {/* Round info */}
-      {comp.series?.name && (
-        <div style={{ padding: '4px 12px 6px', fontSize: '0.62rem', color: 'var(--text-muted)' }}>
-          {comp.series.name}
+      {/* ── Expandable details (venue, surface) ── */}
+      {(comp.venue?.fullName || comp.neutralSite !== undefined) && (
+        <div
+          onClick={() => setExpanded(v => !v)}
+          style={{ padding: '4px 12px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textDecoration: 'underline dotted' }}>
+            {expanded ? 'Less ▲' : 'Details ▼'}
+          </span>
+        </div>
+      )}
+      {expanded && (
+        <div style={{ padding: '6px 12px 10px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          {comp.venue?.fullName && (
+            <div>
+              <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Venue</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{comp.venue.fullName}</div>
+            </div>
+          )}
+          {comp.venue?.address?.city && (
+            <div>
+              <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Location</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{comp.venue.address.city}{comp.venue.address.country ? `, ${comp.venue.address.country}` : ''}</div>
+            </div>
+          )}
+          {match.season?.year && (
+            <div>
+              <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Season</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{match.season.year}</div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function TournamentSection({ name, matches }) {
-  const liveCount = matches.filter(m => m.competitions?.[0]?.status?.type?.state === 'in').length;
+// ── Tournament section (collapsible) ─────────────────────────────────────────
+function TournamentSection({ name, matches, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  const liveCount    = matches.filter(m => m.competitions?.[0]?.status?.type?.state === 'in').length;
+  const finalCount   = matches.filter(m => m.competitions?.[0]?.status?.type?.state === 'post').length;
+  const pendingCount = matches.filter(m => m.competitions?.[0]?.status?.type?.state === 'pre').length;
+
   return (
-    <div style={{ marginBottom: '1.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-        <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-          {name}
-        </h3>
+    <div style={{
+      background: 'var(--bg-surface)',
+      border: `1px solid ${liveCount > 0 ? 'rgba(74,222,128,0.3)' : open ? 'rgba(255,184,0,0.2)' : 'var(--border)'}`,
+      borderRadius: '10px',
+      overflow: 'hidden',
+      boxShadow: liveCount > 0 ? '0 2px 12px rgba(74,222,128,0.07)' : 'none',
+      transition: 'border-color 0.15s',
+    }}>
+      {/* ── Section header — clickable ── */}
+      <div
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '10px 14px', cursor: 'pointer', userSelect: 'none',
+          background: liveCount > 0 ? 'rgba(74,222,128,0.04)' : 'transparent',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => { if (!liveCount) e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
+        onMouseLeave={e => { if (!liveCount) e.currentTarget.style.background = 'transparent'; }}
+      >
+        {/* Live dot */}
         {liveCount > 0 && (
-          <span style={{ fontSize: '0.65rem', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '10px', padding: '1px 7px', fontWeight: 700 }}>
-            {liveCount} LIVE
-          </span>
+          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 5px #4ade80', display: 'inline-block', animation: 'live-pulse 2s infinite', flexShrink: 0 }} />
         )}
-        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{matches.length} match{matches.length !== 1 ? 'es' : ''}</span>
+
+        {/* Tournament name + badges */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+            <h3 style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              🎾 {name}
+            </h3>
+            {liveCount > 0 && (
+              <span style={{ fontSize: '0.6rem', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '10px', padding: '1px 7px', fontWeight: 800, flexShrink: 0 }}>
+                {liveCount} LIVE
+              </span>
+            )}
+          </div>
+          {/* Match count summary */}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>
+              {matches.length} match{matches.length !== 1 ? 'es' : ''}
+            </span>
+            {finalCount > 0 && <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>· {finalCount} final</span>}
+            {pendingCount > 0 && <span style={{ fontSize: '0.67rem', color: '#60a5fa' }}>· {pendingCount} upcoming</span>}
+          </div>
+        </div>
+
+        {/* Expand chevron */}
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', transition: 'transform 0.2s', display: 'inline-block', transform: open ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>
+          ▼
+        </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '8px' }}>
-        {matches.map((m, i) => <MatchCard key={m.id || i} match={m} />)}
-      </div>
+
+      {/* ── Match cards ── */}
+      {open && (
+        <div style={{ borderTop: `1px solid ${liveCount > 0 ? 'rgba(74,222,128,0.15)' : 'var(--border)'}`, padding: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(290px, 100%), 1fr))', gap: '8px' }}>
+            {matches.map((m, i) => <MatchCard key={m.id || i} match={m} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function TennisScoreboard({ initialTour = 'atp' }) {
-  const [tour, setTour]       = useState(initialTour === 'tenniswta' ? 'tenniswta' : 'atp');
-  const [data, setData]       = useState(null);
+  const [tour, setTour]     = useState(initialTour === 'tenniswta' ? 'tenniswta' : 'atp');
+  const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [filter, setFilter]   = useState('all'); // all | live | final | upcoming
+  const [error, setError]   = useState('');
+  const [filter, setFilter] = useState('all'); // all | live | final | upcoming
 
   const tours = [
-    { id: 'atp',  label: 'ATP (Men)',  emoji: '🎾' },
+    { id: 'atp',       label: 'ATP (Men)',   emoji: '🎾' },
     { id: 'tenniswta', label: 'WTA (Women)', emoji: '🎾' },
   ];
 
@@ -184,7 +271,7 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
     setLoading(true);
     setError('');
     try {
-      // 'atp' maps to the 'tennis' key in the API; 'tenniswta' is its own key
+      // 'atp' maps to 'tennis' key in the API; 'tenniswta' is its own key
       const sportParam = tour === 'atp' ? 'tennis' : tour;
       const res  = await fetch(`/api/sports?sport=${sportParam}&endpoint=scoreboard`);
       const json = await res.json();
@@ -199,13 +286,13 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const t = setInterval(load, 60 * 1000); // refresh every minute
+    const t = setInterval(load, 60 * 1000);
     return () => clearInterval(t);
   }, [load]);
 
   const allMatches = data?.events || [];
 
-  // Filter
+  // Apply filter
   const filtered = allMatches.filter(m => {
     const state = m.competitions?.[0]?.status?.type?.state;
     if (filter === 'live')     return state === 'in';
@@ -214,16 +301,23 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
     return true;
   });
 
-  // Group by tournament name
+  // Group by tournament name, preserving insert order
   const grouped = {};
   for (const match of filtered) {
-    const tournName = match.competitions?.[0]?.series?.name
+    const key = match.competitions?.[0]?.series?.name
       || match.name?.split(' - ')?.[0]
       || match.league?.name
       || 'Other Matches';
-    if (!grouped[tournName]) grouped[tournName] = [];
-    grouped[tournName].push(match);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(match);
   }
+
+  // Sort groups: live tournaments first
+  const sortedGroups = Object.entries(grouped).sort(([, a], [, b]) => {
+    const aLive = a.some(m => m.competitions?.[0]?.status?.type?.state === 'in') ? 0 : 1;
+    const bLive = b.some(m => m.competitions?.[0]?.status?.type?.state === 'in') ? 0 : 1;
+    return aLive - bLive;
+  });
 
   const liveTotal = allMatches.filter(m => m.competitions?.[0]?.status?.type?.state === 'in').length;
 
@@ -231,8 +325,9 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
     <div className="fade-in">
       {/* Controls */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Tour toggle */}
         {tours.map(t => (
-          <button key={t.id} onClick={() => setTour(t.id)} style={{
+          <button key={t.id} onClick={() => { setTour(t.id); setData(null); }} style={{
             padding: '5px 14px', borderRadius: '20px', fontSize: '0.78rem', cursor: 'pointer',
             border: `1px solid ${tour === t.id ? '#84cc16' : 'var(--border)'}`,
             background: tour === t.id ? 'rgba(132,204,22,0.12)' : 'transparent',
@@ -243,15 +338,18 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
           </button>
         ))}
 
+        {/* State filter pills */}
         <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
-          {[['all','All'], ['live','● Live'], ['final','Final'], ['upcoming','Upcoming']].map(([id, label]) => (
+          {[['all', 'All'], ['live', '● Live'], ['final', 'Final'], ['upcoming', 'Upcoming']].map(([id, label]) => (
             <button key={id} onClick={() => setFilter(id)} style={{
               padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer',
               border: `1px solid ${filter === id ? 'var(--gold)' : 'var(--border)'}`,
               background: filter === id ? 'rgba(255,184,0,0.08)' : 'transparent',
               color: filter === id ? 'var(--gold)' : 'var(--text-muted)',
               fontWeight: filter === id ? 700 : 400,
-            }}>{label}</button>
+            }}>
+              {label}
+            </button>
           ))}
         </div>
 
@@ -260,11 +358,13 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
         </button>
       </div>
 
-      {/* Live badge */}
+      {/* Live summary badge */}
       {liveTotal > 0 && (
-        <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80', animation: 'pulse 1.5s ease-in-out infinite', display: 'inline-block' }} />
-          <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 700 }}>{liveTotal} match{liveTotal !== 1 ? 'es' : ''} in progress</span>
+        <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80', animation: 'live-pulse 1.5s ease-in-out infinite', display: 'inline-block' }} />
+          <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 700 }}>
+            {liveTotal} match{liveTotal !== 1 ? 'es' : ''} in progress
+          </span>
         </div>
       )}
 
@@ -283,9 +383,16 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
           <p>No {filter === 'all' ? '' : filter + ' '}matches available right now.</p>
         </div>
       ) : (
-        Object.entries(grouped).map(([tournName, matches]) => (
-          <TournamentSection key={tournName} name={tournName} matches={matches} />
-        ))
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {sortedGroups.map(([tournName, matches], i) => (
+            <TournamentSection
+              key={tournName}
+              name={tournName}
+              matches={matches}
+              defaultOpen={i === 0}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
