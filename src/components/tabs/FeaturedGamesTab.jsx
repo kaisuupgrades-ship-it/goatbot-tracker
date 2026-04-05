@@ -490,6 +490,27 @@ function EmptyStars() {
   );
 }
 
+// ── Day navigation helpers ─────────────────────────────────────────────────────
+function offsetDate(base, days) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+function formatNavDate(d) {
+  const today = new Date();
+  const yesterday = offsetDate(today, -1);
+  const tomorrow  = offsetDate(today,  1);
+  if (isSameDay(d, today))     return 'Today';
+  if (isSameDay(d, yesterday)) return 'Yesterday';
+  if (isSameDay(d, tomorrow))  return 'Tomorrow';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isDemo }) {
   const { starred, toggleStar } = useStarredGames();
@@ -498,6 +519,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   const [loading,     setLoading]     = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [countdown,   setCountdown]   = useState(null);
+  const [viewDate,    setViewDate]    = useState(() => new Date());
 
   const [injuries,        setInjuries]        = useState({});   // eslint-disable-line
   const [injuriesChecked, setInjuriesChecked] = useState(null); // eslint-disable-line
@@ -508,11 +530,18 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   const starredList   = Object.values(starred);
   const starredSports = [...new Set(starredList.map(g => g.sport).filter(Boolean))];
 
+  const isToday = isSameDay(viewDate, new Date());
+
+  const goDay = (delta) => {
+    setLiveData({});
+    setViewDate(prev => offsetDate(prev, delta));
+  };
+
   // ── Fetch ESPN scoreboard for all starred sports ──────────────────────────
   const fetchAll = useCallback(async () => {
     if (starredSports.length === 0) return;
     setLoading(true);
-    const espnDate = toLocalDateStr(new Date());
+    const espnDate = toLocalDateStr(viewDate);
 
     const results = await Promise.allSettled(
       starredSports.map(async (s) => {
@@ -530,7 +559,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
     setLiveData(merged);
     setLastUpdated(new Date());
     setLoading(false);
-  }, [starredSports.join(',')]); // eslint-disable-line
+  }, [starredSports.join(','), toLocalDateStr(viewDate)]); // eslint-disable-line
 
   // ── Auto-refresh: 20s when any game is live, 45s otherwise ───────────────
   const allEvents = Object.values(liveData).flat();
@@ -539,7 +568,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
 
   useEffect(() => {
     fetchAll();
-  }, [starredSports.join(',')]); // eslint-disable-line
+  }, [starredSports.join(','), toLocalDateStr(viewDate)]); // eslint-disable-line
 
   useEffect(() => {
     if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
@@ -608,7 +637,45 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+
+          {/* Day navigation */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button
+              onClick={() => goDay(-1)}
+              style={{
+                background: 'none', border: '1px solid var(--border)', borderRadius: '6px',
+                color: 'var(--text-muted)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem',
+              }}
+              title="Previous day"
+            >‹</button>
+            <span style={{
+              fontSize: '0.73rem', fontWeight: 700, color: isToday ? 'var(--gold)' : 'var(--text-secondary)',
+              padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px',
+              background: 'var(--bg-surface)', minWidth: '72px', textAlign: 'center',
+            }}>
+              {formatNavDate(viewDate)}
+            </span>
+            <button
+              onClick={() => goDay(1)}
+              style={{
+                background: 'none', border: '1px solid var(--border)', borderRadius: '6px',
+                color: 'var(--text-muted)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem',
+              }}
+              title="Next day"
+            >›</button>
+            {!isToday && (
+              <button
+                onClick={() => { setLiveData({}); setViewDate(new Date()); }}
+                style={{
+                  background: 'none', border: '1px solid rgba(255,184,0,0.35)', borderRadius: '6px',
+                  color: 'var(--gold)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 700,
+                }}
+                title="Jump to today"
+              >Today</button>
+            )}
+          </div>
+
           {starredList.length > 0 && (
             <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
               {hasLive
@@ -674,11 +741,23 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
           <div style={{ marginTop: '1rem', display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
             {starredList.map(g => (
               <span key={g.id} style={{
-                fontSize: '0.72rem', padding: '3px 8px', borderRadius: '5px',
+                display: 'inline-flex', alignItems: 'center', gap: '5px',
+                fontSize: '0.72rem', padding: '3px 6px 3px 8px', borderRadius: '5px',
                 background: 'var(--bg-elevated)', border: '1px solid var(--border)',
                 color: 'var(--text-muted)',
               }}>
                 {SPORT_LABELS[g.sport]?.emoji} {g.awayAbbr} @ {g.homeAbbr}
+                <button
+                  onClick={(e) => toggleStar(e, g)}
+                  title="Remove star"
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+                    color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', lineHeight: 1,
+                    display: 'inline-flex', alignItems: 'center',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#FF4560'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+                >×</button>
               </span>
             ))}
           </div>
