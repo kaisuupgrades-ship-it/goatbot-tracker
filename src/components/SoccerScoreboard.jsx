@@ -38,6 +38,7 @@ function getMatchOdds(comp) {
   const oddsArr = comp?.odds || [];
   if (!oddsArr.length) return null;
   const o = oddsArr[0];
+  if (!o) return null; // ESPN occasionally returns [null] as the odds array
   const homeML = fmtML(o.homeTeamOdds?.moneyLine ?? o.homeTeamOdds?.current?.moneyLine);
   const awayML = fmtML(o.awayTeamOdds?.moneyLine ?? o.awayTeamOdds?.current?.moneyLine);
   const drawML = fmtML(o.drawOdds?.moneyLine ?? o.drawOdds?.current?.moneyLine);

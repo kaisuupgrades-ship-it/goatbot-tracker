@@ -600,9 +600,10 @@ export default function OddsTab({ onAnalyze }) {
     .filter(g => isGameLive(g))
     .sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
 
+  // 'all' mode: live games first (they're time-sensitive), then upcoming by start time
   const filtered = gameFilter === 'upcoming' ? upcomingGames
                  : gameFilter === 'live'     ? liveGames
-                 : [...upcomingGames, ...liveGames]; // 'all': upcoming first
+                 : [...liveGames, ...upcomingGames];
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -677,7 +678,25 @@ export default function OddsTab({ onAnalyze }) {
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          No games found. {search ? 'Try a different search.' : 'No lines posted yet.'}
+          {gameFilter === 'upcoming' && liveGames.length > 0
+            ? <span>All today&apos;s games are already in progress —{' '}
+                <button onClick={() => setGameFilter('live')} style={{ color: '#FF4560', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', textDecoration: 'underline' }}>
+                  switch to Live
+                </button>
+                {' '}or{' '}
+                <button onClick={() => setGameFilter('all')} style={{ color: '#FFB800', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', textDecoration: 'underline' }}>
+                  view All
+                </button>
+              </span>
+            : gameFilter === 'live' && upcomingGames.length > 0
+            ? <span>No live games right now —{' '}
+                <button onClick={() => setGameFilter('upcoming')} style={{ color: '#FFB800', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', textDecoration: 'underline' }}>
+                  view upcoming
+                </button>
+              </span>
+            : search
+            ? 'No games match your search.'
+            : 'No lines posted yet for this sport.'}
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
@@ -715,7 +734,8 @@ export default function OddsTab({ onAnalyze }) {
 
           {/* Games grouped by date */}
           {(() => {
-            const gamesToShow = gameFilter === 'live' ? liveGames : gameFilter === 'upcoming' ? upcomingGames : [...upcomingGames, ...liveGames];
+            // live first in 'all' mode so in-progress games are prominent
+            const gamesToShow = gameFilter === 'live' ? liveGames : gameFilter === 'upcoming' ? upcomingGames : [...liveGames, ...upcomingGames];
             const groups = groupByDate(gamesToShow);
             return groups.map((group, gi) => (
               <div key={gi}>

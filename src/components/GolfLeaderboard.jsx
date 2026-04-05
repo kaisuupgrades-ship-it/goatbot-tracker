@@ -216,6 +216,30 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
   const toPar     = stats[0]?.displayValue ?? '—';
   const thru      = player.status?.thru ?? stats[1]?.displayValue ?? '—';
 
+  // Normalize a raw hole/linescore entry — ESPN uses 'period' + 'value', some
+  // endpoints use 'number' + 'score'. Accept both and produce a consistent shape.
+  function normalizeHole(h, i) {
+    return {
+      number:       h.period  ?? h.number ?? (i + 1),
+      par:          h.par     ?? null,
+      score:        h.value   ?? h.score  ?? null,
+      displayValue: h.displayValue ?? null,
+      scoreType:    h.scoreType    ?? null,
+    };
+  }
+
+  // Normalize a round — ESPN returns linescores (not holes) inside each round.
+  function normalizeRound(r) {
+    const rawHoles = r.holes || r.linescores || [];
+    return {
+      number: r.number,
+      value:  r.value ?? r.scoreToPar ?? null,
+      par:    r.par   ?? null,
+      total:  r.score ?? r.total ?? null,
+      holes:  rawHoles.map(normalizeHole),
+    };
+  }
+
   useEffect(() => {
     if (!athleteId || !eventId) { setLoading(false); return; }
     setLoading(true);
@@ -223,27 +247,26 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
       .then(r => r.json())
       .then(d => {
         if (d.error) throw new Error(d.error);
-        const r = d.rounds || d.player?.rounds || [];
+        // ESPN may nest rounds under d.player.rounds or return them at the top level
+        const rawRounds = d.rounds || d.player?.rounds || [];
+        const r = rawRounds.map(normalizeRound).filter(r => r.holes.length > 0);
         setRounds(r);
         // Default to last round (most current)
         if (r.length > 0) setActiveRound(r.length - 1);
       })
       .catch(e => setError(e.message || 'Could not load scorecard'))
       .finally(() => setLoading(false));
-  }, [athleteId, eventId, league]);
+  }, [athleteId, eventId, league]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build from linescores as fallback
+  // Build from linescores as fallback (leaderboard data — may have hole-by-hole)
   const fallbackRounds = (() => {
     if (rounds?.length) return null;
     const ls = player.linescores || [];
     if (!ls.length) return null;
-    // linescores from leaderboard are typically round totals not hole-by-hole
-    // Check if they have scoreType (hole-by-hole)
-    if (ls[0]?.scoreType) {
-      return [{ number: 'Current', holes: ls.map((h, i) => ({
-        number: h.period || (i + 1), par: h.par,
-        score: h.value, displayValue: h.displayValue, scoreType: h.scoreType,
-      })) }];
+    // Accept both hole-by-hole (scoreType present) and positional linescores
+    const hasHoleData = ls.some(h => h.scoreType || h.par != null);
+    if (hasHoleData) {
+      return [{ number: 'Current', value: null, holes: ls.map(normalizeHole) }];
     }
     return null;
   })();

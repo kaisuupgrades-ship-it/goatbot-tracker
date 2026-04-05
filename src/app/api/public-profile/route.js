@@ -36,7 +36,7 @@ export async function GET(req) {
     .eq('is_public', true)
     .order('created_at', { ascending: false })
     .limit(100);
-  if (contestOnly) picksQuery = picksQuery.not('contest_id', 'is', null);
+  if (contestOnly) picksQuery = picksQuery.eq('contest_entry', true);
 
   // Fetch profile + picks + follower count + following count in parallel
   const [profileRes, picksRes, followCountRes, followingCountRes] = await Promise.all([
