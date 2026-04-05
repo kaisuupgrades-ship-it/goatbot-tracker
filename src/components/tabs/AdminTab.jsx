@@ -1039,6 +1039,8 @@ function SystemPanel({ userEmail }) {
   const [generatedAnalyses,setGeneratedAnalyses]= useState(null); // fetched from game_analyses
   const [analysesDate,     setAnalysesDate]     = useState(new Date().toISOString().split('T')[0]);
   const [expandedAnalysis, setExpandedAnalysis] = useState(null); // id of expanded row
+  const [gradingId,        setGradingId]        = useState(null); // id currently being saved
+  const [aiRecord,         setAiRecord]         = useState(null); // { wins, losses, pushes, winPct, byConf, bySport }
 
   async function runBatchAnalysis() {
     setBatchRunning(true);
@@ -1075,6 +1077,31 @@ function SystemPanel({ userEmail }) {
       .then(r => r.json())
       .then(data => setGeneratedAnalyses(data.analyses || []))
       .catch(() => setGeneratedAnalyses([]));
+  }
+
+  function loadAiRecord() {
+    fetch('/api/admin/grade-analysis')
+      .then(r => r.json())
+      .then(data => { if (data.summary) setAiRecord(data.summary); })
+      .catch(() => {});
+  }
+
+  async function gradeAnalysis(id, result) {
+    setGradingId(id);
+    try {
+      await fetch('/api/admin/grade-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, result }),
+      });
+      // Optimistically update local state so the badge shows immediately
+      setGeneratedAnalyses(prev => (prev || []).map(a =>
+        a.id === id ? { ...a, prediction_result: result } : a
+      ));
+      loadAiRecord(); // refresh overall record
+    } catch { /* silent */ } finally {
+      setGradingId(null);
+    }
   }
 
   // Fire-and-forget: sends ONE request for all sports. The server processes
@@ -1176,7 +1203,7 @@ function SystemPanel({ userEmail }) {
       .catch(() => {});
   }
 
-  useEffect(() => { loadSysInfo(); loadPregenLog(); loadGeneratedAnalyses(); }, [userEmail]); // eslint-disable-line
+  useEffect(() => { loadSysInfo(); loadPregenLog(); loadGeneratedAnalyses(); loadAiRecord(); }, [userEmail]); // eslint-disable-line
 
   async function sendAnnouncement() {
     if (!announcement.trim()) return;
@@ -1315,6 +1342,41 @@ function SystemPanel({ userEmail }) {
           </div>
         </div>
 
+        {/* ── AI Prediction Record ── */}
+        {aiRecord && (aiRecord.wins > 0 || aiRecord.losses > 0) && (
+          <div style={{ marginBottom: '0.85rem', padding: '10px 14px', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.18)', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--gold)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>🤖 AI Record</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {aiRecord.wins}W – {aiRecord.losses}L{aiRecord.pushes > 0 ? ` – ${aiRecord.pushes}P` : ''}
+              </span>
+              {aiRecord.winPct !== null && (
+                <span style={{
+                  fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.8rem', fontWeight: 800,
+                  color: aiRecord.winPct >= 55 ? '#4ade80' : aiRecord.winPct >= 45 ? '#FFB800' : '#f87171',
+                }}>
+                  {aiRecord.winPct}%
+                </span>
+              )}
+            </div>
+            {/* Breakdown by confidence */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {['ELITE','HIGH','MEDIUM','LOW'].map(c => {
+                const s = aiRecord.byConf?.[c];
+                if (!s || (s.wins + s.losses + s.pushes) === 0) return null;
+                const total = s.wins + s.losses;
+                const pct = total > 0 ? Math.round((s.wins / total) * 100) : null;
+                const col = { ELITE: '#00D48B', HIGH: '#4ade80', MEDIUM: '#FFB800', LOW: '#888' }[c];
+                return (
+                  <span key={c} style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: '4px', background: `${col}14`, border: `1px solid ${col}35`, color: col, fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700 }}>
+                    {c} {s.wins}-{s.losses}{s.pushes > 0 ? `-${s.pushes}P` : ''}{pct !== null ? ` (${pct}%)` : ''}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {generatedAnalyses === null && (
           <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Loading…</div>
         )}
@@ -1335,41 +1397,89 @@ function SystemPanel({ userEmail }) {
               const confMatch = a.analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
               const conf = confMatch?.[1];
               const confColor = { ELITE: '#00D48B', HIGH: '#4ade80', MEDIUM: '#FFB800', LOW: '#888' }[conf] || '#555';
+              const graded = a.prediction_result;
+              const isGrading = gradingId === a.id;
+
+              // Grade button helper
+              const GradeBtn = ({ result, label, color }) => {
+                const isActive = graded === result;
+                return (
+                  <button
+                    onClick={e => { e.stopPropagation(); gradeAnalysis(a.id, isActive ? null : result); }}
+                    disabled={isGrading}
+                    title={isActive ? `Clear grade (currently ${result})` : `Mark as ${result}`}
+                    style={{
+                      padding: '2px 7px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 700,
+                      border: `1px solid ${isActive ? color : 'rgba(255,255,255,0.1)'}`,
+                      background: isActive ? `${color}22` : 'transparent',
+                      color: isActive ? color : 'rgba(255,255,255,0.25)',
+                      cursor: isGrading ? 'wait' : 'pointer',
+                      transition: 'all 0.15s',
+                      flexShrink: 0,
+                    }}
+                  >{label}</button>
+                );
+              };
 
               return (
-                <div key={a.id} style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', overflow: 'hidden' }}>
-                  <button
-                    onClick={() => setExpandedAnalysis(isOpen ? null : a.id)}
-                    style={{
-                      width: '100%', background: isOpen ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
-                      border: 'none', cursor: 'pointer', padding: '8px 12px',
-                      display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.6rem', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: '#60a5fa', minWidth: '30px' }}>{a.sport.toUpperCase()}</span>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-primary)', fontWeight: 600, flex: 1 }}>
-                      {a.away_team} @ {a.home_team}
-                    </span>
-                    {conf && (
-                      <span style={{ fontSize: '0.58rem', fontWeight: 700, color: confColor, background: `${confColor}18`, border: `1px solid ${confColor}40`, borderRadius: '4px', padding: '1px 6px', flexShrink: 0 }}>{conf}</span>
-                    )}
-                    <span style={{ fontSize: '0.62rem', color: '#444', flexShrink: 0 }}>{ageLabel}</span>
-                    <span style={{ color: '#444', fontSize: '0.65rem', flexShrink: 0 }}>{isOpen ? '▲' : '▼'}</span>
-                  </button>
+                <div key={a.id} style={{ border: `1px solid ${graded === 'WIN' ? 'rgba(74,222,128,0.2)' : graded === 'LOSS' ? 'rgba(248,113,113,0.2)' : graded === 'PUSH' ? 'rgba(148,163,184,0.2)' : 'rgba(255,255,255,0.07)'}`, borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', background: isOpen ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)' }}>
+                    <button
+                      onClick={() => setExpandedAnalysis(isOpen ? null : a.id)}
+                      style={{
+                        flex: 1, background: 'none',
+                        border: 'none', cursor: 'pointer', padding: '8px 12px',
+                        display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left',
+                        minWidth: 0,
+                      }}
+                    >
+                      <span style={{ fontSize: '0.6rem', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: '#60a5fa', minWidth: '30px' }}>{a.sport.toUpperCase()}</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-primary)', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {a.away_team} @ {a.home_team}
+                      </span>
+                      {conf && (
+                        <span style={{ fontSize: '0.58rem', fontWeight: 700, color: confColor, background: `${confColor}18`, border: `1px solid ${confColor}40`, borderRadius: '4px', padding: '1px 6px', flexShrink: 0 }}>{conf}</span>
+                      )}
+                      <span style={{ fontSize: '0.62rem', color: '#444', flexShrink: 0 }}>{ageLabel}</span>
+                    </button>
+
+                    {/* Grade buttons — always visible inline */}
+                    <div style={{ display: 'flex', gap: '4px', padding: '0 8px', alignItems: 'center', flexShrink: 0 }}>
+                      <GradeBtn result="WIN"  label="W" color="#4ade80" />
+                      <GradeBtn result="LOSS" label="L" color="#f87171" />
+                      <GradeBtn result="PUSH" label="P" color="#94a3b8" />
+                    </div>
+
+                    <button
+                      onClick={() => setExpandedAnalysis(isOpen ? null : a.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px', color: '#444', fontSize: '0.65rem', flexShrink: 0 }}
+                    >{isOpen ? '▲' : '▼'}</button>
+                  </div>
 
                   {isOpen && (
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '10px 12px', background: 'rgba(0,0,0,0.25)' }}>
                       {pickLine && (
-                        <div style={{ marginBottom: '8px', padding: '6px 10px', background: 'rgba(255,184,0,0.07)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#FFB800', fontWeight: 700 }}>
-                          🎯 {pickLine}
+                        <div style={{ marginBottom: '8px', padding: '6px 10px', background: 'rgba(255,184,0,0.07)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#FFB800', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                          <span>🎯 {pickLine}</span>
+                          {graded && (
+                            <span style={{
+                              fontSize: '0.65rem', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', flexShrink: 0,
+                              color: graded === 'WIN' ? '#4ade80' : graded === 'LOSS' ? '#f87171' : '#94a3b8',
+                              background: graded === 'WIN' ? 'rgba(74,222,128,0.12)' : graded === 'LOSS' ? 'rgba(248,113,113,0.12)' : 'rgba(148,163,184,0.12)',
+                              border: `1px solid ${graded === 'WIN' ? 'rgba(74,222,128,0.3)' : graded === 'LOSS' ? 'rgba(248,113,113,0.3)' : 'rgba(148,163,184,0.3)'}`,
+                            }}>
+                              {graded === 'WIN' ? '✓ WIN' : graded === 'LOSS' ? '✗ LOSS' : '≈ PUSH'}
+                            </span>
+                          )}
                         </div>
                       )}
                       <pre style={{ fontSize: '0.68rem', color: '#999', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, maxHeight: '300px', overflowY: 'auto' }}>
                         {a.analysis}
                       </pre>
-                      <div style={{ marginTop: '8px', fontSize: '0.6rem', color: '#333', display: 'flex', gap: '12px' }}>
+                      <div style={{ marginTop: '8px', fontSize: '0.6rem', color: '#333', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <span>Generated: {new Date(a.updated_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                         <span>Model: {a.model}</span>
+                        {graded && <span style={{ color: graded === 'WIN' ? '#4ade80' : graded === 'LOSS' ? '#f87171' : '#94a3b8' }}>Graded: {graded}</span>}
                       </div>
                     </div>
                   )}

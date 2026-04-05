@@ -268,7 +268,7 @@ export async function GET(req) {
       const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
       const { data: analyses } = await supabaseAdmin
         .from('game_analyses')
-        .select('id, sport, away_team, home_team, game_date, model, generated_at, updated_at, analysis')
+        .select('id, sport, away_team, home_team, game_date, model, generated_at, updated_at, analysis, prediction_result, prediction_graded_at')
         .eq('game_date', date)
         .order('updated_at', { ascending: false });
       return NextResponse.json({ analyses: analyses || [], date });
