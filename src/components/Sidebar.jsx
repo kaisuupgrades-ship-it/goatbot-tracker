@@ -23,7 +23,8 @@ const NAV_SECTIONS = [
     items: [
       { id: 'analyzer',    label: 'Analyzer',    icon: '🧠',  desc: 'BetOS + AI tools' },
       { id: 'trends',      label: 'Trends',      icon: '📈',  desc: 'Situational edge finder' },
-      { id: 'leaderboard', label: 'Leaderboard', icon: '🏆', desc: 'Sharp rankings' },
+      { id: 'leaderboard', label: 'Contest',     icon: '🏆',  desc: 'Verified picks & leaderboard' },
+      { id: 'usersearch',  label: 'User Search', icon: '🔍',  desc: 'Find & follow sharp bettors', indent: true },
     ],
   },
 ];

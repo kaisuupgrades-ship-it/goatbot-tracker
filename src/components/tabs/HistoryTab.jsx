@@ -1,8 +1,163 @@
 'use client';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { addPick, updatePick, deletePick, setPickPublic } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
+
+// ── Live Score Engine ─────────────────────────────────────────────────────────
+// Polls ESPN every 30s for PENDING picks whose game is today.
+// Returns a map of { pickId → liveData } and fires onGameFinal when STATUS_FINAL detected.
+
+const LIVE_SPORT_PATHS = {
+  mlb: 'baseball/mlb', nfl: 'football/nfl', nba: 'basketball/nba',
+  nhl: 'hockey/nhl', ncaaf: 'football/college-football',
+  ncaab: 'basketball/mens-college-basketball', mls: 'soccer/usa.1',
+  wnba: 'basketball/wnba',
+};
+
+function liveNorm(str) {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+}
+function liveTeamMatches(a, b) {
+  if (!a || !b) return false;
+  const n1 = liveNorm(a), n2 = liveNorm(b);
+  if (!n1 || !n2) return false;
+  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+}
+function liveParseSide(matchup, pickTeam) {
+  // "BOS @ TB" → away=bos, home=tb; match against pickTeam
+  if (!matchup || !pickTeam) return null;
+  const lower = matchup.toLowerCase();
+  const atIdx = lower.indexOf(' @ ');
+  const vsIdx = lower.indexOf(' vs ');
+  let awayHint, homeHint;
+  if (atIdx > -1) { awayHint = liveNorm(matchup.slice(0, atIdx)); homeHint = liveNorm(matchup.slice(atIdx + 3)); }
+  else if (vsIdx > -1) { awayHint = liveNorm(matchup.slice(0, vsIdx)); homeHint = liveNorm(matchup.slice(vsIdx + 4)); }
+  else return null;
+  const teamN = liveNorm(pickTeam);
+  if (awayHint?.length >= 2 && (teamN.includes(awayHint) || awayHint.includes(teamN.slice(0, 4)))) return 'away';
+  if (homeHint?.length >= 2 && (teamN.includes(homeHint) || homeHint.includes(teamN.slice(0, 4)))) return 'home';
+  return null;
+}
+
+function useLiveScores(pendingPicks, user, isDemo, onGameFinal) {
+  const [liveScores, setLiveScores]   = useState({});
+  const gradedGamesRef = useRef(new Set()); // game IDs we've already triggered grading for
+  const initializedRef = useRef(false);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  const todayPicks = pendingPicks.filter(p =>
+    (p.result === 'PENDING' || !p.result) && (p.date === todayStr || p.date === yesterdayStr)
+  );
+
+  const pollKey = todayPicks.map(p => p.id).sort().join(',');
+
+  useEffect(() => {
+    if (!todayPicks.length || isDemo) return;
+
+    const uniqueSports = [...new Set(todayPicks.map(p => (p.sport || '').toLowerCase()).filter(s => LIVE_SPORT_PATHS[s]))];
+    if (!uniqueSports.length) return;
+
+    async function fetchLiveData() {
+      const newScores = {};
+
+      for (const sport of uniqueSports) {
+        try {
+          const res = await fetch(`/api/sports?sport=${sport}&endpoint=scoreboard`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          const events = data.events || [];
+
+          for (const event of events) {
+            const comp        = event.competitions?.[0];
+            const competitors = comp?.competitors || [];
+            const homeComp    = competitors.find(c => c.homeAway === 'home');
+            const awayComp    = competitors.find(c => c.homeAway === 'away');
+            if (!homeComp || !awayComp) continue;
+
+            const homeTeam   = homeComp.team?.displayName || homeComp.team?.name || '';
+            const awayTeam   = awayComp.team?.displayName || awayComp.team?.name || '';
+            const homeAbbr   = homeComp.team?.abbreviation || homeComp.team?.shortDisplayName || homeTeam.split(' ').pop();
+            const awayAbbr   = awayComp.team?.abbreviation || awayComp.team?.shortDisplayName || awayTeam.split(' ').pop();
+            const homeScore  = parseFloat(homeComp.score || 0);
+            const awayScore  = parseFloat(awayComp.score || 0);
+            const statusName = comp?.status?.type?.name || '';
+            const statusState= comp?.status?.type?.state || '';
+            const displayClock = comp?.status?.displayClock || '';
+            const period     = comp?.status?.period || 0;
+
+            const isFinal = ['STATUS_FINAL', 'STATUS_FULL_TIME', 'STATUS_END_PERIOD'].includes(statusName);
+            const isLive  = statusState === 'in';
+            const gameDateStr = event.date ? event.date.split('T')[0] : todayStr;
+
+            // Format period/clock display
+            let periodLabel = '';
+            if (isLive) {
+              if (sport === 'nhl' || sport === 'nba') periodLabel = period ? `P${period} ${displayClock}` : displayClock;
+              else if (sport === 'mlb') periodLabel = `Inn ${period} ${displayClock}`;
+              else if (sport === 'nfl') periodLabel = period ? `Q${period} ${displayClock}` : displayClock;
+              else periodLabel = displayClock || `${period}`;
+            }
+
+            // Match against today's PENDING picks
+            for (const pick of todayPicks.filter(p => (p.sport || '').toLowerCase() === sport)) {
+              const matchesGame = liveTeamMatches(homeTeam, pick.team) || liveTeamMatches(awayTeam, pick.team)
+                || (pick.home_team && liveTeamMatches(homeTeam, pick.home_team))
+                || (pick.away_team && liveTeamMatches(awayTeam, pick.away_team));
+
+              if (!matchesGame) continue;
+
+              // Determine if this pick is currently winning
+              const pickedSide = (pick.side || '').toLowerCase()
+                || (liveTeamMatches(homeTeam, pick.team) ? 'home' : null)
+                || (liveTeamMatches(awayTeam, pick.team) ? 'away' : null)
+                || liveParseSide(pick.matchup, pick.team);
+
+              let liveStatus = null;
+              if (pickedSide === 'home') {
+                liveStatus = homeScore > awayScore ? 'WINNING' : homeScore < awayScore ? 'LOSING' : 'TIED';
+              } else if (pickedSide === 'away') {
+                liveStatus = awayScore > homeScore ? 'WINNING' : awayScore < homeScore ? 'LOSING' : 'TIED';
+              }
+
+              newScores[pick.id] = {
+                homeTeam, awayTeam, homeAbbr, awayAbbr,
+                homeScore, awayScore,
+                isLive, isFinal, periodLabel,
+                liveStatus,
+                gameDate: gameDateStr,
+                eventId: event.id,
+              };
+
+              // Trigger instant grading when game just went FINAL (only once per game)
+              if (isFinal && !gradedGamesRef.current.has(event.id) && initializedRef.current) {
+                gradedGamesRef.current.add(event.id);
+                onGameFinal?.({ sport, homeTeam, awayTeam, homeScore, awayScore, gameDate: gameDateStr });
+              }
+              // On first load, mark already-final games so we don't re-grade them
+              if (isFinal && !initializedRef.current) {
+                gradedGamesRef.current.add(event.id);
+              }
+            }
+          }
+        } catch (e) {
+          // fail silently — live scores are bonus
+        }
+      }
+
+      setLiveScores(newScores);
+      initializedRef.current = true;
+    }
+
+    fetchLiveData();
+    const interval = setInterval(fetchLiveData, 30_000);
+    return () => clearInterval(interval);
+  }, [pollKey, isDemo]); // eslint-disable-line
+
+  return liveScores;
+}
 
 const SPORTS  = ['MLB', 'NFL', 'NBA', 'NHL', 'NCAAF', 'NCAAB', 'Soccer', 'UFC', 'Other'];
 const BET_TYPES = ['Moneyline', 'Spread', 'Total (Over)', 'Total (Under)', 'Prop', 'Parlay', 'Teaser', 'Futures'];
@@ -463,7 +618,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
   );
 }
 
-export default function HistoryTab({ picks, setPicks, user, contest, setContest, isDemo, onViewGame }) {
+export default function HistoryTab({ picks, setPicks, user, contest, setContest, isDemo, onViewGame, onLeaderboardRefresh }) {
   const [addMode, setAddMode]   = useState(null); // null | 'choose' | 'import' | 'manual'
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -481,6 +636,44 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   const [analyses, setAnalyses] = useState({}); // { pickId: analysisText }
   const [expandedAnalysis, setExpandedAnalysis] = useState(null); // pickId
   const [analysisLoading, setAnalysisLoading] = useState(false);
+
+  // ── Live Scores + Instant Grading ───────────────────────────────────────
+  const pendingPicks = picks.filter(p => !p.result || p.result === 'PENDING');
+
+  async function handleGameFinal({ sport, homeTeam, awayTeam, homeScore, awayScore, gameDate }) {
+    try {
+      const res = await fetch('/api/grade-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sport, homeTeam, awayTeam, homeScore, awayScore, gameDate }),
+      });
+      const { graded } = await res.json();
+      if (!graded?.length) return;
+
+      // Update only this user's picks in state
+      const myGraded = graded.filter(g => g.user_id === user?.id);
+      if (myGraded.length) {
+        setPicks(prev => prev.map(p => {
+          const g = myGraded.find(gr => gr.id === p.id);
+          return g ? { ...p, result: g.result, profit: g.profit, graded_home_score: g.home_score, graded_away_score: g.away_score } : p;
+        }));
+        // Sound effects
+        const wins   = myGraded.filter(g => g.result === 'WIN').length;
+        const losses = myGraded.filter(g => g.result === 'LOSS').length;
+        const pushes = myGraded.filter(g => g.result === 'PUSH').length;
+        if (wins > 0)        { playWin();   if (wins   > 1) setTimeout(playWin,  350); }
+        else if (losses > 0) { playLoss();  if (losses > 1) setTimeout(playLoss, 400); }
+        else if (pushes > 0) { playGrade(); }
+        setGradeMsg(`✓ ${homeTeam} vs ${awayTeam} graded — ${wins}W ${losses}L${pushes ? ' '+pushes+'P' : ''}`);
+        setTimeout(() => setGradeMsg(''), 5000);
+        // Cascade to leaderboard if any contest pick was graded
+        const hasContestPick = myGraded.some(g => g.contest_entry);
+        if (hasContestPick) onLeaderboardRefresh?.();
+      }
+    } catch { /* fail silently */ }
+  }
+
+  const liveScores = useLiveScores(pendingPicks, user, isDemo, handleGameFinal);
 
   // ── Auto-grade concluded pending picks on mount ─────────────────────────
   const [grading, setGrading] = useState(false);
@@ -615,11 +808,13 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       return;
     }
 
-    setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: newVal } : p));
+    // Contest picks are always public (paywall model: settled picks visible, pending picks paywalled)
+    const autoPublic = newVal ? true : pick.is_public;
+    setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: newVal, is_public: autoPublic } : p));
     if (!isDemo) {
-      const { error } = await updatePick(pick.id, { contest_entry: newVal });
+      const { error } = await updatePick(pick.id, { contest_entry: newVal, is_public: autoPublic });
       if (error) {
-        setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: pick.contest_entry } : p));
+        setPicks(prev => prev.map(p => p.id === pick.id ? { ...p, contest_entry: pick.contest_entry, is_public: pick.is_public } : p));
         return;
       }
       // Fire-and-forget: trigger AI audit for new contest entries
@@ -917,10 +1112,18 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
           {/* Card Grid — DraftKings-style bet slips */}
           <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
             {filtered.map((pick) => {
+              const live = liveScores[pick.id] || null;
+              const isPending  = !pick.result || pick.result === 'PENDING';
+              const isTracking = isPending && live?.isLive;
+              const isFinalNow = isPending && live?.isFinal;
+
               const resultColor =
                 pick.result === 'WIN'  ? '#4ade80' :
                 pick.result === 'LOSS' ? '#f87171' :
-                pick.result === 'PUSH' ? '#94a3b8' : '#FFB800';
+                pick.result === 'PUSH' ? '#94a3b8' :
+                isTracking && live?.liveStatus === 'WINNING' ? '#4ade80' :
+                isTracking && live?.liveStatus === 'LOSING'  ? '#f87171' : '#FFB800';
+
               const profitVal = pick.profit != null ? parseFloat(pick.profit) : null;
               const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
               const profitDisplay = profitVal != null
@@ -930,13 +1133,40 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               return (
                 <div key={pick.id} style={{
                   background: 'var(--bg-surface)',
-                  border: '1px solid var(--border)',
+                  border: `1px solid ${isTracking ? 'rgba(74,222,128,0.2)' : 'var(--border)'}`,
                   borderLeft: `3px solid ${resultColor}`,
                   borderRadius: '10px',
                   overflow: 'hidden',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                  boxShadow: isTracking ? '0 2px 16px rgba(74,222,128,0.08)' : '0 2px 8px rgba(0,0,0,0.25)',
                   display: 'flex', flexDirection: 'column',
                 }}>
+
+                  {/* ── Live Tracking Banner ── */}
+                  {isTracking && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '4px 12px',
+                      background: 'rgba(74,222,128,0.06)',
+                      borderBottom: '1px solid rgba(74,222,128,0.12)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{
+                          width: '6px', height: '6px', borderRadius: '50%',
+                          background: '#4ade80', flexShrink: 0,
+                          boxShadow: '0 0 5px #4ade80',
+                          animation: 'pulse 1.5s ease-in-out infinite',
+                        }} />
+                        <span style={{ fontSize: '0.62rem', color: '#4ade80', fontWeight: 700, letterSpacing: '0.06em' }}>
+                          tracking live
+                        </span>
+                      </div>
+                      {live.periodLabel && (
+                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>
+                          {live.periodLabel}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* ── Header: Sport + Date + Book ── */}
                   <div style={{
@@ -994,7 +1224,30 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         {pick.matchup}
                       </div>
                     )}
-                    {/* Final score if graded */}
+                    {/* Live score while game is in progress */}
+                    {isTracking && (
+                      <div style={{
+                        marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px',
+                      }}>
+                        <span style={{
+                          fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '1.1rem',
+                          color: live.liveStatus === 'WINNING' ? '#4ade80' : live.liveStatus === 'LOSING' ? '#f87171' : '#94a3b8',
+                          letterSpacing: '-0.02em',
+                        }}>
+                          {live.awayAbbr} {live.awayScore} – {live.homeScore} {live.homeAbbr}
+                        </span>
+                      </div>
+                    )}
+                    {/* Final score badge once game ended (not yet graded by server) */}
+                    {isFinalNow && !isTracking && (
+                      <div style={{
+                        marginTop: '5px', fontFamily: 'IBM Plex Mono, monospace',
+                        fontWeight: 700, fontSize: '0.72rem', color: '#94a3b8',
+                      }}>
+                        {live.awayScore}–{live.homeScore} <span style={{ fontWeight: 400, color: '#555' }}>FINAL · grading…</span>
+                      </div>
+                    )}
+                    {/* Final score if server-graded */}
                     {pick.graded_home_score != null && pick.graded_away_score != null && (
                       <div style={{
                         marginTop: '5px', fontFamily: 'IBM Plex Mono, monospace',
@@ -1022,8 +1275,12 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                     </div>
                     <div style={{ padding: '7px 12px', borderRight: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '2px' }}>Result</div>
-                      <div style={{ fontWeight: 800, fontSize: '0.8rem', color: resultColor, textTransform: 'uppercase' }}>
-                        {pick.result || 'PENDING'}
+                      <div style={{ fontWeight: 800, fontSize: '0.75rem', color: resultColor, textTransform: 'uppercase', lineHeight: 1.1 }}>
+                        {isTracking && live?.liveStatus
+                          ? live.liveStatus
+                          : isFinalNow && !pick.result
+                            ? <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>GRADING…</span>
+                            : pick.result || 'PENDING'}
                       </div>
                     </div>
                     <div style={{ padding: '7px 12px', textAlign: 'right' }}>

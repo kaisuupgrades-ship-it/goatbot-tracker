@@ -872,7 +872,7 @@ function ContestBanner() {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function LeaderboardTab({ user, isDemo }) {
+export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
@@ -902,6 +902,9 @@ export default function LeaderboardTab({ user, isDemo }) {
   }, [userId, isDemo]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Re-load when a contest pick is graded (cascade from HistoryTab via Dashboard)
+  useEffect(() => { if (refreshKey > 0) load(); }, [refreshKey]); // eslint-disable-line
 
   // Load own profile
   useEffect(() => {

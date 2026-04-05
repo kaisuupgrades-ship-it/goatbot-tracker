@@ -50,10 +50,24 @@ function normalize(str) {
     .trim();
 }
 
+// Guard: never match when either side is empty — prevents false positives
 function teamMatches(espnName, pickTeam) {
+  if (!espnName || !pickTeam) return false;
   const n1 = normalize(espnName);
   const n2 = normalize(pickTeam);
+  if (!n1 || !n2) return false;
   return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+}
+
+// Parse "BOS @ TB" or "PHI vs COL" → { away: 'bos', home: 'tb' }
+function parseMatchup(matchup) {
+  if (!matchup) return null;
+  const lower = matchup.toLowerCase();
+  const atIdx  = lower.indexOf(' @ ');
+  const vsIdx  = lower.indexOf(' vs ');
+  if (atIdx  > -1) return { away: normalize(matchup.slice(0, atIdx)),  home: normalize(matchup.slice(atIdx  + 3)) };
+  if (vsIdx  > -1) return { away: normalize(matchup.slice(0, vsIdx)),  home: normalize(matchup.slice(vsIdx  + 4)) };
+  return null;
 }
 
 function gradePick(pick, game) {
@@ -74,15 +88,41 @@ function gradePick(pick, game) {
   const totalScore = homeScore + awayScore;
 
   const betType = (pick.bet_type || 'Moneyline').toLowerCase();
-  const pickTeam = (pick.team || '').toLowerCase();
   const pickSide = (pick.side || '').toLowerCase(); // 'home' | 'away' | 'over' | 'under'
   const line = parseFloat(pick.line || pick.spread_line || 0);
 
-  // Determine which side the user picked
-  const pickedHome = teamMatches(home.team?.displayName || home.team?.name || '', pick.team)
-    || pickSide === 'home';
-  const pickedAway = teamMatches(away.team?.displayName || away.team?.name || '', pick.team)
-    || pickSide === 'away';
+  const homeName = home.team?.displayName || home.team?.name || '';
+  const awayName = away.team?.displayName || away.team?.name || '';
+
+  // Determine which side the user picked — explicit side field first
+  let pickedHome = pickSide === 'home';
+  let pickedAway = pickSide === 'away';
+
+  if (!pickedHome && !pickedAway) {
+    // Primary: match pick.team against ESPN team names (safe — guards against empty strings)
+    pickedHome = teamMatches(homeName, pick.team);
+    pickedAway = teamMatches(awayName, pick.team);
+
+    // Secondary: use stored home_team / away_team fields (only if non-empty)
+    if (!pickedHome && !pickedAway) {
+      pickedHome = pick.home_team ? teamMatches(homeName, pick.home_team) : false;
+      pickedAway = pick.away_team ? teamMatches(awayName, pick.away_team) : false;
+    }
+
+    // Tertiary: parse matchup string e.g. "BOS @ TB" → away=bos, home=tb
+    if (!pickedHome && !pickedAway && pick.matchup) {
+      const parsed = parseMatchup(pick.matchup);
+      if (parsed) {
+        const teamN = normalize(pick.team);
+        // Does the pick's team name contain the away abbreviation (or vice-versa)?
+        if (parsed.away && parsed.away.length >= 2 && (teamN.includes(parsed.away) || parsed.away.includes(teamN.slice(0, 4)))) {
+          pickedAway = true;
+        } else if (parsed.home && parsed.home.length >= 2 && (teamN.includes(parsed.home) || parsed.home.includes(teamN.slice(0, 4)))) {
+          pickedHome = true;
+        }
+      }
+    }
+  }
 
   let result = 'PENDING';
 

@@ -12,6 +12,7 @@ import TrendsTab     from './tabs/TrendsTab';
 import HistoryTab    from './tabs/HistoryTab';
 import AnalyzerTab      from './tabs/AnalyzerTab';
 import LeaderboardTab    from './tabs/LeaderboardTab';
+import UserSearchTab     from './tabs/UserSearchTab';
 import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
 import AdminTab          from './tabs/AdminTab';
 import ProfileModal      from './ProfileModal';
@@ -103,7 +104,8 @@ const TAB_META = {
   trends:     { label: 'Trends',       sub: 'Situational edges, filter engine & backtest' },
   history:    { label: 'Pick History', sub: 'Log, edit, and analyze every bet' },
   analyzer:    { label: 'Analyzer',     sub: 'BetOS live analysis + sharp tools' },
-  leaderboard:  { label: 'Leaderboard',     sub: 'Sharp picks, verified records, public rankings' },
+  leaderboard:  { label: 'Contest',          sub: 'Verified picks, sharp bettors & public rankings' },
+  usersearch:   { label: 'User Search',     sub: 'Find and follow the sharpest bettors in the community' },
   featured:     { label: 'Featured Games',  sub: 'Your starred games & quick BetOS access' },
   admin:        { label: '🛡 Admin Panel',  sub: 'User management, analytics & system settings' },
 };
@@ -137,6 +139,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
       return () => stopSessionTracking();
     }
   }, [user?.id, isDemo]);
+
+  // Leaderboard refresh key — increment to trigger LeaderboardTab re-load
+  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
 
   // Global refresh: re-fetch picks from Supabase + run grading
   const [globalRefreshing, setGlobalRefreshing] = useState(false);
@@ -261,7 +266,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           </div>
           <div style={{ display: activeTab === 'trends'     ? 'block' : 'none' }}><TrendsTab picks={picks} user={user} onNavigateToTracker={() => setActiveTab('tracker')} /></div>
           <div style={{ display: activeTab === 'history'    ? 'block' : 'none' }}>
-            <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} />
+            <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} onLeaderboardRefresh={() => setLeaderboardRefreshKey(k => k + 1)} />
           </div>
           <div style={{ display: activeTab === 'analyzer'   ? 'block' : 'none' }}>
             <AnalyzerTab
@@ -271,7 +276,10 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             />
           </div>
           <div style={{ display: activeTab === 'leaderboard' ? 'block' : 'none' }}>
-            <LeaderboardTab user={user} isDemo={isDemo} />
+            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} />
+          </div>
+          <div style={{ display: activeTab === 'usersearch' ? 'block' : 'none' }}>
+            <UserSearchTab user={user} isDemo={isDemo} />
           </div>
           <div style={{ display: activeTab === 'featured' ? 'block' : 'none' }}>
             <FeaturedGamesTab

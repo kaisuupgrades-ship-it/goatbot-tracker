@@ -58,9 +58,21 @@ function normalize(str) {
 }
 
 function teamMatches(espnName, pickTeam) {
+  if (!espnName || !pickTeam) return false;
   const n1 = normalize(espnName);
   const n2 = normalize(pickTeam);
+  if (!n1 || !n2) return false;
   return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+}
+
+function parseMatchup(matchup) {
+  if (!matchup) return null;
+  const lower = matchup.toLowerCase();
+  const atIdx = lower.indexOf(' @ ');
+  const vsIdx = lower.indexOf(' vs ');
+  if (atIdx > -1) return { away: normalize(matchup.slice(0, atIdx)), home: normalize(matchup.slice(atIdx + 3)) };
+  if (vsIdx > -1) return { away: normalize(matchup.slice(0, vsIdx)), home: normalize(matchup.slice(vsIdx + 4)) };
+  return null;
 }
 
 function gradePick(pick, game) {
@@ -83,8 +95,33 @@ function gradePick(pick, game) {
   const pickSide = (pick.side || '').toLowerCase();
   const line     = parseFloat(pick.line || pick.spread_line || 0);
 
-  const pickedHome = teamMatches(home.team?.displayName || home.team?.name || '', pick.team) || pickSide === 'home';
-  const pickedAway = teamMatches(away.team?.displayName || away.team?.name || '', pick.team) || pickSide === 'away';
+  const homeName = home.team?.displayName || home.team?.name || '';
+  const awayName = away.team?.displayName || away.team?.name || '';
+
+  let pickedHome = pickSide === 'home';
+  let pickedAway = pickSide === 'away';
+
+  if (!pickedHome && !pickedAway) {
+    pickedHome = teamMatches(homeName, pick.team);
+    pickedAway = teamMatches(awayName, pick.team);
+
+    if (!pickedHome && !pickedAway) {
+      pickedHome = pick.home_team ? teamMatches(homeName, pick.home_team) : false;
+      pickedAway = pick.away_team ? teamMatches(awayName, pick.away_team) : false;
+    }
+
+    if (!pickedHome && !pickedAway && pick.matchup) {
+      const parsed = parseMatchup(pick.matchup);
+      if (parsed) {
+        const teamN = normalize(pick.team);
+        if (parsed.away && parsed.away.length >= 2 && (teamN.includes(parsed.away) || parsed.away.includes(teamN.slice(0, 4)))) {
+          pickedAway = true;
+        } else if (parsed.home && parsed.home.length >= 2 && (teamN.includes(parsed.home) || parsed.home.includes(teamN.slice(0, 4)))) {
+          pickedHome = true;
+        }
+      }
+    }
+  }
 
   let result = 'PENDING';
 
