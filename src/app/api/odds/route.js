@@ -130,6 +130,19 @@ const PIN_HEADERS = {
   'User-Agent':      'Mozilla/5.0 BetOS/1.0',
 };
 
+// Pinnacle's guest API returns prices in DECIMAL (European) format.
+// American odds are ≥ +100 or ≤ -100. Any price between -99 and +99
+// that isn't 0 is almost certainly decimal — convert it.
+function pinPriceToAmerican(price) {
+  if (price == null) return null;
+  // Already American format (≤ -100 or ≥ +100)
+  if (price <= -100 || price >= 100) return price;
+  // Decimal odds: favorite < 2.0, underdog >= 2.0
+  if (price >= 2.0) return Math.round((price - 1) * 100);   // e.g. 2.94 → +194
+  if (price > 1.0)  return Math.round(-100 / (price - 1));   // e.g. 1.34 → -294
+  return null; // invalid
+}
+
 function normTeam(name) {
   return (name || '')
     .toLowerCase()
@@ -193,42 +206,47 @@ async function fetchPinnacleLines(sportKey) {
           const h = prices.find(p => p.designation === 'home');
           const a = prices.find(p => p.designation === 'away');
           if (h && a) {
-            // Sanity-check: one side must be negative (favorite) and the other positive.
-            // If both are the same sign the data is invalid (e.g. decimal odds misread as American).
-            const homeNeg = h.price < 0, awayNeg = a.price < 0;
-            if (homeNeg !== awayNeg) {
-              oddsMap[mid].ml = { home: h.price, away: a.price };
+            const hP = pinPriceToAmerican(h.price);
+            const aP = pinPriceToAmerican(a.price);
+            if (hP != null && aP != null) {
+              // After conversion, one side must be negative (favorite) and the other positive
+              const homeNeg = hP < 0, awayNeg = aP < 0;
+              if (homeNeg !== awayNeg) {
+                oddsMap[mid].ml = { home: hP, away: aP };
+              }
             }
           }
         }
       } else if (mkt.type === 'spread') {
         const h = prices.find(p => p.designation === 'home');
         const a = prices.find(p => p.designation === 'away');
-        // Prefer the spread closest to standard run line (±1.5 for MLB).
-        // Only overwrite if not yet set, or if this spread's |homePoint| is closer to 1.5
-        // (the most standard baseball run line) than the current one.
         if (h && a && h.points != null) {
-          if (!oddsMap[mid].spread) {
-            oddsMap[mid].spread = { homePoint: h.points, homePrice: h.price, awayPoint: a.points, awayPrice: a.price };
-          } else {
-            const curDiff  = Math.abs(Math.abs(oddsMap[mid].spread.homePoint) - 1.5);
-            const newDiff  = Math.abs(Math.abs(h.points) - 1.5);
-            if (newDiff < curDiff) {
-              oddsMap[mid].spread = { homePoint: h.points, homePrice: h.price, awayPoint: a.points, awayPrice: a.price };
+          const hP = pinPriceToAmerican(h.price);
+          const aP = pinPriceToAmerican(a.price);
+          if (hP != null && aP != null) {
+            if (!oddsMap[mid].spread) {
+              oddsMap[mid].spread = { homePoint: h.points, homePrice: hP, awayPoint: a.points, awayPrice: aP };
+            } else {
+              const curDiff  = Math.abs(Math.abs(oddsMap[mid].spread.homePoint) - 1.5);
+              const newDiff  = Math.abs(Math.abs(h.points) - 1.5);
+              if (newDiff < curDiff) {
+                oddsMap[mid].spread = { homePoint: h.points, homePrice: hP, awayPoint: a.points, awayPrice: aP };
+              }
             }
           }
         }
       } else if (mkt.type === 'total') {
         const ov = prices.find(p => p.designation === 'over');
         const un = prices.find(p => p.designation === 'under');
-        // Pick the total whose juice is CLOSEST to standard (-110 on both sides).
-        // Pinnacle lists the real game total alongside alternates (0.5, 5.0, 11.5 etc.);
-        // alternates always have extreme juice (+350/-450) while the standard line is ~-110.
-        // Previously used "highest point" which broke when Pinnacle offered an alt-high (11.5).
         if (ov && un && ov.points != null) {
-          const juiceScore = Math.abs(Math.abs(ov.price) - 110) + Math.abs(Math.abs(un.price) - 110);
-          if (!oddsMap[mid].total || juiceScore < oddsMap[mid].total._juiceScore) {
-            oddsMap[mid].total = { point: ov.points, overPrice: ov.price, underPrice: un.price, _juiceScore: juiceScore };
+          const ovP = pinPriceToAmerican(ov.price);
+          const unP = pinPriceToAmerican(un.price);
+          if (ovP != null && unP != null) {
+            // Pick the total whose juice is CLOSEST to standard (-110 on both sides).
+            const juiceScore = Math.abs(Math.abs(ovP) - 110) + Math.abs(Math.abs(unP) - 110);
+            if (!oddsMap[mid].total || juiceScore < oddsMap[mid].total._juiceScore) {
+              oddsMap[mid].total = { point: ov.points, overPrice: ovP, underPrice: unP, _juiceScore: juiceScore };
+            }
           }
         }
       }

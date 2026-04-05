@@ -348,6 +348,22 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
 
             {/* Items */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+              {/* Community: My Profile first */}
+              {section.section === 'Community' && !isDemo && (
+                <button
+                  onClick={() => { onOpenPublicProfile?.(); if (mobileOpen) onMobileClose?.(); }}
+                  className="nav-item"
+                  style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '0.5rem' : '0.45rem 0.75rem' }}
+                  title={collapsed ? 'My Profile' : undefined}
+                >
+                  <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
+                    <Icons.Profile />
+                  </span>
+                  {!collapsed && <span style={{ flex: 1, fontSize: '0.875rem' }}>My Profile</span>}
+                </button>
+              )}
+
+              {/* Regular nav items (Following, Chat Room, etc.) */}
               {section.items.map(item => (
                 <button
                   key={item.id}
@@ -371,47 +387,25 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                   )}
                 </button>
               ))}
-              {/* Community extras — My Profile + Messages overlays */}
+
+              {/* Community: Messages last */}
               {section.section === 'Community' && !isDemo && (
-                <>
-                  {/* My Profile — opens public profile view */}
-                  <button
-                    onClick={() => { onOpenPublicProfile?.(); if (mobileOpen) onMobileClose?.(); }}
-                    className="nav-item"
-                    style={{
-                      justifyContent: collapsed ? 'center' : 'flex-start',
-                      padding: collapsed ? '0.5rem' : '0.45rem 0.75rem',
-                    }}
-                    title={collapsed ? 'My Profile' : undefined}
-                  >
-                    <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
-                      <Icons.Profile />
-                    </span>
-                    {!collapsed && (
-                      <span style={{ flex: 1, fontSize: '0.875rem' }}>My Profile</span>
-                    )}
-                  </button>
-                  {/* Messages — opens Inbox overlay */}
-                  <button
-                    onClick={() => { onOpenInbox?.(); if (mobileOpen) onMobileClose?.(); }}
-                    className="nav-item"
-                    style={{
-                      justifyContent: collapsed ? 'center' : 'flex-start',
-                      padding: collapsed ? '0.5rem' : '0.45rem 0.75rem',
-                    }}
-                    title={collapsed ? 'Messages' : undefined}
-                  >
-                    <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
-                      <Icons.Messages />
-                    </span>
-                    {!collapsed && (
-                      <>
-                        <span style={{ flex: 1, fontSize: '0.875rem' }}>Messages</span>
-                        <UnreadMessages userId={userId} />
-                      </>
-                    )}
-                  </button>
-                </>
+                <button
+                  onClick={() => { onOpenInbox?.(); if (mobileOpen) onMobileClose?.(); }}
+                  className="nav-item"
+                  style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '0.5rem' : '0.45rem 0.75rem' }}
+                  title={collapsed ? 'Messages' : undefined}
+                >
+                  <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', flexShrink: 0 }}>
+                    <Icons.Messages />
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span style={{ flex: 1, fontSize: '0.875rem' }}>Messages</span>
+                      <UnreadMessages userId={userId} />
+                    </>
+                  )}
+                </button>
               )}
             </div>
           </div>
