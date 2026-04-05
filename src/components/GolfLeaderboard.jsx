@@ -118,13 +118,23 @@ function TournamentCard({ event, defaultOpen, search, isMobile }) {
   const category = event.links?.[0]?.text || '';
 
   // Players — competitors array inside competitions[0]
-  const players = comp.competitors || event.competitors || event.leaderboard || [];
+  const rawPlayers = comp.competitors || event.competitors || event.leaderboard || [];
+
+  // Sort by numeric position (handles ties like "T2" → 2, "CUT" → 999)
+  function parsePos(pos) {
+    if (!pos || pos === '—' || pos === 'CUT') return 9999;
+    const n = parseInt(String(pos).replace(/[^0-9]/g, ''));
+    return isNaN(n) ? 9999 : n;
+  }
+  const players = [...rawPlayers].sort((a, b) =>
+    parsePos(a.status?.position?.displayName) - parsePos(b.status?.position?.displayName)
+  );
 
   const filtered = search.trim()
     ? players.filter(p => (p.athlete?.displayName || p.athlete?.fullName || '').toLowerCase().includes(search.toLowerCase()))
     : players;
 
-  // Leader preview
+  // Leader preview — first player after sort = position 1
   const leader      = players[0];
   const leaderName  = leader?.athlete?.displayName?.split(' ').slice(-1)[0] || '';
   const leaderScore = leader?.statistics?.[0]?.displayValue || leader?.score?.displayValue || '';

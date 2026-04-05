@@ -36,10 +36,17 @@ function MatchCard({ match }) {
   const isPre      = status?.state === 'pre';
   const statusLabel = status?.shortDetail || (isLive ? 'LIVE' : isFinal ? 'Final' : 'Upcoming');
 
+  // Per-set linescores — ESPN may return these nested differently
   const p1Sets  = p1.linescores || [];
   const p2Sets  = p2.linescores || [];
-  const p1SetsWon = (isFinal || isLive) ? parseInt(p1.score || 0) : null;
-  const p2SetsWon = (isFinal || isLive) ? parseInt(p2.score || 0) : null;
+
+  // Sets won: p1.score / p2.score is the total sets won as a string ("2", "1")
+  const p1SetsWon = (isFinal || isLive) ? (parseInt(p1.score) || 0) : null;
+  const p2SetsWon = (isFinal || isLive) ? (parseInt(p2.score) || 0) : null;
+
+  // Has any real score data?
+  const hasLinescores = p1Sets.length > 0 || p2Sets.length > 0;
+  const hasSetsWon    = p1SetsWon !== null || p2SetsWon !== null;
 
   const p1Name  = p1.athlete?.displayName || p1.athlete?.fullName || 'Player 1';
   const p2Name  = p2.athlete?.displayName || p2.athlete?.fullName || 'Player 2';
@@ -51,9 +58,10 @@ function MatchCard({ match }) {
   // Round label — extract from series name or competition note
   const round   = comp.series?.name || comp.notes?.[0]?.headline || match.name?.split(' - ').slice(-1)[0] || '';
 
-  // Scheduled time
-  const startTime = comp.date ? new Date(comp.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-  const startDay  = comp.date ? new Date(comp.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+  // Scheduled time — format nicely like Flashscore
+  const matchDate = comp.date ? new Date(comp.date) : null;
+  const startTime = matchDate ? matchDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const startDay  = matchDate ? matchDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
 
   return (
     <div style={{
@@ -87,9 +95,6 @@ function MatchCard({ match }) {
           }}>
             {statusLabel}
           </span>
-          {isPre && startTime && (
-            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{startDay} {startTime}</span>
-          )}
         </div>
       </div>
 
@@ -125,22 +130,35 @@ function MatchCard({ match }) {
               {side.name}
               {side.won && <span style={{ marginLeft: '5px', fontSize: '0.65rem', color: '#4ade80' }}>✓</span>}
             </div>
-            {/* Set scores */}
+            {/* Score area — set-by-set, total sets, or empty for upcoming */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1px', flexShrink: 0 }}>
-              {side.sets.length > 0
+              {hasLinescores
                 ? side.sets.map((set, si) => {
                     const opp = side.opponentSets[si];
                     const wonSet = parseInt(set.displayValue || 0) > parseInt(opp?.displayValue || 0);
                     return <SetCell key={si} score={set.displayValue} won={wonSet} />;
                   })
-                : (isFinal || isLive) && side.setsWon !== null
-                  ? <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.92rem', color: side.won ? '#4ade80' : 'var(--text-muted)' }}>
+                : hasSetsWon && side.setsWon !== null
+                  ? <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.92rem', color: side.won ? '#4ade80' : 'var(--text-muted)', minWidth: '20px', textAlign: 'center' }}>
                       {side.setsWon}
                     </span>
                   : null}
             </div>
           </div>
         ))}
+
+        {/* Upcoming: show start time like Flashscore instead of blank scores */}
+        {isPre && (startDay || startTime) && (
+          <div style={{ marginTop: '8px', textAlign: 'center' }}>
+            <span style={{
+              fontSize: '0.75rem', color: '#60a5fa', fontWeight: 700,
+              background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)',
+              borderRadius: '20px', padding: '3px 12px', display: 'inline-block',
+            }}>
+              {startDay}{startTime ? ` · ${startTime}` : ''}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Expandable details (venue, surface) ── */}
