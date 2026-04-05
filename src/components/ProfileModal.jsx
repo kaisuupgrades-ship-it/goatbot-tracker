@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { TIMEZONES, saveLocalPrefs } from '@/lib/userPrefs';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -86,6 +87,10 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
   const [username, setUsername] = useState(currentUsername);
   const [email,    setEmail]    = useState(currentEmail);
   const [phone,    setPhone]    = useState(currentPhone);
+
+  // Preferences
+  const [timezone,    setTimezone]    = useState(meta.timezone    || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York');
+  const [oddsFormat,  setOddsFormat]  = useState(meta.odds_format || 'american');
 
   // Avatar state
   const [avatarPreview,    setAvatarPreview]    = useState(currentAvatar ? avatarUrl(userId) : null);
@@ -183,6 +188,10 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
         updates.avatar_url = newAvatarUrl;
       }
 
+      // Preferences — always save (no rate limit)
+      if (timezone   !== (meta.timezone    || '')) updates.timezone    = timezone;
+      if (oddsFormat !== (meta.odds_format || 'american')) updates.odds_format = oddsFormat;
+
       if (Object.keys(updates).length === 0) {
         setSuccess('No changes to save.');
         setSaving(false);
@@ -197,6 +206,9 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Update failed');
+
+      // Also persist prefs locally so they're immediately available
+      saveLocalPrefs({ timezone, odds_format: oddsFormat });
 
       setSuccess('Profile updated! Some changes (like email) may require confirmation.');
       setAvatarFile(null);
@@ -438,6 +450,51 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                 />
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                   Can change every 7 days
+                </div>
+              </FieldRow>
+            </>
+          )}
+
+          {/* ── Preferences section (always visible) ─────────────────── */}
+          {activeTab === 'profile' && (
+            <>
+              <SectionLabel>Preferences</SectionLabel>
+              <FieldRow label="Timezone" hint="Game times will display in your local time.">
+                <select
+                  value={timezone}
+                  onChange={e => setTimezone(e.target.value)}
+                  style={{
+                    width: '100%', padding: '9px 11px', borderRadius: '8px', fontSize: '0.85rem',
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                    color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer',
+                  }}
+                >
+                  {TIMEZONES.map(tz => (
+                    <option key={tz.value} value={tz.value}>{tz.label}</option>
+                  ))}
+                </select>
+              </FieldRow>
+              <FieldRow label="Odds Format" hint="How odds are displayed throughout BetOS.">
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {[
+                    { value: 'american', label: 'American  (+150 / -110)' },
+                    { value: 'decimal',  label: 'Decimal  (2.50 / 1.91)' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setOddsFormat(opt.value)}
+                      style={{
+                        flex: 1, padding: '9px 10px', borderRadius: '8px', fontSize: '0.8rem',
+                        fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.15s',
+                        background: oddsFormat === opt.value ? 'var(--gold)' : 'var(--bg-elevated)',
+                        color: oddsFormat === opt.value ? '#000' : 'var(--text-secondary)',
+                        border: `1px solid ${oddsFormat === opt.value ? 'var(--gold)' : 'var(--border)'}`,
+                        fontWeight: oddsFormat === opt.value ? 700 : 400,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               </FieldRow>
             </>

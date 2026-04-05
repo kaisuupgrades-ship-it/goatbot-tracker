@@ -242,6 +242,16 @@ export async function GET(req) {
       return NextResponse.json({ activity });
     }
 
+    if (action === 'sessions') {
+      // Return recent session logs with device info and time spent
+      const { data: sessions } = await supabaseAdmin
+        .from('user_sessions')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(500);
+      return NextResponse.json({ sessions: sessions || [] });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (err) {
     console.error('Admin API error:', err.message);
@@ -252,6 +262,31 @@ export async function GET(req) {
 export async function POST(req) {
   const body = await req.json();
   const { action, userEmail, targetId, value, newEmail, newPassword, newUsername } = body;
+
+  // Session tracking is unauthenticated — any logged-in user can log their own session
+  if (action === 'track_session') {
+    const { userId, sessionId, durationSeconds, deviceInfo } = body;
+    if (!userId || !sessionId) return NextResponse.json({ ok: false });
+    // Get real IP from Vercel headers
+    const ip = req.headers.get('x-real-ip')
+      || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || null;
+    try {
+      await supabaseAdmin.from('user_sessions').upsert([{
+        id: sessionId,
+        user_id: userId,
+        duration_seconds: durationSeconds || 0,
+        ip_address: ip,
+        device_type: deviceInfo?.deviceType || null,
+        browser: deviceInfo?.browser || null,
+        os: deviceInfo?.os || null,
+        screen: deviceInfo?.screen || null,
+        started_at: deviceInfo?.startedAt || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }], { onConflict: 'id' });
+    } catch { /* non-critical */ }
+    return NextResponse.json({ ok: true });
+  }
 
   if (!isAdmin(userEmail)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

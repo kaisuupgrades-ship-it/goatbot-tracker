@@ -30,6 +30,8 @@ export async function PATCH(req) {
       email,    email_changed_at,
       phone,    phone_changed_at,
       avatar_url,
+      timezone,      // e.g. 'America/New_York'
+      odds_format,   // 'american' | 'decimal'
     } = body;
 
     // Build metadata update (merges with existing)
@@ -40,6 +42,8 @@ export async function PATCH(req) {
     if (phone_changed_at)          { metaUpdate.phone_changed_at    = phone_changed_at;    }
     if (avatar_url  !== undefined) { metaUpdate.avatar_url          = avatar_url;  }
     if (email_changed_at)          { metaUpdate.email_changed_at    = email_changed_at;    }
+    if (timezone    !== undefined) { metaUpdate.timezone            = timezone;    }
+    if (odds_format !== undefined) { metaUpdate.odds_format         = odds_format; }
 
     // Email update (goes through Supabase auth separately)
     if (email && email !== user.email) {

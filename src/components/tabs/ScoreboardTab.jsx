@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import BetSlipModal from '@/components/BetSlipModal';
 import VoiceButton from '@/components/VoiceInput';
+import { getUserPrefs, formatGameTime, getTzAbbr } from '@/lib/userPrefs';
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
@@ -43,15 +44,17 @@ export function useStarredGames() {
 
 // ── Sport Config ──────────────────────────────────────────────────────────────
 const SPORTS = [
-  { key: 'all',   label: 'All',    emoji: '🏆', color: '#FFB800' },
-  { key: 'mlb',   label: 'MLB',    emoji: '⚾', color: '#e63946' },
-  { key: 'nfl',   label: 'NFL',    emoji: '🏈', color: '#2a9d8f' },
-  { key: 'nba',   label: 'NBA',    emoji: '🏀', color: '#e76f51' },
-  { key: 'nhl',   label: 'NHL',    emoji: '🏒', color: '#457b9d' },
-  { key: 'ncaaf', label: 'NCAAF',  emoji: '🏈', color: '#8338ec' },
-  { key: 'ncaab', label: 'NCAAB',  emoji: '🏀', color: '#fb8500' },
-  { key: 'mls',   label: 'MLS',    emoji: '⚽', color: '#06d6a0' },
-  { key: 'wnba',  label: 'WNBA',   emoji: '🏀', color: '#ff6b9d' },
+  { key: 'all',    label: 'All',    emoji: '🏆', color: '#FFB800' },
+  { key: 'mlb',    label: 'MLB',    emoji: '⚾', color: '#e63946' },
+  { key: 'nfl',    label: 'NFL',    emoji: '🏈', color: '#2a9d8f' },
+  { key: 'nba',    label: 'NBA',    emoji: '🏀', color: '#e76f51' },
+  { key: 'nhl',    label: 'NHL',    emoji: '🏒', color: '#457b9d' },
+  { key: 'ncaaf',  label: 'NCAAF',  emoji: '🏈', color: '#8338ec' },
+  { key: 'ncaab',  label: 'NCAAB',  emoji: '🏀', color: '#fb8500' },
+  { key: 'mls',    label: 'MLS',    emoji: '⚽', color: '#06d6a0' },
+  { key: 'wnba',   label: 'WNBA',   emoji: '🏀', color: '#ff6b9d' },
+  { key: 'tennis', label: 'Tennis', emoji: '🎾', color: '#84cc16' },
+  { key: 'golf',   label: 'Golf',   emoji: '⛳', color: '#22c55e' },
 ];
 
 // Sports fetched in "All" mode (skip 'all' key itself)
@@ -600,8 +603,12 @@ function getH2H(event) {
   return null;
 }
 
-function formatOdds(n) {
+function formatOdds(n, oddsFormat = 'american') {
   if (n == null) return '—';
+  if (oddsFormat === 'decimal') {
+    const d = n > 0 ? (n / 100 + 1) : (100 / Math.abs(n) + 1);
+    return d.toFixed(2);
+  }
   return n > 0 ? `+${n}` : `${n}`;
 }
 
@@ -701,7 +708,7 @@ function WinProbBar({ homeTeam, awayTeam, homeProb, awayProb, homeOdds, awayOdds
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
-export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null }) {
+export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York' }) {
   const [expanded, setExpanded] = useState(false);
   const isExpanded = suppressHeader ? (externalExpanded ?? false) : expanded;
   const [h2hData,  setH2hData]  = useState(null);   // { record, games } or null
@@ -906,7 +913,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                       minWidth: '40px', textAlign: 'right',
                       letterSpacing: '-0.02em', opacity: gameState.state === 'live' ? 0.75 : 1,
                     }}>
-                      {formatOdds(ml)}
+                      {formatOdds(ml, oddsFormat)}
                     </span>
                   )}
                   {/* Score — show for live/final */}
@@ -1439,7 +1446,13 @@ function NewsCard({ article, sportKey }) {
   const SPORT_ACCENTS = { mlb: '#E31937', nba: '#F58426', nfl: '#5B8CFF', nhl: '#00A3E0', ncaaf: '#8B5CF6', ncaab: '#F97316', mls: '#00B14F', wnba: '#FF6B6B', ufc: '#D20A0A' };
   const accent = SPORT_ACCENTS[sportKey || article._sport] || '#FFB800';
   const teamLabel = article.categories?.find(c => c.type === 'team')?.description || '';
-  const dateStr   = article.published ? new Date(article.published).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+  const pubDate   = article.published ? new Date(article.published) : null;
+  const ageHours  = pubDate ? (Date.now() - pubDate.getTime()) / 3600000 : 999;
+  const dateStr   = pubDate
+    ? ageHours < 1    ? 'Just now'
+    : ageHours < 24   ? `${Math.floor(ageHours)}h ago`
+    : pubDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '';
   return (
     <a href={article.links?.web?.href || '#'} target="_blank" rel="noreferrer"
       style={{ display: 'block', textDecoration: 'none' }}>
@@ -1515,6 +1528,7 @@ function dateLabel(dateStr) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo }) {
   const todayStr = toLocalDateStr(new Date());
+  const userPrefs = useMemo(() => getUserPrefs(user), [user]);
 
   const [betSlipGame, setBetSlipGame] = useState(null); // { event, sport } | null
   const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team → bookmaker game data
@@ -1982,6 +1996,8 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                 injuries={injuries}
                 injuriesChecked={injuriesChecked}
                 isAllMode={isAllMode}
+                oddsFormat={userPrefs.odds_format}
+                timezone={userPrefs.timezone}
               />
             ))}
           </div>
@@ -2030,9 +2046,16 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
-                {news.slice(0, 20).map((article, i) => (
-                  <NewsCard key={i} article={article} sportKey={isAllMode ? undefined : sport} />
-                ))}
+                {news
+                  .filter(a => {
+                    if (!a.published) return true; // keep if no date
+                    const ageHours = (Date.now() - new Date(a.published).getTime()) / 3600000;
+                    return ageHours <= 72; // only show articles from last 72 hours
+                  })
+                  .slice(0, 20)
+                  .map((article, i) => (
+                    <NewsCard key={i} article={article} sportKey={isAllMode ? undefined : sport} />
+                  ))}
               </div>
             )}
           </>

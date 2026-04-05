@@ -15,6 +15,8 @@ const SPORT_PATHS = {
   mls:    'soccer/usa.1',
   wnba:   'basketball/wnba',
   ufc:    'mma/ufc',
+  tennis: 'tennis/atp',   // ATP tour; scoreboard = current tournament draws
+  golf:   'golf/pga',     // PGA Tour
 };
 
 // Simple in-memory cache (resets on server restart)

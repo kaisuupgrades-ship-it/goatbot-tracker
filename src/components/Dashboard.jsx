@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { signOut } from '@/lib/supabase';
+import { startSessionTracking, stopSessionTracking } from '@/lib/sessionTracker';
 import { useRouter } from 'next/navigation';
 import Sidebar       from './Sidebar';
 import TrackerTab    from './tabs/TrackerTab';
@@ -122,12 +123,21 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
   const [goatPrompt, setGoatPrompt] = useState('');
   const [goatReport, setGoatReport] = useState(null);
 
+  // Start session tracking when a real user loads the dashboard
+  useEffect(() => {
+    if (!isDemo && user?.id) {
+      startSessionTracking(user.id);
+      return () => stopSessionTracking();
+    }
+  }, [user?.id, isDemo]);
+
   async function handleSignOut() {
     if (isDemo) {
       if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('betos_demo');
       router.push('/');
       return;
     }
+    stopSessionTracking();
     await signOut();
     router.push('/');
   }

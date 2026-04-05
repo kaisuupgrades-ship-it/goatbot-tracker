@@ -473,6 +473,28 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   const [expandedAnalysis, setExpandedAnalysis] = useState(null); // pickId
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
+  // ── Auto-grade concluded pending picks on mount ─────────────────────────
+  useEffect(() => {
+    if (!user?.id || isDemo) return;
+    const hasPending = picks.some(p => p.result === 'PENDING');
+    if (!hasPending) return;
+    fetch('/api/grade-picks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id }),
+    })
+      .then(r => r.json())
+      .then(({ graded }) => {
+        if (!graded?.length) return;
+        // Update local state with newly graded picks
+        setPicks(prev => prev.map(p => {
+          const g = graded.find(gr => gr.id === p.id);
+          return g ? { ...p, result: g.result } : p;
+        }));
+      })
+      .catch(() => {});
+  }, [user?.id, isDemo]); // eslint-disable-line
+
   // Batch-load analyses for visible picks on mount
   useEffect(() => {
     if (!picks?.length || isDemo) return;
