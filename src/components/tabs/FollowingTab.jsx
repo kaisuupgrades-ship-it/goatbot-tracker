@@ -99,7 +99,7 @@ function FollowedUserCard({ entry, onUnfollow, userId, onViewProfile }) {
   );
 }
 
-export default function FollowingTab({ user, isDemo, onOpenInbox }) {
+export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
   const [following,    setFollowing]    = useState([]);
   const [stats,        setStats]        = useState({});
   const [loading,      setLoading]      = useState(true);
@@ -107,7 +107,11 @@ export default function FollowingTab({ user, isDemo, onOpenInbox }) {
   const userId = user?.id;
 
   useEffect(() => {
+    // Re-fetch every time the tab becomes active so new follows always show
+    if (!isActive) return;
     if (!userId || isDemo) { setLoading(false); return; }
+    setLoading(true);
+    setStats({});
     // 1. Get list of followed users
     fetch(`/api/follow?followerId=${userId}`)
       .then(r => r.json())
@@ -154,7 +158,7 @@ export default function FollowingTab({ user, isDemo, onOpenInbox }) {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [userId, isDemo]);
+  }, [userId, isDemo, isActive]); // eslint-disable-line
 
   const handleUnfollow = async (entry) => {
     await fetch('/api/follow', {

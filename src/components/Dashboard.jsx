@@ -383,7 +383,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             <UserSearchTab user={user} isDemo={isDemo} onOpenInbox={openInbox} />
           </div>
           <div style={{ display: activeTab === 'following' ? 'block' : 'none' }}>
-            <FollowingTab user={user} isDemo={isDemo} onOpenInbox={openInbox} />
+            <FollowingTab user={user} isDemo={isDemo} onOpenInbox={openInbox} isActive={activeTab === 'following'} />
           </div>
           <div style={{ display: activeTab === 'chatroom' ? 'block' : 'none' }}>
             <ChatRoomTab user={user} isDemo={isDemo} onOpenInbox={openInbox} />

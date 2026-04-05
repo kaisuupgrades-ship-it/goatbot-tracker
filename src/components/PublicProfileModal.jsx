@@ -110,10 +110,11 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   };
 
   // Derived data — prefer fetched stats, fall back to entry props
-  const stats         = profileData?.stats;
-  const settledPicks  = profileData?.settled_picks || [];
+  const stats          = profileData?.stats;
+  const settledPicks   = profileData?.settled_picks || [];
+  const pendingPicks   = profileData?.pending_picks  || [];
   const sportBreakdown = profileData?.sport_breakdown || [];
-  const pendingCount  = stats?.pending_count ?? 0;
+  const pendingCount   = pendingPicks.length || stats?.pending_count || 0;
 
   const { rank, avatar_emoji, avatar_url, display_name, username, sharp_score } = entry;
   const displayName   = display_name || username || 'Anonymous';
@@ -332,22 +333,68 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                 </div>
               )}
 
-              {/* Pending picks — blurred */}
+              {/* Pending picks — visible to owner, blurred to others */}
               {!loadingPicks && pendingCount > 0 && (
                 <div style={{ marginBottom: '4px' }}>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>⏳ Active ({pendingCount})</span>
-                    <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px', padding: '1px 6px' }}>
-                      🔒 Hidden until settled
-                    </span>
+                    {!isMe && (
+                      <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px', padding: '1px 6px' }}>
+                        🔒 Hidden until settled
+                      </span>
+                    )}
                   </div>
-                  {[...Array(Math.min(pendingCount, 3))].map((_, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.65rem 0.85rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '4px', filter: 'blur(5px)', userSelect: 'none' }}>
-                      <span style={{ fontSize: '0.68rem', color: '#60a5fa', fontWeight: 700, background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: '4px', padding: '1px 6px', flexShrink: 0 }}>LIVE</span>
-                      <span style={{ flex: 1, fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600 }}>████ @ ████</span>
-                      <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: 'var(--text-muted)' }}>████</span>
-                    </div>
-                  ))}
+                  {pendingPicks.map((p, i) => {
+                    const oddsNum = parseInt(p.odds);
+                    return (
+                      <div
+                        key={p.id || i}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '10px',
+                          padding: '0.6rem 0.85rem',
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid rgba(96,165,250,0.18)',
+                          borderRadius: '8px', borderLeft: '3px solid rgba(96,165,250,0.45)',
+                          marginBottom: '4px',
+                          filter: isMe ? 'none' : 'blur(5px)',
+                          userSelect: isMe ? 'auto' : 'none',
+                          pointerEvents: isMe ? 'auto' : 'none',
+                          transition: 'filter 0.2s',
+                        }}
+                      >
+                        <span style={{
+                          fontSize: '0.62rem', fontWeight: 800, padding: '2px 5px', borderRadius: '4px', flexShrink: 0,
+                          background: 'rgba(96,165,250,0.12)', color: '#60a5fa',
+                          border: '1px solid rgba(96,165,250,0.3)',
+                          minWidth: '28px', textAlign: 'center',
+                        }}>
+                          LIVE
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.63rem', color: 'var(--text-muted)', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0 4px', fontWeight: 700 }}>{p.sport}</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.team} — {p.bet_type || 'Moneyline'}
+                            </span>
+                          </div>
+                          {p.notes && isMe && (
+                            <div style={{ fontSize: '0.63rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                              {p.notes}
+                            </div>
+                          )}
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                            {new Date(p.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.73rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                          {!isNaN(oddsNum) ? (oddsNum > 0 ? `+${oddsNum}` : oddsNum) : '—'}
+                        </span>
+                        <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0, color: '#94a3b8', minWidth: '46px', textAlign: 'right' }}>
+                          {(p.units || 1).toFixed(1)}u
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -406,7 +453,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                   })}
                   {settledPicks.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                      {contestOnly ? 'No settled contest picks yet.' : 'No settled public picks yet.'}
+                      {contestOnly ? 'No settled contest picks yet.' : pendingCount > 0 ? 'No settled picks yet — picks in progress above.' : 'No picks posted yet.'}
                     </div>
                   )}
                 </>
@@ -561,7 +608,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
         <div style={{ padding: '0.65rem 1.5rem', borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
           <span style={{ fontSize: '0.7rem' }}>🔒</span>
           <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-            {contestOnly ? 'Showing contest picks only.' : 'Pending picks hidden until settled.'} Only public picks are shown.
+            {contestOnly ? 'Showing contest picks only.' : isMe ? 'Your pending picks are visible only to you.' : 'Pending picks are blurred until settled.'} Only public picks are shown.
           </span>
           {/* For own profile: quick inbox link */}
           {isMe && onOpenInbox && (

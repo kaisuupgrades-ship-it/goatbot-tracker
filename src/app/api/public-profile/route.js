@@ -55,6 +55,18 @@ export async function GET(req) {
   const settled = allPicks.filter(p => ['WIN', 'LOSS', 'PUSH'].includes(p.result));
   const pending = allPicks.filter(p => !p.result || p.result === 'PENDING');
 
+  // Pending picks — return minimal info (blurred in UI for non-owners)
+  const pendingPicks = pending.map(p => ({
+    id:         p.id,
+    team:       p.team,
+    sport:      p.sport,
+    bet_type:   p.bet_type || 'Moneyline',
+    odds:       p.odds,
+    units:      p.units || 1,
+    notes:      p.notes || '',
+    created_at: p.created_at,
+  }));
+
   // Compute profit per pick + aggregate stats
   let totalUnits = 0, wagered = 0;
   const settledWithProfit = settled.map(p => {
@@ -128,7 +140,8 @@ export async function GET(req) {
       follower_count:  followCountRes.count  || 0,
       following_count: followingCountRes.count || 0,
     },
-    settled_picks: settledWithProfit,
+    settled_picks:  settledWithProfit,
+    pending_picks:  pendingPicks,
     sport_breakdown,
     cachedAt: new Date().toISOString(),
   });
