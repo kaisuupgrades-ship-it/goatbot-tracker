@@ -10,11 +10,19 @@
     },
     {
       "path": "/api/cron/grade-picks",
-      "schedule": "*/30 17-23 * * *"
+      "schedule": "*/5 17-23 * * *"
     },
     {
       "path": "/api/cron/grade-picks",
-      "schedule": "*/30 0-4 * * *"
+      "schedule": "*/5 0-4 * * *"
+    },
+    {
+      "path": "/api/cron/pregenerate-analysis",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/pregenerate-analysis",
+      "schedule": "0 20 * * *"
     }
   ],
   "redirects": [

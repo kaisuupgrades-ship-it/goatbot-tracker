@@ -3,6 +3,7 @@ import { useMemo, useEffect, useState, useRef } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import { getUserPrefs } from '@/lib/userPrefs';
 
 // Count-up animation hook
 function useCountUp(target, duration = 800) {
@@ -105,8 +106,17 @@ function getDaysInMonth(year, month) {
 function getFirstDayOfMonth(year, month) {
   return new Date(year, month, 1).getDay(); // 0=Sun
 }
-function isoDate(d) {
-  return d.toISOString().split('T')[0];
+function isoDate(d, timezone) {
+  // Use the user's profile timezone if provided, otherwise fall back to local browser time.
+  // NEVER use toISOString() here — it gives UTC and causes off-by-one at night.
+  if (timezone) {
+    // 'sv' locale returns YYYY-MM-DD format natively
+    return d.toLocaleDateString('sv', { timeZone: timezone });
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 // Group picks by date string
@@ -128,22 +138,24 @@ function sportEmoji(sport) {
   return SPORT_EMOJI[(sport || '').toUpperCase()] || '🎯';
 }
 
-// Build date range from preset key
-function presetRange(key, picks) {
+// Build date range from preset key — uses user's timezone so "today" is correct
+function presetRange(key, picks, timezone) {
   const today = new Date();
-  const todayStr = isoDate(today);
+  const todayStr = isoDate(today, timezone);
   if (key === 'all') return { start: null, end: null };
   if (key === 'month') {
-    const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-    return { start, end: todayStr };
+    const d = new Date(today);
+    const y = timezone ? parseInt(d.toLocaleDateString('sv', { timeZone: timezone }).slice(0, 4)) : d.getFullYear();
+    const mo = timezone ? parseInt(d.toLocaleDateString('sv', { timeZone: timezone }).slice(5, 7)) : d.getMonth() + 1;
+    return { start: `${y}-${String(mo).padStart(2, '0')}-01`, end: todayStr };
   }
   if (key === '30d') {
     const d = new Date(today); d.setDate(d.getDate() - 30);
-    return { start: isoDate(d), end: todayStr };
+    return { start: isoDate(d, timezone), end: todayStr };
   }
   if (key === '90d') {
     const d = new Date(today); d.setDate(d.getDate() - 90);
-    return { start: isoDate(d), end: todayStr };
+    return { start: isoDate(d, timezone), end: todayStr };
   }
   return { start: null, end: null };
 }
@@ -154,10 +166,14 @@ function presetRange(key, picks) {
 const WEEKDAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-function PickCalendar({ picks, dateRange, onRangeChange }) {
+function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
   const today = new Date();
-  const [viewYear, setViewYear]   = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  // Use profile timezone for "today" — prevents UTC rollover showing tomorrow at night
+  const todayLocal = timezone ? today.toLocaleDateString('sv', { timeZone: timezone }) : isoDate(today);
+  const todayYear  = parseInt(todayLocal.slice(0, 4));
+  const todayMonth = parseInt(todayLocal.slice(5, 7)) - 1; // 0-indexed
+  const [viewYear, setViewYear]   = useState(todayYear);
+  const [viewMonth, setViewMonth] = useState(todayMonth);
   const [selected, setSelected]   = useState(null);
 
   useEffect(() => {
@@ -198,7 +214,7 @@ function PickCalendar({ picks, dateRange, onRangeChange }) {
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMo; d++) cells.push(d);
-  const todayStr = isoDate(today);
+  const todayStr = todayLocal; // already computed in profile timezone
 
   // Compute color for a tile based on P/L
   function tileStyle(dayPL, hasSettled, hasPending, isSelected, isToday) {
@@ -251,7 +267,7 @@ function PickCalendar({ picks, dateRange, onRangeChange }) {
         </div>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
           <button onClick={prevMonth} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1 }}>‹</button>
-          <button onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); setSelected(null); }}
+          <button onClick={() => { setViewYear(todayYear); setViewMonth(todayMonth); setSelected(null); }}
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600 }}>Today</button>
           <button onClick={nextMonth} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1 }}>›</button>
         </div>
@@ -764,7 +780,8 @@ function DateRangeSelector({ range, onChange }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function TrackerTab({ picks }) {
+export default function TrackerTab({ picks, user }) {
+  const { timezone } = getUserPrefs(user);
   const [dateRange, setDateRange] = useState({ start: null, end: null });
 
   // Filter picks by date range
@@ -797,7 +814,7 @@ export default function TrackerTab({ picks }) {
 
         {/* Calendar — ~57%, stacks to full width on mobile */}
         <div style={{ flex: '3 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <PickCalendar picks={filteredPicks} dateRange={dateRange} onRangeChange={setDateRange} />
+          <PickCalendar picks={filteredPicks} dateRange={dateRange} onRangeChange={setDateRange} timezone={timezone} />
         </div>
 
         {/* Equity Curve — ~43%, stacks to full width on mobile */}

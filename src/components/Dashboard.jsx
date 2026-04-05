@@ -122,6 +122,12 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
   // Preserved state for cross-tab navigation
   const [goatPrompt, setGoatPrompt] = useState('');
   const [goatReport, setGoatReport] = useState(null);
+  // Pick → Scoreboard navigation
+  const [scoreboardGame, setScoreboardGame] = useState(null);
+  function onViewGame(pick) {
+    setScoreboardGame(pick);
+    setActiveTab('scoreboard');
+  }
 
   // Start session tracking when a real user loads the dashboard
   useEffect(() => {
@@ -139,7 +145,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
     try {
       // Re-fetch picks
       const { data } = await import('@/lib/supabase').then(m => m.supabase
-        .from('picks').select('*').eq('user_id', user.id).order('game_date', { ascending: false }));
+        .from('picks').select('*').eq('user_id', user.id).order('date', { ascending: false }));
       if (data) setPicks(data);
       // Run grading on updated picks
       await fetch('/api/grade-picks', {
@@ -230,7 +236,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
 
         {/* Tab content — all tabs stay mounted, hidden when inactive to preserve state */}
         <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }} className="fade-up main-content">
-          <div style={{ display: activeTab === 'tracker'    ? 'block' : 'none' }}><TrackerTab    picks={picks} /></div>
+          <div style={{ display: activeTab === 'tracker'    ? 'block' : 'none' }}><TrackerTab    picks={picks} user={user} /></div>
           <div style={{ display: activeTab === 'scoreboard' ? 'block' : 'none' }}>
             <ScoreboardTab
               onAnalyze={(prompt) => { setGoatPrompt(prompt); setActiveTab('analyzer'); }}
@@ -238,6 +244,8 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
               picks={picks}
               setPicks={setPicks}
               isDemo={isDemo}
+              highlightGame={scoreboardGame}
+              onHighlightConsumed={() => setScoreboardGame(null)}
             />
           </div>
           <div style={{ display: activeTab === 'odds'       ? 'block' : 'none' }}>
@@ -245,7 +253,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           </div>
           <div style={{ display: activeTab === 'trends'     ? 'block' : 'none' }}><TrendsTab picks={picks} user={user} onNavigateToTracker={() => setActiveTab('tracker')} /></div>
           <div style={{ display: activeTab === 'history'    ? 'block' : 'none' }}>
-            <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} />
+            <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} />
           </div>
           <div style={{ display: activeTab === 'analyzer'   ? 'block' : 'none' }}>
             <AnalyzerTab

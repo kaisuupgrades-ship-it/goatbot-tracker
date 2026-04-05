@@ -1534,12 +1534,16 @@ function dateLabel(dateStr) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo }) {
+export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo, highlightGame, onHighlightConsumed }) {
   const todayStr = toLocalDateStr(new Date());
   const userPrefs = useMemo(() => getUserPrefs(user), [user]);
 
   const [betSlipGame, setBetSlipGame] = useState(null); // { event, sport } | null
   const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team → bookmaker game data
+
+  // Pick → Scoreboard highlight
+  const [highlightedEventId, setHighlightedEventId] = useState(null);
+  const gameCardRefs = useRef({});
 
   const [sport, setSport]       = useState('mlb');
   const [games, setGames]       = useState([]);
@@ -1738,6 +1742,52 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     }, 1000);
     return () => clearInterval(tick);
   }, [lastUpdated, liveCount, selectedDate, todayStr]);
+
+  // ── Pick → Scoreboard: switch sport/date when a pick is passed in ────────────
+  useEffect(() => {
+    if (!highlightGame) return;
+    const targetSport = (highlightGame.sport || '').toLowerCase();
+    const validKeys = SPORTS.map(s => s.key);
+    if (targetSport && validKeys.includes(targetSport)) {
+      setSport(targetSport);
+    }
+    if (highlightGame.date) {
+      setSelectedDate(highlightGame.date);
+    }
+    setFilter('all'); // show all statuses so the game is visible
+  }, [highlightGame]); // eslint-disable-line
+
+  // ── After games load, find the matching game and scroll/highlight it ─────────
+  useEffect(() => {
+    if (!highlightGame || !games.length) return;
+    function norm(str) { return (str || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+    const pickTeam = norm(highlightGame.team);
+    const pickHome = norm(highlightGame.home_team);
+    const pickAway = norm(highlightGame.away_team);
+
+    let foundId = null;
+    for (const event of games) {
+      const comps = event.competitions?.[0]?.competitors || [];
+      const homeDisp = norm(comps.find(c => c.homeAway === 'home')?.team?.displayName || '');
+      const awayDisp = norm(comps.find(c => c.homeAway === 'away')?.team?.displayName || '');
+      const teamMatch = pickTeam && (homeDisp.includes(pickTeam) || awayDisp.includes(pickTeam) ||
+                        pickTeam.includes(homeDisp.slice(-5)) || pickTeam.includes(awayDisp.slice(-5)));
+      const homeMatch = pickHome && homeDisp.includes(pickHome.slice(-5));
+      const awayMatch = pickAway && awayDisp.includes(pickAway.slice(-5));
+      if (teamMatch || homeMatch || awayMatch) { foundId = event.id; break; }
+    }
+
+    if (foundId) {
+      setHighlightedEventId(foundId);
+      setTimeout(() => {
+        const el = gameCardRefs.current[foundId];
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 350);
+      if (onHighlightConsumed) onHighlightConsumed();
+      // Auto-clear the highlight glow after 5s
+      setTimeout(() => setHighlightedEventId(null), 5000);
+    }
+  }, [games, highlightGame]); // eslint-disable-line
 
   // Auto-scan injury intel when tab is active or sport changes, refresh every 5 min
   useEffect(() => {
@@ -1996,20 +2046,29 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         ) : (
           <div className="game-cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px', alignItems: 'start' }}>
             {sortedFilteredGames.map(event => (
-              <GameCard
+              <div
                 key={`${event._sport || sport}-${event.id}`}
-                event={event}
-                sport={event._sport || sport}
-                onAnalyze={onAnalyze}
-                onAddBet={(ev, sp) => setBetSlipGame({ event: ev, sport: sp })}
-                starred={starred}
-                onStar={toggleStar}
-                injuries={injuries}
-                injuriesChecked={injuriesChecked}
-                isAllMode={isAllMode}
-                oddsFormat={userPrefs.odds_format}
-                timezone={userPrefs.timezone}
-              />
+                ref={el => { if (el) gameCardRefs.current[event.id] = el; }}
+                style={highlightedEventId === event.id ? {
+                  borderRadius: '14px',
+                  boxShadow: '0 0 0 2px #FFB800, 0 0 24px rgba(255,184,0,0.35)',
+                  transition: 'box-shadow 0.4s ease',
+                } : { transition: 'box-shadow 0.4s ease' }}
+              >
+                <GameCard
+                  event={event}
+                  sport={event._sport || sport}
+                  onAnalyze={onAnalyze}
+                  onAddBet={(ev, sp) => setBetSlipGame({ event: ev, sport: sp })}
+                  starred={starred}
+                  onStar={toggleStar}
+                  injuries={injuries}
+                  injuriesChecked={injuriesChecked}
+                  isAllMode={isAllMode}
+                  oddsFormat={userPrefs.odds_format}
+                  timezone={userPrefs.timezone}
+                />
+              </div>
             ))}
           </div>
         )}

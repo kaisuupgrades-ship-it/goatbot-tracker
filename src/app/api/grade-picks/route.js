@@ -141,7 +141,8 @@ export async function POST(req) {
       .lte('date', todayStr)
       .limit(100);
 
-    // Normal mode: only PENDING picks. Force mode: re-check recent picks too (last 7 days).
+    // Normal mode: only ungraded picks (result = 'PENDING' OR result IS NULL).
+    // Force mode: re-check recent picks from the last 7 days.
     if (force) {
       const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
       query = supabase
@@ -152,7 +153,8 @@ export async function POST(req) {
         .lte('date', todayStr)
         .limit(100);
     } else {
-      query = query.eq('result', 'PENDING');
+      // Match both explicit 'PENDING' AND null (new picks inserted without a default)
+      query = query.or('result.eq.PENDING,result.is.null');
     }
 
     const { data: picks, error } = await query;
@@ -160,10 +162,11 @@ export async function POST(req) {
     if (error) throw error;
     if (!picks?.length) return NextResponse.json({ graded: [], count: 0 });
 
-    // Group picks by sport + date to minimize ESPN calls
+    // Group picks by sport + date to minimize ESPN calls.
+    // Normalize sport to lowercase so SPORT_PATHS lookup works regardless of DB casing.
     const groups = {};
     picks.forEach(pick => {
-      const key = `${pick.sport}|${pick.date}`;
+      const key = `${(pick.sport || '').toLowerCase()}|${pick.date}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(pick);
     });

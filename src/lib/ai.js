@@ -19,7 +19,7 @@ const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
 // Model choices
 const XAI_MODEL        = 'grok-3';           // default — reliable, supports web search
 const XAI_MODEL_HEAVY  = 'grok-4';           // for deep daily analysis (cron + admin scan)
-const CLAUDE_MODEL     = 'claude-sonnet-4-5'; // fast, high quality, cost-effective
+const CLAUDE_MODEL     = 'claude-opus-4-6';  // best reasoning — used as fallback when xAI is unavailable
 
 /**
  * Call xAI grok-3 chat completions (with optional web search)

@@ -454,7 +454,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
   );
 }
 
-export default function HistoryTab({ picks, setPicks, user, contest, setContest, isDemo }) {
+export default function HistoryTab({ picks, setPicks, user, contest, setContest, isDemo, onViewGame }) {
   const [addMode, setAddMode]   = useState(null); // null | 'choose' | 'import' | 'manual'
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -937,7 +937,17 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                       </span>
                     </td>
                     <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: '#f0f0f0', whiteSpace: 'nowrap' }}>{pick.team}</td>
-                    <td style={{ padding: '0.7rem 1rem', color: '#888', fontSize: '0.8rem' }}>{pick.matchup || '—'}</td>
+                    <td style={{ padding: '0.7rem 1rem', fontSize: '0.8rem' }}>
+                      <div style={{ color: '#888' }}>{pick.matchup || '—'}</div>
+                      {/* Show final score once graded */}
+                      {pick.graded_home_score != null && pick.graded_away_score != null && (
+                        <div style={{ marginTop: '2px', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.75rem',
+                          color: pick.result === 'WIN' ? '#4ade80' : pick.result === 'LOSS' ? '#f87171' : '#888' }}>
+                          {pick.graded_away_score} – {pick.graded_home_score}
+                          <span style={{ color: '#555', fontWeight: 400, marginLeft: '4px' }}>FINAL</span>
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '0.7rem 1rem', color: '#888', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{pick.bet_type}</td>
                     <td style={{ padding: '0.7rem 1rem', fontFamily: 'monospace', fontWeight: 700, color: pick.odds > 0 ? '#4ade80' : '#f0f0f0', whiteSpace: 'nowrap' }}>
                       {pick.odds > 0 ? '+' : ''}{pick.odds}
@@ -994,6 +1004,14 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                     </td>
                     <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', gap: '4px' }}>
+                        {/* View on Scoreboard */}
+                        {onViewGame && (
+                          <button
+                            onClick={() => onViewGame(pick)}
+                            style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid rgba(96,165,250,0.3)', background: 'transparent', color: '#60a5fa', cursor: 'pointer', fontSize: '0.75rem' }}
+                            title="View game on Scoreboard"
+                          >📺</button>
+                        )}
                         <button
                           onClick={async () => {
                             if (expandedAnalysis === pick.id) { setExpandedAnalysis(null); return; }

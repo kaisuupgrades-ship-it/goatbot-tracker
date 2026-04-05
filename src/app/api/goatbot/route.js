@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 300;
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 const XAI_API_KEY = process.env.XAI_API_KEY;
 const XAI_BASE    = 'https://api.x.ai/v1';
@@ -92,14 +98,28 @@ Formatting:
 - No markdown asterisks, no bold, numbered lists only
 - Be decisive — pick a side and defend it with what you actually found`;
 
+const FRESHNESS_SYSTEM = `You are a sports news checker. You will be given a pre-generated BetOS analysis and must quickly check if anything significant has changed since it was written that would materially affect the pick.
+
+Search ONLY for:
+1. New injuries or lineup changes announced after the analysis was written
+2. Significant line movement (more than 1 point on spread, more than 10 cents on ML)
+3. Weather changes for outdoor games
+4. Starting pitcher/goalie changes
+
+If you find material changes, output:
+⚠️ UPDATE: [2-3 sentences describing what changed and how it affects the pick]
+
+If nothing material has changed, output exactly:
+✓ No material changes found since this analysis was generated.
+
+Keep it short. Do not rewrite the full analysis.`;
+
 function parseResponsesOutput(resp) {
-  // New /v1/responses format
   if (resp.output) {
     const texts = resp.output
       .filter(item => item.type === 'message')
       .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
     if (texts.length) return texts.join('\n\n');
-    // Fallback: any text content
     const anyText = resp.output.flatMap(item => {
       if (item.content) return item.content.filter(c => c.text).map(c => c.text);
       if (item.text) return [item.text];
@@ -111,10 +131,6 @@ function parseResponsesOutput(resp) {
   return JSON.stringify(resp).substring(0, 500);
 }
 
-/**
- * Helper: fetch with a timeout via AbortController.
- * Returns { response, timedOut } — on timeout, response is null.
- */
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -129,98 +145,314 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   }
 }
 
-export async function POST(req) {
-  if (!XAI_API_KEY) {
-    return NextResponse.json({ error: 'XAI_API_KEY not configured on server. Add it to .env.local' }, { status: 500 });
-  }
-
+/**
+ * Try to find a pre-generated analysis in game_analyses table.
+ * Matches by looking for team names from the cache appearing in the user's prompt.
+ * Returns the matching row or null.
+ */
+async function findCachedAnalysis(prompt, gameDate) {
   try {
-    const { prompt } = await req.json();
-    if (!prompt?.trim()) {
-      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
+    const dateStr = gameDate || new Date().toISOString().split('T')[0];
+
+    // Fetch all of today's cached analyses
+    const { data: rows } = await supabase
+      .from('game_analyses')
+      .select('*')
+      .eq('game_date', dateStr)
+      .order('updated_at', { ascending: false });
+
+    if (!rows?.length) return null;
+
+    const promptLower = prompt.toLowerCase().replace(/[^a-z0-9 ]/g, ' ');
+
+    for (const row of rows) {
+      // Extract the last word of each team name (e.g. "Bruins" from "Boston Bruins")
+      const homeWords = row.home_team.toLowerCase().split(' ');
+      const awayWords = row.away_team.toLowerCase().split(' ');
+      const homeLast  = homeWords[homeWords.length - 1];
+      const awayLast  = awayWords[awayWords.length - 1];
+
+      // Also try the full team name (normalized)
+      const homeNorm = row.home_team.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+      const awayNorm = row.away_team.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+
+      const homeMatch = promptLower.includes(homeLast) || promptLower.includes(homeNorm);
+      const awayMatch = promptLower.includes(awayLast) || promptLower.includes(awayNorm);
+
+      if (homeMatch && awayMatch) return row;
     }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${XAI_API_KEY}`,
-    };
+/**
+ * Run a quick freshness check on a cached analysis.
+ * Uses Grok-3 (fast) to search for any material changes since generated_at.
+ * Returns a short delta string, or null on failure.
+ */
+async function runFreshnessCheck(cached) {
+  const ageMin = Math.round((Date.now() - new Date(cached.updated_at).getTime()) / 60000);
+  const prompt = `This BetOS analysis was generated ${ageMin} minutes ago for ${cached.away_team} @ ${cached.home_team} (${cached.sport.toUpperCase()}) on ${cached.game_date}.
 
-    // ── Tier 1: grok-4 + web search (90s budget) ─────────────────────────
-    // grok-4 /responses with web search is the best quality.
-    // Vercel Pro gives us 300s — let it do thorough research.
-    try {
-      const { response, timedOut } = await fetchWithTimeout(
-        `${XAI_BASE}/responses`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model: 'grok-4',
-            instructions: SYSTEM_PROMPT,
-            input: [{ role: 'user', content: prompt }],
-            tools: [{ type: 'web_search' }],
-            max_output_tokens: 3000,
-          }),
-        },
-        90_000,
-      );
-      if (!timedOut && response?.ok) {
-        const data = await response.json();
-        const result = parseResponsesOutput(data);
-        return NextResponse.json({ result, model: 'grok-4' });
-      }
-      if (timedOut) console.log('[goatbot] grok-4 timed out after 90s, falling back to grok-3');
-      else console.log('[goatbot] grok-4 returned', response?.status, '— falling back to grok-3');
-    } catch (err) {
-      console.log('[goatbot] grok-4 error:', err.message, '— falling back');
-    }
+Pre-generated analysis:
+${cached.analysis.substring(0, 800)}...
 
-    // ── Tier 2: grok-3 /chat/completions (60s budget) ────────────────────
-    // Fast and reliable fallback.
+Check quickly: has anything material changed in the last ${ageMin} minutes? (injuries, line movement, lineup news, weather)`;
+
+  const xaiKey = process.env.XAI_API_KEY;
+  const claudeKey = process.env.ANTHROPIC_API_KEY;
+
+  // Try Grok-3 first (fast + web search)
+  if (xaiKey) {
     try {
       const { response, timedOut } = await fetchWithTimeout(
         `${XAI_BASE}/chat/completions`,
         {
           method: 'POST',
-          headers,
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
           body: JSON.stringify({
             model: 'grok-3',
             messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'system', content: FRESHNESS_SYSTEM },
               { role: 'user', content: prompt },
             ],
-            temperature: 0.7,
-            max_tokens: 3000,
+            search_parameters: { mode: 'on' },
+            temperature: 0.3,
+            max_tokens: 300,
           }),
         },
-        60_000,
+        20_000,
       );
       if (!timedOut && response?.ok) {
         const data = await response.json();
-        return NextResponse.json({ result: data.choices[0].message.content, model: 'grok-3' });
+        return data.choices?.[0]?.message?.content?.trim() || null;
       }
-      if (timedOut) console.log('[goatbot] grok-3 timed out after 60s, falling back to Claude');
-      else console.log('[goatbot] grok-3 returned', response?.status, '— falling back to Claude');
-    } catch (err) {
-      console.log('[goatbot] grok-3 error:', err.message, '— falling back');
+    } catch { /* fall through */ }
+  }
+
+  // Fallback: Claude web search
+  if (claudeKey) {
+    try {
+      const { response, timedOut } = await fetchWithTimeout(
+        'https://api.anthropic.com/v1/messages',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-opus-4-6',
+            system: FRESHNESS_SYSTEM,
+            tools: [{ type: 'web_search_20260209' }],
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 400,
+            temperature: 1,
+          }),
+        },
+        20_000,
+      );
+      if (!timedOut && response?.ok) {
+        const data = await response.json();
+        const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+        return text || null;
+      }
+    } catch { /* fall through */ }
+  }
+
+  return null;
+}
+
+/**
+ * Store a freshly-generated analysis in the cache for future users.
+ */
+async function cacheAnalysis(sport, homeTeam, awayTeam, gameDate, analysis, model) {
+  try {
+    if (!sport || !homeTeam || !awayTeam) return;
+    await supabase.from('game_analyses').upsert(
+      [{
+        sport:       sport.toLowerCase(),
+        game_date:   gameDate,
+        home_team:   homeTeam,
+        away_team:   awayTeam,
+        analysis,
+        model,
+        generated_at: new Date().toISOString(),
+        updated_at:   new Date().toISOString(),
+      }],
+      { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
+    );
+  } catch { /* caching is best-effort */ }
+}
+
+export async function POST(req) {
+  const claudeKey = process.env.ANTHROPIC_API_KEY;
+  const xaiHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${XAI_API_KEY}`,
+  };
+  const claudeHeaders = {
+    'Content-Type': 'application/json',
+    'x-api-key': claudeKey,
+    'anthropic-version': '2023-06-01',
+  };
+
+  try {
+    const body = await req.json();
+    const { prompt, gameDate, sport, homeTeam, awayTeam } = body;
+    if (!prompt?.trim()) {
+      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    // ── Tier 3: Claude (45s budget) ──────────────────────────────────────
-    const claudeKey = process.env.ANTHROPIC_API_KEY;
+    const targetDate = gameDate || new Date().toISOString().split('T')[0];
+
+    // ── Cache lookup: check for a pre-generated analysis ─────────────────────
+    // Max age: 4 hours. After that, we re-run a full analysis and refresh the cache.
+    const CACHE_MAX_AGE_MS = 4 * 60 * 60 * 1000;
+    const cached = await findCachedAnalysis(prompt, targetDate);
+
+    if (cached) {
+      const ageMs = Date.now() - new Date(cached.updated_at).getTime();
+
+      if (ageMs < CACHE_MAX_AGE_MS) {
+        // ── Cache HIT (fresh) — return instantly + quick news delta ──────────
+        console.log(`[goatbot] Cache HIT for ${cached.away_team}@${cached.home_team}, age=${Math.round(ageMs/60000)}min`);
+
+        // Run freshness check in parallel — quick search for any changes
+        const delta = await runFreshnessCheck(cached);
+
+        const ageLabel = ageMs < 60000
+          ? 'just now'
+          : `${Math.round(ageMs / 60000)} min ago`;
+
+        let result = cached.analysis;
+        if (delta && !delta.includes('No material changes')) {
+          result += `\n\n---\n${delta}`;
+        }
+        result += `\n\n[Analysis pre-generated ${ageLabel} · ${cached.model || 'AI'} · Freshness checked now]`;
+
+        return NextResponse.json({ result, model: `${cached.model} (cached)`, cached: true });
+      }
+
+      // Cache is stale — fall through to fresh generation, but we'll update it
+      console.log(`[goatbot] Cache STALE for ${cached.away_team}@${cached.home_team} (${Math.round(ageMs/3600000)}h old)`);
+    } else {
+      console.log(`[goatbot] Cache MISS for prompt starting: "${prompt.substring(0, 60)}..."`);
+    }
+
+    // ── No cache (or stale) — run full AI analysis ────────────────────────────
+
+    // ── Tier 1: Claude Opus 4.6 + live web search (90s) ──────────────────────
     if (claudeKey) {
       try {
         const { response, timedOut } = await fetchWithTimeout(
           'https://api.anthropic.com/v1/messages',
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': claudeKey,
-              'anthropic-version': '2023-06-01',
-            },
+            headers: claudeHeaders,
             body: JSON.stringify({
-              model: 'claude-sonnet-4-5',
-              system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is currently unavailable. Base your analysis on the provided odds data and your training knowledge. Flag anything that should be verified live.]',
+              model: 'claude-opus-4-6',
+              system: SYSTEM_PROMPT,
+              tools: [{ type: 'web_search_20260209' }],
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: 4000,
+              temperature: 1,
+            }),
+          },
+          90_000,
+        );
+        if (!timedOut && response?.ok) {
+          const data = await response.json();
+          const textBlocks = (data.content || [])
+            .filter(block => block.type === 'text')
+            .map(block => block.text)
+            .join('\n\n')
+            .trim();
+          if (textBlocks) {
+            // Store in cache for the next user
+            cacheAnalysis(sport, homeTeam, awayTeam, targetDate, textBlocks, 'claude-opus-4-6');
+            return NextResponse.json({ result: textBlocks, model: 'claude-opus-4-6' });
+          }
+        }
+        if (timedOut) console.log('[goatbot] Claude Opus + search timed out after 90s');
+        else console.log('[goatbot] Claude Opus returned', response?.status);
+      } catch (err) {
+        console.log('[goatbot] Claude Opus error:', err.message);
+      }
+    }
+
+    // ── Tier 2: grok-4 + web search (90s) ────────────────────────────────────
+    if (XAI_API_KEY) {
+      try {
+        const { response, timedOut } = await fetchWithTimeout(
+          `${XAI_BASE}/responses`,
+          {
+            method: 'POST',
+            headers: xaiHeaders,
+            body: JSON.stringify({
+              model: 'grok-4',
+              instructions: SYSTEM_PROMPT,
+              input: [{ role: 'user', content: prompt }],
+              tools: [{ type: 'web_search' }],
+              max_output_tokens: 3000,
+            }),
+          },
+          90_000,
+        );
+        if (!timedOut && response?.ok) {
+          const data = await response.json();
+          const result = parseResponsesOutput(data);
+          cacheAnalysis(sport, homeTeam, awayTeam, targetDate, result, 'grok-4');
+          return NextResponse.json({ result, model: 'grok-4' });
+        }
+        if (timedOut) console.log('[goatbot] grok-4 timed out after 90s');
+        else console.log('[goatbot] grok-4 returned', response?.status);
+      } catch (err) {
+        console.log('[goatbot] grok-4 error:', err.message);
+      }
+
+      // ── Tier 3: grok-3 (60s) ─────────────────────────────────────────────
+      try {
+        const { response, timedOut } = await fetchWithTimeout(
+          `${XAI_BASE}/chat/completions`,
+          {
+            method: 'POST',
+            headers: xaiHeaders,
+            body: JSON.stringify({
+              model: 'grok-3',
+              messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: prompt },
+              ],
+              temperature: 0.7,
+              max_tokens: 3000,
+            }),
+          },
+          60_000,
+        );
+        if (!timedOut && response?.ok) {
+          const data = await response.json();
+          const result = data.choices[0].message.content;
+          cacheAnalysis(sport, homeTeam, awayTeam, targetDate, result, 'grok-3');
+          return NextResponse.json({ result, model: 'grok-3' });
+        }
+        if (timedOut) console.log('[goatbot] grok-3 timed out after 60s');
+        else console.log('[goatbot] grok-3 returned', response?.status);
+      } catch (err) {
+        console.log('[goatbot] grok-3 error:', err.message);
+      }
+    }
+
+    // ── Tier 4: Claude Opus 4.6 no search (last resort, 45s) ─────────────────
+    if (claudeKey) {
+      try {
+        const { response, timedOut } = await fetchWithTimeout(
+          'https://api.anthropic.com/v1/messages',
+          {
+            method: 'POST',
+            headers: claudeHeaders,
+            body: JSON.stringify({
+              model: 'claude-opus-4-6',
+              system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is unavailable for this request. Base analysis on the provided odds data and training knowledge. Flag any facts that should be verified live.]',
               messages: [{ role: 'user', content: prompt }],
               max_tokens: 3000,
               temperature: 0.7,
@@ -230,7 +462,8 @@ export async function POST(req) {
         );
         if (!timedOut && response?.ok) {
           const data = await response.json();
-          return NextResponse.json({ result: data.content?.[0]?.text || '', model: 'claude-sonnet-4-5 (no live search)' });
+          const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
+          if (text) return NextResponse.json({ result: text, model: 'claude-opus-4-6 (no search)' });
         }
       } catch { /* fall through */ }
     }

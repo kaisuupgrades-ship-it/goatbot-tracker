@@ -154,10 +154,11 @@ export async function GET(req) {
     return NextResponse.json({ graded: 0, users: 0, skipped: 0, duration_ms: Date.now() - started });
   }
 
-  // Group by sport + date to batch ESPN calls
+  // Group by sport + date to batch ESPN calls.
+  // Normalize sport to lowercase so SPORT_PATHS lookup works regardless of DB casing.
   const groups = {};
   picks.forEach(pick => {
-    const key = `${pick.sport}|${pick.date}`;
+    const key = `${(pick.sport || '').toLowerCase()}|${pick.date}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(pick);
   });
