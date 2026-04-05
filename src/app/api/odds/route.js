@@ -107,6 +107,167 @@ const LEGACY_MARKET_MAP = {
 };
 
 
+// ── Pinnacle (free, no key — sharpest book in the world) ─────────────────────
+// Guest API: https://guest.api.arcadia.pinnacle.com/0.1
+// No auth required. Used as a reality-check against The Odds API lines.
+// Any game where a US book's ML is >15 pts off Pinnacle gets flagged suspectOdds=true.
+
+const PINNACLE_BASE = 'https://guest.api.arcadia.pinnacle.com/0.1';
+
+const PINNACLE_LEAGUE_IDS = {
+  nba:   487,
+  nfl:   889,
+  mlb:   246,
+  nhl:   1456,
+  ncaab: 493,
+  ncaaf: 880,
+  mls:   2764,
+  ufc:   906,
+};
+
+const PIN_HEADERS = {
+  'Accept':          'application/json',
+  'User-Agent':      'Mozilla/5.0 BetOS/1.0',
+};
+
+function normTeam(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/\b(the|a|an|fc|sc|city|united|sporting)\b/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function teamsMatch(a, b) {
+  const na = normTeam(a), nb = normTeam(b);
+  if (na === nb) return true;
+  const wordsA = na.split(' '), wordsB = nb.split(' ');
+  // Last word is usually the mascot — strongest signal
+  const lastA = wordsA[wordsA.length - 1], lastB = wordsB[wordsB.length - 1];
+  if (lastA && lastA === lastB && lastA.length > 3) return true;
+  // Also check if one name contains the other's last word (e.g. "LA Lakers" vs "Los Angeles Lakers")
+  return (na.includes(lastB) && lastB.length > 4) || (nb.includes(lastA) && lastA.length > 4);
+}
+
+async function fetchPinnacleLines(sportKey) {
+  const leagueId = PINNACLE_LEAGUE_IDS[sportKey];
+  if (!leagueId) return null;
+
+  try {
+    const [matchupsRes, marketsRes] = await Promise.all([
+      fetch(`${PINNACLE_BASE}/leagues/${leagueId}/matchups`, {
+        headers: PIN_HEADERS, signal: AbortSignal.timeout(6000),
+      }),
+      fetch(`${PINNACLE_BASE}/leagues/${leagueId}/markets/straight`, {
+        headers: PIN_HEADERS, signal: AbortSignal.timeout(6000),
+      }),
+    ]);
+
+    if (!matchupsRes.ok || !marketsRes.ok) return null;
+
+    const matchups = await matchupsRes.json();
+    const markets  = await marketsRes.json();
+    if (!Array.isArray(matchups) || !Array.isArray(markets)) return null;
+
+    // Build matchupId → teams
+    const matchupMap = {};
+    for (const m of matchups) {
+      if (m.special) continue;
+      const home = m.participants?.find(p => p.alignment === 'home')?.name;
+      const away = m.participants?.find(p => p.alignment === 'away')?.name;
+      if (home && away) matchupMap[m.id] = { home, away };
+    }
+
+    // Build matchupId → odds
+    const oddsMap = {};
+    for (const mkt of markets) {
+      const mid = mkt.matchupId;
+      if (!matchupMap[mid]) continue;
+      if (!oddsMap[mid]) oddsMap[mid] = {};
+
+      const prices = mkt.prices || [];
+      if (mkt.type === 'moneyline') {
+        const h = prices.find(p => p.designation === 'home');
+        const a = prices.find(p => p.designation === 'away');
+        if (h && a) oddsMap[mid].ml = { home: h.price, away: a.price };
+      } else if (mkt.type === 'spread') {
+        const h = prices.find(p => p.designation === 'home');
+        const a = prices.find(p => p.designation === 'away');
+        if (h && a) oddsMap[mid].spread = { homePoint: h.points, homePrice: h.price, awayPoint: a.points, awayPrice: a.price };
+      } else if (mkt.type === 'total') {
+        const ov = prices.find(p => p.designation === 'over');
+        const un = prices.find(p => p.designation === 'under');
+        if (ov && un) oddsMap[mid].total = { point: ov.points, overPrice: ov.price, underPrice: un.price };
+      }
+    }
+
+    return Object.entries(oddsMap)
+      .filter(([, o]) => o.ml) // only return games that have a ML
+      .map(([id, odds]) => ({ matchupId: parseInt(id), ...matchupMap[parseInt(id)], ...odds }));
+  } catch (err) {
+    console.warn('[Pinnacle] fetch failed (non-fatal):', err.message);
+    return null;
+  }
+}
+
+function enrichWithPinnacle(events, pinnacleGames) {
+  if (!Array.isArray(pinnacleGames) || pinnacleGames.length === 0) return events;
+
+  return events.map(event => {
+    // Find matching Pinnacle game by home+away team name similarity
+    const pg = pinnacleGames.find(g =>
+      teamsMatch(event.home_team, g.home) && teamsMatch(event.away_team, g.away)
+    );
+    if (!pg) return event;
+
+    // Build Pinnacle as a bookmaker entry so UI can display it
+    const pinBook = {
+      key: 'pinnacle',
+      title: 'Pinnacle ⚡',
+      last_update: new Date().toISOString(),
+      markets: [],
+    };
+    if (pg.ml) {
+      pinBook.markets.push({ key: 'h2h', outcomes: [
+        { name: event.home_team, price: pg.ml.home },
+        { name: event.away_team, price: pg.ml.away },
+      ]});
+    }
+    if (pg.spread) {
+      pinBook.markets.push({ key: 'spreads', outcomes: [
+        { name: event.home_team, price: pg.spread.homePrice, point: pg.spread.homePoint },
+        { name: event.away_team, price: pg.spread.awayPrice, point: pg.spread.awayPoint },
+      ]});
+    }
+    if (pg.total) {
+      pinBook.markets.push({ key: 'totals', outcomes: [
+        { name: 'Over',  price: pg.total.overPrice,  point: pg.total.point },
+        { name: 'Under', price: pg.total.underPrice, point: pg.total.point },
+      ]});
+    }
+
+    // Flag any book whose home ML is >15 pts off from Pinnacle
+    let suspectOdds = false;
+    if (pg.ml) {
+      for (const bm of (event.bookmakers || [])) {
+        const h2h = bm.markets?.find(m => m.key === 'h2h');
+        if (!h2h) continue;
+        const bookHome = h2h.outcomes?.find(o => teamsMatch(o.name, event.home_team))?.price;
+        if (bookHome == null) continue;
+        if (Math.abs(bookHome - pg.ml.home) > 15) { suspectOdds = true; break; }
+      }
+    }
+
+    return {
+      ...event,
+      bookmakers:  [...(event.bookmakers || []), pinBook],
+      pinnacle:    { ml: pg.ml, spread: pg.spread ?? null, total: pg.total ?? null },
+      suspectOdds,
+    };
+  });
+}
+
 // ── The Odds API (primary) ────────────────────────────────────────────────────
 async function fetchFromTheOddsAPI(sportKey) {
   const apiKey = SPORT_KEYS[sportKey];
@@ -264,12 +425,18 @@ export async function GET(req) {
   }
 
   // Cache miss — fetch live data
-  // Try The Odds API first (better — all games + all markets in 1 call)
+  // Try The Odds API + Pinnacle in parallel (Pinnacle is free, adds sharp reference line)
   if (THE_ODDS_KEY) {
     try {
-      const result = await fetchFromTheOddsAPI(sportKey);
-      // Only cache if we got actual data back
-      if (result?.data?.length >= 0) {  // 0 games is valid (off-season), errors are not
+      const [result, pinnacleGames] = await Promise.all([
+        fetchFromTheOddsAPI(sportKey),
+        fetchPinnacleLines(sportKey),   // free, no key — silently skipped if it fails
+      ]);
+      // Enrich each event with Pinnacle line + suspectOdds flag
+      if (result?.data) result.data = enrichWithPinnacle(result.data, pinnacleGames);
+      result.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
+      // Only cache if we got actual data back (0 games is valid off-season, errors are not)
+      if (result?.data?.length >= 0) {
         setMemCache(cacheKey, result);
         await setSupabaseCache(sportKey, result);
       }
@@ -279,10 +446,15 @@ export async function GET(req) {
     }
   }
 
-  // Fallback: odds-api.io
+  // Fallback: odds-api.io (+ Pinnacle still runs in parallel)
   if (LEGACY_KEY) {
     try {
-      const result = await fetchFromLegacy(sportKey);
+      const [result, pinnacleGames] = await Promise.all([
+        fetchFromLegacy(sportKey),
+        fetchPinnacleLines(sportKey),
+      ]);
+      if (result?.data) result.data = enrichWithPinnacle(result.data, pinnacleGames);
+      result.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
       // Only cache successful responses with actual data — never cache errors or empty fallbacks
       if (result?.data?.length > 0) {
         setMemCache(cacheKey, result);
@@ -290,9 +462,7 @@ export async function GET(req) {
       }
       return NextResponse.json({ ...result, cached: false });
     } catch (err) {
-      // Log the failure server-side only — don't surface raw error strings to the UI
       console.error('[/api/odds] Both odds providers failed:', err.message);
-      // Return graceful empty response so UI shows "—" instead of an ugly error
       return NextResponse.json({ configured: true, data: [], total: 0, source: 'none', cached: false });
     }
   }

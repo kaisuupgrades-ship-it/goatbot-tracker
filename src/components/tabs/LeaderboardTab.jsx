@@ -1008,6 +1008,7 @@ function ContestStandings({ userId, isDemo, refreshKey }) {
 }
 
 export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
+  const [subTab, setSubTab]           = useState('contest'); // 'contest' | 'sharp'
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
@@ -1051,55 +1052,85 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
   const entries  = data?.leaderboard || [];
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-      {/* Monthly Contest Banner — top of page like a forum notice */}
-      <ContestBanner />
+      {/* ── Sub-tab switcher ── */}
+      <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
+        {[
+          { id: 'contest', label: '🏆 Contest', desc: 'Monthly standings' },
+          { id: 'sharp',   label: '📊 Sharp Board', desc: 'All-time rankings' },
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '8px 16px 10px',
+              borderBottom: subTab === t.id ? '2px solid var(--gold)' : '2px solid transparent',
+              color: subTab === t.id ? 'var(--gold)' : 'var(--text-muted)',
+              fontWeight: subTab === t.id ? 800 : 500,
+              fontSize: '0.88rem',
+              transition: 'all 0.15s',
+              marginBottom: '-1px',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Contest Standings — live leaderboard for contest_entry picks */}
-      <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} />
-
-      {/* Demo mode notice */}
-      {(isDemo || data?.isDemo) && (
-        <div style={{
-          padding: '0.6rem 1rem', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
-          borderRadius: '8px', fontSize: '0.78rem', color: '#93c5fd', display: 'flex', gap: '8px', alignItems: 'center',
-        }}>
-          <span>👁</span>
-          <span><strong>Demo Preview</strong> — This is sample data to show how the leaderboard works. Create an account and log your picks to appear on the real leaderboard.</span>
-        </div>
+      {/* ══ CONTEST TAB ══ */}
+      {subTab === 'contest' && (
+        <>
+          <ContestBanner />
+          <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} />
+        </>
       )}
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-        <div>
-          <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', letterSpacing: '-0.02em', margin: 0 }}>
-            🏆 Sharp Leaderboard
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0' }}>
-            Ranked by Sharp Score — rewards ROI × verified pick volume
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {data && (
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
-              {entries.length} handicappers · updated {new Date(data.cachedAt).toLocaleTimeString()}
-            </span>
+      {/* ══ SHARP BOARD TAB ══ */}
+      {subTab === 'sharp' && (
+        <>
+          {/* Demo mode notice */}
+          {(isDemo || data?.isDemo) && (
+            <div style={{
+              padding: '0.6rem 1rem', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
+              borderRadius: '8px', fontSize: '0.78rem', color: '#93c5fd', display: 'flex', gap: '8px', alignItems: 'center',
+            }}>
+              <span>👁</span>
+              <span><strong>Demo Preview</strong> — This is sample data. Create an account and log picks to appear on the real leaderboard.</span>
+            </div>
           )}
-          <button onClick={load} style={{
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
-            borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
-            color: 'var(--text-muted)', fontSize: '0.75rem',
-          }}>↺ Refresh</button>
-          {!isDemo && (
-            <button onClick={() => setEditOpen(true)} style={{
-              background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.4)',
-              borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
-              color: 'var(--gold)', fontSize: '0.75rem', fontWeight: 700,
-            }}>✎ My Profile</button>
-          )}
-        </div>
-      </div>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', letterSpacing: '-0.02em', margin: 0 }}>
+                📊 Sharp Leaderboard
+              </h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0' }}>
+                Ranked by Sharp Score — ROI × verified pick volume
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {data && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
+                  {entries.length} ranked · {new Date(data.cachedAt).toLocaleTimeString()}
+                </span>
+              )}
+              <button onClick={load} style={{
+                background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: '0.75rem',
+              }}>↺ Refresh</button>
+              {!isDemo && (
+                <button onClick={() => setEditOpen(true)} style={{
+                  background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.4)',
+                  borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
+                  color: 'var(--gold)', fontSize: '0.75rem', fontWeight: 700,
+                }}>✎ My Profile</button>
+              )}
+            </div>
+          </div>
 
       {/* User rank card */}
       {data?.userEntry && (
@@ -1212,11 +1243,13 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
         borderRadius: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
       }}>
         <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(verified picks) ÷ 10. High ROI alone isn't enough — you need volume and consistency.{' '}
-        <strong style={{ color: 'var(--green)' }}>✓ Verified</strong> = AI-audited, submitted before game start, odds between -145 and +400, straight bet only.{' '}
-        Contest entries are <strong style={{ color: '#FFB800' }}>locked once posted</strong> — no edits, no deletes. One pick per day. All picks auto-posted to leaderboard after audit.
+        <strong style={{ color: 'var(--green)' }}>✓ Verified</strong> = submitted before game start, odds between -145 and +400, straight bet only.{' '}
+        Need at least <strong style={{ color: 'var(--gold)' }}>3 public settled picks</strong> to appear. Mark picks Public in History and enable your profile below.
       </div>
+        </>
+      )}{/* end sharp tab */}
 
-      {/* Profile editor modal */}
+      {/* Modals — outside tabs so they render regardless of active tab */}
       {editOpen && (
         <ProfileEditor
           user={user}
@@ -1225,8 +1258,6 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
           onClose={() => setEditOpen(false)}
         />
       )}
-
-      {/* Public profile view modal */}
       {viewEntry && (
         <PublicProfileModal
           entry={viewEntry}

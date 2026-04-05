@@ -208,6 +208,19 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
               </span>
             : <span style={{ fontSize: '0.65rem', color: '#666', whiteSpace: 'nowrap' }}>{timeLabel}</span>
           }
+          {game.suspectOdds && (
+            <span title="One or more book lines diverge >15pts from Pinnacle's sharp number — verify before betting" style={{
+              fontSize: '0.6rem', fontWeight: 800, color: '#f59e0b',
+              background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.35)',
+              borderRadius: '4px', padding: '1px 6px', whiteSpace: 'nowrap', cursor: 'help',
+            }}>⚠ LINE CHECK</span>
+          )}
+          {game.pinnacle && !game.suspectOdds && (
+            <span title="Pinnacle sharp line matches — odds look clean" style={{
+              fontSize: '0.6rem', color: '#4ade80',
+              opacity: 0.6, whiteSpace: 'nowrap',
+            }}>⚡ sharp</span>
+          )}
           <span style={{ color: '#444', fontSize: '0.72rem', marginLeft: '4px' }}>{expanded ? '▲' : '▼'}</span>
         </div>
 
@@ -352,10 +365,16 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                   );
                 }
 
+                const isPinnacle = bk.key === 'pinnacle';
                 return (
-                  <tr key={bk.key} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                    <td style={{ padding: '6px 8px', color: '#888', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                  <tr key={bk.key} style={{
+                    borderBottom: '1px solid #1a1a1a',
+                    background: isPinnacle ? 'rgba(74,222,128,0.04)' : 'transparent',
+                    borderLeft: isPinnacle ? '2px solid rgba(74,222,128,0.4)' : '2px solid transparent',
+                  }}>
+                    <td style={{ padding: '6px 8px', color: isPinnacle ? '#4ade80' : '#888', fontWeight: isPinnacle ? 700 : 500, whiteSpace: 'nowrap' }}>
                       {BOOK_LABELS[bk.key] || bk.title}
+                      {isPinnacle && <span style={{ fontSize: '0.58rem', color: '#4ade80', opacity: 0.7, marginLeft: '4px' }}>sharp ref</span>}
                     </td>
                     <Cell price={awayMLPrice} isBest={awayMLPrice === awayML} />
                     <Cell price={homeMLPrice} isBest={homeMLPrice === homeML} />
