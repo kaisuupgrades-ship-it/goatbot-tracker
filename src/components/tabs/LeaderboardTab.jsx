@@ -646,7 +646,8 @@ function ContestStandings({ userId, isDemo, refreshKey }) {
 
 export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSubTab = 'contest', onOpenInbox }) {
   const [subTab, setSubTab]           = useState(defaultSubTab); // 'contest' | 'sharp'
-  const [sharpFilter, setSharpFilter] = useState('all');     // 'all' | 'verified'
+  const [sharpFilter, setSharpFilter] = useState('verified');     // locked to verified only
+  const [verifiedInfoOpen, setVerifiedInfoOpen] = useState(false);
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
@@ -678,12 +679,6 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
 
   useEffect(() => { load(); }, [load]);
 
-  // Re-load when filter changes
-  const handleFilterChange = (f) => {
-    setSharpFilter(f);
-    load(f);
-  };
-
   // Re-load when a contest pick is graded (cascade from HistoryTab via Dashboard)
   useEffect(() => { if (refreshKey > 0) load(); }, [refreshKey]); // eslint-disable-line
 
@@ -703,7 +698,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
       <div style={{ display: 'flex', gap: '4px', padding: '3px', background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px solid var(--border)', alignSelf: 'flex-start' }}>
         {[
           { id: 'contest', label: '🏆 Contest' },
-          { id: 'sharp',   label: '📊 All Picks' },
+          { id: 'sharp',   label: '📊 Leaderboard' },
         ].map(t => (
           <button
             key={t.id}
@@ -754,10 +749,21 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', letterSpacing: '-0.02em', margin: 0 }}>
-                📊 Sharp Leaderboard
+                📊 Leaderboard
               </h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 Ranked by Sharp Score — ROI × verified pick volume
+                <button
+                  onClick={() => setVerifiedInfoOpen(true)}
+                  style={{
+                    background: 'rgba(74,222,128,0.12)', color: '#4ade80',
+                    border: '1px solid rgba(74,222,128,0.3)',
+                    borderRadius: '4px', padding: '1px 7px', fontSize: '0.65rem', fontWeight: 700,
+                    cursor: 'pointer', lineHeight: 1.4,
+                  }}
+                >
+                  ✓ Verified Only
+                </button>
               </p>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -779,44 +785,6 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
                 }}>✎ My Profile</button>
               )}
             </div>
-          </div>
-
-          {/* ── Verified / All toggle ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Record:
-            </span>
-            {[
-              { id: 'all',      label: 'All Picks',      icon: '📋' },
-              { id: 'verified', label: '✓ Verified Only', icon: '' },
-            ].map(opt => (
-              <button
-                key={opt.id}
-                onClick={() => handleFilterChange(opt.id)}
-                title={opt.id === 'verified'
-                  ? 'Only picks that passed AI + Pinnacle audit (submitted before game start, legit line)'
-                  : 'All public settled picks regardless of audit status'}
-                style={{
-                  background: sharpFilter === opt.id ? (opt.id === 'verified' ? 'rgba(74,222,128,0.15)' : 'var(--bg-elevated)') : 'none',
-                  border: sharpFilter === opt.id
-                    ? (opt.id === 'verified' ? '1px solid rgba(74,222,128,0.4)' : '1px solid var(--border)')
-                    : '1px solid transparent',
-                  borderRadius: '6px', padding: '4px 10px', cursor: 'pointer',
-                  color: sharpFilter === opt.id
-                    ? (opt.id === 'verified' ? '#4ade80' : 'var(--text-primary)')
-                    : 'var(--text-muted)',
-                  fontSize: '0.75rem', fontWeight: sharpFilter === opt.id ? 700 : 400,
-                  transition: 'all 0.15s',
-                }}
-              >
-                {opt.icon} {opt.label}
-              </button>
-            ))}
-            {sharpFilter === 'verified' && (
-              <span style={{ fontSize: '0.7rem', color: '#4ade80', opacity: 0.7 }}>
-                — AI-checked picks only
-              </span>
-            )}
           </div>
 
       {/* User rank card */}
@@ -930,12 +898,56 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
         borderRadius: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
       }}>
         <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(verified picks) ÷ 10. High ROI alone isn't enough — you need volume and consistency.{' '}
-        <strong style={{ color: '#4ade80' }}>✓ Verified</strong> = pick passed the AI + Pinnacle audit (legit line, submitted before game start).{' '}
-        Toggle between <strong>All Picks</strong> (every public settled pick) and <strong>✓ Verified Only</strong> (AI-checked picks only) using the filter above.{' '}
-        Any user with at least <strong style={{ color: 'var(--gold)' }}>1 public settled pick</strong> appears here. Mark picks Public in Pick History to show up.
+        Only <button onClick={() => setVerifiedInfoOpen(true)} style={{ background: 'none', border: 'none', padding: 0, color: '#4ade80', fontWeight: 700, cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline' }}>✓ Verified picks</button> count on this leaderboard.{' '}
+        Any user with at least <strong style={{ color: 'var(--gold)' }}>1 verified pick</strong> appears here. Mark picks Public in Pick History to show up.
       </div>
         </>
       )}{/* end sharp tab */}
+
+      {/* Verified info popup */}
+      {verifiedInfoOpen && (
+        <div
+          onClick={() => setVerifiedInfoOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999, padding: '1rem',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-elevated)', border: '1px solid rgba(74,222,128,0.3)',
+              borderRadius: '12px', padding: '1.5rem', maxWidth: '420px', width: '100%',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '1.4rem' }}>✓</span>
+              <h3 style={{ margin: 0, fontWeight: 800, color: '#4ade80', fontSize: '1.1rem' }}>
+                What is a Verified Pick?
+              </h3>
+              <button
+                onClick={() => setVerifiedInfoOpen(false)}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}
+              >×</button>
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.7 }}>
+              <p style={{ margin: '0 0 0.75rem' }}>
+                A <strong style={{ color: '#4ade80' }}>Verified Pick</strong> is one that has passed a multi-step AI audit before the game starts:
+              </p>
+              <ul style={{ margin: '0 0 0.75rem', paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <li><strong>Submitted before game start</strong> — picks entered after tip-off or first pitch don't count.</li>
+                <li><strong>Legitimate line</strong> — the odds are cross-checked against Pinnacle (the market's sharpest book) to confirm it's a real number.</li>
+                <li><strong>AI-audited</strong> — our system checks for inconsistencies or retroactive edits.</li>
+              </ul>
+              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                Only verified picks count toward your Sharp Score and appear on this leaderboard. This keeps the rankings honest.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals — outside tabs so they render regardless of active tab */}
       {editOpen && (

@@ -767,7 +767,7 @@ function WinProbBar({ homeTeam, awayTeam, homeProb, awayProb, homeOdds, awayOdds
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
-export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York' }) {
+export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York', gameLeans = {} }) {
   const [expanded, setExpanded] = useState(false);
   const isExpanded = suppressHeader ? (externalExpanded ?? false) : expanded;
   const [h2hData,  setH2hData]  = useState(null);   // { record, games } or null
@@ -1433,6 +1433,52 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             </div>
           )}
 
+          {/* BetOS AI Lean */}
+          {(() => {
+            const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
+            const lean = gameLeans[leanKey];
+            if (!lean?.pick) return null;
+            const confColors = { ELITE: '#FFB800', HIGH: '#4ade80', MEDIUM: '#60a5fa', LOW: '#9ca3af' };
+            const confColor = confColors[lean.conf] || '#9ca3af';
+            return (
+              <div style={{
+                margin: '0.5rem 0 0.75rem',
+                padding: '0.7rem 1rem',
+                background: 'rgba(255,184,0,0.05)',
+                border: '1px solid rgba(255,184,0,0.18)',
+                borderRadius: '8px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.07em', color: '#FFB800', textTransform: 'uppercase' }}>
+                    🤖 BetOS AI Lean
+                  </span>
+                  {lean.conf && (
+                    <span style={{
+                      fontSize: '0.58rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
+                      background: confColor + '22', color: confColor, border: `1px solid ${confColor}44`,
+                      letterSpacing: '0.04em',
+                    }}>
+                      {lean.conf}
+                    </span>
+                  )}
+                  {lean.edge && (
+                    <span style={{ fontSize: '0.63rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginLeft: 'auto' }}>
+                      Edge {lean.edge}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                  {lean.pick}
+                </div>
+                {lean.edge_breakdown && (
+                  <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5 }}>
+                    {lean.edge_breakdown}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Action row */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid var(--border-subtle)', gap: '8px' }}>
             {!suppressHeader && (
@@ -1616,6 +1662,24 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const [injuries, setInjuries]               = useState({});  // { teamId: [{name, status, type},...] }
   const [injuriesChecked, setInjuriesChecked] = useState(null);
   const { starred, toggleStar } = useStarredGames();
+
+  // ── AI Leans (pre-generated analyses from game_analyses table) ───────────
+  const [gameLeans, setGameLeans] = useState({}); // key: `${sport}_${awayLower}_${homeLower}`
+
+  useEffect(() => {
+    const date = selectedDate || todayStr;
+    fetch(`/api/game-analyses?date=${date}`)
+      .then(r => r.json())
+      .then(({ analyses = [] }) => {
+        const map = {};
+        for (const a of analyses) {
+          const key = `${a.sport}_${a.away_team.toLowerCase()}_${a.home_team.toLowerCase()}`;
+          map[key] = a;
+        }
+        setGameLeans(map);
+      })
+      .catch(() => {});
+  }, [selectedDate, todayStr]); // eslint-disable-line
 
   // ── Injury Intel sidebar ──────────────────────────────────────────────────
   const [sidebarTab,   setSidebarTab]   = useState('headlines'); // 'headlines' | 'intel'
@@ -2206,6 +2270,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                   isAllMode={isAllMode}
                   oddsFormat={userPrefs.odds_format}
                   timezone={userPrefs.timezone}
+                  gameLeans={gameLeans}
                 />
               </div>
             ))}

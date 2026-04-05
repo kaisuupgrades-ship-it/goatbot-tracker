@@ -277,11 +277,15 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
       {/* ── Contest — special glowing nav item ───────────────────────────────── */}
       <style>{`
         @keyframes contestPulse {
-          0%, 100% { box-shadow: 0 0 6px rgba(255,184,0,0.12), inset 0 0 8px rgba(255,184,0,0.04); border-color: rgba(255,184,0,0.22); }
-          50%       { box-shadow: 0 0 18px rgba(255,184,0,0.28), inset 0 0 12px rgba(255,184,0,0.08); border-color: rgba(255,184,0,0.5); }
+          0%, 100% { box-shadow: 0 0 10px rgba(255,184,0,0.25), 0 0 24px rgba(255,184,0,0.08), inset 0 0 12px rgba(255,184,0,0.06); border-color: rgba(255,184,0,0.45); }
+          50%       { box-shadow: 0 0 22px rgba(255,184,0,0.55), 0 0 40px rgba(255,184,0,0.18), inset 0 0 18px rgba(255,184,0,0.12); border-color: rgba(255,184,0,0.85); }
         }
-        .contest-glow-btn { animation: contestPulse 2.8s ease-in-out infinite; }
-        .contest-glow-btn:hover { animation: none !important; }
+        @keyframes liveDot {
+          0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+        }
+        .contest-glow-btn { animation: contestPulse 2.4s ease-in-out infinite; }
+        .contest-glow-btn:hover { animation: none !important; background: linear-gradient(135deg, rgba(255,184,0,0.38), rgba(255,120,0,0.18)) !important; border-color: rgba(255,184,0,0.9) !important; }
+        .live-dot { animation: liveDot 1.2s ease-in-out infinite; }
       `}</style>
       <div style={{ padding: collapsed ? '0.4rem 0.3rem 0' : '0.5rem 0.4rem 0' }}>
         <button
@@ -292,17 +296,17 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
             width: '100%', display: 'flex', alignItems: 'center',
             gap: collapsed ? 0 : '8px',
             justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? '0.55rem' : '0.5rem 0.75rem',
+            padding: collapsed ? '0.6rem' : '0.55rem 0.85rem',
             background: activeTab === 'leaderboard'
-              ? 'linear-gradient(135deg, rgba(255,184,0,0.18), rgba(255,100,0,0.08))'
-              : 'linear-gradient(135deg, rgba(255,184,0,0.07), rgba(255,100,0,0.03))',
-            border: `1px solid ${activeTab === 'leaderboard' ? 'rgba(255,184,0,0.55)' : 'rgba(255,184,0,0.22)'}`,
+              ? 'linear-gradient(135deg, rgba(255,184,0,0.38), rgba(255,120,0,0.18))'
+              : 'linear-gradient(135deg, rgba(255,184,0,0.22), rgba(255,120,0,0.09))',
+            border: `2px solid ${activeTab === 'leaderboard' ? 'rgba(255,184,0,0.9)' : 'rgba(255,184,0,0.45)'}`,
             borderRadius: '10px', cursor: 'pointer',
             transition: 'background 0.2s, border-color 0.2s',
           }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', flexShrink: 0, color: 'var(--gold)' }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', flexShrink: 0, color: '#FFD700', filter: 'drop-shadow(0 0 4px rgba(255,215,0,0.6))' }}>
+            <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 2h6v6a3 3 0 0 1-6 0V2z"/>
               <path d="M5 4H2.5a1.5 1.5 0 0 0 0 3H5"/>
               <path d="M11 4h2.5a1.5 1.5 0 0 1 0 3H11"/>
@@ -312,15 +316,22 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
           </span>
           {!collapsed && (
             <>
-              <span style={{ flex: 1, fontWeight: 700, fontSize: '0.88rem', color: 'var(--gold)', letterSpacing: '-0.01em' }}>
+              <span style={{
+                flex: 1, fontWeight: 800, fontSize: '0.9rem', letterSpacing: '0.01em',
+                background: 'linear-gradient(90deg, #FFD700, #FFB800)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                textShadow: 'none',
+              }}>
                 Contest
               </span>
               <span style={{
-                fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.08em',
-                color: '#FFB800', background: 'rgba(255,184,0,0.12)',
-                border: '1px solid rgba(255,184,0,0.3)',
-                borderRadius: '4px', padding: '1px 5px', flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: '4px',
+                fontSize: '0.58rem', fontWeight: 900, letterSpacing: '0.1em',
+                color: '#000', background: 'linear-gradient(135deg, #FFD700, #FF9500)',
+                borderRadius: '5px', padding: '2px 7px', flexShrink: 0,
+                boxShadow: '0 0 8px rgba(255,184,0,0.5)',
               }}>
+                <span className="live-dot" style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#000', display: 'inline-block' }} />
                 LIVE
               </span>
             </>

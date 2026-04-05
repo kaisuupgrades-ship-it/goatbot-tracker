@@ -541,6 +541,9 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
   const [unitSize, setUnitSize]     = useState(1);
   const [addSaving, setAddSaving]   = useState(false);
   const [addDone, setAddDone]       = useState(false);
+  // Export state
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting]   = useState(false);
 
   const parsed = useMemo(() => parseReport(result), [result]);
   const { pick, conf, edge, odds, winProb, factors, sport } = parsed;
@@ -558,6 +561,59 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
   const awayLogoUrl = awayName ? teamLogoUrl(sportKey, awayName) : null;
   const homeLogoUrl = homeName ? teamLogoUrl(sportKey, homeName) : null;
   const hasMatchup  = !!(awayName && homeName);
+
+  // ── Export as JPG (via /api/og/pick) ────────────────────────────────────
+  async function downloadPickImage() {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (pick)    params.set('pick', pick);
+      if (conf)    params.set('conf', conf);
+      if (edge)    params.set('edge', String(edge));
+      if (odds)    params.set('odds', odds);
+      if (winProb) params.set('winProb', String(winProb));
+      if (sport)   params.set('sport', sport);
+      if (awayName) params.set('away', awayName);
+      if (homeName) params.set('home', homeName);
+      if (awayLogoUrl) params.set('awayLogo', awayLogoUrl);
+      if (homeLogoUrl) params.set('homeLogo', homeLogoUrl);
+
+      const res = await fetch(`/api/og/pick?${params}`);
+      if (!res.ok) throw new Error('Image generation failed');
+      const pngBlob = await res.blob();
+
+      // Convert PNG → JPG using canvas for smaller file size
+      const img = new Image();
+      const pngUrl = URL.createObjectURL(pngBlob);
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = pngUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200; canvas.height = 628;
+      const ctx = canvas.getContext('2d');
+      // Dark background fill (JPG has no transparency)
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, 1200, 628);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(pngUrl);
+
+      canvas.toBlob(jpgBlob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(jpgBlob);
+        const safePick = (pick || 'betos-pick').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40);
+        a.download = `betos-${safePick}.jpg`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      }, 'image/jpeg', 0.93);
+    } catch (e) {
+      alert('Image export failed — try again in a moment.');
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  }
 
   return (
     <div style={{
@@ -928,22 +984,75 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
           <span style={{ color: '#4ade80', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>✓ Logged</span>
         )}
 
-        {/* PDF Export button */}
-        <button
-          onClick={() => exportReportToPDF(parsed, result, prompt, runTime)}
-          title="Export as PDF"
-          style={{
-            background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.25)',
-            borderRadius: '6px', color: 'rgba(255,184,0,0.7)', cursor: 'pointer',
-            fontSize: '0.65rem', fontWeight: 700, padding: '3px 8px',
-            display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0,
-            transition: 'all 0.12s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.15)'; e.currentTarget.style.color = '#FFB800'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.08)'; e.currentTarget.style.color = 'rgba(255,184,0,0.7)'; }}
-        >
-          📄 Export PDF
-        </button>
+        {/* Export dropdown */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setExportOpen(v => !v)}
+            title="Export pick"
+            style={{
+              background: exportOpen ? 'rgba(255,184,0,0.15)' : 'rgba(255,184,0,0.08)',
+              border: `1px solid ${exportOpen ? 'rgba(255,184,0,0.5)' : 'rgba(255,184,0,0.25)'}`,
+              borderRadius: '6px', color: exportOpen ? '#FFB800' : 'rgba(255,184,0,0.7)',
+              cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px',
+              display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.12s',
+            }}
+          >
+            ↗ Export {exportOpen ? '▲' : '▼'}
+          </button>
+
+          {exportOpen && (
+            <div style={{
+              position: 'absolute', bottom: 'calc(100% + 6px)', right: 0,
+              background: '#141414', border: '1px solid rgba(255,184,0,0.25)',
+              borderRadius: '10px', overflow: 'hidden',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)', zIndex: 100,
+              minWidth: '160px',
+            }}>
+              {/* JPG option */}
+              <button
+                onClick={downloadPickImage}
+                disabled={exporting}
+                style={{
+                  width: '100%', background: 'none', border: 'none', cursor: exporting ? 'wait' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 14px', color: '#e0e0e0', fontSize: '0.72rem', fontWeight: 600,
+                  textAlign: 'left', transition: 'background 0.1s',
+                  opacity: exporting ? 0.6 : 1,
+                }}
+                onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+              >
+                <span style={{ fontSize: '1rem' }}>📸</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                  <span>{exporting ? 'Generating…' : 'Download Image'}</span>
+                  <span style={{ fontSize: '0.58rem', color: '#555' }}>1200×628 JPG</span>
+                </div>
+              </button>
+
+              {/* Divider */}
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '0 10px' }} />
+
+              {/* PDF option */}
+              <button
+                onClick={() => { exportReportToPDF(parsed, result, prompt, runTime); setExportOpen(false); }}
+                style={{
+                  width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 14px', color: '#e0e0e0', fontSize: '0.72rem', fontWeight: 600,
+                  textAlign: 'left', transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+              >
+                <span style={{ fontSize: '1rem' }}>📄</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                  <span>Export PDF</span>
+                  <span style={{ fontSize: '0.58rem', color: '#555' }}>Full analysis report</span>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
 
         <span style={{
           fontSize: '0.62rem', fontWeight: 900, letterSpacing: '0.12em',

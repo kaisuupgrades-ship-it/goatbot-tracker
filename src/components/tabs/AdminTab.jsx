@@ -1008,9 +1008,13 @@ function SystemPanel({ userEmail }) {
   const [sysInfo, setSysInfo]           = useState(null);
   const [batchRunning,   setBatchRunning]   = useState(false);
   const [batchResult,    setBatchResult]    = useState(null);
-  const [pregenRunning,  setPregenRunning]  = useState(false);
-  const [pregenResult,   setPregenResult]   = useState(null);
-  const [pregenLog,      setPregenLog]      = useState(null);
+  const [pregenRunning,    setPregenRunning]    = useState(false);
+  const [pregenResult,     setPregenResult]     = useState(null);
+  const [pregenLog,        setPregenLog]        = useState(null);
+  const [pregenLiveLog,    setPregenLiveLog]    = useState([]); // [{sport, status, count}]
+  const [generatedAnalyses,setGeneratedAnalyses]= useState(null); // fetched from game_analyses
+  const [analysesDate,     setAnalysesDate]     = useState(new Date().toISOString().split('T')[0]);
+  const [expandedAnalysis, setExpandedAnalysis] = useState(null); // id of expanded row
 
   async function runBatchAnalysis() {
     setBatchRunning(true);
@@ -1041,23 +1045,31 @@ function SystemPanel({ userEmail }) {
       .catch(() => {});
   }
 
+  function loadGeneratedAnalyses(date) {
+    const d = date || analysesDate;
+    fetch(`/api/admin?action=game_analyses&userEmail=${encodeURIComponent(userEmail)}&date=${d}`)
+      .then(r => r.json())
+      .then(data => setGeneratedAnalyses(data.analyses || []))
+      .catch(() => setGeneratedAnalyses([]));
+  }
+
   async function runPregenAnalysis() {
     setPregenRunning(true);
     setPregenResult(null);
+    setPregenLiveLog([]);
 
-    // Call one sport at a time — keeps each serverless call under 60s
-    // and avoids the single-giant-call timeout that returns non-JSON errors
     const SPORTS = ['mlb', 'nba', 'nhl', 'nfl', 'mls', 'wnba'];
     const agg = { generated: 0, skipped: 0, errors: 0, games: [], error_list: [], duration_ms: 0 };
 
     for (const sport of SPORTS) {
+      // Mark this sport as in-progress in the live log
+      setPregenLiveLog(prev => [...prev, { sport, status: 'running', count: null, ts: Date.now() }]);
       try {
         const res = await fetch('/api/cron/pregenerate-analysis', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userEmail, force: true, sport }),
         });
-        // Safe parse — handle non-JSON responses (timeouts, HTML error pages, etc.)
         const text = await res.text();
         let data;
         try { data = JSON.parse(text); }
@@ -1066,22 +1078,29 @@ function SystemPanel({ userEmail }) {
         if (data.error && typeof data.generated === 'undefined') {
           agg.error_list.push(data.error);
           agg.errors++;
+          setPregenLiveLog(prev => prev.map(e => e.sport === sport ? { ...e, status: 'error', error: data.error } : e));
         } else {
-          agg.generated    += data.generated    || 0;
-          agg.skipped      += data.skipped      || 0;
-          agg.errors       += data.errors       || 0;
-          agg.duration_ms  += data.duration_ms  || 0;
+          agg.generated   += data.generated   || 0;
+          agg.skipped     += data.skipped     || 0;
+          agg.errors      += data.errors      || 0;
+          agg.duration_ms += data.duration_ms || 0;
           agg.games.push(...(data.games       || []));
           agg.error_list.push(...(data.error_list || []));
+          setPregenLiveLog(prev => prev.map(e => e.sport === sport
+            ? { ...e, status: data.generated > 0 ? 'done' : 'skipped',
+                count: data.generated, skipped: data.skipped, games: data.games || [] }
+            : e));
         }
       } catch (e) {
         agg.error_list.push(`${sport.toUpperCase()}: ${e.message}`);
         agg.errors++;
+        setPregenLiveLog(prev => prev.map(e => e.sport === sport ? { ...e, status: 'error', error: e.message } : e));
       }
     }
 
     setPregenResult(agg);
-    if (agg.generated > 0) loadPregenLog();
+    loadPregenLog();
+    loadGeneratedAnalyses();
     setPregenRunning(false);
   }
 
@@ -1092,7 +1111,7 @@ function SystemPanel({ userEmail }) {
       .catch(() => {});
   }
 
-  useEffect(() => { loadSysInfo(); loadPregenLog(); }, [userEmail]);
+  useEffect(() => { loadSysInfo(); loadPregenLog(); loadGeneratedAnalyses(); }, [userEmail]); // eslint-disable-line
 
   async function sendAnnouncement() {
     if (!announcement.trim()) return;
@@ -1133,6 +1152,168 @@ function SystemPanel({ userEmail }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {msg && <div style={{ color: msg.startsWith('✓') ? '#4ade80' : '#f87171', padding: '0.5rem 0.75rem', background: msg.startsWith('✓') ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', borderRadius: '6px', fontSize: '0.8rem' }}>{msg}</div>}
+
+      {/* ── Analyzer Pre-Generation ── */}
+      <div className="card" style={{ padding: '1.2rem', borderColor: pregenRunning ? 'rgba(96,165,250,0.3)' : 'var(--border)' }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          ⚡ Pre-Generate Analyses
+          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', letterSpacing: '0.07em' }}>AUTO 8AM + 4PM ET</span>
+          {pregenRunning && <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa', letterSpacing: '0.07em', animation: 'pulse 1.5s infinite' }}>● RUNNING</span>}
+        </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.85rem', lineHeight: 1.5 }}>
+          Generates a full BetOS AI analysis for every pre-game matchup and caches it in Supabase. Users get instant results instead of waiting 60–90s.
+        </p>
+
+        {/* Last run summary */}
+        {pregenLog && !pregenRunning && (
+          <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.12)', borderRadius: '7px', fontSize: '0.72rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: '#60a5fa' }}>⏱ Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
+            <span style={{ color: '#4ade80' }}>✅ {pregenLog.generated} generated</span>
+            <span style={{ color: 'var(--text-muted)' }}>⏭ {pregenLog.skipped} skipped</span>
+            {pregenLog.errors > 0 && <span style={{ color: '#f87171' }}>⚠ {pregenLog.errors} errors</span>}
+            <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
+          </div>
+        )}
+
+        {/* Live sport-by-sport progress during run */}
+        {pregenLiveLog.length > 0 && (
+          <div style={{ marginBottom: '0.85rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', padding: '0.7rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            {pregenLiveLog.map(({ sport, status, count, skipped: sk, games, error }) => (
+              <div key={sport} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
+                <span style={{ width: '44px', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: '#888', fontSize: '0.65rem' }}>{sport.toUpperCase()}</span>
+                {status === 'running' && <span style={{ color: '#60a5fa' }}>⟳ Processing…</span>}
+                {status === 'done' && count > 0 && (
+                  <span style={{ color: '#4ade80' }}>✓ {count} generated{sk > 0 ? `, ${sk} skipped` : ''}{games?.length ? ` · ${games.slice(0,3).map(g => g.split('@')[0].trim().split(' ').pop()).join(', ')}${games.length > 3 ? ` +${games.length-3}` : ''}` : ''}</span>
+                )}
+                {status === 'skipped' && <span style={{ color: '#555' }}>— No pre-game games</span>}
+                {status === 'error' && <span style={{ color: '#f87171' }}>✗ {error?.slice(0, 80)}</span>}
+              </div>
+            ))}
+            {pregenRunning && (
+              <div style={{ marginTop: '4px', fontSize: '0.65rem', color: '#444' }}>
+                Sport {pregenLiveLog.length}/6 · Next sports queued…
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Final result after run */}
+        {pregenResult && !pregenRunning && (
+          <div style={{
+            padding: '0.65rem 0.85rem', borderRadius: '7px', marginBottom: '0.85rem', fontSize: '0.78rem',
+            background: pregenResult.generated > 0 ? 'rgba(74,222,128,0.06)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${pregenResult.generated > 0 ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)'}`,
+          }}>
+            <span style={{ color: '#4ade80', fontWeight: 700 }}>
+              ✓ Done — {pregenResult.generated} generated · {pregenResult.skipped} skipped · {Math.round((pregenResult.duration_ms || 0) / 1000)}s
+            </span>
+            {pregenResult.error_list?.length > 0 && (
+              <div style={{ color: '#f87171', marginTop: '5px', fontSize: '0.68rem' }}>
+                ⚠ {pregenResult.error_list.slice(0, 3).join(' · ')}
+              </div>
+            )}
+          </div>
+        )}
+
+        <button
+          className="btn-gold"
+          onClick={runPregenAnalysis}
+          disabled={pregenRunning}
+          style={{ opacity: pregenRunning ? 0.6 : 1 }}
+        >
+          {pregenRunning ? `⟳ Running… (${pregenLiveLog.length}/6 sports)` : '⚡ Pre-Generate Now'}
+        </button>
+      </div>
+
+      {/* ── Generated Analyses Log ── */}
+      <div className="card" style={{ padding: '1.2rem' }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            📋 Generated Analyses
+            {generatedAnalyses && (
+              <span style={{ fontSize: '0.62rem', fontWeight: 600, color: generatedAnalyses.length > 0 ? '#4ade80' : '#555', background: generatedAnalyses.length > 0 ? 'rgba(74,222,128,0.1)' : 'rgba(255,255,255,0.04)', border: `1px solid ${generatedAnalyses.length > 0 ? 'rgba(74,222,128,0.25)' : 'var(--border)'}`, borderRadius: '4px', padding: '2px 7px' }}>
+                {generatedAnalyses.length} cached
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              type="date"
+              value={analysesDate}
+              onChange={e => { setAnalysesDate(e.target.value); loadGeneratedAnalyses(e.target.value); }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-primary)', padding: '2px 6px', fontSize: '0.68rem', cursor: 'pointer' }}
+            />
+            <button
+              onClick={() => loadGeneratedAnalyses()}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 8px', fontSize: '0.68rem' }}
+            >↻</button>
+          </div>
+        </div>
+
+        {generatedAnalyses === null && (
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Loading…</div>
+        )}
+        {generatedAnalyses?.length === 0 && (
+          <div style={{ color: '#444', fontSize: '0.75rem', padding: '1rem 0', textAlign: 'center' }}>
+            No analyses cached for {analysesDate}. Hit Pre-Generate Now to populate.
+          </div>
+        )}
+        {generatedAnalyses && generatedAnalyses.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {generatedAnalyses.map(a => {
+              const isOpen = expandedAnalysis === a.id;
+              const ageMin = Math.round((Date.now() - new Date(a.updated_at).getTime()) / 60000);
+              const ageLabel = ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin/60)}h ago`;
+              // Extract THE PICK line
+              const pickMatch = a.analysis?.match(/THE PICK[:\s]+([^\n]{5,100})/i);
+              const pickLine = pickMatch ? pickMatch[1].trim() : null;
+              const confMatch = a.analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
+              const conf = confMatch?.[1];
+              const confColor = { ELITE: '#00D48B', HIGH: '#4ade80', MEDIUM: '#FFB800', LOW: '#888' }[conf] || '#555';
+
+              return (
+                <div key={a.id} style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setExpandedAnalysis(isOpen ? null : a.id)}
+                    style={{
+                      width: '100%', background: isOpen ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+                      border: 'none', cursor: 'pointer', padding: '8px 12px',
+                      display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.6rem', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: '#60a5fa', minWidth: '30px' }}>{a.sport.toUpperCase()}</span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-primary)', fontWeight: 600, flex: 1 }}>
+                      {a.away_team} @ {a.home_team}
+                    </span>
+                    {conf && (
+                      <span style={{ fontSize: '0.58rem', fontWeight: 700, color: confColor, background: `${confColor}18`, border: `1px solid ${confColor}40`, borderRadius: '4px', padding: '1px 6px', flexShrink: 0 }}>{conf}</span>
+                    )}
+                    <span style={{ fontSize: '0.62rem', color: '#444', flexShrink: 0 }}>{ageLabel}</span>
+                    <span style={{ color: '#444', fontSize: '0.65rem', flexShrink: 0 }}>{isOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {isOpen && (
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '10px 12px', background: 'rgba(0,0,0,0.25)' }}>
+                      {pickLine && (
+                        <div style={{ marginBottom: '8px', padding: '6px 10px', background: 'rgba(255,184,0,0.07)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#FFB800', fontWeight: 700 }}>
+                          🎯 {pickLine}
+                        </div>
+                      )}
+                      <pre style={{ fontSize: '0.68rem', color: '#999', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, maxHeight: '300px', overflowY: 'auto' }}>
+                        {a.analysis}
+                      </pre>
+                      <div style={{ marginTop: '8px', fontSize: '0.6rem', color: '#333', display: 'flex', gap: '12px' }}>
+                        <span>Generated: {new Date(a.updated_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                        <span>Model: {a.model}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="card" style={{ padding: '1.2rem' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '10px' }}>

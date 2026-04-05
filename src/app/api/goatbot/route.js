@@ -350,28 +350,35 @@ export async function POST(req) {
 
     // ── Game-analyses cache: pre-generated team matchup analysis ─────────────
     // Max age: 4 hours. After that, we re-run a full analysis and refresh the cache.
-    const CACHE_MAX_AGE_MS = 4 * 60 * 60 * 1000;
+    const CACHE_MAX_AGE_MS    = 4 * 60 * 60 * 1000;
+    // If cache is under 30 min old, trust it completely — no freshness check needed.
+    // This covers the "just ran pregenerate" case: user gets instant results.
+    const FRESHNESS_SKIP_MS   = 30 * 60 * 1000;
     const cached = await findCachedAnalysis(prompt, targetDate);
 
     if (cached) {
       const ageMs = Date.now() - new Date(cached.updated_at).getTime();
 
       if (ageMs < CACHE_MAX_AGE_MS) {
-        // ── Cache HIT (fresh) — return instantly + quick news delta ──────────
         console.log(`[goatbot] Cache HIT for ${cached.away_team}@${cached.home_team}, age=${Math.round(ageMs/60000)}min`);
-
-        // Run freshness check in parallel — quick search for any changes
-        const delta = await runFreshnessCheck(cached);
 
         const ageLabel = ageMs < 60000
           ? 'just now'
           : `${Math.round(ageMs / 60000)} min ago`;
 
         let result = cached.analysis;
-        if (delta && !delta.includes('No material changes')) {
-          result += `\n\n---\n${delta}`;
+
+        if (ageMs < FRESHNESS_SKIP_MS) {
+          // ── Very fresh cache (< 30 min) — return instantly, no AI check ────
+          result += `\n\n[Analysis generated ${ageLabel} · BetOS AI]`;
+        } else {
+          // ── Older cache (30 min–4 hr) — run quick news delta check ──────────
+          const delta = await runFreshnessCheck(cached);
+          if (delta && !delta.includes('No material changes')) {
+            result += `\n\n---\n${delta}`;
+          }
+          result += `\n\n[Analysis pre-generated ${ageLabel} · BetOS AI · Freshness checked]`;
         }
-        result += `\n\n[Analysis pre-generated ${ageLabel} · BetOS AI · Freshness checked now]`;
 
         return NextResponse.json({ result, model: 'BetOS AI (cached)', cached: true });
       }

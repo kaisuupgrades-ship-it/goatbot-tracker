@@ -263,6 +263,17 @@ export async function GET(req) {
       return NextResponse.json({ sessions: sessions || [] });
     }
 
+    if (action === 'game_analyses') {
+      // Return all pre-generated analyses, optionally filtered by date
+      const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
+      const { data: analyses } = await supabaseAdmin
+        .from('game_analyses')
+        .select('id, sport, away_team, home_team, game_date, model, generated_at, updated_at, analysis')
+        .eq('game_date', date)
+        .order('updated_at', { ascending: false });
+      return NextResponse.json({ analyses: analyses || [], date });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (err) {
     console.error('Admin API error:', err.message);
