@@ -858,6 +858,21 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
             {/* Contest eligibility result */}
             {isContest && contestResult && <ContestBadge result={contestResult} />}
+
+            {/* 1u cap notice — shown when contest is on and user picked > 1 unit */}
+            {isContest && parseFloat(units) > 1 && (
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: '8px',
+                padding: '0.5rem 0.75rem', borderRadius: '7px',
+                background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
+              }}>
+                <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>ℹ️</span>
+                <span style={{ fontSize: '0.72rem', color: '#93c5fd', lineHeight: 1.5 }}>
+                  Contest picks are always scored as <strong style={{ color: '#60a5fa' }}>1 unit</strong> regardless of your bet size.
+                  Your pick log will show <strong style={{ color: '#60a5fa' }}>{units}u</strong>, but the contest leaderboard will count it as 1u.
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -1019,7 +1034,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.78rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>🏆 Enter as Contest Pick</div>
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                  {isContest ? 'Grok will audit this — locked once saved' : 'Personal tracking only'}
+                  {isContest ? 'AI will audit this — locked once saved' : 'Personal tracking only'}
                 </div>
               </div>
               {verifying && <PulsingDots />}
@@ -1027,6 +1042,21 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
             {/* Contest result for custom */}
             {isContest && contestResult && <ContestBadge result={contestResult} />}
+
+            {/* 1u cap notice */}
+            {isContest && parseFloat(units) > 1 && (
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: '8px',
+                padding: '0.5rem 0.75rem', borderRadius: '7px',
+                background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
+              }}>
+                <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>ℹ️</span>
+                <span style={{ fontSize: '0.72rem', color: '#93c5fd', lineHeight: 1.5 }}>
+                  Contest picks are always scored as <strong style={{ color: '#60a5fa' }}>1 unit</strong> regardless of your bet size.
+                  Your pick log will show <strong style={{ color: '#60a5fa' }}>{units}u</strong>, but the contest leaderboard will count it as 1u.
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -1047,6 +1077,11 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               It will be audited by AI and reviewed by the admin. If it gets flagged or rejected,
               you'll be free to resubmit a new pick for today.
             </div>
+            {parseFloat(units) > 1 && (
+              <div style={{ fontSize: '0.72rem', color: '#93c5fd', marginBottom: '12px', padding: '6px 10px', borderRadius: '6px', background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.18)' }}>
+                ℹ️ You're entering <strong>{units}u</strong> — this will be logged in your pick history as {units}u, but the <strong>contest leaderboard scores it as 1u</strong>.
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 onClick={() => setShowConfirm(false)}

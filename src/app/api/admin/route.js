@@ -78,7 +78,7 @@ export async function GET(req) {
         if (p.result === 'WIN')  s.wins++;
         if (p.result === 'LOSS') s.losses++;
         if (p.result === 'PUSH') s.pushes++;
-        s.units += parseFloat(p.profit) || 0;
+        if (p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH') s.units += parseFloat(p.profit) || 0;
         if (p.date && (!s.lastDate || p.date > s.lastDate)) s.lastDate = p.date;
         if (p.sport) s.sports[p.sport] = (s.sports[p.sport] || 0) + 1;
       });

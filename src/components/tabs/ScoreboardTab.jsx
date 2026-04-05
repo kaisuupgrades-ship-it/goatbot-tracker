@@ -46,7 +46,7 @@ export function useStarredGames() {
 }
 
 // ── Sport Config ──────────────────────────────────────────────────────────────
-const SPORTS = [
+const SPORTS_BASE = [
   { key: 'all',    label: 'All',    emoji: '🏆', color: '#FFB800' },
   { key: 'mlb',    label: 'MLB',    emoji: '⚾', color: '#e63946' },
   { key: 'nfl',    label: 'NFL',    emoji: '🏈', color: '#2a9d8f' },
@@ -54,14 +54,45 @@ const SPORTS = [
   { key: 'nhl',    label: 'NHL',    emoji: '🏒', color: '#457b9d' },
   { key: 'ncaaf',  label: 'NCAAF',  emoji: '🏈', color: '#8338ec' },
   { key: 'ncaab',  label: 'NCAAB',  emoji: '🏀', color: '#fb8500' },
-  { key: 'mls',    label: 'MLS',    emoji: '⚽', color: '#06d6a0' },
+  { key: 'soccer', label: 'Soccer', emoji: '⚽', color: '#06d6a0' },
   { key: 'wnba',   label: 'WNBA',   emoji: '🏀', color: '#ff6b9d' },
   { key: 'tennis', label: 'Tennis', emoji: '🎾', color: '#84cc16' },
   { key: 'golf',   label: 'Golf',   emoji: '⛳', color: '#22c55e' },
 ];
 
-// Sports fetched in "All" mode — exclude golf/tennis (custom views, not standard scoreboard)
-const ALL_SPORTS_KEYS = SPORTS.filter(s => s.key !== 'all' && s.key !== 'golf' && s.key !== 'tennis' && s.key !== 'tenniswta').map(s => s.key);
+// Season ranges [startMonth, endMonth] (0-indexed). null = year-round.
+// Wrapping ranges (e.g. NFL Sept–Feb) handled by start > end check.
+const SPORT_SEASONS = {
+  mlb:    [2, 10], // Mar–Oct
+  nfl:    [8, 1],  // Sept–Feb  (wraps)
+  nba:    [9, 5],  // Oct–Jun   (wraps)
+  nhl:    [9, 5],  // Oct–Jun   (wraps)
+  ncaaf:  [7, 0],  // Aug–Jan   (wraps)
+  ncaab:  [10, 3], // Nov–Mar   (wraps; March Madness)
+  soccer: [2, 10], // Mar–Oct
+  wnba:   [4, 9],  // May–Oct
+  tennis: null,
+  golf:   null,
+  all:    null,
+};
+
+function sportInSeason(key) {
+  const range = SPORT_SEASONS[key];
+  if (!range) return true;
+  const m = new Date().getMonth();
+  const [s, e] = range;
+  return s <= e ? (m >= s && m <= e) : (m >= s || m <= e);
+}
+
+// Sort: All first, then in-season sports (preserving original order within group), then off-season
+const SPORTS = [
+  SPORTS_BASE[0], // 'all' always first
+  ...SPORTS_BASE.slice(1).filter(sp => sportInSeason(sp.key)),
+  ...SPORTS_BASE.slice(1).filter(sp => !sportInSeason(sp.key)),
+];
+
+// Sports fetched in "All" mode — exclude soccer/golf/tennis (custom views, not standard scoreboard)
+const ALL_SPORTS_KEYS = SPORTS.filter(s => s.key !== 'all' && s.key !== 'golf' && s.key !== 'tennis' && s.key !== 'tenniswta' && s.key !== 'soccer').map(s => s.key);
 
 // Merge new games into existing state by game ID, preserving object references for unchanged games
 function mergeGames(prevGames, newGames) {
@@ -1557,7 +1588,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
 // ── News Card ─────────────────────────────────────────────────────────────────
 function NewsCard({ article, sportKey }) {
   // Pick a sport accent color for the left border
-  const SPORT_ACCENTS = { mlb: '#E31937', nba: '#F58426', nfl: '#5B8CFF', nhl: '#00A3E0', ncaaf: '#8B5CF6', ncaab: '#F97316', mls: '#00B14F', wnba: '#FF6B6B', ufc: '#D20A0A' };
+  const SPORT_ACCENTS = { mlb: '#E31937', nba: '#F58426', nfl: '#5B8CFF', nhl: '#00A3E0', ncaaf: '#8B5CF6', ncaab: '#F97316', soccer: '#06d6a0', wnba: '#FF6B6B', ufc: '#D20A0A' };
   const accent = SPORT_ACCENTS[sportKey || article._sport] || '#FFB800';
   const teamLabel = article.categories?.find(c => c.type === 'team')?.description || '';
   const pubDate   = article.published ? new Date(article.published) : null;
@@ -1707,7 +1738,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     // Client-side safety timeout: always clear spinner after 60s
     const safetyTimer = setTimeout(() => {
       setIntelLoading(false);
-      setIntelError('Scan timed out — xAI is slow right now. Try again in a moment.');
+      setIntelError('Scan timed out — AI is slow right now. Try again in a moment.');
     }, 60_000);
 
     try {
@@ -2226,12 +2257,12 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           <GolfLeaderboard />
         ) : sport === 'tennis' || sport === 'tenniswta' ? (
           <TennisScoreboard initialTour={sport} />
-        ) : sport === 'mls' ? (
+        ) : sport === 'soccer' ? (
           <SoccerScoreboard />
         ) : null}
 
         {/* Games grid — hidden for sports with dedicated views */}
-        {sport !== 'golf' && sport !== 'tennis' && sport !== 'tenniswta' && sport !== 'mls' && (
+        {sport !== 'golf' && sport !== 'tennis' && sport !== 'tenniswta' && sport !== 'soccer' && (
         <>
         {loading && games.length === 0 ? (
           /* First-load skeleton only — never show this on background refresh */

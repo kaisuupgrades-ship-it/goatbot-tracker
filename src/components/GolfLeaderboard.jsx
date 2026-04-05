@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // ── Starred golfers persistence ───────────────────────────────────────────────
 const GOLF_STAR_KEY = 'betos_starred_golfers';
@@ -87,8 +87,270 @@ function fmtScore(val) {
   return n > 0 ? `+${n}` : `${n}`;
 }
 
+// ── Score type helpers ────────────────────────────────────────────────────────
+function scoreTypeMeta(typeName) {
+  const t = (typeName || '').toLowerCase();
+  if (t === 'eagle' || t === 'double eagle' || t === 'albatross')
+    return { label: t === 'eagle' ? 'Eagle' : t === 'double eagle' ? '2-Eagle' : 'Albatross', color: '#FFB800', bg: 'rgba(255,184,0,0.15)', border: 'rgba(255,184,0,0.4)' };
+  if (t === 'birdie')
+    return { label: 'Birdie', color: '#4ade80', bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.35)' };
+  if (t === 'par')
+    return { label: 'Par', color: '#94a3b8', bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.2)' };
+  if (t === 'bogey')
+    return { label: 'Bogey', color: '#fb923c', bg: 'rgba(251,146,60,0.1)', border: 'rgba(251,146,60,0.3)' };
+  if (t.includes('double bogey') || t === 'double bogey')
+    return { label: 'Dbl Bogey', color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.35)' };
+  if (t.includes('bogey'))
+    return { label: 'Triple+', color: '#ef4444', bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.4)' };
+  return null;
+}
+
+// Compute hot/cold from linescores (per-hole) or fall back to today's pace
+function getHotCold(player) {
+  const linescores = player.linescores || [];
+  // If we have scoreType-annotated linescores, use last 3-5 holes
+  const withType = linescores.filter(ls => ls.scoreType?.name);
+  if (withType.length >= 2) {
+    const recent = withType.slice(-5);
+    const birdies = recent.filter(h => {
+      const t = h.scoreType.name.toLowerCase();
+      return t === 'birdie' || t === 'eagle' || t === 'double eagle' || t === 'albatross';
+    }).length;
+    const bogeys = recent.filter(h => {
+      const t = h.scoreType.name.toLowerCase();
+      return t.includes('bogey');
+    }).length;
+    if (birdies >= 2) return 'hot';
+    if (bogeys >= 2) return 'cold';
+    return null;
+  }
+  // Fallback: use today's round score pace
+  const stats    = player.statistics || [];
+  const todayStr = stats[2]?.displayValue ?? '—';
+  const thruVal  = player.status?.thru ?? stats[1]?.displayValue;
+  if (todayStr === '—' || !thruVal || thruVal === 'F') return null;
+  const today = todayStr === 'E' ? 0 : parseInt(todayStr);
+  const thru  = parseInt(thruVal);
+  if (isNaN(today) || isNaN(thru) || thru < 4) return null;
+  // -2 or better through 4+ holes = hot; +2 or worse = cold
+  if (today <= -2) return 'hot';
+  if (today >= 2) return 'cold';
+  return null;
+}
+
+// Get the most recent hole result from linescores
+function getLastHole(player) {
+  const linescores = player.linescores || [];
+  const withType = linescores.filter(ls => ls.scoreType?.name);
+  if (!withType.length) return null;
+  return withType[withType.length - 1];
+}
+
+// ── Scorecard Modal ───────────────────────────────────────────────────────────
+function ScorecardModal({ player, eventId, league, onClose }) {
+  const [rounds, setRounds] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState('');
+  const overlayRef = useRef(null);
+
+  const athleteId = player.id || player.athlete?.id;
+  const name      = player.athlete?.displayName || player.athlete?.fullName || 'Player';
+
+  useEffect(() => {
+    if (!athleteId || !eventId) { setLoading(false); return; }
+    setLoading(true);
+    fetch(`/api/sports?sport=golf&endpoint=scorecard&league=${league || 'pga'}&athleteId=${athleteId}&eventId=${eventId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        // ESPN scorecard returns rounds array
+        const r = d.rounds || d.player?.rounds || [];
+        setRounds(r);
+      })
+      .catch(e => setError(e.message || 'Could not load scorecard'))
+      .finally(() => setLoading(false));
+  }, [athleteId, eventId, league]);
+
+  // Also try to build scorecard from linescores if API fails
+  const linescoredRounds = (() => {
+    if (rounds?.length) return null; // use API data
+    const ls = player.linescores || [];
+    if (!ls.length) return null;
+    return [{ number: 'Current', holes: ls.map((h, i) => ({
+      number: h.period || (i + 1),
+      par: h.par,
+      score: h.value,
+      displayValue: h.displayValue,
+      scoreType: h.scoreType,
+    }))}];
+  })();
+
+  const displayRounds = rounds?.length ? rounds : (linescoredRounds || []);
+
+  function hdlOverlay(e) { if (e.target === overlayRef.current) onClose(); }
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={hdlOverlay}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '16px',
+      }}
+    >
+      <div style={{
+        background: 'var(--bg-surface, #1a1a2e)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: '12px',
+        width: '100%', maxWidth: '660px',
+        maxHeight: '85vh', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)',
+          background: 'rgba(255,255,255,0.02)',
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary, #fff)' }}>{name}</div>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted, #94a3b8)', marginTop: '2px' }}>Scorecard</div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted, #94a3b8)',
+            borderRadius: '6px', cursor: 'pointer', padding: '4px 10px', fontSize: '0.78rem',
+          }}>✕ Close</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', padding: '12px 14px' }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted, #94a3b8)' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⛳</div>
+              <p style={{ fontSize: '0.82rem' }}>Loading scorecard…</p>
+            </div>
+          ) : error && !displayRounds.length ? (
+            <div style={{ padding: '1rem', color: '#f87171', fontSize: '0.82rem', textAlign: 'center' }}>
+              <div style={{ marginBottom: '6px' }}>⚠️ {error}</div>
+              <div style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '0.72rem' }}>
+                Detailed scorecard may not be available yet. Check back during or after the round.
+              </div>
+            </div>
+          ) : !displayRounds.length ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontSize: '0.82rem' }}>
+              No scorecard data available yet. Check back once the round starts.
+            </div>
+          ) : (
+            displayRounds.map((round, ri) => (
+              <div key={ri} style={{ marginBottom: '18px' }}>
+                <div style={{
+                  fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                  color: '#22c55e', marginBottom: '8px',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                }}>
+                  Round {round.number}
+                  {round.total != null && (
+                    <span style={{ fontFamily: 'IBM Plex Mono', color: scoreColor(round.total - (round.par || 72)), fontWeight: 800, textTransform: 'none', fontSize: '0.78rem' }}>
+                      {round.displayTotal || fmtScore(round.total - (round.par || 72))}
+                    </span>
+                  )}
+                </div>
+
+                {/* Hole grid */}
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: '0.72rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <th style={{ padding: '4px 6px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, textAlign: 'left', whiteSpace: 'nowrap', minWidth: '36px' }}>Hole</th>
+                        {(round.holes || []).map(h => (
+                          <th key={h.number} style={{ padding: '4px 5px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, textAlign: 'center', minWidth: '28px' }}>
+                            {h.number}
+                          </th>
+                        ))}
+                        <th style={{ padding: '4px 6px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, textAlign: 'center' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Par row */}
+                      {(round.holes || []).some(h => h.par != null) && (
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '3px 6px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, fontSize: '0.65rem' }}>Par</td>
+                          {(round.holes || []).map(h => (
+                            <td key={h.number} style={{ padding: '3px 5px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontFamily: 'IBM Plex Mono' }}>
+                              {h.par ?? '—'}
+                            </td>
+                          ))}
+                          <td style={{ padding: '3px 6px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontFamily: 'IBM Plex Mono' }}>
+                            {(round.holes || []).reduce((s, h) => s + (h.par || 0), 0) || round.par || '—'}
+                          </td>
+                        </tr>
+                      )}
+                      {/* Score row */}
+                      <tr>
+                        <td style={{ padding: '5px 6px', fontWeight: 700, fontSize: '0.68rem', color: 'var(--text-secondary, #cbd5e1)' }}>Score</td>
+                        {(round.holes || []).map(h => {
+                          const meta = scoreTypeMeta(h.scoreType?.name);
+                          const score = h.displayValue ?? (h.score != null ? String(h.score) : null);
+                          return (
+                            <td key={h.number} style={{ padding: '3px 3px', textAlign: 'center' }}>
+                              {score != null ? (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  width: '22px', height: '22px', borderRadius: '50%',
+                                  fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.75rem',
+                                  background: meta?.bg || 'transparent',
+                                  color: meta?.color || 'var(--text-primary, #fff)',
+                                  border: meta ? `1px solid ${meta.border}` : 'none',
+                                }}>
+                                  {score}
+                                </span>
+                              ) : (
+                                <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.65rem' }}>–</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td style={{ padding: '5px 6px', textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, color: round.total != null ? scoreColor(round.total - (round.par || 72)) : 'var(--text-muted, #94a3b8)' }}>
+                          {round.total ?? '—'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Score type legend for this round */}
+                {(round.holes || []).some(h => h.scoreType?.name) && (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    {['Eagle', 'Birdie', 'Par', 'Bogey', 'Dbl Bogey'].map(label => {
+                      const meta = scoreTypeMeta(label === 'Dbl Bogey' ? 'double bogey' : label.toLowerCase());
+                      if (!meta) return null;
+                      return (
+                        <span key={label} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          fontSize: '0.6rem', color: meta.color, padding: '1px 6px',
+                          background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '10px',
+                        }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: meta.color, display: 'inline-block' }} />
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Player row ────────────────────────────────────────────────────────────────
-function PlayerRow({ player, isMobile, tournamentName }) {
+function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
   const stats      = player.statistics || [];
   const toPar      = stats[0]?.displayValue ?? player.score?.displayValue ?? '—';
   const thru       = player.status?.thru ?? stats[1]?.displayValue ?? '—';
@@ -100,8 +362,13 @@ function PlayerRow({ player, isMobile, tournamentName }) {
   const isCut      = player.status?.type === 'cut';
   const pos        = player.status?.position?.displayName || '—';
 
-  const [starred, setStarred] = useState(() => isGolferStarred(player));
-  // Re-sync if localStorage changes elsewhere
+  const hotCold    = getHotCold(player);
+  const lastHole   = getLastHole(player);
+  const lastMeta   = lastHole ? scoreTypeMeta(lastHole.scoreType?.name) : null;
+
+  const [starred, setStarred]         = useState(() => isGolferStarred(player));
+  const [showScorecard, setScorecard] = useState(false);
+
   useEffect(() => {
     const handler = () => setStarred(isGolferStarred(player));
     window.addEventListener('storage', handler);
@@ -115,81 +382,124 @@ function PlayerRow({ player, isMobile, tournamentName }) {
   }
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: isMobile
-        ? '30px 1fr 44px 40px 40px 28px'
-        : '40px 32px 1fr 56px 50px 50px 60px 28px',
-      alignItems: 'center',
-      padding: isMobile ? '7px 12px' : '7px 14px',
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
-      background: isLead ? 'rgba(74,222,128,0.04)' : 'transparent',
-      opacity: isCut ? 0.45 : 1,
-    }}>
-      {/* Pos */}
-      <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: isLead ? 800 : 500, color: isLead ? '#FFB800' : 'var(--text-muted)' }}>
-        {pos}
-      </div>
-      {/* Flag — desktop only */}
-      {!isMobile && (
+    <>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile
+          ? '30px 1fr 44px 40px 40px 28px'
+          : '40px 32px 1fr 56px 50px 50px 60px 28px',
+        alignItems: 'center',
+        padding: isMobile ? '7px 12px' : '7px 14px',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
+        background: isLead ? 'rgba(74,222,128,0.04)' : 'transparent',
+        opacity: isCut ? 0.45 : 1,
+      }}>
+        {/* Pos */}
+        <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: isLead ? 800 : 500, color: isLead ? '#FFB800' : 'var(--text-muted)' }}>
+          {pos}
+        </div>
+        {/* Flag — desktop only */}
+        {!isMobile && (
+          <div style={{ textAlign: 'center' }}>
+            {player.athlete?.flag?.href
+              ? <img src={player.athlete.flag.href} alt="" style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '1px' }} />
+              : <span style={{ fontSize: '0.8rem', opacity: 0.4 }}>🏌️</span>}
+          </div>
+        )}
+        {/* Name + hot/cold + last hole badge */}
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', overflow: 'hidden' }}>
+            <button
+              onClick={() => setScorecard(true)}
+              title="View scorecard"
+              style={{
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                fontSize: isMobile ? '0.82rem' : '0.85rem', fontWeight: 600,
+                color: 'var(--text-primary)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.15)',
+                textUnderlineOffset: '2px',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#60a5fa'; e.currentTarget.style.textDecorationColor = '#60a5fa'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.textDecorationColor = 'rgba(255,255,255,0.15)'; }}
+            >
+              {player.athlete?.displayName || player.athlete?.fullName || '—'}
+            </button>
+            {/* Hot/cold emoji */}
+            {hotCold === 'hot' && <span title="Hot round" style={{ fontSize: '0.75rem', flexShrink: 0 }}>🔥</span>}
+            {hotCold === 'cold' && <span title="Cold round" style={{ fontSize: '0.75rem', flexShrink: 0 }}>❄️</span>}
+          </div>
+          {/* Last hole badge + CUT */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', flexWrap: 'wrap' }}>
+            {isCut && <div style={{ fontSize: '0.58rem', color: '#f87171', fontWeight: 700 }}>CUT</div>}
+            {lastMeta && (
+              <span style={{
+                fontSize: '0.55rem', fontWeight: 700, padding: '1px 5px', borderRadius: '8px',
+                background: lastMeta.bg, color: lastMeta.color, border: `1px solid ${lastMeta.border}`,
+                lineHeight: 1.4, flexShrink: 0,
+              }}>
+                {lastMeta.label}
+              </span>
+            )}
+          </div>
+        </div>
+        {/* To Par */}
+        <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: isMobile ? '0.85rem' : '0.9rem', color: scoreColor(toParNum) }}>
+          {fmtScore(toPar)}
+        </div>
+        {/* Today */}
+        <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: scoreColor(todayNum) }}>
+          {todayScore !== '—' ? fmtScore(todayScore) : '—'}
+        </div>
+        {/* Thru */}
+        <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          {thru}
+        </div>
+        {/* Total — desktop only */}
+        {!isMobile && (
+          <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            {totalScore !== '—' ? totalScore : '—'}
+          </div>
+        )}
+        {/* Star button */}
         <div style={{ textAlign: 'center' }}>
-          {player.athlete?.flag?.href
-            ? <img src={player.athlete.flag.href} alt="" style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '1px' }} />
-            : <span style={{ fontSize: '0.8rem', opacity: 0.4 }}>🏌️</span>}
+          <button
+            onClick={handleStar}
+            title={starred ? 'Remove from Featured' : 'Track in Featured tab'}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+              fontSize: '0.85rem', lineHeight: 1,
+              color: starred ? '#FFB800' : 'rgba(255,255,255,0.2)',
+              transition: 'color 0.15s, transform 0.15s',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; e.currentTarget.style.transform = 'scale(1.2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = starred ? '#FFB800' : 'rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'scale(1)'; }}
+          >
+            {starred ? '★' : '☆'}
+          </button>
         </div>
+      </div>
+
+      {/* Scorecard modal */}
+      {showScorecard && (
+        <ScorecardModal
+          player={player}
+          eventId={eventId}
+          league={league}
+          onClose={() => setScorecard(false)}
+        />
       )}
-      {/* Name */}
-      <div style={{ overflow: 'hidden' }}>
-        <div style={{ fontSize: isMobile ? '0.82rem' : '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {player.athlete?.displayName || player.athlete?.fullName || '—'}
-        </div>
-        {isCut && <div style={{ fontSize: '0.58rem', color: '#f87171', fontWeight: 700 }}>CUT</div>}
-      </div>
-      {/* To Par */}
-      <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: isMobile ? '0.85rem' : '0.9rem', color: scoreColor(toParNum) }}>
-        {fmtScore(toPar)}
-      </div>
-      {/* Today */}
-      <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: scoreColor(todayNum) }}>
-        {todayScore !== '—' ? fmtScore(todayScore) : '—'}
-      </div>
-      {/* Thru */}
-      <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-        {thru}
-      </div>
-      {/* Total — desktop only */}
-      {!isMobile && (
-        <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-          {totalScore !== '—' ? totalScore : '—'}
-        </div>
-      )}
-      {/* Star button */}
-      <div style={{ textAlign: 'center' }}>
-        <button
-          onClick={handleStar}
-          title={starred ? 'Remove from Featured' : 'Track in Featured tab'}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
-            fontSize: '0.85rem', lineHeight: 1,
-            color: starred ? '#FFB800' : 'rgba(255,255,255,0.2)',
-            transition: 'color 0.15s, transform 0.15s',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; e.currentTarget.style.transform = 'scale(1.2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = starred ? '#FFB800' : 'rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'scale(1)'; }}
-        >
-          {starred ? '★' : '☆'}
-        </button>
-      </div>
-    </div>
+    </>
   );
 }
 
 // ── Tournament card (expandable) ──────────────────────────────────────────────
-function TournamentCard({ event, defaultOpen, search, isMobile }) {
+function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
   const [open, setOpen] = useState(defaultOpen);
 
   const name       = event.name || event.shortName || 'Tournament';
+  const eventId    = event.id;
   const comp       = event.competitions?.[0] ?? {};
   const venue      = comp.venue?.fullName || event.venue?.fullName || '';
   const city       = comp.venue?.address?.city || '';
@@ -360,6 +670,8 @@ function TournamentCard({ event, defaultOpen, search, isMobile }) {
                   player={{ ...player, _isLead: i === 0 }}
                   isMobile={isMobile}
                   tournamentName={name}
+                  eventId={eventId}
+                  league={league}
                 />
               ))}
 
@@ -496,6 +808,7 @@ export default function GolfLeaderboard() {
               defaultOpen={i === 0}
               search={search}
               isMobile={isMobile}
+              league={league}
             />
           ))}
         </div>

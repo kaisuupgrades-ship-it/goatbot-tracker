@@ -635,7 +635,7 @@ Return ONLY the JSON array, no other text.`;
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.77rem', lineHeight: 1.5, margin: 0, maxWidth: '520px' }}>
             {globalEdges && !userScanned
-              ? 'BetOS AI (Grok 4 + live web search) pre-analyzed today\'s slate automatically. Updated twice daily. Use "Ask the Analyst" below for custom queries.'
+              ? 'BetOS AI pre-analyzed today\'s slate automatically with live web search. Updated twice daily. Use "Ask the Analyst" below for custom queries.'
               : 'BetOS scans today\'s slate and surfaces situational betting edges — home dogs, rest spots, fade opportunities, and line value — with real current odds.'}
           </p>
           {/* Show last generated timestamp */}
@@ -818,7 +818,7 @@ Return ONLY the JSON array, no other text.`;
       {/* Footer info */}
       <div style={{ padding: '0.7rem 1rem', background: '#080808', border: '1px solid #1a1a1a', borderRadius: '8px', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.68rem', color: '#444' }}>
         <span>📡 Live odds from ESPN</span>
-        <span>🤖 AI edge detection via xAI Grok + Claude</span>
+        <span>🤖 AI-powered edge detection with live data</span>
         <span>⚡ Situational edges: rest, matchups, line value, public fade spots</span>
         <span>💬 5 free analyst queries/day per user</span>
       </div>

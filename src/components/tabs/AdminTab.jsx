@@ -472,7 +472,9 @@ function PicksAuditPanel({ userEmail }) {
                   }}>{p.result || 'PENDING'}</span>
                 </td>
                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: parseFloat(p.profit) >= 0 ? '#4ade80' : '#f87171', whiteSpace: 'nowrap' }}>
-                  {p.profit != null ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '—'}
+                  {(p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH') && p.profit != null
+                    ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u`
+                    : '—'}
                 </td>
                 <td style={{ padding: '0.55rem 0.85rem' }}>
                   {p.contest_entry ? <span style={{ color: 'var(--gold)', fontSize: '0.85rem' }}>🏆</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
@@ -806,7 +808,7 @@ const CRON_DEFS = [
   {
     key:      'pregenerate',
     label:    '🤖 Pre-Generate Analyses',
-    desc:     'Runs Grok-4 analysis on today\'s games and caches results so the Analyzer loads instantly.',
+    desc:     'Runs AI analysis on today\'s games and caches results so the Analyzer loads instantly.',
     schedule: '8 AM & 4 PM ET daily',
     path:     '/api/cron/pregenerate-analysis',
     lastRunKey: 'cron_pregenerate_last_run',
@@ -814,7 +816,7 @@ const CRON_DEFS = [
   {
     key:      'trends',
     label:    '📈 Daily Trends',
-    desc:     'Generates today\'s sharp betting edges using Grok-4 with live web search.',
+    desc:     'Generates today\'s sharp betting edges using AI with live web search.',
     schedule: '5 AM & 1 PM ET daily',
     path:     '/api/cron/trends',
     lastRunKey: 'cron_trends_last_run',

@@ -1168,7 +1168,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   useEffect(() => {
     if (injectedReport) {
       setResult(injectedReport.result || '');
-      setModel(injectedReport.model || 'grok-4');
+      setModel(injectedReport.model || 'BetOS AI');
       setPrompt(injectedReport.prompt || '');
       setRunTime(injectedReport.runTime || null);
       onReportConsumed?.();
@@ -1237,7 +1237,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       retryRef.current = false; // success — reset retry flag
       const rt = Math.floor((Date.now() - t0) / 1000);
       setResult(data.result);
-      setModel(data.model || 'grok-4');
+      setModel(data.model || 'BetOS AI');
       setRunTime(rt);
       // Extract team names from prompt for cross-tab linkage (Featured, History)
       const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|$)/i);

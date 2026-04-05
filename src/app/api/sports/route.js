@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 export const maxDuration = 15;
 
 // ESPN unofficial API — free, no key needed
-const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
+const ESPN_BASE      = 'https://site.api.espn.com/apis/site/v2/sports';
+const ESPN_WEB_BASE  = 'https://site.web.api.espn.com/apis/v2/sports';
 
 const SPORT_PATHS = {
   mlb:    'baseball/mlb',
@@ -41,17 +42,18 @@ function setCache(key, data) {
   cache.set(key, { data, time: Date.now() });
 }
 
-async function espnFetch(path) {
-  const cached = getCached(path);
+async function espnFetch(path, base = ESPN_BASE) {
+  const key = `${base}/${path}`;
+  const cached = getCached(key);
   if (cached) return cached;
 
-  const res = await fetch(`${ESPN_BASE}/${path}`, {
+  const res = await fetch(`${base}/${path}`, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
     next: { revalidate: 20 },
   });
   if (!res.ok) throw new Error(`ESPN API ${res.status}: ${path}`);
   const data = await res.json();
-  setCache(path, data);
+  setCache(key, data);
   return data;
 }
 
@@ -77,6 +79,22 @@ export async function GET(req) {
     if (sport === 'golf' && effectiveEndpoint === 'leaderboard') {
       const golfLeague = searchParams.get('league') || 'pga';
       path = `golf/leaderboard?league=${golfLeague}`;
+    } else if (sport === 'golf' && endpoint === 'scorecard') {
+      // Per-player scorecard: uses ESPN web API
+      // https://site.web.api.espn.com/apis/v2/sports/golf/{league}/scorecards/{athleteId}?event={eventId}
+      const golfLeague = searchParams.get('league') || 'pga';
+      const athleteId  = searchParams.get('athleteId');
+      const eventId    = searchParams.get('eventId');
+      if (!athleteId || !eventId) {
+        return NextResponse.json({ error: 'athleteId and eventId required for golf scorecard' }, { status: 400 });
+      }
+      try {
+        const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`, ESPN_WEB_BASE);
+        return NextResponse.json(data);
+      } catch (err) {
+        console.error('Golf scorecard error:', err.message);
+        return NextResponse.json({ error: err.message }, { status: 500 });
+      }
     } else if (sport === 'soccer') {
       // Soccer uses a dynamic league param — e.g. ?league=eng.1 for Premier League
       const soccerLeague = searchParams.get('league') || 'usa.1';

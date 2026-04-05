@@ -281,11 +281,12 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
           50%       { box-shadow: 0 0 22px rgba(255,184,0,0.55), 0 0 40px rgba(255,184,0,0.18), inset 0 0 18px rgba(255,184,0,0.12); border-color: rgba(255,184,0,0.85); }
         }
         @keyframes liveDot {
-          0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+          0%, 49% { opacity: 1; box-shadow: 0 0 5px #ef4444, 0 0 10px rgba(239,68,68,0.6); }
+          50%, 100% { opacity: 0.15; box-shadow: none; }
         }
         .contest-glow-btn { animation: contestPulse 2.4s ease-in-out infinite; }
         .contest-glow-btn:hover { animation: none !important; background: linear-gradient(135deg, rgba(255,184,0,0.38), rgba(255,120,0,0.18)) !important; border-color: rgba(255,184,0,0.9) !important; }
-        .live-dot { animation: liveDot 1.2s ease-in-out infinite; }
+        .live-dot { animation: liveDot 1s step-start infinite; }
       `}</style>
       <div style={{ padding: collapsed ? '0.4rem 0.3rem 0' : '0.5rem 0.4rem 0' }}>
         <button
@@ -331,7 +332,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                 borderRadius: '5px', padding: '2px 7px', flexShrink: 0,
                 boxShadow: '0 0 8px rgba(255,184,0,0.5)',
               }}>
-                <span className="live-dot" style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#000', display: 'inline-block' }} />
+                <span className="live-dot" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444', display: 'inline-block', flexShrink: 0 }} />
                 LIVE
               </span>
             </>
