@@ -246,13 +246,26 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
     fetch(`/api/sports?sport=golf&endpoint=scorecard&league=${league || 'pga'}&athleteId=${athleteId}&eventId=${eventId}`)
       .then(r => r.json())
       .then(d => {
-        if (d.error) throw new Error(d.error);
+        if (d.error && !d.rounds?.length) throw new Error(d.error);
         // ESPN may nest rounds under d.player.rounds or return them at the top level
         const rawRounds = d.rounds || d.player?.rounds || [];
-        const r = rawRounds.map(normalizeRound).filter(r => r.holes.length > 0);
-        setRounds(r);
-        // Default to last round (most current)
-        if (r.length > 0) setActiveRound(r.length - 1);
+        // Accept rounds with hole data AND rounds with just totals (from leaderboard fallback)
+        const withHoles = rawRounds.map(normalizeRound).filter(r => r.holes.length > 0);
+        if (withHoles.length > 0) {
+          setRounds(withHoles);
+          setActiveRound(withHoles.length - 1);
+        } else if (rawRounds.length > 0) {
+          // Rounds exist but without per-hole data — keep them for round-score display
+          const roundSummaries = rawRounds.map(r => ({
+            number: r.number,
+            value:  r.value ?? r.scoreToPar ?? null,
+            par:    r.par ?? null,
+            total:  r.score ?? r.total ?? null,
+            holes:  [],
+          })).filter(r => r.total != null);
+          setRounds(roundSummaries);
+          if (roundSummaries.length > 0) setActiveRound(roundSummaries.length - 1);
+        }
       })
       .catch(e => setError(e.message || 'Could not load scorecard'))
       .finally(() => setLoading(false));
@@ -262,12 +275,30 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
   const fallbackRounds = (() => {
     if (rounds?.length) return null;
     const ls = player.linescores || [];
-    if (!ls.length) return null;
-    // Accept both hole-by-hole (scoreType present) and positional linescores
+
+    // Check for per-hole data in linescores
     const hasHoleData = ls.some(h => h.scoreType || h.par != null);
-    if (hasHoleData) {
+    if (hasHoleData && ls.length > 0) {
       return [{ number: 'Current', value: null, holes: ls.map(normalizeHole) }];
     }
+
+    // Build round-level scores from player.statistics (indices 3+ are round scores)
+    const stats = player.statistics || [];
+    const roundScores = [];
+    for (let i = 3; i < stats.length; i++) {
+      const val = stats[i]?.displayValue;
+      if (val && !isNaN(parseInt(val))) {
+        roundScores.push({
+          number: i - 2,
+          total: parseInt(val),
+          value: null,
+          par: null,
+          holes: [],
+        });
+      }
+    }
+    if (roundScores.length > 0) return roundScores;
+
     return null;
   })();
 
@@ -428,8 +459,49 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
             )}
 
             {holes.length === 0 ? (
-              <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem', textAlign: 'center' }}>
-                Hole-by-hole data will appear once this round starts.
+              <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                {/* Show round-by-round summary even without hole data */}
+                {displayRounds.length > 0 && displayRounds.some(r => r.total != null) ? (
+                  <div>
+                    <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>
+                      Round-by-Round Scores
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {displayRounds.map((r, i) => {
+                        const toPar = r.value ?? (r.total && r.par ? r.total - r.par : null);
+                        return (
+                          <div key={i} style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '8px 14px', borderRadius: '8px',
+                            background: activeRound === i ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${activeRound === i ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                            cursor: 'pointer',
+                          }} onClick={() => setActiveRound(i)}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>R{r.number}</span>
+                            <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                              {r.total ?? '—'}
+                            </span>
+                            {toPar != null && (
+                              <span style={{
+                                fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', fontWeight: 700,
+                                color: scoreColor(toPar),
+                                background: toPar < 0 ? 'rgba(74,222,128,0.1)' : toPar > 0 ? 'rgba(248,113,113,0.1)' : 'rgba(148,163,184,0.08)',
+                                padding: '1px 6px', borderRadius: '4px',
+                              }}>
+                                {fmtScore(toPar)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: '8px', fontSize: '0.65rem', color: 'var(--text-muted)', opacity: 0.6 }}>
+                      Hole-by-hole detail not available from ESPN for this event.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center' }}>Hole-by-hole data will appear once this round starts.</div>
+                )}
               </div>
             ) : (
               <>

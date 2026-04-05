@@ -80,21 +80,77 @@ export async function GET(req) {
       const golfLeague = searchParams.get('league') || 'pga';
       path = `golf/leaderboard?league=${golfLeague}`;
     } else if (sport === 'golf' && endpoint === 'scorecard') {
-      // Per-player scorecard: uses ESPN web API
-      // https://site.web.api.espn.com/apis/v2/sports/golf/{league}/scorecards/{athleteId}?event={eventId}
+      // Per-player scorecard: try multiple ESPN endpoints
       const golfLeague = searchParams.get('league') || 'pga';
       const athleteId  = searchParams.get('athleteId');
       const eventId    = searchParams.get('eventId');
       if (!athleteId || !eventId) {
         return NextResponse.json({ error: 'athleteId and eventId required for golf scorecard' }, { status: 400 });
       }
+
+      // Endpoint 1: site.web.api scorecards (most detailed — has par per hole)
       try {
         const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`, ESPN_WEB_BASE);
-        return NextResponse.json(data);
+        const rounds = data?.rounds || data?.player?.rounds || [];
+        if (rounds.length > 0) return NextResponse.json(data);
       } catch (err) {
-        console.error('Golf scorecard error:', err.message);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        console.warn('Golf scorecard primary endpoint failed:', err.message);
       }
+
+      // Endpoint 2: site.web.api competitor detail (sometimes has round-by-round linescores)
+      try {
+        const data = await espnFetch(
+          `golf/${golfLeague}/leaderboard/${eventId}/playersummary?player=${athleteId}`,
+          ESPN_WEB_BASE
+        );
+        if (data?.rounds?.length || data?.player?.rounds?.length) {
+          return NextResponse.json(data);
+        }
+      } catch (err) {
+        console.warn('Golf player summary fallback failed:', err.message);
+      }
+
+      // Endpoint 3: Try the main leaderboard and extract this player's linescores
+      try {
+        const lb = await espnFetch(`golf/leaderboard?league=${golfLeague}`);
+        const events = lb?.events || [];
+        for (const evt of events) {
+          if (String(evt.id) !== String(eventId)) continue;
+          const competitors = evt.competitions?.[0]?.competitors || [];
+          const player = competitors.find(c =>
+            String(c.id) === String(athleteId) ||
+            String(c.athlete?.id) === String(athleteId)
+          );
+          if (player) {
+            // Build rounds from per-round statistics if available
+            const linescores = player.linescores || [];
+            const stats = player.statistics || [];
+            const roundScores = [];
+            // stats[0]=toPar, stats[1]=thru, stats[2]=today, stats[3+]=round scores
+            for (let i = 3; i < stats.length; i++) {
+              const val = stats[i]?.displayValue;
+              if (val && !isNaN(parseInt(val))) {
+                roundScores.push({
+                  number: i - 2,
+                  total: parseInt(val),
+                  value: null, // don't know par for the round from this data
+                  holes: [], // no per-hole data from leaderboard
+                });
+              }
+            }
+            return NextResponse.json({
+              rounds: roundScores,
+              linescores,
+              player: { displayName: player.athlete?.displayName },
+              _source: 'leaderboard_fallback',
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Golf leaderboard fallback failed:', err.message);
+      }
+
+      return NextResponse.json({ error: 'Scorecard not available for this player/event', rounds: [] }, { status: 200 });
     } else if (sport === 'soccer') {
       // Soccer uses a dynamic league param — e.g. ?league=eng.1 for Premier League
       const soccerLeague = searchParams.get('league') || 'usa.1';

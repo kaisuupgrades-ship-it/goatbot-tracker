@@ -863,26 +863,6 @@ function ContestsPanel({ userEmail }) {
     setTimeout(() => setActionMsg(''), 6000);
   }
 
-  async function handleBackfillCommenceTime(dryRun = false) {
-    const label = dryRun ? 'dry run' : 'backfill';
-    if (!dryRun && !confirm('Backfill commence_time on all historical picks using ESPN? This looks up game start times and updates the database.')) return;
-    setActionMsg(`Running ${label}…`);
-    try {
-      const res = await adminFetch('/api/admin/backfill-commence-time', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun }),
-      });
-      const d = await res.json();
-      if (d.error) { setActionMsg(`Error: ${d.error}`); }
-      else {
-        setActionMsg(`${dryRun ? '🔍 Dry run' : '✅ Backfill'}: ${d.updated} updated, ${d.skipped} not found, ${d.failed} failed (${d.espnCalls || 0} ESPN calls)`);
-      }
-    } catch (e) {
-      setActionMsg(`Error: ${e.message}`);
-    }
-    setTimeout(() => setActionMsg(''), 10000);
-  }
-
   function handleSavedPick(updated) {
     setPicks(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
     setActionMsg('✓ Pick updated');
@@ -937,7 +917,6 @@ function ContestsPanel({ userEmail }) {
         <button onClick={() => setShowDeclare(true)} style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.5)', background: 'rgba(255,184,0,0.12)', color: '#FFB800' }}>🏆 Declare Winner</button>
         <button onClick={handleBatchAudit} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.25)', background: 'rgba(255,184,0,0.06)', color: '#FFB800' }}>🎯 AI Audit</button>
         <button onClick={handleTimingSweep} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.07)', color: '#f87171' }} title="Auto-reject picks submitted after game start">⏱ Timing</button>
-        <button onClick={() => handleBackfillCommenceTime(false)} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(20,184,166,0.35)', background: 'rgba(20,184,166,0.07)', color: '#14b8a6' }} title="Backfill commence_time from ESPN for historical picks">🕐 Backfill</button>
         <button onClick={load} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', border: '1px solid #222', background: 'transparent', color: '#666' }}>↻</button>
       </div>
 
@@ -1435,6 +1414,45 @@ function SystemPanel({ userEmail }) {
   const [expandedAnalysis, setExpandedAnalysis] = useState(null); // id of expanded row
   const [gradingId,        setGradingId]        = useState(null); // id currently being saved
   const [aiRecord,         setAiRecord]         = useState(null); // { wins, losses, pushes, winPct, byConf, bySport }
+  const [backfillMsg,      setBackfillMsg]      = useState('');
+  const [backfillRunning,  setBackfillRunning]  = useState(false);
+  const [autoGradeMsg,     setAutoGradeMsg]     = useState('');
+  const [autoGradeRunning, setAutoGradeRunning] = useState(false);
+
+  async function handleBackfill() {
+    if (!confirm('Backfill commence_time on all historical picks using ESPN? This looks up game start times and updates the database.')) return;
+    setBackfillRunning(true);
+    setBackfillMsg('Running backfill…');
+    try {
+      const res = await adminFetch('/api/admin/backfill-commence-time', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const d = await res.json();
+      if (d.error) setBackfillMsg(`Error: ${d.error}`);
+      else setBackfillMsg(`✅ ${d.updated} updated, ${d.skipped} not found, ${d.failed} failed (${d.espnCalls || 0} ESPN calls)`);
+    } catch (e) { setBackfillMsg(`Error: ${e.message}`); }
+    setBackfillRunning(false);
+    setTimeout(() => setBackfillMsg(''), 12000);
+  }
+
+  async function handleAutoGrade() {
+    setAutoGradeRunning(true);
+    setAutoGradeMsg('Auto-grading analyses against ESPN scores…');
+    try {
+      const res = await adminFetch('/api/admin/auto-grade-analyses', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const d = await res.json();
+      if (d.error) setAutoGradeMsg(`Error: ${d.error}`);
+      else setAutoGradeMsg(`✅ ${d.graded} graded (${d.wins}W-${d.losses}L-${d.pushes}P), ${d.skipped} skipped, ${d.noScore} no score yet`);
+    } catch (e) { setAutoGradeMsg(`Error: ${e.message}`); }
+    setAutoGradeRunning(false);
+    loadAiRecord();
+    loadGeneratedAnalyses();
+    setTimeout(() => setAutoGradeMsg(''), 12000);
+  }
 
   async function runBatchAnalysis() {
     setBatchRunning(true);
@@ -1954,6 +1972,40 @@ function SystemPanel({ userEmail }) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Admin Tools ── */}
+      <div className="card" style={{ padding: '1.2rem' }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>🛠️ Admin Tools</div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={handleBackfill}
+            disabled={backfillRunning}
+            style={{ padding: '6px 14px', borderRadius: '6px', cursor: backfillRunning ? 'wait' : 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(20,184,166,0.35)', background: 'rgba(20,184,166,0.07)', color: '#14b8a6', opacity: backfillRunning ? 0.6 : 1 }}
+          >
+            {backfillRunning ? '⟳ Running…' : '🕐 Backfill Commence Times'}
+          </button>
+          <button
+            onClick={handleAutoGrade}
+            disabled={autoGradeRunning}
+            style={{ padding: '6px 14px', borderRadius: '6px', cursor: autoGradeRunning ? 'wait' : 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(96,165,250,0.35)', background: 'rgba(96,165,250,0.07)', color: '#60a5fa', opacity: autoGradeRunning ? 0.6 : 1 }}
+          >
+            {autoGradeRunning ? '⟳ Grading…' : '🤖 Auto-Grade AI Picks'}
+          </button>
+        </div>
+        {backfillMsg && (
+          <div style={{ marginTop: '8px', fontSize: '0.72rem', color: backfillMsg.startsWith('✅') ? '#4ade80' : backfillMsg.startsWith('Error') ? '#f87171' : '#60a5fa', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            {backfillMsg}
+          </div>
+        )}
+        {autoGradeMsg && (
+          <div style={{ marginTop: '8px', fontSize: '0.72rem', color: autoGradeMsg.startsWith('✅') ? '#4ade80' : autoGradeMsg.startsWith('Error') ? '#f87171' : '#60a5fa', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            {autoGradeMsg}
+          </div>
+        )}
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginTop: '6px', lineHeight: 1.5 }}>
+          <strong>Backfill</strong> looks up ESPN game start times for all picks missing commence_time (enables verified pick status). <strong>Auto-Grade</strong> checks ESPN final scores and grades all ungraded AI analysis picks automatically.
+        </p>
       </div>
 
       <div className="card" style={{ padding: '1.2rem' }}>
