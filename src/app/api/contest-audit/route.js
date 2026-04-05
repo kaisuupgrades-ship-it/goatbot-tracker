@@ -9,7 +9,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 const RULES = {
   minOdds: -145,
@@ -178,7 +178,7 @@ export async function GET(req) {
   const userEmail = searchParams.get('userEmail');
   const action = searchParams.get('action');
 
-  if (userEmail !== ADMIN_EMAIL) {
+  if (!ADMIN_EMAILS.includes(userEmail?.toLowerCase())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -232,7 +232,7 @@ export async function POST(req) {
   const { action, pickId, userEmail, overrideStatus, overrideReason } = body;
 
   // Admin override: manually approve/reject a pick
-  if (action === 'override' && userEmail === ADMIN_EMAIL && pickId) {
+  if (action === 'override' && ADMIN_EMAILS.includes(userEmail?.toLowerCase()) && pickId) {
     const isRejected = (overrideStatus || 'APPROVED') === 'REJECTED';
 
     // First fetch the current pick so we can preserve contest_date on rejection
@@ -246,7 +246,7 @@ export async function POST(req) {
       audit_status: overrideStatus || 'APPROVED',
       audit_reason: overrideReason || 'Admin override',
       audit_override: true,
-      audit_override_by: ADMIN_EMAIL,
+      audit_override_by: userEmail?.toLowerCase(),
       audit_override_at: new Date().toISOString(),
     };
 

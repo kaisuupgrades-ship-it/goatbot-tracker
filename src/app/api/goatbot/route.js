@@ -3,6 +3,34 @@ import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 300;
 
+// Simple in-memory rate limiter — 5 requests per user per minute
+const rateLimitMap = new Map();
+const RATE_LIMIT = 5;
+const RATE_WINDOW = 60 * 1000; // 1 minute
+
+function checkRateLimit(userId) {
+  const now = Date.now();
+  const key = userId || 'anonymous';
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now - entry.windowStart > RATE_WINDOW) {
+    rateLimitMap.set(key, { windowStart: now, count: 1 });
+    return true;
+  }
+
+  if (entry.count >= RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
+// Clean up old entries every 5 minutes to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (now - entry.windowStart > RATE_WINDOW * 2) rateLimitMap.delete(key);
+  }
+}, 5 * 60 * 1000);
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -318,6 +346,12 @@ async function cacheAnalysis(sport, homeTeam, awayTeam, gameDate, analysis, mode
 }
 
 export async function POST(req) {
+  // Rate limiting check
+  const userId = req.headers.get('x-user-id') || req.ip || 'anonymous';
+  if (!checkRateLimit(userId)) {
+    return NextResponse.json({ error: 'Rate limit exceeded. Please wait a minute.' }, { status: 429 });
+  }
+
   const claudeKey = process.env.ANTHROPIC_API_KEY;
   const xaiHeaders = {
     'Content-Type': 'application/json',

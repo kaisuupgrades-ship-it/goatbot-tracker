@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 30;
 
-const ADMIN_EMAILS = ['kaisuupgrades@gmail.com'];
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 // Use service role key if available, otherwise fall back to anon (limited access)
 const supabaseAdmin = createClient(

@@ -19,7 +19,7 @@ import { callAI }        from '@/lib/ai';
 
 export const maxDuration = 120; // Grok 4 + web search can take a while
 
-const ADMIN_EMAIL      = 'kaisuupgrades@gmail.com';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 const GLOBAL_EDGES_KEY = 'ai_daily_edges';
 const CRON_LOG_KEY     = 'cron_trends_last_run';
 
@@ -244,11 +244,16 @@ export async function GET(req) {
   // Also allow manual trigger with admin email param (for testing)
   const { searchParams } = new URL(req.url);
   const adminEmail = searchParams.get('adminEmail');
-  const isAdmin    = adminEmail === ADMIN_EMAIL;
+  const isAdmin    = ADMIN_EMAILS.includes(adminEmail?.toLowerCase());
 
   if (!isAdmin) {
-    // Require either CRON_SECRET (Vercel) or no secret configured (dev)
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Fail-closed: if CRON_SECRET is not configured, return 503
+    if (!cronSecret) {
+      return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 });
+    }
+
+    // Require CRON_SECRET header
+    if (authHeader !== `Bearer ${cronSecret}`) {
       console.warn('[cron/trends] Unauthorized request - missing or invalid CRON_SECRET');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -273,7 +278,7 @@ export async function GET(req) {
 // ── POST (Admin Panel manual trigger) ─────────────────────────────────────────
 export async function POST(req) {
   const body = await req.json().catch(() => ({}));
-  if (body.userEmail !== ADMIN_EMAIL) {
+  if (!ADMIN_EMAILS.includes(body.userEmail?.toLowerCase())) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   }
 

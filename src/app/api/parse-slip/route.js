@@ -92,6 +92,23 @@ async function parseImage(imageBase64, mimeType) {
   throw new Error('No vision API available — configure XAI_API_KEY or ANTHROPIC_API_KEY');
 }
 
+// ── SSRF Protection: validate URLs before fetching ────────────────────────────
+function isSafeUrl(urlStr) {
+  try {
+    const url = new URL(urlStr);
+    // Block non-http(s) protocols
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    // Block internal/private IPs
+    const hostname = url.hostname.toLowerCase();
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') return false;
+    if (hostname.startsWith('10.') || hostname.startsWith('192.168.')) return false;
+    if (hostname.startsWith('172.') && parseInt(hostname.split('.')[1]) >= 16 && parseInt(hostname.split('.')[1]) <= 31) return false;
+    if (hostname === '169.254.169.254') return false; // AWS metadata
+    if (hostname.endsWith('.internal') || hostname.endsWith('.local')) return false;
+    return true;
+  } catch { return false; }
+}
+
 // ── Text: use shared AI utility (xAI → Claude) ────────────────────────────────
 async function parseText(text) {
   const xaiKey     = process.env.XAI_API_KEY;
@@ -169,6 +186,11 @@ export async function POST(req) {
     } else if (type === 'url') {
       const { url } = body;
       if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
+
+      // SSRF protection: validate URL before fetching
+      if (!isSafeUrl(url)) {
+        return NextResponse.json({ error: 'Invalid or blocked URL' }, { status: 400 });
+      }
 
       let pageText = '';
       try {

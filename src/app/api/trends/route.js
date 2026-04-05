@@ -6,7 +6,7 @@ import { fetchWeatherForGames } from '@/lib/weather';
 
 export const maxDuration = 60;
 
-const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -235,7 +235,7 @@ export async function POST(req) {
   // ── Admin: Push today's edges site-wide ──────────────────────────────────
   if (body.action === 'scan-edges') {
     const { userEmail } = body;
-    if (userEmail !== ADMIN_EMAIL) {
+    if (!ADMIN_EMAILS.includes(userEmail?.toLowerCase())) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 });
     }
 

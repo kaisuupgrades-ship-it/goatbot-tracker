@@ -26,13 +26,17 @@ const supabase = createClient(
 );
 
 export async function GET(req) {
-  // ── Auth: allow both CRON_SECRET header AND Vercel's own cron invocation ──
+  // ── Auth: require CRON_SECRET to be configured (fail-closed) ──
   const authHeader = req.headers.get('authorization') || '';
   const cronSecret = process.env.CRON_SECRET;
 
-  // If CRON_SECRET is set, enforce it. If it's not set, allow the request
-  // (useful during initial setup before the env var is configured).
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Fail-closed: if CRON_SECRET is not configured, return 503
+  if (!cronSecret) {
+    return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 });
+  }
+
+  // If CRON_SECRET is set, enforce it
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

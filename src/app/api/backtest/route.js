@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 60;
 
-const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -220,7 +220,7 @@ export async function POST(req) {
   const body = await req.json();
   const { action, userEmail } = body;
 
-  if (userEmail?.toLowerCase() !== ADMIN_EMAIL) {
+  if (!ADMIN_EMAILS.includes(userEmail?.toLowerCase())) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   }
 

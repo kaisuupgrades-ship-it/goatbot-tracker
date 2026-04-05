@@ -20,6 +20,17 @@ const ANON_KEY     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 // Service role client — bypasses RLS, used for the actual insert
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY || ANON_KEY);
 
+async function getAuthUser(req) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) return null;
+    return user;
+  } catch { return null; }
+}
+
 // ── Contest hard rules (enforced server-side) ────────────────────────────────
 const CONTEST_RULES = {
   minOdds: -145,
@@ -130,38 +141,28 @@ async function lookupCommenceTime(sport, team, dateStr) {
 
 // ── POST /api/picks ──────────────────────────────────────────────────────────
 export async function POST(req) {
+  // ── 1. Verify the caller's identity (REQUIRED) ────────────────────────────
+  //    Use the JWT from the Authorization header to get their actual user_id.
+  //    This prevents a user from spoofing another user's user_id.
+  const user = await getAuthUser(req);
+  if (!user) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
-  const { pick, authToken } = body;
+  const { pick } = body;
 
   if (!pick) {
     return NextResponse.json({ error: 'Pick data required' }, { status: 400 });
   }
 
-  // ── 1. Verify the caller's identity ─────────────────────────────────────
-  //    Use the user's JWT to get their actual user_id from Supabase Auth.
-  //    This prevents a user from spoofing another user's user_id.
-  let verifiedUserId = null;
-  if (authToken) {
-    try {
-      const authClient = createClient(SUPABASE_URL, ANON_KEY, {
-        global: { headers: { Authorization: `Bearer ${authToken}` } },
-      });
-      const { data: { user } } = await authClient.auth.getUser();
-      verifiedUserId = user?.id || null;
-    } catch { /* fall through */ }
-  }
-
-  // If we verified a user, enforce that the pick belongs to them
-  if (verifiedUserId && pick.user_id && pick.user_id !== verifiedUserId) {
+  // ── 2. Enforce that the pick belongs to the authenticated user ────────────
+  const userId = user.id;
+  if (pick.user_id && pick.user_id !== userId) {
     return NextResponse.json({ error: 'User ID mismatch' }, { status: 403 });
   }
 
-  const userId = verifiedUserId || pick.user_id;
-  if (!userId) {
-    return NextResponse.json({ error: 'user_id required' }, { status: 400 });
-  }
-
-  // ── 2. Strip client-supplied commence_time — we set it from ESPN ─────────
+  // ── 3. Strip client-supplied commence_time — we set it from ESPN ─────────
   //    A client could send commence_time = "2099-01-01" to fake verification.
   //    We ALWAYS look it up ourselves.
   const safePayload = { ...pick, user_id: userId };
@@ -169,7 +170,7 @@ export async function POST(req) {
   delete safePayload.submitted_at;    // strip — set by DB trigger
   delete safePayload.id;              // strip — never trust client-supplied id
 
-  // ── 3. Contest server-side validation + 1-unit normalization ────────────
+  // ── 4. Contest server-side validation + 1-unit normalization ────────────
   if (safePayload.contest_entry) {
     const errors = validateContestRules(safePayload);
     if (errors.length > 0) {
@@ -200,7 +201,7 @@ export async function POST(req) {
     // without touching the stored data. "My Picks" always shows real units/profit.
   }
 
-  // ── 4. Look up actual game start time from ESPN ──────────────────────────
+  // ── 5. Look up actual game start time from ESPN ──────────────────────────
   //    This is the only trusted source of commence_time.
   //    If ESPN can't find the game, commence_time stays null (pick is unverifiable).
   let commence_time = null;
@@ -212,7 +213,7 @@ export async function POST(req) {
     );
   }
 
-  // ── 5. Insert via service role (trusted) ─────────────────────────────────
+  // ── 6. Insert via service role (trusted) ─────────────────────────────────
   const { data, error } = await supabaseAdmin
     .from('picks')
     .insert([{ ...safePayload, commence_time }])

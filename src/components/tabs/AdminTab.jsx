@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import BacktestPanel from './admin/BacktestPanel';
 
-const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 // ── Tiny reusable components ──────────────────────────────────────────────────
 
@@ -1053,56 +1053,97 @@ function SystemPanel({ userEmail }) {
       .catch(() => setGeneratedAnalyses([]));
   }
 
+  // Fire-and-forget: sends ONE request for all sports. The server processes
+  // them sequentially and writes progress to the settings table. We poll that
+  // table so the UI stays alive even if the user switches tabs or refreshes.
   async function runPregenAnalysis() {
     setPregenRunning(true);
     setPregenResult(null);
     setPregenLiveLog([]);
 
-    const SPORTS = ['mlb', 'nba', 'nhl', 'nfl', 'mls', 'wnba'];
-    const agg = { generated: 0, skipped: 0, errors: 0, games: [], error_list: [], duration_ms: 0 };
-
-    for (const sport of SPORTS) {
-      // Mark this sport as in-progress in the live log
-      setPregenLiveLog(prev => [...prev, { sport, status: 'running', count: null, ts: Date.now() }]);
+    // Fire the request — don't await it (it can take 2-5 min on Vercel)
+    fetch('/api/cron/pregenerate-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userEmail, force: true }),
+    }).then(async res => {
+      // When the full request completes, show the final result
       try {
-        const res = await fetch('/api/cron/pregenerate-analysis', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userEmail, force: true, sport }),
-        });
-        const text = await res.text();
-        let data;
-        try { data = JSON.parse(text); }
-        catch { data = { error: `${sport.toUpperCase()}: Server returned non-JSON (${res.status}) — ${text.slice(0, 120)}` }; }
+        const data = await res.json();
+        setPregenResult(data);
+      } catch { /* polling will catch completion */ }
+      setPregenRunning(false);
+      loadPregenLog();
+      loadGeneratedAnalyses();
+    }).catch(() => {
+      // Request may fail if user navigated away — that's fine,
+      // the server-side function continues and polling will catch it
+    });
 
-        if (data.error && typeof data.generated === 'undefined') {
-          agg.error_list.push(data.error);
-          agg.errors++;
-          setPregenLiveLog(prev => prev.map(e => e.sport === sport ? { ...e, status: 'error', error: data.error } : e));
-        } else {
-          agg.generated   += data.generated   || 0;
-          agg.skipped     += data.skipped     || 0;
-          agg.errors      += data.errors      || 0;
-          agg.duration_ms += data.duration_ms || 0;
-          agg.games.push(...(data.games       || []));
-          agg.error_list.push(...(data.error_list || []));
-          setPregenLiveLog(prev => prev.map(e => e.sport === sport
-            ? { ...e, status: data.generated > 0 ? 'done' : 'skipped',
-                count: data.generated, skipped: data.skipped, games: data.games || [] }
-            : e));
-        }
-      } catch (e) {
-        agg.error_list.push(`${sport.toUpperCase()}: ${e.message}`);
-        agg.errors++;
-        setPregenLiveLog(prev => prev.map(e => e.sport === sport ? { ...e, status: 'error', error: e.message } : e));
-      }
-    }
-
-    setPregenResult(agg);
-    loadPregenLog();
-    loadGeneratedAnalyses();
-    setPregenRunning(false);
+    // Start polling progress from Supabase settings table
+    startPregenPolling();
   }
+
+  function startPregenPolling() {
+    const pollId = setInterval(async () => {
+      try {
+        const res = await fetch('/api/settings?key=pregenerate_progress');
+        const d = await res.json();
+        if (!d.value) return;
+        const progress = typeof d.value === 'string' ? JSON.parse(d.value) : d.value;
+
+        // Update live log from server progress
+        if (progress.current_sport && progress.status === 'running') {
+          setPregenLiveLog(prev => {
+            const existing = prev.find(e => e.sport === progress.current_sport);
+            if (!existing) {
+              return [...prev, { sport: progress.current_sport, status: 'running', count: null, ts: Date.now() }];
+            }
+            return prev;
+          });
+        }
+
+        // If done, stop polling and refresh data
+        if (progress.status === 'done') {
+          clearInterval(pollId);
+          setPregenRunning(false);
+          loadPregenLog();
+          loadGeneratedAnalyses();
+        }
+      } catch { /* ignore poll errors */ }
+    }, 4000); // poll every 4 seconds
+
+    // Safety: stop polling after 6 minutes no matter what
+    setTimeout(() => {
+      clearInterval(pollId);
+      setPregenRunning(false);
+    }, 360000);
+
+    // Store the interval ID so we can clean up on unmount
+    return pollId;
+  }
+
+  // On mount: check if a pregenerate job is already running (e.g. started
+  // before a tab switch). If so, resume the polling UI.
+  useEffect(() => {
+    let pollId;
+    async function checkRunning() {
+      try {
+        const res = await fetch('/api/settings?key=pregenerate_progress');
+        const d = await res.json();
+        if (!d.value) return;
+        const progress = typeof d.value === 'string' ? JSON.parse(d.value) : d.value;
+        // If it was started less than 5 min ago and not done, resume polling
+        const age = Date.now() - new Date(progress.started_at).getTime();
+        if (progress.status === 'running' && age < 300000) {
+          setPregenRunning(true);
+          pollId = startPregenPolling();
+        }
+      } catch { /* ignore */ }
+    }
+    checkRunning();
+    return () => { if (pollId) clearInterval(pollId); };
+  }, []); // eslint-disable-line
 
   function loadSysInfo() {
     fetch(`/api/admin?action=system&userEmail=${encodeURIComponent(userEmail)}`)
@@ -1221,7 +1262,7 @@ function SystemPanel({ userEmail }) {
           disabled={pregenRunning}
           style={{ opacity: pregenRunning ? 0.6 : 1 }}
         >
-          {pregenRunning ? `⟳ Running… (${pregenLiveLog.length}/6 sports)` : '⚡ Pre-Generate Now'}
+          {pregenRunning ? '⟳ Running on server… (safe to switch tabs)' : '⚡ Pre-Generate Now'}
         </button>
       </div>
 

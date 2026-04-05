@@ -328,37 +328,34 @@ function ContestBanner() {
   const urgent = daysLeft <= 5;
 
   return (
-    /* Outer wrapper: provides animated border via spinning conic gradient */
+    /* Outer wrapper: static gradient border with gold → green money theme */
     <div style={{
       position: 'relative',
       borderRadius: '14px',
       padding: '1.5px',
-      overflow: 'hidden',
-      boxShadow: '0 0 40px rgba(255,184,0,0.08), 0 8px 24px rgba(0,0,0,0.4)',
+      background: 'linear-gradient(135deg, rgba(255,184,0,0.6) 0%, rgba(74,222,128,0.4) 50%, rgba(255,184,0,0.6) 100%)',
+      boxShadow: '0 0 30px rgba(74,222,128,0.06), 0 8px 24px rgba(0,0,0,0.4)',
     }}>
-      {/* Spinning gold spotlight — travels around the full border */}
-      <div style={{
-        position: 'absolute',
-        top: '50%', left: '50%',
-        width: '220%', height: '220%',
-        transform: 'translate(-50%, -50%)',
-        background: 'conic-gradient(from 0deg, transparent 0deg, rgba(255,184,0,0.12) 20deg, rgba(255,184,0,0.85) 50deg, rgba(255,220,80,1) 65deg, rgba(255,149,0,0.85) 80deg, rgba(255,184,0,0.12) 110deg, transparent 140deg)',
-        animation: 'spin-border 3s linear infinite',
-      }} />
 
       {/* Inner card */}
       <div style={{
-        position: 'relative', zIndex: 1,
-        background: 'linear-gradient(135deg, rgba(20,14,0,0.97) 0%, rgba(28,18,0,0.99) 100%)',
+        position: 'relative',
+        background: 'linear-gradient(135deg, rgba(12,20,8,0.98) 0%, rgba(16,14,4,0.99) 50%, rgba(8,18,12,0.98) 100%)',
         borderRadius: '12.5px',
         overflow: 'hidden',
       }}>
 
-      {/* Subtle radial glow behind trophy */}
+      {/* Corner glow — top left gold, bottom right green */}
       <div style={{
-        position: 'absolute', top: '-20px', left: '16px',
-        width: '80px', height: '80px',
-        background: 'radial-gradient(circle, rgba(255,184,0,0.12) 0%, transparent 70%)',
+        position: 'absolute', top: '-30px', left: '-10px',
+        width: '120px', height: '120px',
+        background: 'radial-gradient(circle, rgba(255,184,0,0.1) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-30px', right: '-10px',
+        width: '120px', height: '120px',
+        background: 'radial-gradient(circle, rgba(74,222,128,0.08) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
 
@@ -369,26 +366,23 @@ function ContestBanner() {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Animated trophy */}
+            {/* Trophy */}
             <span style={{
               fontSize: '1.8rem', lineHeight: 1,
-              animation: 'trophy-bounce 2s ease-in-out infinite',
-              display: 'inline-block', filter: 'drop-shadow(0 0 8px rgba(255,184,0,0.6))',
+              display: 'inline-block', filter: 'drop-shadow(0 0 6px rgba(255,184,0,0.4))',
             }}>🏆</span>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 900, color: '#FFD700', fontSize: '1.05rem', letterSpacing: '-0.02em', textShadow: '0 0 12px rgba(255,184,0,0.4)' }}>
                   Monthly Sharp Contest
                 </span>
-                {/* Prize pill with shimmer */}
+                {/* Prize pill — green money theme */}
                 <span style={{
-                  background: 'linear-gradient(90deg, rgba(255,184,0,0.25), rgba(255,149,0,0.2), rgba(255,184,0,0.25))',
-                  backgroundSize: '200% auto',
-                  animation: 'prize-shimmer 3s linear infinite',
-                  color: '#FFD700',
-                  border: '1px solid rgba(255,184,0,0.55)',
+                  background: 'linear-gradient(90deg, rgba(74,222,128,0.2), rgba(52,211,153,0.15))',
+                  color: '#4ade80',
+                  border: '1px solid rgba(74,222,128,0.5)',
                   borderRadius: '20px', padding: '2px 12px', fontSize: '0.7rem', fontWeight: 900,
-                  letterSpacing: '0.06em', textShadow: '0 0 8px rgba(255,184,0,0.5)',
+                  letterSpacing: '0.06em', textShadow: '0 0 8px rgba(74,222,128,0.4)',
                 }}>$100 PRIZE</span>
                 {/* Live badge */}
                 <span style={{
@@ -510,21 +504,28 @@ function ContestBanner() {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 // ── Contest Row ───────────────────────────────────────────────────────────────
-function ContestRow({ entry, isMe }) {
+function ContestRow({ entry, isMe, onViewProfile }) {
   const streakColor = entry.streak_type === 'W' ? '#4ade80' : entry.streak_type === 'L' ? '#f87171' : '#94a3b8';
   const unitColor   = entry.units > 0 ? '#4ade80' : entry.units < 0 ? '#f87171' : '#94a3b8';
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '36px 36px 1fr 70px 65px 55px 60px',
-      alignItems: 'center',
-      gap: '6px',
-      padding: '8px 12px',
-      background: isMe ? 'rgba(255,184,0,0.06)' : entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent',
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
-      borderLeft: isMe ? '2px solid rgba(255,184,0,0.5)' : '2px solid transparent',
-    }}>
+    <div
+      onClick={onViewProfile}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '36px 36px 1fr 70px 65px 55px 60px',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '8px 12px',
+        background: isMe ? 'rgba(255,184,0,0.06)' : entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
+        borderLeft: isMe ? '2px solid rgba(255,184,0,0.5)' : '2px solid transparent',
+        cursor: 'pointer',
+        transition: 'background 0.15s',
+      }}
+      onMouseEnter={e => { if (!isMe) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+      onMouseLeave={e => { if (!isMe) e.currentTarget.style.background = entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent'; }}
+    >
       {/* Rank */}
       <div style={{ textAlign: 'center' }}>
         {entry.rank === 1 ? <span style={{ fontSize: '1.1rem' }}>🥇</span>
@@ -532,8 +533,10 @@ function ContestRow({ entry, isMe }) {
           : entry.rank === 3 ? <span style={{ fontSize: '1.1rem' }}>🥉</span>
           : <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: 'var(--text-muted)' }}>#{entry.rank}</span>}
       </div>
-      {/* Avatar */}
-      <div style={{ fontSize: '1.1rem', textAlign: 'center' }}>{entry.avatar_emoji || '🎯'}</div>
+      {/* Avatar — real photo with initials fallback */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <UserAvatar userId={entry.user_id} avatarEmoji={entry.avatar_emoji} displayName={entry.display_name} username={entry.username} size={30} />
+      </div>
       {/* Name */}
       <div style={{ overflow: 'hidden' }}>
         <div style={{ fontSize: '0.85rem', fontWeight: isMe ? 800 : 600, color: isMe ? 'var(--gold)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -570,7 +573,7 @@ function ContestRow({ entry, isMe }) {
 }
 
 // ── Contest Standings Block ────────────────────────────────────────────────────
-function ContestStandings({ userId, isDemo, refreshKey }) {
+function ContestStandings({ userId, isDemo, refreshKey, onViewProfile }) {
   const [cData, setCData]   = useState(null);
   const [cLoad, setCLoad]   = useState(true);
 
@@ -637,7 +640,7 @@ function ContestStandings({ userId, isDemo, refreshKey }) {
         </div>
       ) : (
         entries.map(entry => (
-          <ContestRow key={entry.user_id} entry={entry} isMe={entry.user_id === userId} />
+          <ContestRow key={entry.user_id} entry={entry} isMe={entry.user_id === userId} onViewProfile={() => onViewProfile?.(entry)} />
         ))
       )}
     </div>
@@ -727,7 +730,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
       {subTab === 'contest' && (
         <>
           <ContestBanner />
-          <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} />
+          <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} onViewProfile={(entry) => setViewEntry(entry)} />
         </>
       )}
 

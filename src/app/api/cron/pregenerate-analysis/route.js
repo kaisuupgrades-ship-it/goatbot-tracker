@@ -82,6 +82,55 @@ async function fetchTodaysGames(sport, dateStr) {
   }
 }
 
+// Fetch cached odds from settings table and find the matching game
+// Returns a rich multi-bookmaker odds string for the AI prompt
+async function fetchCachedOdds(sport, homeTeam, awayTeam) {
+  try {
+    // Map sport codes to odds cache keys
+    const sportKeyMap = {
+      mlb: 'mlb', nba: 'nba', nhl: 'nhl', nfl: 'nfl', mls: 'mls', wnba: 'wnba',
+    };
+    const cacheKey = `odds_cache_${sportKeyMap[sport] || sport}`;
+    const { data } = await supabase
+      .from('settings').select('value').eq('key', cacheKey).maybeSingle();
+    if (!data?.value) return '';
+
+    const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    const odds = parsed.data || parsed;
+    if (!Array.isArray(odds)) return '';
+
+    // Find the matching game (fuzzy match on team names)
+    const ht = homeTeam.toLowerCase();
+    const at = awayTeam.toLowerCase();
+    const game = odds.find(g =>
+      g.home_team?.toLowerCase().includes(ht.split(' ').pop()) &&
+      g.away_team?.toLowerCase().includes(at.split(' ').pop())
+    );
+    if (!game || !game.bookmakers?.length) return '';
+
+    // Build a rich odds summary from up to 4 bookmakers
+    const lines = [];
+    const books = game.bookmakers.slice(0, 4);
+    for (const book of books) {
+      const bookLines = [];
+      for (const market of (book.markets || [])) {
+        const key = market.key;
+        const outcomes = (market.outcomes || []).map(o =>
+          `${o.name} ${o.point != null ? (o.point > 0 ? '+' : '') + o.point : ''} (${o.price > 0 ? '+' : ''}${o.price})`
+        ).join(' / ');
+        if (outcomes) bookLines.push(`${key}: ${outcomes}`);
+      }
+      if (bookLines.length) lines.push(`${book.title || book.key}: ${bookLines.join(' | ')}`);
+    }
+    return lines.length
+      ? `LIVE ODDS (from The Odds API cache):\n${lines.join('\n')}`
+      : '';
+  } catch (e) {
+    console.log(`[pregenerate] odds cache fetch failed for ${sport}:`, e.message);
+    return '';
+  }
+}
+
 async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext) {
   const prompt = `Analyze this ${sport.toUpperCase()} matchup for ${gameDate}:
 
@@ -184,6 +233,36 @@ export async function GET(req) {
 
   console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}`);
 
+  // Pre-warm odds cache: fetch fresh odds from The Odds API for each sport
+  // so analyses have the best available line data. This uses the same API key
+  // as /api/odds and caches to the same settings keys.
+  const THE_ODDS_KEY = process.env.THE_ODDS_API_KEY;
+  const ODDS_SPORT_KEYS = {
+    mlb: 'baseball_mlb', nba: 'basketball_nba', nhl: 'icehockey_nhl',
+    nfl: 'americanfootball_nfl', mls: 'soccer_usa_mls', wnba: 'basketball_wnba',
+  };
+  if (THE_ODDS_KEY) {
+    const sportsToPrime = sportFilter ? [sportFilter] : Object.keys(ODDS_SPORT_KEYS);
+    for (const sk of sportsToPrime) {
+      const oddsKey = ODDS_SPORT_KEYS[sk];
+      if (!oddsKey) continue;
+      try {
+        const url = `https://api.the-odds-api.com/v4/sports/${oddsKey}/odds?apiKey=${THE_ODDS_KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (res.ok) {
+          const data = await res.json();
+          await supabase.from('settings').upsert(
+            [{ key: `odds_cache_${sk}`, value: JSON.stringify({ data, timestamp: Date.now(), source: 'the-odds-api' }) }],
+            { onConflict: 'key' }
+          );
+          console.log(`[pregenerate] Odds pre-warmed for ${sk}: ${data.length} games`);
+        }
+      } catch (e) {
+        console.log(`[pregenerate] Odds pre-warm failed for ${sk}:`, e.message);
+      }
+    }
+  }
+
   // If not force, skip analyses generated in the last 3.5 hours
   const staleAfter = new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString();
 
@@ -196,7 +275,30 @@ export async function GET(req) {
     ? Object.entries(SPORT_PATHS).filter(([key]) => key === sportFilter)
     : Object.entries(SPORT_PATHS);
 
+  // Write live progress so the UI can poll status even if the user switches tabs
+  const totalSports = sportsToProcess.length;
+  let sportIndex = 0;
+  async function writeProgress(currentSport, status) {
+    await supabase.from('settings').upsert(
+      [{ key: 'pregenerate_progress', value: JSON.stringify({
+        status,           // 'running' | 'done'
+        current_sport: currentSport,
+        sport_index: sportIndex,
+        total_sports: totalSports,
+        generated: generated.length,
+        skipped: skipped.length,
+        errors: errors.length,
+        started_at: new Date(started).toISOString(),
+        updated_at: new Date().toISOString(),
+      })}],
+      { onConflict: 'key' }
+    ).catch(() => {});
+  }
+
   for (const [sport, _] of sportsToProcess) {
+    sportIndex++;
+    await writeProgress(sport, 'running');
+
     const events = await fetchTodaysGames(sport, espnDate);
     if (!events.length) continue;
 
@@ -227,11 +329,15 @@ export async function GET(req) {
         }
       }
 
-      // Build odds context from ESPN if available
-      const espnOdds = event.competitions?.[0]?.odds?.[0];
-      const oddsContext = espnOdds
-        ? `Spread: ${espnOdds.details || 'N/A'} | O/U: ${espnOdds.overUnder || 'N/A'}`
-        : '';
+      // Build odds context — prefer rich cached odds from The Odds API,
+      // fall back to ESPN's basic spread/total if no cache available
+      let oddsContext = await fetchCachedOdds(sport, homeTeam, awayTeam);
+      if (!oddsContext) {
+        const espnOdds = event.competitions?.[0]?.odds?.[0];
+        oddsContext = espnOdds
+          ? `Spread: ${espnOdds.details || 'N/A'} | O/U: ${espnOdds.overUnder || 'N/A'}`
+          : '';
+      }
 
       const gameTime = event.competitions?.[0]?.date
         ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
@@ -285,6 +391,9 @@ export async function GET(req) {
     { onConflict: 'key' }
   ).catch(() => {});
 
+  // Mark progress as done so polling clients know it finished
+  await writeProgress('', 'done');
+
   return NextResponse.json(summary);
 }
 
@@ -294,11 +403,11 @@ export async function GET(req) {
  * Called from the Admin Panel "Pre-Generate Analyses" button.
  */
 export async function POST(req) {
-  const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+  const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
   try {
     const body = await req.json();
     const { userEmail, force = true, sport = null } = body;
-    if (userEmail?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+    if (!ADMIN_EMAILS.includes(userEmail?.toLowerCase())) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 });
     }
     // Reuse the same GET logic by constructing a fake request with the cron secret

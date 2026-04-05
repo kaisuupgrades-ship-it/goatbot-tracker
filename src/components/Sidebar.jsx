@@ -190,7 +190,7 @@ function StarredCount() {
   );
 }
 
-const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
+const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -204,7 +204,7 @@ function avatarSrc(user) {
 
 export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile, onRefresh, refreshing, onOpenInbox, userId, onOpenPublicProfile }) {
   const [collapsed, setCollapsed] = useState(false);
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase());
 
   const settled  = picks.filter(p => p.result === 'WIN' || p.result === 'LOSS');
   const wins     = picks.filter(p => p.result === 'WIN').length;

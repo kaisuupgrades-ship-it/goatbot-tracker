@@ -100,6 +100,76 @@ function AnnouncementBanner() {
   );
 }
 
+// ── Server Job Banner — shows when background server jobs are running ───────────
+// Polls the pregenerate_progress key in settings so the banner persists across
+// tab switches, page refreshes, etc. The server writes progress as it goes.
+function ServerJobBanner() {
+  const [job, setJob]     = useState(null);
+  const [done, setDone]   = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function poll() {
+      try {
+        const res  = await fetch('/api/settings?key=pregenerate_progress');
+        const data = await res.json();
+        if (!data.value || !active) return;
+        const progress = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        const age = Date.now() - new Date(progress.started_at).getTime();
+
+        if (progress.status === 'running' && age < 360000) {
+          setJob(progress);
+          setDone(false);
+        } else if (progress.status === 'done' && age < 30000) {
+          // Show "done" briefly then fade out
+          setJob(progress);
+          setDone(true);
+          setTimeout(() => { if (active) setJob(null); }, 8000);
+        } else {
+          setJob(null);
+        }
+      } catch {}
+    }
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
+  if (!job) return null;
+
+  const sportLabel = job.current_sport ? job.current_sport.toUpperCase() : '';
+  const pct = job.total_sports > 0 ? Math.round((job.sport_index / job.total_sports) * 100) : 0;
+
+  return (
+    <div style={{
+      background: done
+        ? 'linear-gradient(90deg, rgba(74,222,128,0.1) 0%, rgba(74,222,128,0.05) 100%)'
+        : 'linear-gradient(90deg, rgba(96,165,250,0.1) 0%, rgba(96,165,250,0.05) 100%)',
+      borderBottom: `1px solid ${done ? 'rgba(74,222,128,0.2)' : 'rgba(96,165,250,0.2)'}`,
+      padding: '0 1.5rem',
+      display: 'flex', alignItems: 'center', gap: '10px',
+      minHeight: '34px', flexShrink: 0,
+      animation: 'fadeIn 0.3s ease',
+    }}>
+      <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>{done ? '✅' : '⟳'}</span>
+      <span style={{
+        fontSize: '0.78rem', fontWeight: 600,
+        color: done ? 'rgba(74,222,128,0.9)' : 'rgba(147,197,253,0.9)',
+      }}>
+        {done
+          ? `Pre-generation complete — ${job.generated || 0} analyses cached`
+          : `Pre-generating analyses… ${sportLabel ? `(${sportLabel})` : ''} ${pct}%`
+        }
+      </span>
+      {!done && (
+        <div style={{ flex: 1, maxWidth: '200px', height: '3px', background: 'rgba(96,165,250,0.15)', borderRadius: '2px', overflow: 'hidden' }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: '#60a5fa', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TAB_META = {
   tracker:    { label: 'My Picks',     sub: 'Track your picks and ROI' },
   scoreboard: { label: 'Scoreboard',   sub: 'Live scores across all sports' },
@@ -262,6 +332,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
 
         {/* Announcement Banner — only shows when admin has broadcast a message */}
         <AnnouncementBanner />
+
+        {/* Server Job Banner — shows progress for background server tasks */}
+        <ServerJobBanner />
 
         {/* Tab content — all tabs stay mounted, hidden when inactive to preserve state */}
         <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }} className="fade-up main-content">

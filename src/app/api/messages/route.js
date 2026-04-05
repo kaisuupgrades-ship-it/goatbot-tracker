@@ -6,6 +6,17 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_P
 
 function db() { return createClient(SUPABASE_URL, SUPABASE_KEY); }
 
+async function getAuthUser(req) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  try {
+    const { data: { user }, error } = await db().auth.getUser(token);
+    if (error || !user) return null;
+    return user;
+  } catch { return null; }
+}
+
 // ── GET /api/messages?userId=X                → list all conversations (inbox)
 // ── GET /api/messages?userId=X&withUser=Y    → get thread with a specific user
 // ── GET /api/messages?userId=X&unreadCount=1 → just return unread count
@@ -93,6 +104,9 @@ export async function GET(req) {
 
 // ── POST /api/messages  body: { senderId, recipientId, content }
 export async function POST(req) {
+  const user = await getAuthUser(req);
+  if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+
   const { senderId, recipientId, content } = await req.json();
   if (!senderId || !recipientId || !content?.trim())
     return NextResponse.json({ error: 'senderId, recipientId, content required' }, { status: 400 });
@@ -100,6 +114,9 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });
   if (content.length > 2000)
     return NextResponse.json({ error: 'Message too long (max 2000 chars)' }, { status: 400 });
+
+  if (user.id !== senderId)
+    return NextResponse.json({ error: 'User ID mismatch' }, { status: 403 });
 
   const { data, error } = await db()
     .from('messages')
@@ -113,8 +130,14 @@ export async function POST(req) {
 
 // ── PATCH /api/messages  body: { userId, partnerId }  → mark thread as read
 export async function PATCH(req) {
+  const user = await getAuthUser(req);
+  if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+
   const { userId, partnerId } = await req.json();
   if (!userId || !partnerId) return NextResponse.json({ error: 'Missing IDs' }, { status: 400 });
+
+  if (user.id !== userId)
+    return NextResponse.json({ error: 'User ID mismatch' }, { status: 403 });
 
   await db()
     .from('messages')

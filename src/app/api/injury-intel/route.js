@@ -2,6 +2,34 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 60;
 
+// Simple in-memory rate limiter — 5 requests per user per minute
+const rateLimitMap = new Map();
+const RATE_LIMIT = 5;
+const RATE_WINDOW = 60 * 1000; // 1 minute
+
+function checkRateLimit(userId) {
+  const now = Date.now();
+  const key = userId || 'anonymous';
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now - entry.windowStart > RATE_WINDOW) {
+    rateLimitMap.set(key, { windowStart: now, count: 1 });
+    return true;
+  }
+
+  if (entry.count >= RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
+// Clean up old entries every 5 minutes to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (now - entry.windowStart > RATE_WINDOW * 2) rateLimitMap.delete(key);
+  }
+}, 5 * 60 * 1000);
+
 const XAI_API_KEY    = process.env.XAI_API_KEY;
 const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY;
 const XAI_BASE       = 'https://api.x.ai/v1';
@@ -64,6 +92,12 @@ async function fetchWithTimeout(url, options, ms) {
 }
 
 export async function POST(req) {
+  // Rate limiting check
+  const userId = req.headers.get('x-user-id') || req.ip || 'anonymous';
+  if (!checkRateLimit(userId)) {
+    return NextResponse.json({ error: 'Rate limit exceeded. Please wait a minute.' }, { status: 429 });
+  }
+
   const { sport = 'mlb', query = '', date } = await req.json();
   const dateStr = date || new Date().toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
