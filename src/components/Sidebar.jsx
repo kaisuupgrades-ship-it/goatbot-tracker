@@ -28,6 +28,12 @@ const NAV_SECTIONS = [
       { id: 'following',   label: 'Following',   icon: '👥',  desc: 'Cappers you follow', indent: true },
     ],
   },
+  {
+    section: 'Community',
+    items: [
+      { id: 'chatroom', label: 'Chat Room', icon: '💬', desc: 'Community chat' },
+    ],
+  },
 ];
 
 function LiveCount() {
@@ -46,6 +52,32 @@ function LiveCount() {
     <span style={{
       marginLeft: 'auto', background: 'rgba(0,212,139,0.12)',
       color: 'var(--green)', border: '1px solid rgba(0,212,139,0.2)',
+      borderRadius: '10px', padding: '1px 7px', fontSize: '0.68rem', fontWeight: 700,
+    }}>
+      {count}
+    </span>
+  );
+}
+
+function UnreadMessages({ userId }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!userId) return;
+    function poll() {
+      fetch(`/api/messages?userId=${userId}&unreadCount=1`)
+        .then(r => r.json())
+        .then(d => setCount(d.unread || 0))
+        .catch(() => {});
+    }
+    poll();
+    const t = setInterval(poll, 30000);
+    return () => clearInterval(t);
+  }, [userId]);
+  if (!count) return null;
+  return (
+    <span style={{
+      marginLeft: 'auto', background: 'rgba(248,113,113,0.15)',
+      color: '#f87171', border: '1px solid rgba(248,113,113,0.3)',
       borderRadius: '10px', padding: '1px 7px', fontSize: '0.68rem', fontWeight: 700,
     }}>
       {count}
@@ -88,7 +120,7 @@ function avatarSrc(user) {
   return `${SUPABASE_URL}/storage/v1/object/public/avatars/${user.id}.jpg${ts ? `?v=${ts}` : ''}`;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile, onRefresh, refreshing }) {
+export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile, onRefresh, refreshing, onOpenInbox, userId }) {
   const [collapsed, setCollapsed] = useState(false);
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
 
@@ -247,6 +279,26 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                   )}
                 </button>
               ))}
+              {/* Messages button — special action (opens Inbox overlay, not a tab) */}
+              {section.section === 'Community' && !isDemo && (
+                <button
+                  onClick={() => { onOpenInbox?.(); if (mobileOpen) onMobileClose?.(); }}
+                  className="nav-item"
+                  style={{
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                    padding: collapsed ? '0.5rem' : '0.45rem 0.75rem',
+                  }}
+                  title={collapsed ? 'Messages' : undefined}
+                >
+                  <span className="nav-icon" style={{ fontSize: '1rem', fontStyle: 'normal' }}>✉️</span>
+                  {!collapsed && (
+                    <>
+                      <span style={{ flex: 1, fontSize: '0.875rem' }}>Messages</span>
+                      <UnreadMessages userId={userId} />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         ))}

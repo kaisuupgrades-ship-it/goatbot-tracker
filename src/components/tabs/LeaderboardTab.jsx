@@ -96,104 +96,43 @@ function SharpBar({ score, maxScore }) {
 
 // ── Public Profile Modal ──────────────────────────────────────────────────────
 
-// Generate realistic mock pick history for a leaderboard entry
-function generateMockPicks(entry) {
-  const { wins, losses, total, username } = entry;
-  const sports  = ['MLB', 'NBA', 'NFL', 'NHL'];
-  const types   = ['Moneyline', 'Spread', 'Total (Over)', 'Total (Under)', 'Prop'];
-  const teams   = ['LAD', 'NYY', 'BOS', 'HOU', 'ATL', 'PHI', 'SD', 'SEA', 'NYM', 'CHC', 'MIL', 'TB', 'MIN', 'CLE', 'SF', 'CIN'];
-  const books   = ['FanDuel', 'DraftKings', 'BetMGM', 'Caesars'];
-  const notes   = [
-    'Sharp line movement, public fading the other side',
-    'Strong situational spot — team 8-2 ATS in these scenarios',
-    'Injury report favors this side, market hasn\'t adjusted',
-    'Weather plays into this — blowing out to CF',
-    'Line value vs closing line expectation',
-    'High leverage spot — ace on mound, bullpen fresh',
-    'Fade the public — 78% on the other side',
-    '', '', '',
-  ];
+function PublicProfileModal({ entry, onClose, onOpenInbox, currentUserId }) {
+  const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, user_id } = entry;
+  // Prefer user_id, fall back to id (leaderboard_stats uses user_id)
+  const userId = user_id || entry.id;
 
-  const settled = wins + losses;
-  const pending = total - settled;
-  const picks = [];
+  const [activeSection, setActiveSection] = useState('picks');
+  const [profileData, setProfileData]     = useState(null);
+  const [loadingPicks, setLoadingPicks]   = useState(true);
 
-  // Generate settled picks
-  for (let i = 0; i < Math.min(settled, 20); i++) {
-    const isWin = i < wins;
-    const sport = sports[i % sports.length];
-    const odds  = isWin ? (Math.random() > 0.5 ? -115 : -108) : (Math.random() > 0.5 ? -112 : +105);
-    const profit = isWin ? (odds > 0 ? odds / 100 : 100 / Math.abs(odds)) : -1;
-    const d = new Date();
-    d.setDate(d.getDate() - (i * 2 + Math.floor(Math.random() * 3)));
-    picks.push({
-      id: `m_${username}_${i}`,
-      date: d.toISOString().split('T')[0],
-      sport,
-      team: teams[i % teams.length],
-      matchup: `${teams[i % teams.length]} vs ${teams[(i + 5) % teams.length]}`,
-      bet_type: types[i % types.length],
-      odds: String(odds),
-      book: books[i % books.length],
-      result: isWin ? 'WIN' : 'LOSS',
-      profit: parseFloat(profit.toFixed(2)),
-      notes: notes[i % notes.length],
-      is_public: true,
-      pending: false,
-    });
-  }
+  // Fetch real picks from API
+  useEffect(() => {
+    if (!userId) { setLoadingPicks(false); return; }
+    fetch(`/api/public-profile?userId=${userId}`)
+      .then(r => r.json())
+      .then(d => { setProfileData(d); setLoadingPicks(false); })
+      .catch(() => setLoadingPicks(false));
+  }, [userId]);
 
-  // Generate pending picks (blurred)
-  for (let i = 0; i < Math.min(pending, 3); i++) {
-    const sport = sports[i % sports.length];
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    picks.push({
-      id: `mp_${username}_${i}`,
-      date: d.toISOString().split('T')[0],
-      sport,
-      team: '???',
-      matchup: '??? vs ???',
-      bet_type: types[i % types.length],
-      odds: '???',
-      book: books[i % books.length],
-      result: 'PENDING',
-      profit: null,
-      notes: '',
-      is_public: true,
-      pending: true,
-    });
-  }
+  // Use fetched stats when available, fall back to leaderboard entry data
+  const stats = profileData?.stats;
+  const settledPicks  = profileData?.settled_picks || [];
+  const sportBreakdown = profileData?.sport_breakdown || [];
+  const pendingCount  = stats?.pending_count || 0;
 
-  return picks;
-}
+  const displayWins    = stats?.wins    ?? wins    ?? 0;
+  const displayLosses  = stats?.losses  ?? losses  ?? 0;
+  const displayTotal   = stats?.total   ?? total   ?? 0;
+  const displayUnits   = stats?.units   ?? parseFloat(units) ?? 0;
+  const displayRoi     = stats?.roi     ?? parseFloat(roi)   ?? 0;
+  const displayVerified = stats?.verified_picks ?? verified_picks ?? 0;
+  const displaySharp   = parseFloat(sharp_score || 0);
 
-function PublicProfileModal({ entry, onClose }) {
-  const { rank, avatar_emoji, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, id: userId } = entry;
-  const winRate  = total > 0 ? ((wins / total) * 100).toFixed(1) : '—';
-  const unitsNum = parseFloat(units) || 0;
-  const roiNum   = parseFloat(roi) || 0;
-  const [activeSection, setActiveSection] = useState('picks'); // picks | stats
+  const winRate = displayTotal > 0 ? ((displayWins / displayTotal) * 100).toFixed(1) : '—';
 
-  const allPicks = generateMockPicks(entry);
-  const settledPicks = allPicks.filter(p => !p.pending);
-  const pendingPicks = allPicks.filter(p => p.pending);
-
-  // Streak calc
-  let streak = 0, streakType = '';
-  for (const p of settledPicks) {
-    if (!streakType) { streakType = p.result; streak = 1; }
-    else if (p.result === streakType) streak++;
-    else break;
-  }
-
-  // Sport breakdown
-  const sportBreakdown = {};
-  settledPicks.forEach(p => {
-    if (!sportBreakdown[p.sport]) sportBreakdown[p.sport] = { wins: 0, losses: 0 };
-    if (p.result === 'WIN') sportBreakdown[p.sport].wins++;
-    else sportBreakdown[p.sport].losses++;
-  });
+  const streak     = stats?.current_streak ?? 0;
+  const streakAbs  = Math.abs(streak);
+  const streakType = streak > 0 ? 'WIN' : streak < 0 ? 'LOSS' : '';
 
   return (
     <div
@@ -242,30 +181,44 @@ function PublicProfileModal({ entry, onClose }) {
                   <span style={{ fontSize: '0.68rem', color: 'var(--gold)', background: 'rgba(255,184,0,0.12)', border: '1px solid rgba(255,184,0,0.35)', borderRadius: '5px', padding: '2px 8px', fontWeight: 800 }}>
                     #{rank} Ranked
                   </span>
-                  {verified_picks > 0 && (
+                  {displayVerified > 0 && (
                     <span style={{ fontSize: '0.68rem', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: '5px', padding: '2px 8px', fontWeight: 800 }}>
-                      ✓ {verified_picks} Verified
+                      ✓ {displayVerified} Verified
                     </span>
                   )}
-                  {streak >= 3 && (
+                  {streakAbs >= 3 && (
                     <span style={{ fontSize: '0.68rem', color: streakType === 'WIN' ? '#4ade80' : '#f87171', background: streakType === 'WIN' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', border: `1px solid ${streakType === 'WIN' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`, borderRadius: '5px', padding: '2px 8px', fontWeight: 800 }}>
-                      {streakType === 'WIN' ? '🔥' : '🧊'} {streak}-{streakType === 'WIN' ? 'W' : 'L'} streak
+                      {streakType === 'WIN' ? '🔥' : '🧊'} {streakAbs}-{streakType === 'WIN' ? 'W' : 'L'} streak
                     </span>
                   )}
                 </div>
               </div>
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', padding: '4px', flexShrink: 0, lineHeight: 1 }}>✕</button>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+              {onOpenInbox && currentUserId && userId !== currentUserId && (
+                <button
+                  onClick={() => { onClose(); onOpenInbox({ id: userId, username, display_name, avatar_emoji }); }}
+                  style={{
+                    padding: '5px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700,
+                    background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)',
+                    color: '#60a5fa', cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  💬 Message
+                </button>
+              )}
+              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', padding: '4px', flexShrink: 0, lineHeight: 1 }}>✕</button>
+            </div>
           </div>
 
           {/* Quick stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '1rem' }}>
             {[
-              { label: 'Record', value: `${wins}–${losses}`, color: wins > losses ? 'var(--green)' : wins < losses ? 'var(--red)' : 'var(--text-primary)', sub: `${total} picks` },
-              { label: 'Win %', value: `${winRate}%`, color: parseFloat(winRate) >= 55 ? 'var(--green)' : 'var(--text-primary)' },
-              { label: 'Units', value: `${unitsNum >= 0 ? '+' : ''}${unitsNum.toFixed(1)}u`, color: unitsNum >= 0 ? 'var(--green)' : 'var(--red)' },
-              { label: 'ROI', value: `${roiNum >= 0 ? '+' : ''}${roiNum.toFixed(1)}%`, color: roiNum >= 0 ? 'var(--green)' : 'var(--red)' },
-              { label: 'Sharp Score', value: parseFloat(sharp_score || 0).toFixed(1), color: parseFloat(sharp_score) >= 20 ? '#FFB800' : '#4ade80' },
+              { label: 'Record', value: `${displayWins}–${displayLosses}`, color: displayWins > displayLosses ? 'var(--green)' : displayWins < displayLosses ? 'var(--red)' : 'var(--text-primary)', sub: `${displayTotal} picks` },
+              { label: 'Win %', value: winRate === '—' ? '—' : `${winRate}%`, color: parseFloat(winRate) >= 55 ? 'var(--green)' : 'var(--text-primary)' },
+              { label: 'Units', value: `${displayUnits >= 0 ? '+' : ''}${displayUnits.toFixed(1)}u`, color: displayUnits >= 0 ? 'var(--green)' : 'var(--red)' },
+              { label: 'ROI', value: `${displayRoi >= 0 ? '+' : ''}${displayRoi.toFixed(1)}%`, color: displayRoi >= 0 ? 'var(--green)' : 'var(--red)' },
+              { label: 'Sharp Score', value: displaySharp.toFixed(1), color: displaySharp >= 20 ? '#FFB800' : '#4ade80' },
             ].map(s => (
               <div key={s.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.6rem 0.75rem', textAlign: 'center' }}>
                 <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>{s.label}</div>
@@ -305,20 +258,29 @@ function PublicProfileModal({ entry, onClose }) {
           {/* ── Pick History tab ── */}
           {activeSection === 'picks' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {/* Pending picks — blurred */}
-              {pendingPicks.length > 0 && (
+              {/* Loading state */}
+              {loadingPicks && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} style={{ height: '52px', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', animation: 'pulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.2 }} />
+                  ))}
+                </div>
+              )}
+
+              {/* Pending picks — blurred placeholder */}
+              {!loadingPicks && pendingCount > 0 && (
                 <div style={{ marginBottom: '4px' }}>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>⏳ Active Picks ({pendingPicks.length})</span>
+                    <span>⏳ Active Picks ({pendingCount})</span>
                     <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px', padding: '1px 6px' }}>
                       🔒 Hidden until settled
                     </span>
                   </div>
-                  {pendingPicks.map(p => (
-                    <div key={p.id} style={{
+                  {[...Array(Math.min(pendingCount, 3))].map((_, i) => (
+                    <div key={i} style={{
                       display: 'flex', alignItems: 'center', gap: '10px', padding: '0.65rem 0.85rem',
                       background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px',
-                      marginBottom: '4px', filter: 'blur(5px)', userSelect: 'none', position: 'relative',
+                      marginBottom: '4px', filter: 'blur(5px)', userSelect: 'none',
                     }}>
                       <span style={{ fontSize: '0.68rem', color: '#60a5fa', fontWeight: 700, background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: '4px', padding: '1px 6px', flexShrink: 0 }}>LIVE</span>
                       <span style={{ flex: 1, fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600 }}>████ @ ████</span>
@@ -328,61 +290,68 @@ function PublicProfileModal({ entry, onClose }) {
                 </div>
               )}
 
-              {/* Settled picks */}
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
-                Settled Picks ({settledPicks.length})
-              </div>
-              {settledPicks.map((p) => (
-                <div key={p.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '10px', padding: '0.65rem 0.85rem',
-                  background: 'var(--bg-elevated)', border: `1px solid ${p.result === 'WIN' ? 'rgba(74,222,128,0.15)' : 'rgba(255,69,96,0.12)'}`,
-                  borderRadius: '8px', borderLeft: `3px solid ${p.result === 'WIN' ? 'var(--green)' : 'var(--red)'}`,
-                }}>
-                  {/* Result badge */}
-                  <span style={{
-                    fontSize: '0.62rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', flexShrink: 0,
-                    background: p.result === 'WIN' ? 'rgba(74,222,128,0.15)' : 'rgba(255,69,96,0.12)',
-                    color: p.result === 'WIN' ? 'var(--green)' : 'var(--red)',
-                    border: `1px solid ${p.result === 'WIN' ? 'rgba(74,222,128,0.3)' : 'rgba(255,69,96,0.25)'}`,
-                    minWidth: '30px', textAlign: 'center',
-                  }}>
-                    {p.result === 'WIN' ? 'W' : 'L'}
-                  </span>
-
-                  {/* Sport + matchup */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '1px' }}>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0 5px', fontWeight: 700 }}>{p.sport}</span>
-                      <span style={{ fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.team} — {p.bet_type}
-                      </span>
-                    </div>
-                    {p.notes && (
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.notes}
-                      </div>
-                    )}
+              {/* Settled picks — real data */}
+              {!loadingPicks && (
+                <>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                    Settled Picks ({settledPicks.length})
                   </div>
-
-                  {/* Odds */}
-                  <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-                    {parseInt(p.odds) > 0 ? '+' : ''}{p.odds}
-                  </span>
-
-                  {/* Profit */}
-                  <span style={{
-                    fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', fontWeight: 700, flexShrink: 0,
-                    color: (p.profit || 0) >= 0 ? 'var(--green)' : 'var(--red)', minWidth: '46px', textAlign: 'right',
-                  }}>
-                    {(p.profit || 0) >= 0 ? '+' : ''}{(p.profit || 0).toFixed(2)}u
-                  </span>
-                </div>
-              ))}
-
-              {settledPicks.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                  No settled public picks yet.
-                </div>
+                  {settledPicks.map((p) => {
+                    const resultColor = p.result === 'WIN' ? 'var(--green)' : p.result === 'PUSH' ? '#94a3b8' : 'var(--red)';
+                    const borderColor = p.result === 'WIN' ? 'rgba(74,222,128,0.15)' : p.result === 'PUSH' ? 'rgba(148,163,184,0.15)' : 'rgba(255,69,96,0.12)';
+                    const oddsNum = parseInt(p.odds);
+                    return (
+                      <div key={p.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '10px', padding: '0.6rem 0.85rem',
+                        background: 'var(--bg-elevated)', border: `1px solid ${borderColor}`,
+                        borderRadius: '8px', borderLeft: `3px solid ${resultColor}`,
+                      }}>
+                        <span style={{
+                          fontSize: '0.62rem', fontWeight: 800, padding: '2px 5px', borderRadius: '4px', flexShrink: 0,
+                          background: p.result === 'WIN' ? 'rgba(74,222,128,0.15)' : p.result === 'PUSH' ? 'rgba(148,163,184,0.1)' : 'rgba(255,69,96,0.12)',
+                          color: resultColor,
+                          border: `1px solid ${p.result === 'WIN' ? 'rgba(74,222,128,0.3)' : p.result === 'PUSH' ? 'rgba(148,163,184,0.3)' : 'rgba(255,69,96,0.25)'}`,
+                          minWidth: '28px', textAlign: 'center',
+                        }}>
+                          {p.result === 'WIN' ? 'W' : p.result === 'PUSH' ? 'P' : 'L'}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.63rem', color: 'var(--text-muted)', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0 4px', fontWeight: 700 }}>{p.sport}</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.team} — {p.bet_type || 'Moneyline'}
+                            </span>
+                            {p.verified && <span style={{ fontSize: '0.58rem', color: '#4ade80', fontWeight: 700 }}>✓</span>}
+                          </div>
+                          {p.notes && (
+                            <div style={{ fontSize: '0.63rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                              {p.notes}
+                            </div>
+                          )}
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '1px' }}>
+                            {new Date(p.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.73rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                          {!isNaN(oddsNum) ? (oddsNum > 0 ? `+${oddsNum}` : oddsNum) : '—'}
+                        </span>
+                        {p.profit !== null && (
+                          <span style={{
+                            fontFamily: 'IBM Plex Mono', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0,
+                            color: p.profit >= 0 ? 'var(--green)' : 'var(--red)', minWidth: '46px', textAlign: 'right',
+                          }}>
+                            {p.profit >= 0 ? '+' : ''}{p.profit.toFixed(2)}u
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {settledPicks.length === 0 && !loadingPicks && (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                      No settled public picks yet.
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -395,15 +364,15 @@ function PublicProfileModal({ entry, onClose }) {
               <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>Sharp Score</span>
-                  <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '1.1rem', color: parseFloat(sharp_score) >= 20 ? '#FFB800' : '#4ade80' }}>
-                    {parseFloat(sharp_score || 0).toFixed(1)}
+                  <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '1.1rem', color: displaySharp >= 20 ? '#FFB800' : '#4ade80' }}>
+                    {displaySharp.toFixed(1)}
                   </span>
                 </div>
                 <div style={{ height: '10px', background: 'var(--border)', borderRadius: '5px', overflow: 'hidden' }}>
                   <div style={{
                     height: '100%', borderRadius: '5px',
-                    width: `${Math.min((parseFloat(sharp_score || 0) / 40) * 100, 100)}%`,
-                    background: parseFloat(sharp_score) >= 20 ? 'linear-gradient(90deg, #FFB800, #FF9500)' : 'linear-gradient(90deg, #4ade80, #22c55e)',
+                    width: `${Math.min((displaySharp / 40) * 100, 100)}%`,
+                    background: displaySharp >= 20 ? 'linear-gradient(90deg, #FFB800, #FF9500)' : 'linear-gradient(90deg, #4ade80, #22c55e)',
                     transition: 'width 0.8s ease',
                   }} />
                 </div>
@@ -413,35 +382,35 @@ function PublicProfileModal({ entry, onClose }) {
               </div>
 
               {/* Recent form */}
-              <div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', fontWeight: 700 }}>
-                  Recent Form (last {Math.min(settledPicks.length, 10)})
-                </div>
-                <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  {settledPicks.slice(0, 10).map((p, i) => (
-                    <div key={i} style={{
-                      width: '32px', height: '32px', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: p.result === 'WIN' ? 'rgba(0,212,139,0.15)' : 'rgba(255,69,96,0.15)',
-                      border: `1px solid ${p.result === 'WIN' ? 'rgba(0,212,139,0.35)' : 'rgba(255,69,96,0.35)'}`,
-                      fontSize: '0.68rem', fontWeight: 800, color: p.result === 'WIN' ? 'var(--green)' : 'var(--red)',
-                    }}>
-                      {p.result === 'WIN' ? 'W' : 'L'}
-                    </div>
-                  ))}
-                  {settledPicks.length > 0 && (
+              {settledPicks.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', fontWeight: 700 }}>
+                    Recent Form (last {Math.min(settledPicks.length, 10)})
+                  </div>
+                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {settledPicks.slice(0, 10).map((p, i) => (
+                      <div key={i} style={{
+                        width: '32px', height: '32px', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: p.result === 'WIN' ? 'rgba(0,212,139,0.15)' : p.result === 'PUSH' ? 'rgba(148,163,184,0.1)' : 'rgba(255,69,96,0.15)',
+                        border: `1px solid ${p.result === 'WIN' ? 'rgba(0,212,139,0.35)' : p.result === 'PUSH' ? 'rgba(148,163,184,0.3)' : 'rgba(255,69,96,0.35)'}`,
+                        fontSize: '0.68rem', fontWeight: 800, color: p.result === 'WIN' ? 'var(--green)' : p.result === 'PUSH' ? '#94a3b8' : 'var(--red)',
+                      }}>
+                        {p.result === 'WIN' ? 'W' : p.result === 'PUSH' ? 'P' : 'L'}
+                      </div>
+                    ))}
                     <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', paddingLeft: '4px' }}>← most recent</span>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Sport breakdown */}
-              {Object.keys(sportBreakdown).length > 0 && (
+              {/* Sport breakdown — real data */}
+              {sportBreakdown.length > 0 && (
                 <div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', fontWeight: 700 }}>
                     By Sport
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {Object.entries(sportBreakdown).map(([sport, { wins: sw, losses: sl }]) => {
+                    {sportBreakdown.map(({ sport, wins: sw, losses: sl }) => {
                       const wr = sw + sl > 0 ? (sw / (sw + sl)) * 100 : 0;
                       return (
                         <div key={sport} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -449,8 +418,7 @@ function PublicProfileModal({ entry, onClose }) {
                           <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', minWidth: '44px' }}>{sw}–{sl}</span>
                           <div style={{ flex: 1, height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
                             <div style={{
-                              height: '100%', borderRadius: '3px',
-                              width: `${wr}%`,
+                              height: '100%', borderRadius: '3px', width: `${wr}%`,
                               background: wr >= 55 ? 'var(--green)' : wr >= 45 ? '#fbbf24' : 'var(--red)',
                               transition: 'width 0.6s ease',
                             }} />
@@ -1007,7 +975,7 @@ function ContestStandings({ userId, isDemo, refreshKey }) {
   );
 }
 
-export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSubTab = 'contest' }) {
+export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSubTab = 'contest', onOpenInbox }) {
   const [subTab, setSubTab]           = useState(defaultSubTab); // 'contest' | 'sharp'
   const [sharpFilter, setSharpFilter] = useState('all');     // 'all' | 'verified'
   const [data, setData]               = useState(null);
@@ -1287,6 +1255,8 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
         <PublicProfileModal
           entry={viewEntry}
           onClose={() => setViewEntry(null)}
+          onOpenInbox={onOpenInbox}
+          currentUserId={user?.id}
         />
       )}
     </div>

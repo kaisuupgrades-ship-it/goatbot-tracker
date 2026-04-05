@@ -14,9 +14,11 @@ import AnalyzerTab      from './tabs/AnalyzerTab';
 import LeaderboardTab    from './tabs/LeaderboardTab';
 import UserSearchTab     from './tabs/UserSearchTab';
 import FollowingTab      from './tabs/FollowingTab';
+import ChatRoomTab       from './tabs/ChatRoomTab';
 import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
 import AdminTab          from './tabs/AdminTab';
 import ProfileModal      from './ProfileModal';
+import InboxPanel        from './InboxPanel';
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
 
@@ -109,6 +111,7 @@ const TAB_META = {
   sharpboard:  { label: 'Sharp Board',  sub: 'All-time public handicapper rankings' },
   usersearch:  { label: 'User Search',  sub: 'Find and follow the sharpest bettors in the community' },
   following:   { label: 'Following',    sub: 'Cappers you follow — all-time stats' },
+  chatroom:    { label: 'Chat Room',    sub: 'Community chat — discuss picks & sharp action' },
   featured:     { label: 'Featured Games',  sub: 'Your starred games & quick BetOS access' },
   admin:        { label: '🛡 Admin Panel',  sub: 'User management, analytics & system settings' },
 };
@@ -125,6 +128,13 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
   const [mobileNavOpen,   setMobileNavOpen]   = useState(false);
   const [profileOpen,     setProfileOpen]     = useState(false);
   const [currentUser,     setCurrentUser]     = useState(user);
+  const [inboxOpen,       setInboxOpen]       = useState(false);
+  const [inboxRecipient,  setInboxRecipient]  = useState(null);
+
+  function openInbox(recipient = null) {
+    setInboxRecipient(recipient);
+    setInboxOpen(true);
+  }
   // Preserved state for cross-tab navigation
   const [goatPrompt, setGoatPrompt] = useState('');
   const [goatReport, setGoatReport] = useState(null);
@@ -216,6 +226,8 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         onOpenProfile={() => setProfileOpen(true)}
         onRefresh={refreshAll}
         refreshing={globalRefreshing}
+        onOpenInbox={openInbox}
+        userId={user?.id}
       />
 
       {/* Main */}
@@ -280,17 +292,20 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           </div>
           {/* Contest — standalone, always mounts Contest sub-tab */}
           <div style={{ display: activeTab === 'leaderboard' ? 'block' : 'none' }}>
-            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="contest" />
+            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="contest" onOpenInbox={openInbox} />
           </div>
           {/* Sharp Board — standalone sharp rankings */}
           <div style={{ display: activeTab === 'sharpboard' ? 'block' : 'none' }}>
-            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="sharp" />
+            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="sharp" onOpenInbox={openInbox} />
           </div>
           <div style={{ display: activeTab === 'usersearch' ? 'block' : 'none' }}>
-            <UserSearchTab user={user} isDemo={isDemo} />
+            <UserSearchTab user={user} isDemo={isDemo} onOpenInbox={openInbox} />
           </div>
           <div style={{ display: activeTab === 'following' ? 'block' : 'none' }}>
-            <FollowingTab user={user} isDemo={isDemo} />
+            <FollowingTab user={user} isDemo={isDemo} onOpenInbox={openInbox} />
+          </div>
+          <div style={{ display: activeTab === 'chatroom' ? 'block' : 'none' }}>
+            <ChatRoomTab user={user} isDemo={isDemo} onOpenInbox={openInbox} />
           </div>
           <div style={{ display: activeTab === 'featured' ? 'block' : 'none' }}>
             <FeaturedGamesTab
@@ -324,6 +339,15 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           }}
         />
       )}
+
+      {/* Inbox Panel — slide-in DM overlay */}
+      <InboxPanel
+        user={currentUser}
+        isOpen={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        initialRecipient={inboxRecipient}
+        isDemo={isDemo}
+      />
     </div>
   );
 }
