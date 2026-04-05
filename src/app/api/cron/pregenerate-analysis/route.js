@@ -115,7 +115,7 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
           .filter(item => item.type === 'message')
           .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
         const text = texts.join('\n\n').trim();
-        if (text) return { text, model: 'grok-4' };
+        if (text) return { text, model: 'BetOS AI' };
       }
     } catch (e) {
       console.log(`[pregenerate] grok-4 failed for ${awayTeam}@${homeTeam}:`, e.message);
@@ -146,7 +146,7 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
         const data = await res.json();
         const text = (data.content || [])
           .filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
-        if (text) return { text, model: 'claude-opus-4-6' };
+        if (text) return { text, model: 'BetOS AI' };
       }
     } catch (e) {
       console.log(`[pregenerate] Claude failed for ${awayTeam}@${homeTeam}:`, e.message);
@@ -163,13 +163,17 @@ export async function GET(req) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const force = new URL(req.url).searchParams.get('force') === 'true';
+  const params   = new URL(req.url).searchParams;
+  const force    = params.get('force') === 'true';
+  // Optional: filter to a single sport (used by admin per-sport calls to stay within timeout)
+  const sportFilter = params.get('sport') || null;
+
   const started = Date.now();
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
   const espnDate = todayStr.replace(/-/g, '');
 
-  console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}`);
+  console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}`);
 
   // If not force, skip analyses generated in the last 3.5 hours
   const staleAfter = new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString();
@@ -178,7 +182,12 @@ export async function GET(req) {
   const skipped   = [];
   const errors    = [];
 
-  for (const [sport, _] of Object.entries(SPORT_PATHS)) {
+  // Filter to a single sport if specified (allows fast per-sport admin calls)
+  const sportsToProcess = sportFilter
+    ? Object.entries(SPORT_PATHS).filter(([key]) => key === sportFilter)
+    : Object.entries(SPORT_PATHS);
+
+  for (const [sport, _] of sportsToProcess) {
     const events = await fetchTodaysGames(sport, espnDate);
     if (!events.length) continue;
 
@@ -278,18 +287,20 @@ export async function GET(req) {
 export async function POST(req) {
   const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
   try {
-    const { userEmail, force = true } = await req.json();
+    const body = await req.json();
+    const { userEmail, force = true, sport = null } = body;
     if (userEmail?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 });
     }
     // Reuse the same GET logic by constructing a fake request with the cron secret
     const fakeUrl = new URL('http://localhost/api/cron/pregenerate-analysis');
     if (force) fakeUrl.searchParams.set('force', 'true');
+    if (sport)  fakeUrl.searchParams.set('sport', sport);
     const fakeReq = new Request(fakeUrl.toString(), {
-      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+      headers: { authorization: `Bearer ${process.env.CRON_SECRET || ''}` },
     });
-    return GET(fakeReq);
+    return await GET(fakeReq);
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: String(e.message || e) }, { status: 500 });
   }
 }

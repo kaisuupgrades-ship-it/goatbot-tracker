@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { addPick, updatePick, deletePick, setPickPublic } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
+import { playWin, playLoss, playGrade } from '@/lib/sounds';
 
 const SPORTS  = ['MLB', 'NFL', 'NBA', 'NHL', 'NCAAF', 'NCAAB', 'Soccer', 'UFC', 'Other'];
 const BET_TYPES = ['Moneyline', 'Spread', 'Total (Over)', 'Total (Under)', 'Prop', 'Parlay', 'Teaser', 'Futures'];
@@ -493,6 +494,13 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
           const g = graded.find(gr => gr.id === p.id);
           return g ? { ...p, result: g.result, graded_home_score: g.home_score, graded_away_score: g.away_score } : p;
         }));
+        // 🔊 Play sounds for graded results
+        const wins   = graded.filter(g => g.result === 'WIN').length;
+        const losses = graded.filter(g => g.result === 'LOSS').length;
+        const pushes = graded.filter(g => g.result === 'PUSH').length;
+        if (wins > 0)        { playWin();   if (wins > 1)   setTimeout(playWin,  350); }
+        else if (losses > 0) { playLoss();  if (losses > 1) setTimeout(playLoss, 400); }
+        else if (pushes > 0) { playGrade(); }
         setGradeMsg(`✓ Graded ${count} pick${count !== 1 ? 's' : ''}`);
       } else {
         setGradeMsg(force ? 'No new results found' : '');
@@ -869,222 +877,301 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginLeft: 'auto' }}>{filtered.length} picks shown</span>
       </div>
 
-      {/* Table */}
+      {/* Bet Slip Cards */}
       {filtered.length === 0 ? (
         <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           No picks yet. Hit <strong style={{ color: '#FFB800' }}>+ Add Pick</strong> to log your first bet.
         </div>
       ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #2a2a2a' }}>
-                  {[
-                    { label: 'Day', field: 'day_number' },
-                    { label: 'Date', field: 'date' },
-                    { label: 'Sport', field: 'sport' },
-                    { label: 'Pick', field: 'team' },
-                    { label: 'Matchup', field: 'matchup' },
-                    { label: 'Type', field: 'bet_type' },
-                    { label: 'Odds', field: 'odds' },
-                    { label: 'Book', field: 'book' },
-                    { label: 'Result', field: 'result' },
-                    { label: 'P/L', field: 'profit' },
-                    { label: 'Notes', field: 'notes' },
-                    { label: '🏆 Contest', field: null },
-                    { label: 'Public', field: null },
-                    { label: '', field: null },
-                  ].map(({ label, field }) => (
-                    <th
-                      key={label}
-                      onClick={() => field && toggleSort(field)}
-                      style={{
-                        padding: '0.7rem 1rem',
-                        textAlign: 'left',
-                        color: '#888',
-                        fontWeight: 600,
-                        fontSize: '0.72rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        whiteSpace: 'nowrap',
-                        cursor: field ? 'pointer' : 'default',
-                        userSelect: 'none',
-                      }}
-                    >
-                      {label}{field && <SortArrow field={field} />}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((pick, idx) => (
-                  <React.Fragment key={pick.id}>
-                  <tr
-                    style={{
-                      borderBottom: '1px solid #1a1a1a',
-                      background: idx % 2 === 0 ? 'transparent' : '#0d0d0d',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#161616'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = idx % 2 === 0 ? 'transparent' : '#0d0d0d'}
-                  >
-                    <td style={{ padding: '0.7rem 1rem', color: '#888' }}>{pick.day_number || '—'}</td>
-                    <td style={{ padding: '0.7rem 1rem', color: '#888', whiteSpace: 'nowrap' }}>{pick.date}</td>
-                    <td style={{ padding: '0.7rem 1rem' }}>
-                      <span style={{ color: '#60a5fa', background: '#0d1a2b', padding: '2px 6px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600 }}>
-                        {pick.sport}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: '#f0f0f0', whiteSpace: 'nowrap' }}>{pick.team}</td>
-                    <td style={{ padding: '0.7rem 1rem', fontSize: '0.8rem' }}>
-                      <div style={{ color: '#888' }}>{pick.matchup || '—'}</div>
-                      {/* Show final score once graded */}
-                      {pick.graded_home_score != null && pick.graded_away_score != null && (
-                        <div style={{ marginTop: '2px', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.75rem',
-                          color: pick.result === 'WIN' ? '#4ade80' : pick.result === 'LOSS' ? '#f87171' : '#888' }}>
-                          {pick.graded_away_score} – {pick.graded_home_score}
-                          <span style={{ color: '#555', fontWeight: 400, marginLeft: '4px' }}>FINAL</span>
-                        </div>
+        <>
+          {/* Sort Controls */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '0.9rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginRight: '2px' }}>Sort:</span>
+            {[
+              { label: 'Date', field: 'date' },
+              { label: 'Odds', field: 'odds' },
+              { label: 'P/L', field: 'profit' },
+              { label: 'Sport', field: 'sport' },
+            ].map(({ label, field }) => (
+              <button key={field} onClick={() => toggleSort(field)} style={{
+                padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer',
+                border: `1px solid ${sortField === field ? 'var(--gold)' : 'var(--border)'}`,
+                background: sortField === field ? 'rgba(255,184,0,0.08)' : 'transparent',
+                color: sortField === field ? 'var(--gold)' : 'var(--text-muted)',
+                fontWeight: sortField === field ? 700 : 400,
+              }}>
+                {label}{sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+              </button>
+            ))}
+            <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{filtered.length} slips</span>
+          </div>
+
+          {/* Card Grid — DraftKings-style bet slips */}
+          <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+            {filtered.map((pick) => {
+              const resultColor =
+                pick.result === 'WIN'  ? '#4ade80' :
+                pick.result === 'LOSS' ? '#f87171' :
+                pick.result === 'PUSH' ? '#94a3b8' : '#FFB800';
+              const profitVal = pick.profit != null ? parseFloat(pick.profit) : null;
+              const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
+              const profitDisplay = profitVal != null
+                ? `${profitVal >= 0 ? '+' : ''}${profitVal.toFixed(2)}u`
+                : '—';
+
+              return (
+                <div key={pick.id} style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border)',
+                  borderLeft: `3px solid ${resultColor}`,
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                  display: 'flex', flexDirection: 'column',
+                }}>
+
+                  {/* ── Header: Sport + Date + Book ── */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 12px 7px',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    background: 'rgba(255,255,255,0.02)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.88rem', lineHeight: 1 }}>{sportEmoji(pick.sport)}</span>
+                      <span style={{
+                        fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
+                        letterSpacing: '0.07em', color: '#60a5fa',
+                        background: 'rgba(96,165,250,0.1)', padding: '2px 6px', borderRadius: '4px',
+                      }}>{pick.sport}</span>
+                      {pick.contest_entry && (
+                        <span style={{
+                          fontSize: '0.62rem', color: '#FFB800',
+                          background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.25)',
+                          borderRadius: '4px', padding: '1px 5px', fontWeight: 700,
+                        }}>🏆</span>
                       )}
-                    </td>
-                    <td style={{ padding: '0.7rem 1rem', color: '#888', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{pick.bet_type}</td>
-                    <td style={{ padding: '0.7rem 1rem', fontFamily: 'monospace', fontWeight: 700, color: pick.odds > 0 ? '#4ade80' : '#f0f0f0', whiteSpace: 'nowrap' }}>
-                      {pick.odds > 0 ? '+' : ''}{pick.odds}
-                    </td>
-                    <td style={{ padding: '0.7rem 1rem', color: '#888', fontSize: '0.8rem' }}>{pick.book || '—'}</td>
-                    <td style={{ padding: '0.7rem 1rem' }}><ResultBadge result={pick.result} /></td>
-                    <td style={{ padding: '0.7rem 1rem', fontFamily: 'monospace', fontWeight: 700, color: parseFloat(pick.profit) >= 0 ? '#4ade80' : '#f87171', whiteSpace: 'nowrap' }}>
-                      {pick.profit != null ? `${parseFloat(pick.profit) >= 0 ? '+' : ''}${parseFloat(pick.profit).toFixed(2)}u` : '—'}
-                    </td>
-                    <td style={{ padding: '0.7rem 1rem', color: 'var(--text-secondary)', fontSize: '0.78rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {pick.notes || '—'}
-                    </td>
-                    {/* Contest entry toggle */}
-                    <td style={{ padding: '0.7rem 1rem' }}>
+                      {pick.day_number && (
+                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 5px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          Day {pick.day_number}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      {pick.date && (
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                          {new Date(pick.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                      {pick.book && (
+                        <span style={{
+                          fontSize: '0.62rem', color: 'var(--text-muted)',
+                          background: 'var(--bg-elevated)', padding: '2px 6px',
+                          borderRadius: '4px', border: '1px solid var(--border)',
+                        }}>{pick.book}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── Main: Team + Bet Type + Matchup ── */}
+                  <div style={{ padding: '10px 13px 9px', flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '2px', lineHeight: 1.2 }}>
+                      {pick.team}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: pick.matchup ? '5px' : 0 }}>
+                      {pick.bet_type}
+                    </div>
+                    {pick.matchup && (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                        {pick.matchup}
+                      </div>
+                    )}
+                    {/* Final score if graded */}
+                    {pick.graded_home_score != null && pick.graded_away_score != null && (
+                      <div style={{
+                        marginTop: '5px', fontFamily: 'IBM Plex Mono, monospace',
+                        fontWeight: 700, fontSize: '0.72rem',
+                        color: pick.result === 'WIN' ? '#4ade80' : pick.result === 'LOSS' ? '#f87171' : '#94a3b8',
+                      }}>
+                        {pick.graded_away_score}–{pick.graded_home_score} <span style={{ fontWeight: 400, color: '#555' }}>FINAL</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Stats Row: Odds | Result | P/L ── */}
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(0,0,0,0.15)',
+                  }}>
+                    <div style={{ padding: '7px 12px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '2px' }}>Odds</div>
+                      <div style={{
+                        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem',
+                        color: pick.odds > 0 ? '#4ade80' : 'var(--text-primary)',
+                      }}>{oddsDisplay}</div>
+                    </div>
+                    <div style={{ padding: '7px 12px', borderRight: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '2px' }}>Result</div>
+                      <div style={{ fontWeight: 800, fontSize: '0.8rem', color: resultColor, textTransform: 'uppercase' }}>
+                        {pick.result || 'PENDING'}
+                      </div>
+                    </div>
+                    <div style={{ padding: '7px 12px', textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '2px' }}>P/L</div>
+                      <div style={{
+                        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem',
+                        color: profitVal != null ? (profitVal >= 0 ? '#4ade80' : '#f87171') : 'var(--text-muted)',
+                      }}>{profitDisplay}</div>
+                    </div>
+                  </div>
+
+                  {/* ── Notes ── */}
+                  {pick.notes && (
+                    <div style={{
+                      padding: '5px 13px',
+                      fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic',
+                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      lineHeight: 1.4,
+                    }}>
+                      {pick.notes}
+                    </div>
+                  )}
+
+                  {/* ── AI Analysis expansion ── */}
+                  {expandedAnalysis === pick.id && (
+                    <div style={{
+                      padding: '9px 13px',
+                      background: 'rgba(255,184,0,0.03)',
+                      borderBottom: '1px solid rgba(255,184,0,0.1)',
+                    }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>🎯</span>
+                        <div style={{ fontSize: '0.74rem', color: '#ccc', lineHeight: 1.55 }}>
+                          {analysisLoading && !analyses[pick.id]
+                            ? <span style={{ color: '#888' }}>Analyzing pick…</span>
+                            : analyses[pick.id]
+                              ? analyses[pick.id]
+                              : <span style={{ color: '#555' }}>No analysis available</span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Action Bar ── */}
+                  <div style={{
+                    padding: '7px 10px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                    {/* Left: Contest + Public toggles */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {/* Contest toggle */}
                       <button
                         onClick={() => handleToggleContest(pick)}
-                        title={pick.contest_entry ? 'Remove from contest' : 'Enter in contest'}
-                        style={{
-                          width: '38px', height: '20px', borderRadius: '10px', border: 'none', cursor: 'pointer',
-                          background: pick.contest_entry ? 'var(--gold)' : 'var(--border)',
-                          position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-                        }}
+                        title={pick.contest_entry ? 'Contest pick (locked)' : 'Enter in contest'}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}
                       >
                         <div style={{
-                          position: 'absolute', top: '2px',
-                          left: pick.contest_entry ? '20px' : '2px',
-                          width: '16px', height: '16px', borderRadius: '50%',
-                          background: 'white', transition: 'left 0.2s',
-                        }} />
+                          width: '28px', height: '15px', borderRadius: '8px',
+                          background: pick.contest_entry ? 'var(--gold)' : 'var(--border)',
+                          position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                        }}>
+                          <div style={{
+                            position: 'absolute', top: '2px',
+                            left: pick.contest_entry ? '15px' : '2px',
+                            width: '11px', height: '11px', borderRadius: '50%',
+                            background: 'white', transition: 'left 0.2s',
+                          }} />
+                        </div>
+                        <span style={{ fontSize: '0.65rem', color: pick.contest_entry ? 'var(--gold)' : 'var(--text-muted)' }}>🏆</span>
                       </button>
-                    </td>
-                    {/* Public toggle */}
-                    <td style={{ padding: '0.7rem 1rem' }}>
-                      {!isDemo ? (
+                      {/* Public toggle */}
+                      {!isDemo && (
                         <button
                           onClick={() => handleTogglePublic(pick)}
                           title={pick.is_public ? 'Remove from leaderboard' : 'Show on leaderboard'}
-                          style={{
-                            width: '38px', height: '20px', borderRadius: '10px', border: 'none', cursor: 'pointer',
-                            background: pick.is_public ? 'var(--gold)' : 'var(--border)',
-                            position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-                          }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}
                         >
                           <div style={{
-                            position: 'absolute', top: '2px',
-                            left: pick.is_public ? '20px' : '2px',
-                            width: '16px', height: '16px', borderRadius: '50%',
-                            background: 'white', transition: 'left 0.2s',
-                          }} />
-                        </button>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>—</span>
-                      )}
-                    </td>
-                    <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {/* View on Scoreboard */}
-                        {onViewGame && (
-                          <button
-                            onClick={() => onViewGame(pick)}
-                            style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid rgba(96,165,250,0.3)', background: 'transparent', color: '#60a5fa', cursor: 'pointer', fontSize: '0.75rem' }}
-                            title="View game on Scoreboard"
-                          >📺</button>
-                        )}
-                        <button
-                          onClick={async () => {
-                            if (expandedAnalysis === pick.id) { setExpandedAnalysis(null); return; }
-                            setExpandedAnalysis(pick.id);
-                            if (!analyses[pick.id]) {
-                              setAnalysisLoading(true);
-                              try {
-                                const res = await fetch('/api/auto-analyze', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ pickId: pick.id, sport: pick.sport, team: pick.team, bet_type: pick.bet_type, odds: pick.odds, units: pick.units, date: pick.date, notes: pick.notes }),
-                                });
-                                const d = await res.json();
-                                if (d.analysis) setAnalyses(prev => ({ ...prev, [pick.id]: d.analysis }));
-                              } catch {} finally { setAnalysisLoading(false); }
-                            }
-                          }}
-                          style={{ padding: '3px 8px', borderRadius: '5px', border: `1px solid ${analyses[pick.id] ? 'rgba(255,184,0,0.3)' : '#333'}`, background: expandedAnalysis === pick.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: analyses[pick.id] ? '#FFB800' : '#666', cursor: 'pointer', fontSize: '0.75rem' }}
-                          title={analyses[pick.id] ? 'View AI analysis' : 'Get AI analysis'}
-                        >🎯</button>
-                        {/* Rejected contest pick — show resubmit notice */}
-                        {!pick.contest_entry && pick.contest_rejected_date && (
-                          <span
-                            title={`Contest pick rejected${pick.audit_reason ? ': ' + pick.audit_reason : ''} — you may submit a new contest pick`}
-                            style={{ fontSize: '0.62rem', color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help' }}
-                          >
-                            ✕ REJECTED · Resubmit available
-                          </span>
-                        )}
-                        {pick.contest_entry ? (
-                          <span style={{ fontSize: '0.62rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700, whiteSpace: 'nowrap' }} title="Contest picks are locked — no editing or deleting">🔒 LOCKED</span>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleEdit(pick)}
-                              style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.75rem' }}
-                              title="Edit pick"
-                            >✏️</button>
-                            <button
-                              onClick={() => handleDelete(pick.id)}
-                              disabled={deleting === pick.id}
-                              style={{ padding: '3px 8px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.75rem', opacity: deleting === pick.id ? 0.5 : 1 }}
-                              title="Delete pick"
-                            >{deleting === pick.id ? '...' : '🗑️'}</button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {/* Expandable AI Analysis Row */}
-                  {expandedAnalysis === pick.id && (
-                    <tr key={`${pick.id}-analysis`}>
-                      <td colSpan={15} style={{ padding: '0.6rem 1rem 0.8rem', background: '#0a0800', borderBottom: '1px solid rgba(255,184,0,0.15)' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                          <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>🎯</span>
-                          <div style={{ fontSize: '0.78rem', lineHeight: 1.5 }}>
-                            {analysisLoading && !analyses[pick.id]
-                              ? <span style={{ color: '#888' }}>Analyzing pick…</span>
-                              : analyses[pick.id]
-                                ? <span style={{ color: '#ccc' }}>{analyses[pick.id]}</span>
-                                : <span style={{ color: '#555' }}>No analysis available</span>
-                            }
+                            width: '28px', height: '15px', borderRadius: '8px',
+                            background: pick.is_public ? 'var(--gold)' : 'var(--border)',
+                            position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                          }}>
+                            <div style={{
+                              position: 'absolute', top: '2px',
+                              left: pick.is_public ? '15px' : '2px',
+                              width: '11px', height: '11px', borderRadius: '50%',
+                              background: 'white', transition: 'left 0.2s',
+                            }} />
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                          <span style={{ fontSize: '0.65rem', color: pick.is_public ? 'var(--gold)' : 'var(--text-muted)' }}>🌐</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Right: Action buttons */}
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      {onViewGame && (
+                        <button
+                          onClick={() => onViewGame(pick)}
+                          title="View game on Scoreboard"
+                          style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid rgba(96,165,250,0.3)', background: 'transparent', color: '#60a5fa', cursor: 'pointer', fontSize: '0.72rem' }}
+                        >📺</button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (expandedAnalysis === pick.id) { setExpandedAnalysis(null); return; }
+                          setExpandedAnalysis(pick.id);
+                          if (!analyses[pick.id]) {
+                            setAnalysisLoading(true);
+                            try {
+                              const res = await fetch('/api/auto-analyze', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ pickId: pick.id, sport: pick.sport, team: pick.team, bet_type: pick.bet_type, odds: pick.odds, units: pick.units, date: pick.date, notes: pick.notes }),
+                              });
+                              const d = await res.json();
+                              if (d.analysis) setAnalyses(prev => ({ ...prev, [pick.id]: d.analysis }));
+                            } catch {} finally { setAnalysisLoading(false); }
+                          }
+                        }}
+                        title={analyses[pick.id] ? 'View AI analysis' : 'Get AI analysis'}
+                        style={{ padding: '3px 7px', borderRadius: '5px', border: `1px solid ${analyses[pick.id] ? 'rgba(255,184,0,0.3)' : '#333'}`, background: expandedAnalysis === pick.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: analyses[pick.id] ? '#FFB800' : '#666', cursor: 'pointer', fontSize: '0.72rem' }}
+                      >🎯</button>
+                      {/* Rejected notice */}
+                      {!pick.contest_entry && pick.contest_rejected_date && (
+                        <span
+                          title={`Contest pick rejected${pick.audit_reason ? ': ' + pick.audit_reason : ''} — resubmit available`}
+                          style={{ fontSize: '0.6rem', color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '4px', padding: '2px 5px', fontWeight: 700, cursor: 'help' }}
+                        >✕</span>
+                      )}
+                      {pick.contest_entry ? (
+                        <span title="Contest pick — locked" style={{ fontSize: '0.65rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🔒</span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleEdit(pick)}
+                            title="Edit pick"
+                            style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.72rem' }}
+                          >✏️</button>
+                          <button
+                            onClick={() => handleDelete(pick.id)}
+                            disabled={deleting === pick.id}
+                            title="Delete pick"
+                            style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.72rem', opacity: deleting === pick.id ? 0.5 : 1 }}
+                          >{deleting === pick.id ? '…' : '🗑️'}</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              );
+            })}
           </div>
-        </div>
+        </>
       )}
     </div>
   );

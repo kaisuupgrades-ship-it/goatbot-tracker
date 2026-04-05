@@ -18,7 +18,7 @@ git config user.email "kaisuupgrades@gmail.com"
 git config user.name "kaisuupgrades-ship-it"
 
 git add -A
-git commit -m "Add Admin Panel trigger for analyzer pre-generation cache"
+git commit -m "DK-style bet slips, tab-switch fix, sound effects, scan animation, Add as Pick"
 git push origin main
 
 echo.
@@ -28,15 +28,18 @@ if %ERRORLEVEL% EQU 0 (
     echo   Vercel will auto-redeploy in ~60 seconds.
     echo.
     echo   Changes in this push:
-    echo   - Analyzer cache: pre-generates reports at 8AM + 4PM ET for all games
-    echo     Users get instant results + a quick news-delta check instead of 60-90s wait
-    echo   - Click the TV icon on any pick to jump straight to that game on Scoreboard
-    echo   - Auto-grade now runs every 5 minutes during game hours (was every 30 min)
-    echo   - Pick grading: fixed null result, sport uppercase, wrong column name
-    echo   - Injury Intel: Claude Opus 4.6 + live web search as primary
-    echo   - GoatBot: 4-tier AI cascade with Claude + Grok web search
-    echo   - Final score shows in Pick History after game grades
-    echo   - Calendar shows correct day in your timezone
+    echo   - Pick History: DraftKings-style bet slip cards (replaces table)
+    echo     Color-coded left border by result, odds/result/P/L stats row
+    echo   - Tab-switch fix: server-side prompt cache (Supabase prompt_cache table)
+    echo     Retries return instantly even if browser killed the first connection
+    echo   - Auto-retry: detects Load failed / Failed to fetch and silently retries once
+    echo   - WIN/LOSS sound effects fire when picks are graded (HistoryTab + Dashboard)
+    echo   - TrendsTab: animated gold progress bar replaces loading skeleton
+    echo     8-step scan animation with emoji labels and real-time percentage
+    echo   - Analyzer: Add as Pick button auto-fills team/odds/bet type from AI report
+    echo     User only selects unit size (0.5u / 1u / 2u / 3u / 5u)
+    echo   - Pre-generation: per-sport API calls fix timeout, safe JSON parse fallback
+    echo   - Tech stack hidden: all AI model labels show BetOS AI to users
 ) else (
     echo   Something went wrong. Check the error above.
 )

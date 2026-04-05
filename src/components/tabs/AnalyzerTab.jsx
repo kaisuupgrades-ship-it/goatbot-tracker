@@ -1,6 +1,7 @@
 'use client';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import VoiceButton from '@/components/VoiceInput';
+import { addPick } from '@/lib/supabase';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
@@ -442,8 +443,24 @@ function extractMatchup(prompt) {
   return { away: m[1].trim(), home: m[2].trim() };
 }
 
-function GoatPickCard({ result, model, prompt, runTime }) {
+// ── Quick "Add as Pick" helper — detects bet type from pick text ──────────────
+function detectBetType(pickText) {
+  if (!pickText) return 'Moneyline';
+  const t = pickText.toLowerCase();
+  if (/\bover\b/.test(t))  return 'Total (Over)';
+  if (/\bunder\b/.test(t)) return 'Total (Under)';
+  if (/[+-]\d+(\.\d+)?\b/.test(pickText.replace(/[+-]\d{3,4}/, ''))) return 'Spread';
+  return 'Moneyline';
+}
+
+function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
   const [analysisOpen, setAnalysisOpen] = useState(true);
+  // Add as Pick state
+  const [addOpen, setAddOpen]       = useState(false);
+  const [unitSize, setUnitSize]     = useState(1);
+  const [addSaving, setAddSaving]   = useState(false);
+  const [addDone, setAddDone]       = useState(false);
+
   const parsed = useMemo(() => parseReport(result), [result]);
   const { pick, conf, edge, odds, winProb, factors, sport } = parsed;
   const confScore = conf ? confToScore(conf) : null;
@@ -707,6 +724,99 @@ function GoatPickCard({ result, model, prompt, runTime }) {
         )}
       </div>
 
+      {/* ── ADD AS PICK INLINE PANEL ── */}
+      {addOpen && pick && (
+        <div style={{
+          borderTop: '1px solid rgba(74,222,128,0.15)',
+          padding: '1rem 1.4rem',
+          background: 'linear-gradient(135deg, rgba(74,222,128,0.04), rgba(0,0,0,0))',
+        }}>
+          {addDone ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4ade80', fontWeight: 700, fontSize: '0.85rem' }}>
+              ✅ Pick logged! Head to My Picks to track it.
+            </div>
+          ) : (
+            <>
+              {/* Pick preview */}
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '0.58rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '5px' }}>Logging pick</div>
+                <div style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '0.92rem' }}>{pick}</div>
+                <div style={{ color: '#555', fontSize: '0.72rem', marginTop: '3px' }}>
+                  {sport && <span style={{ marginRight: '8px' }}>{sport}</span>}
+                  {odds && <span style={{ color: parseInt(odds) > 0 ? '#4ade80' : '#aaa', fontFamily: 'IBM Plex Mono', marginRight: '8px' }}>{/^[+-]/.test(odds) ? odds : (parseInt(odds) > 0 ? `+${odds}` : odds)}</span>}
+                  <span style={{ color: '#444' }}>{detectBetType(pick)}</span>
+                </div>
+              </div>
+
+              {/* Unit size selector */}
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '0.58rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '7px' }}>Unit size</div>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {[0.5, 1, 2, 3, 5].map(u => (
+                    <button
+                      key={u}
+                      onClick={() => setUnitSize(u)}
+                      style={{
+                        padding: '6px 14px', borderRadius: '8px', cursor: 'pointer',
+                        border: `1px solid ${unitSize === u ? '#4ade80' : 'rgba(255,255,255,0.1)'}`,
+                        background: unitSize === u ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.03)',
+                        color: unitSize === u ? '#4ade80' : '#888',
+                        fontWeight: 700, fontSize: '0.82rem',
+                        fontFamily: 'IBM Plex Mono, monospace',
+                        transition: 'all 0.12s',
+                      }}
+                    >{u}u</button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  onClick={async () => {
+                    if (!user?.id || addSaving) return;
+                    setAddSaving(true);
+                    const { away: awayName, home: homeName } = extractMatchup(prompt);
+                    const matchupStr = awayName && homeName ? `${awayName} @ ${homeName}` : '';
+                    // Extract just the team/pick from the pick line (before the odds)
+                    const teamName = pick.replace(/[+-]\d{3,4}.*$/, '').trim();
+                    try {
+                      await addPick({
+                        user_id: user.id,
+                        date: new Date().toISOString().split('T')[0],
+                        sport: sport || 'Other',
+                        team: teamName,
+                        bet_type: detectBetType(pick),
+                        matchup: matchupStr,
+                        odds: odds ? parseInt(odds) : null,
+                        book: 'BetOS',
+                        result: 'PENDING',
+                        profit: null,
+                        notes: `${unitSize}u | BetOS AI Pick${conf ? ` — ${conf} confidence` : ''}${edge ? `, edge ${edge}/10` : ''}`,
+                      });
+                      setAddDone(true);
+                    } catch { /* silent */ }
+                    setAddSaving(false);
+                  }}
+                  disabled={addSaving || !user?.id}
+                  style={{
+                    padding: '8px 20px', borderRadius: '8px', cursor: 'pointer',
+                    background: 'linear-gradient(135deg, #4ade80, #22c55e)',
+                    border: 'none', color: '#000', fontWeight: 800, fontSize: '0.82rem',
+                    opacity: addSaving || !user?.id ? 0.5 : 1, transition: 'opacity 0.15s',
+                  }}
+                >
+                  {addSaving ? 'Saving…' : `+ Log ${unitSize}u Pick`}
+                </button>
+                {!user?.id && (
+                  <span style={{ color: '#666', fontSize: '0.72rem' }}>Sign in to log picks</span>
+                )}
+                <button onClick={() => setAddOpen(false)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: '0.72rem', marginLeft: 'auto' }}>Cancel</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── FOOTER ── */}
       <div style={{
         borderTop: '1px solid rgba(255,184,0,0.08)', padding: '0.65rem 1.4rem',
@@ -716,6 +826,26 @@ function GoatPickCard({ result, model, prompt, runTime }) {
         <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.65rem', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {prompt}
         </span>
+
+        {/* Add as Pick button — shown when AI found a specific pick */}
+        {pick && !addDone && (
+          <button
+            onClick={() => { setAddOpen(v => !v); setAddDone(false); }}
+            style={{
+              background: addOpen ? 'rgba(74,222,128,0.15)' : 'rgba(74,222,128,0.08)',
+              border: `1px solid ${addOpen ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.2)'}`,
+              borderRadius: '6px', color: '#4ade80', cursor: 'pointer',
+              fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px',
+              display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0,
+              transition: 'all 0.12s',
+            }}
+          >
+            + Log Pick
+          </button>
+        )}
+        {pick && addDone && (
+          <span style={{ color: '#4ade80', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>✓ Logged</span>
+        )}
 
         {/* PDF Export button */}
         <button
@@ -808,7 +938,7 @@ ANGLE: [one-line betting takeaway]
 
 Do not include any URLs, markdown formatting, asterisks, or source citations. Plain text only.`;
 
-function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportConsumed }) {
+function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportConsumed, user, isDemo }) {
   const [prompt, setPrompt]             = useState('');
   const [result, setResult]             = useState('');
   const [model, setModel]               = useState('');
@@ -834,10 +964,12 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   const [chatInput, setChatInput]       = useState('');
   const [chatLoading, setChatLoading]   = useState(false);
 
-  const hasRun    = useRef(false);
-  const taRef     = useRef(null);
-  const timerRefs = useRef([]);
-  const startTime = useRef(null);
+  const hasRun       = useRef(false);
+  const taRef        = useRef(null);
+  const timerRefs    = useRef([]);
+  const startTime    = useRef(null);
+  const retryRef     = useRef(false);   // true if we're in an auto-retry
+  const lastPromptRef = useRef('');     // tracks prompt for tab-return retry
 
   // Load history on mount
   useEffect(() => { setHistory(getReports()); }, []);
@@ -897,6 +1029,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   async function runBetOS(overridePrompt) {
     const base = overridePrompt || prompt;
     if (!base.trim()) return;
+    lastPromptRef.current = base; // track for tab-return retry
     const q = buildContextualPrompt(base, ctx, ctxInput);
     setLoading(true);
     setResult('');
@@ -911,6 +1044,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'API error');
+      retryRef.current = false; // success — reset retry flag
       const rt = Math.floor((Date.now() - t0) / 1000);
       setResult(data.result);
       setModel(data.model || 'grok-4');
@@ -921,7 +1055,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         id: Date.now().toString(),
         prompt: base,
         result: data.result,
-        model: data.model || 'grok-4',
+        model: data.model || 'BetOS AI',
         timestamp: new Date().toISOString(),
         runTime: rt,
         awayTeam: teamMatch ? teamMatch[1].trim() : null,
@@ -932,10 +1066,40 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       setResultCollapsed(false); // auto-expand new report
       setExpandedHistoryId(null);
     } catch (e) {
+      // ── Auto-retry on browser-cancelled network errors ────────────────────
+      // When a user switches browser tabs, some browsers kill long-running fetches.
+      // "Load failed" / "Failed to fetch" = browser abort, not a real error.
+      // Auto-retry once silently instead of showing a confusing error.
+      const isNetworkAbort = e.message === 'Load failed'
+        || e.message === 'Failed to fetch'
+        || e.message === 'NetworkError when attempting to fetch resource.'
+        || e.name === 'TypeError';
+      if (isNetworkAbort && !retryRef.current) {
+        retryRef.current = true;
+        setError(''); // don't show error — silently retry
+        setLoading(false);
+        // Brief pause, then re-fire the same prompt
+        setTimeout(() => runBetOS(base), 800);
+        return;
+      }
+      retryRef.current = false;
       setError(e.message);
     }
     setLoading(false);
   }
+
+  // ── Tab visibility: if user returns while loading was killed, re-fire ─────────
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === 'visible' && !loading && retryRef.current && lastPromptRef.current) {
+        // Tab came back and we were in a retry state — fire again
+        runBetOS(lastPromptRef.current);
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   async function loadFeed() {
     setFeedLoading(true);
@@ -1388,7 +1552,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           {/* Full report content */}
           {!resultCollapsed && (
             <div style={{ borderTop: '1px solid rgba(255,184,0,0.15)' }}>
-              <GoatPickCard result={result} model={model} prompt={prompt} runTime={runTime} />
+              <GoatPickCard result={result} model={model} prompt={prompt} runTime={runTime} user={user} isDemo={isDemo} />
             </div>
           )}
         </div>
@@ -2182,7 +2346,7 @@ const SECTIONS = [
   { id: 'insights',  label: '🧠 AI Insights',           desc: 'Personalized coaching — leaks, edges, and habits from your pick history' },
 ];
 
-export default function AnalyzerTab({ picks, goatPrompt, onGoatPromptConsumed, goatReport, onGoatReportConsumed }) {
+export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPromptConsumed, goatReport, onGoatReportConsumed }) {
   const [active, setActive] = useState('betos');
 
   // Auto-switch to BetOS tab when a prompt or report is injected
@@ -2228,6 +2392,8 @@ export default function AnalyzerTab({ picks, goatPrompt, onGoatPromptConsumed, g
           onPromptConsumed={onGoatPromptConsumed}
           injectedReport={goatReport}
           onReportConsumed={onGoatReportConsumed}
+          user={user}
+          isDemo={isDemo}
         />
       </div>
       {active === 'filter'   && <FilterAnalysis picks={picks} />}

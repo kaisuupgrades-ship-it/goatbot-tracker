@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { signOut } from '@/lib/supabase';
+import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { startSessionTracking, stopSessionTracking } from '@/lib/sessionTracker';
 import { useRouter } from 'next/navigation';
 import Sidebar       from './Sidebar';
@@ -158,6 +159,13 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             const g = graded.find(gr => gr.id === p.id);
             return g ? { ...p, result: g.result } : p;
           }));
+          // 🔊 Sound notifications for graded picks
+          const wins   = graded.filter(g => g.result === 'WIN').length;
+          const losses = graded.filter(g => g.result === 'LOSS').length;
+          const pushes = graded.filter(g => g.result === 'PUSH').length;
+          if (wins > 0)        { playWin();   if (wins > 1)   setTimeout(playWin,  350); }
+          else if (losses > 0) { playLoss();  if (losses > 1) setTimeout(playLoss, 400); }
+          else if (pushes > 0) { playGrade(); }
         }
       });
     } catch { /* silent */ }

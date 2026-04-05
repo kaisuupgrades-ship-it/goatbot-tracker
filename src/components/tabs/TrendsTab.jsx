@@ -1,5 +1,18 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { playTick, playAnalysisReady } from '@/lib/sounds';
+
+// ── Scan steps for the fake-but-real animated progress bar ───────────────────
+const SCAN_STEPS = [
+  { pct: 8,  label: 'Connecting to live data feeds…',      emoji: '🔌' },
+  { pct: 22, label: 'Fetching today\'s full game slate…',  emoji: '📅' },
+  { pct: 38, label: 'Pulling injury & lineup reports…',    emoji: '🏥' },
+  { pct: 52, label: 'Scanning opening vs. current lines…', emoji: '📈' },
+  { pct: 65, label: 'Detecting sharp money signals…',      emoji: '⚡' },
+  { pct: 78, label: 'Analyzing situational matchups…',     emoji: '🔬' },
+  { pct: 90, label: 'Compiling edges & confidence ranks…', emoji: '🧠' },
+  { pct: 98, label: 'Finalizing report…',                  emoji: '✅' },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtOdds(n) {
@@ -250,6 +263,48 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
   const [globalEdges, setGlobalEdges] = useState(null); // server pre-generated edges
   const [userScanned, setUserScanned] = useState(false); // true once user runs their own scan
 
+  // Animated progress bar state
+  const [scanPct,    setScanPct]    = useState(0);
+  const [scanStepIdx, setScanStepIdx] = useState(0);
+  const scanAnimRef = useRef(null); // holds setInterval id
+  const scanDoneRef = useRef(false); // true when real data is back
+
+  // ── Scan animation helpers ────────────────────────────────────────────────────
+  function startScanAnimation() {
+    if (scanAnimRef.current) clearInterval(scanAnimRef.current);
+    scanDoneRef.current = false;
+    setScanPct(SCAN_STEPS[0].pct);
+    setScanStepIdx(0);
+    playTick();
+    let stepIdx = 0;
+    scanAnimRef.current = setInterval(() => {
+      if (stepIdx < SCAN_STEPS.length - 1) {
+        stepIdx++;
+        setScanStepIdx(stepIdx);
+        setScanPct(SCAN_STEPS[stepIdx].pct);
+        playTick();
+      } else if (scanDoneRef.current) {
+        // Real data is back — snap to 100% and play the ready chime
+        clearInterval(scanAnimRef.current);
+        scanAnimRef.current = null;
+        setScanPct(100);
+        playAnalysisReady();
+      }
+      // Otherwise hold at 98% until data arrives
+    }, 600);
+  }
+
+  function finishScan() {
+    // Signal animation to complete, then hide bar and clear loading after brief pause
+    scanDoneRef.current = true;
+    setTimeout(() => {
+      if (scanAnimRef.current) { clearInterval(scanAnimRef.current); scanAnimRef.current = null; }
+      setScanPct(0);
+      setScanStepIdx(0);
+      setLoading(false);
+    }, 750);
+  }
+
   // Per-sport scan cache — keyed by sport key, value = { edges, error }
   // Persists for the life of the browser session (cleared only on full page reload)
   const scanCache = useRef(new Map());
@@ -293,6 +348,7 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
       return;
     }
 
+    startScanAnimation();
     setLoading(true); setError(''); setEdges([]);
     try {
       // Fetch today's games for the selected sport(s)
@@ -414,7 +470,7 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
         setEdges([]);
         setError(noGamesErr);
         setScanned(true);
-        setLoading(false);
+        finishScan();
         return;
       }
 
@@ -471,7 +527,7 @@ Return ONLY the JSON array, no other text.`;
         try { const e = await res.json(); errMsg = e.error || errMsg; } catch {}
         setError(errMsg);
         setScanned(true);
-        setLoading(false);
+        finishScan();
         return;
       }
 
@@ -480,7 +536,7 @@ Return ONLY the JSON array, no other text.`;
       if (data.error && !data.answer) {
         setError(data.error);
         setScanned(true);
-        setLoading(false);
+        finishScan();
         return;
       }
 
@@ -491,7 +547,7 @@ Return ONLY the JSON array, no other text.`;
       if (!cleaned.startsWith('[')) {
         setError('AI returned an unexpected response. Please try scanning again.');
         setScanned(true);
-        setLoading(false);
+        finishScan();
         return;
       }
 
@@ -501,7 +557,7 @@ Return ONLY the JSON array, no other text.`;
       } catch {
         setError('Could not parse AI response. Please try scanning again.');
         setScanned(true);
-        setLoading(false);
+        finishScan();
         return;
       }
 
@@ -514,7 +570,7 @@ Return ONLY the JSON array, no other text.`;
       setError(`Scan failed — network or server error. Try again in a moment.`);
       setScanned(true);
     }
-    setLoading(false);
+    finishScan();
   }, [sport, user]);
 
   function handleLog(edge) {
@@ -662,15 +718,51 @@ Return ONLY the JSON array, no other text.`;
         ))}
       </div>
 
-      {/* Loading skeleton */}
+      {/* ── Animated progress bar ── */}
       {loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {[1, 2, 3].map(i => (
-            <div key={i} style={{ height: '88px', background: '#111', borderRadius: '10px', animation: 'pulse 1.5s infinite', opacity: 0.6 }} />
-          ))}
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textAlign: 'center' }}>
-            Pulling today's games and scanning for edges…
-          </p>
+        <div style={{
+          padding: '1.5rem 1.75rem',
+          background: 'linear-gradient(135deg, #0a0a0f 0%, #0e0b04 100%)',
+          border: '1px solid rgba(255,184,0,0.18)',
+          borderRadius: '14px',
+          boxShadow: '0 2px 24px rgba(255,184,0,0.04)',
+        }}>
+          {/* Step label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '11px', marginBottom: '18px' }}>
+            <span style={{ fontSize: '1.25rem', lineHeight: 1, flexShrink: 0 }}>
+              {SCAN_STEPS[scanStepIdx]?.emoji || '🔍'}
+            </span>
+            <span style={{
+              color: '#d8d0b8', fontSize: '0.87rem', fontWeight: 500, lineHeight: 1.4,
+              transition: 'all 0.35s ease',
+            }}>
+              {SCAN_STEPS[scanStepIdx]?.label || 'Initializing scan…'}
+            </span>
+          </div>
+
+          {/* Progress track */}
+          <div style={{ height: '7px', background: 'rgba(255,255,255,0.07)', borderRadius: '4px', overflow: 'hidden', marginBottom: '10px' }}>
+            <div style={{
+              height: '100%',
+              width: `${scanPct}%`,
+              background: 'linear-gradient(90deg, #ff7b00, #FFB800, #ffe566)',
+              borderRadius: '4px',
+              boxShadow: '0 0 14px rgba(255,184,0,0.55)',
+              transition: 'width 0.45s ease',
+            }} />
+          </div>
+
+          {/* Footer */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: '#3a3a3a' }}>
+            <span style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>BetOS Intelligence · Live Scan</span>
+            <span style={{
+              fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700,
+              color: scanPct >= 98 ? '#FFB800' : '#3a3a3a',
+              transition: 'color 0.3s',
+            }}>
+              {scanPct}%
+            </span>
+          </div>
         </div>
       )}
 

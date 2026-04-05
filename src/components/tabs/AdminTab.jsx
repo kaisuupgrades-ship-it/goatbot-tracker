@@ -872,18 +872,44 @@ function SystemPanel({ userEmail }) {
   async function runPregenAnalysis() {
     setPregenRunning(true);
     setPregenResult(null);
-    try {
-      const res = await fetch('/api/cron/pregenerate-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail, force: true }),
-      });
-      const data = await res.json();
-      setPregenResult(data);
-      if (!data.error) loadPregenLog();
-    } catch (e) {
-      setPregenResult({ error: e.message });
+
+    // Call one sport at a time — keeps each serverless call under 60s
+    // and avoids the single-giant-call timeout that returns non-JSON errors
+    const SPORTS = ['mlb', 'nba', 'nhl', 'nfl', 'mls', 'wnba'];
+    const agg = { generated: 0, skipped: 0, errors: 0, games: [], error_list: [], duration_ms: 0 };
+
+    for (const sport of SPORTS) {
+      try {
+        const res = await fetch('/api/cron/pregenerate-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userEmail, force: true, sport }),
+        });
+        // Safe parse — handle non-JSON responses (timeouts, HTML error pages, etc.)
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); }
+        catch { data = { error: `${sport.toUpperCase()}: Server returned non-JSON (${res.status}) — ${text.slice(0, 120)}` }; }
+
+        if (data.error && typeof data.generated === 'undefined') {
+          agg.error_list.push(data.error);
+          agg.errors++;
+        } else {
+          agg.generated    += data.generated    || 0;
+          agg.skipped      += data.skipped      || 0;
+          agg.errors       += data.errors       || 0;
+          agg.duration_ms  += data.duration_ms  || 0;
+          agg.games.push(...(data.games       || []));
+          agg.error_list.push(...(data.error_list || []));
+        }
+      } catch (e) {
+        agg.error_list.push(`${sport.toUpperCase()}: ${e.message}`);
+        agg.errors++;
+      }
     }
+
+    setPregenResult(agg);
+    if (agg.generated > 0) loadPregenLog();
     setPregenRunning(false);
   }
 
@@ -1006,15 +1032,24 @@ function SystemPanel({ userEmail }) {
         )}
         {pregenResult && (
           <div style={{
-            padding: '0.65rem 0.85rem', borderRadius: '7px', marginBottom: '0.85rem', fontSize: '0.78rem',
-            background: pregenResult.error ? 'rgba(248,113,113,0.06)' : 'rgba(74,222,128,0.06)',
-            border: `1px solid ${pregenResult.error ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
-            color: pregenResult.error ? '#f87171' : '#4ade80',
+            padding: '0.75rem 0.9rem', borderRadius: '7px', marginBottom: '0.85rem', fontSize: '0.78rem',
+            background: pregenResult.errors > 0 && pregenResult.generated === 0 ? 'rgba(248,113,113,0.06)' : 'rgba(74,222,128,0.06)',
+            border: `1px solid ${pregenResult.errors > 0 && pregenResult.generated === 0 ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
           }}>
-            {pregenResult.error
-              ? `Error: ${pregenResult.error}`
-              : `✓ Generated ${pregenResult.generated} reports, skipped ${pregenResult.skipped} (already fresh) in ${Math.round((pregenResult.duration_ms || 0) / 1000)}s`
-            }
+            <div style={{ color: '#4ade80', fontWeight: 700, marginBottom: '4px' }}>
+              ✓ Generated {pregenResult.generated} reports · Skipped {pregenResult.skipped} (fresh) · {Math.round((pregenResult.duration_ms || 0) / 1000)}s
+            </div>
+            {pregenResult.games?.length > 0 && (
+              <div style={{ color: '#86efac', fontSize: '0.72rem', marginTop: '4px' }}>
+                {pregenResult.games.slice(0, 8).join(' · ')}{pregenResult.games.length > 8 ? ` +${pregenResult.games.length - 8} more` : ''}
+              </div>
+            )}
+            {pregenResult.error_list?.length > 0 && (
+              <div style={{ color: '#f87171', marginTop: '6px', fontSize: '0.72rem' }}>
+                ⚠ {pregenResult.error_list.slice(0, 3).join(' | ')}
+                {pregenResult.error_list.length > 3 ? ` (+${pregenResult.error_list.length - 3} more)` : ''}
+              </div>
+            )}
           </div>
         )}
         <button
@@ -1023,7 +1058,7 @@ function SystemPanel({ userEmail }) {
           disabled={pregenRunning}
           style={{ opacity: pregenRunning ? 0.7 : 1 }}
         >
-          {pregenRunning ? '⚡ Pre-generating all games… (takes 2–5 min)' : '⚡ Pre-Generate Today\'s Analyses Now'}
+          {pregenRunning ? '⚡ Pre-generating (sport by sport)…' : '⚡ Pre-Generate Today\'s Analyses Now'}
         </button>
       </div>
 

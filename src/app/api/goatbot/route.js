@@ -262,6 +262,39 @@ Check quickly: has anything material changed in the last ${ageMin} minutes? (inj
   return null;
 }
 
+// ── Prompt-level cache (survives browser tab switches / client disconnects) ────
+// Saves the full AI result for ~15 min so retries after a tab switch are instant.
+
+function promptCacheKey(prompt) {
+  // Use the first 300 chars as a cache key (unique enough for dedup, stable across retries)
+  return prompt.trim().slice(0, 300);
+}
+
+async function findPromptCache(key) {
+  try {
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString(); // 15 min TTL
+    const { data } = await supabase
+      .from('prompt_cache')
+      .select('result, model, created_at')
+      .eq('prompt_key', key)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    return data || null;
+  } catch { return null; }
+}
+
+async function savePromptCache(key, result, model) {
+  try {
+    await supabase.from('prompt_cache').insert([{ prompt_key: key, result, model }]);
+    // Cleanup: delete entries older than 1 hour to keep the table lean
+    await supabase.from('prompt_cache')
+      .delete()
+      .lt('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString());
+  } catch { /* best-effort */ }
+}
+
 /**
  * Store a freshly-generated analysis in the cache for future users.
  */
@@ -305,7 +338,17 @@ export async function POST(req) {
 
     const targetDate = gameDate || new Date().toISOString().split('T')[0];
 
-    // ── Cache lookup: check for a pre-generated analysis ─────────────────────
+    // ── Prompt-level cache (survives browser tab switches) ────────────────────
+    // If the server already completed this exact analysis (even if the browser
+    // killed the client connection), return the result instantly on retry.
+    const pKey = promptCacheKey(prompt);
+    const promptHit = await findPromptCache(pKey);
+    if (promptHit) {
+      console.log(`[goatbot] Prompt cache HIT — returning saved result instantly`);
+      return NextResponse.json({ result: promptHit.result, model: promptHit.model, cached: true });
+    }
+
+    // ── Game-analyses cache: pre-generated team matchup analysis ─────────────
     // Max age: 4 hours. After that, we re-run a full analysis and refresh the cache.
     const CACHE_MAX_AGE_MS = 4 * 60 * 60 * 1000;
     const cached = await findCachedAnalysis(prompt, targetDate);
@@ -328,9 +371,9 @@ export async function POST(req) {
         if (delta && !delta.includes('No material changes')) {
           result += `\n\n---\n${delta}`;
         }
-        result += `\n\n[Analysis pre-generated ${ageLabel} · ${cached.model || 'AI'} · Freshness checked now]`;
+        result += `\n\n[Analysis pre-generated ${ageLabel} · BetOS AI · Freshness checked now]`;
 
-        return NextResponse.json({ result, model: `${cached.model} (cached)`, cached: true });
+        return NextResponse.json({ result, model: 'BetOS AI (cached)', cached: true });
       }
 
       // Cache is stale — fall through to fresh generation, but we'll update it
@@ -368,9 +411,9 @@ export async function POST(req) {
             .join('\n\n')
             .trim();
           if (textBlocks) {
-            // Store in cache for the next user
-            cacheAnalysis(sport, homeTeam, awayTeam, targetDate, textBlocks, 'claude-opus-4-6');
-            return NextResponse.json({ result: textBlocks, model: 'claude-opus-4-6' });
+            cacheAnalysis(sport, homeTeam, awayTeam, targetDate, textBlocks, 'BetOS AI');
+            savePromptCache(pKey, textBlocks, 'BetOS AI');
+            return NextResponse.json({ result: textBlocks, model: 'BetOS AI' });
           }
         }
         if (timedOut) console.log('[goatbot] Claude Opus + search timed out after 90s');
@@ -401,8 +444,9 @@ export async function POST(req) {
         if (!timedOut && response?.ok) {
           const data = await response.json();
           const result = parseResponsesOutput(data);
-          cacheAnalysis(sport, homeTeam, awayTeam, targetDate, result, 'grok-4');
-          return NextResponse.json({ result, model: 'grok-4' });
+          cacheAnalysis(sport, homeTeam, awayTeam, targetDate, result, 'BetOS AI');
+          savePromptCache(pKey, result, 'BetOS AI');
+          return NextResponse.json({ result, model: 'BetOS AI' });
         }
         if (timedOut) console.log('[goatbot] grok-4 timed out after 90s');
         else console.log('[goatbot] grok-4 returned', response?.status);
@@ -432,8 +476,9 @@ export async function POST(req) {
         if (!timedOut && response?.ok) {
           const data = await response.json();
           const result = data.choices[0].message.content;
-          cacheAnalysis(sport, homeTeam, awayTeam, targetDate, result, 'grok-3');
-          return NextResponse.json({ result, model: 'grok-3' });
+          cacheAnalysis(sport, homeTeam, awayTeam, targetDate, result, 'BetOS AI');
+          savePromptCache(pKey, result, 'BetOS AI');
+          return NextResponse.json({ result, model: 'BetOS AI' });
         }
         if (timedOut) console.log('[goatbot] grok-3 timed out after 60s');
         else console.log('[goatbot] grok-3 returned', response?.status);
@@ -463,7 +508,10 @@ export async function POST(req) {
         if (!timedOut && response?.ok) {
           const data = await response.json();
           const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
-          if (text) return NextResponse.json({ result: text, model: 'claude-opus-4-6 (no search)' });
+          if (text) {
+            savePromptCache(pKey, text, 'BetOS AI');
+            return NextResponse.json({ result: text, model: 'BetOS AI' });
+          }
         }
       } catch { /* fall through */ }
     }
