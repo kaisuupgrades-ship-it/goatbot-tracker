@@ -9,6 +9,14 @@ const BET_TYPES = ['Moneyline', 'Spread', 'Total (Over)', 'Total (Under)', 'Prop
 const BOOKS   = ['FanDuel', 'DraftKings', 'BetMGM', 'Caesars', 'PointsBet', 'Bet365', 'Pinnacle', 'Other'];
 const RESULTS = ['WIN', 'LOSS', 'PUSH', 'PENDING'];
 
+const SPORT_EMOJI = {
+  MLB: '⚾', NBA: '🏀', NFL: '🏈', NHL: '🏒', NCAAF: '🏈',
+  NCAAB: '🏀', MLS: '⚽', WNBA: '🏀', UFC: '🥊', Tennis: '🎾',
+};
+function sportEmoji(sport) {
+  return SPORT_EMOJI[(sport || '').toUpperCase()] || '🎯';
+}
+
 const EMPTY_FORM = {
   date: new Date().toISOString().split('T')[0],
   sport: 'MLB',
