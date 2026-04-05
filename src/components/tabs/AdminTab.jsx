@@ -1432,7 +1432,7 @@ function SystemPanel({ userEmail }) {
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>🔧 System Info</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
           {[
-            { label: 'Admin Email', value: ADMIN_EMAIL },
+            { label: 'Admin Email', value: ADMIN_EMAILS.join(', ') || user?.email || '—' },
             { label: 'Environment', value: sysInfo ? sysInfo.environment : '…' },
             {
               label: 'Service Role',
@@ -1472,7 +1472,11 @@ const ADMIN_TABS = [
 export default function AdminTab({ user }) {
   const [active, setActive] = useState('overview');
 
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  // If ADMIN_EMAILS env var is set, use it; otherwise fall back to true since
+  // Dashboard.jsx already gates this component to the hardcoded admin email.
+  const isAdmin = ADMIN_EMAILS.length > 0
+    ? ADMIN_EMAILS.includes(user?.email?.toLowerCase())
+    : true;
 
   if (!isAdmin) {
     return (
