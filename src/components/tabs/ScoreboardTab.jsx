@@ -1820,43 +1820,76 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           );
       if (!realGame) return event;
 
-      // Scan all bookmakers to find the best available data for each market.
-      // bookmakers[0] may be missing one side (e.g. book suspended COL's ML),
-      // so we prefer any book that has BOTH sides of h2h, then fall back to partial.
-      const books = realGame.bookmakers || [];
+      // ── Price validation helpers ───────────────────────────────────────────
+      // Real game-level ML odds are always between -1500 and +1500.
+      // Anything outside that range is a futures price, alt-market, or data error.
+      // Spread juice is always between -300 and +300.
+      // Game totals (baseball 6–14, hockey 4–8, basketball 180–240, football 35–60).
+      function validML(price) {
+        return price != null && Math.abs(price) >= 100 && Math.abs(price) <= 1500;
+      }
+      function validSpreadJuice(price) {
+        return price != null && Math.abs(price) >= 100 && Math.abs(price) <= 300;
+      }
+      function validTotal(point, sport) {
+        if (point == null) return false;
+        const ranges = {
+          baseball_mlb: [5, 16], basketball_nba: [170, 260], icehockey_nhl: [3, 10],
+          americanfootball_nfl: [30, 70], americanfootball_ncaaf: [25, 85],
+          basketball_ncaab: [100, 180],
+        };
+        const [lo, hi] = ranges[sport] || [1, 300];
+        return point >= lo && point <= hi;
+      }
 
-      // h2h: prefer a book that has both home AND away prices
+      // Scan all bookmakers to find the best available data for each market.
+      // Skip any book whose prices fail validation — prevents +2500 garbage lines.
+      const books = realGame.bookmakers || [];
+      const sportKey2 = realGame.sport_key || '';
+
+      // h2h: prefer a book with BOTH sides and valid prices
       let h2h = null, homeH2h = null, awayH2h = null, h2hBook = null;
       for (const bk of books) {
         const mkt = bk.markets?.find(m => m.key === 'h2h');
         if (!mkt) continue;
         const ho = mkt.outcomes?.find(o => o.name === realGame.home_team);
         const ao = mkt.outcomes?.find(o => o.name === realGame.away_team);
-        if (ho && ao) { h2h = mkt; homeH2h = ho; awayH2h = ao; h2hBook = bk; break; }
-        // Partial fallback — keep if we haven't found anything yet
-        if (!h2h && (ho || ao)) { h2h = mkt; homeH2h = ho; awayH2h = ao; h2hBook = bk; }
+        // Require valid prices — reject any book with crazy ML like +2500
+        const hoOk = ho && validML(ho.price);
+        const aoOk = ao && validML(ao.price);
+        if (hoOk && aoOk) { h2h = mkt; homeH2h = ho; awayH2h = ao; h2hBook = bk; break; }
+        // Partial: one valid side — keep as fallback, don't break
+        if (!h2h && (hoOk || aoOk)) {
+          h2h = mkt;
+          homeH2h = hoOk ? ho : null;
+          awayH2h = aoOk ? ao : null;
+          h2hBook = bk;
+        }
       }
 
-      // spreads: prefer a book with both sides
+      // spreads: prefer a book with both sides and valid juice
       let spreads = null, sHome = null, sAway = null;
       for (const bk of books) {
         const mkt = bk.markets?.find(m => m.key === 'spreads');
         if (!mkt) continue;
         const ho = mkt.outcomes?.find(o => o.name === realGame.home_team);
         const ao = mkt.outcomes?.find(o => o.name === realGame.away_team);
-        if (ho && ao) { spreads = mkt; sHome = ho; sAway = ao; break; }
-        if (!spreads && (ho || ao)) { spreads = mkt; sHome = ho; sAway = ao; }
+        const hoOk = ho && validSpreadJuice(ho.price);
+        const aoOk = ao && validSpreadJuice(ao.price);
+        if (hoOk && aoOk) { spreads = mkt; sHome = ho; sAway = ao; break; }
+        if (!spreads && (hoOk || aoOk)) { spreads = mkt; sHome = hoOk ? ho : null; sAway = aoOk ? ao : null; }
       }
 
-      // totals: prefer a book with both over and under
+      // totals: prefer a book with both over+under and a realistic game total
       let totals = null, tOver = null, tUnder = null;
       for (const bk of books) {
         const mkt = bk.markets?.find(m => m.key === 'totals');
         if (!mkt) continue;
         const ov = mkt.outcomes?.find(o => o.name === 'Over');
         const un = mkt.outcomes?.find(o => o.name === 'Under');
-        if (ov && un) { totals = mkt; tOver = ov; tUnder = un; break; }
-        if (!totals && (ov || un)) { totals = mkt; tOver = ov; tUnder = un; }
+        const ptOk = validTotal(ov?.point ?? un?.point, sportKey2);
+        if (ov && un && ptOk) { totals = mkt; tOver = ov; tUnder = un; break; }
+        if (!totals && ptOk && (ov || un)) { totals = mkt; tOver = ov; tUnder = un; }
       }
 
       const book = h2hBook || books[0];
