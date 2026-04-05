@@ -71,9 +71,11 @@ async function fetchTodaysGames(sport, dateStr) {
     if (!res.ok) return [];
     const data = await res.json();
     return (data.events || []).filter(ev => {
-      // Only pre-generate for games that haven't started yet
+      // Only pre-generate for games that haven't started yet.
+      // 'pre' = scheduled/upcoming. Skip 'in' (live) and 'post' (final) —
+      // the 8am run covers the full slate; the 4pm run just fills any gaps.
       const state = ev.competitions?.[0]?.status?.type?.state;
-      return state === 'pre' || state === 'in'; // pre = upcoming, in = live (still worth analyzing)
+      return state === 'pre';
     });
   } catch {
     return [];
