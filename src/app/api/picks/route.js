@@ -264,15 +264,14 @@ export async function PATCH(req) {
     return NextResponse.json({ error: 'pickId and updates required' }, { status: 400 });
   }
 
-  // Verify identity
+  // Verify identity — prefer Authorization header, fall back to body token
   let verifiedUserId = null;
-  if (authToken) {
+  const headerAuth = req.headers.get('authorization') || '';
+  const token = headerAuth.replace(/^Bearer\s+/i, '').trim() || authToken;
+  if (token) {
     try {
-      const authClient = createClient(SUPABASE_URL, ANON_KEY, {
-        global: { headers: { Authorization: `Bearer ${authToken}` } },
-      });
-      const { data: { user } } = await authClient.auth.getUser();
-      verifiedUserId = user?.id || null;
+      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+      if (!error && user) verifiedUserId = user.id;
     } catch { /* fall through */ }
   }
 

@@ -3,26 +3,40 @@ import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 30;
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
-// Use service role key if available, otherwise fall back to anon (limited access)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const ANON_KEY     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY || ANON_KEY);
 
 function isAdmin(email) {
   return ADMIN_EMAILS.includes((email || '').toLowerCase());
 }
 
+// Verify admin identity from JWT — NEVER trust client-supplied email
+async function getAdminUser(req) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) return null;
+    if (!isAdmin(user.email)) return null;
+    return user;
+  } catch { return null; }
+}
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const action    = searchParams.get('action') || 'stats';
-  const userEmail = searchParams.get('userEmail') || '';
+  const action = searchParams.get('action') || 'stats';
 
-  if (!isAdmin(userEmail)) {
+  // Verify admin via JWT — ignore any client-supplied email
+  const adminUser = await getAdminUser(req);
+  if (!adminUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+  const adminEmail = adminUser.email;
 
   try {
     if (action === 'stats') {
@@ -283,7 +297,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json();
-  const { action, userEmail, targetId, value, newEmail, newPassword, newUsername } = body;
+  const { action, targetId, value, newEmail, newPassword, newUsername } = body;
 
   // Session tracking is unauthenticated — any logged-in user can log their own session
   if (action === 'track_session') {
@@ -310,9 +324,12 @@ export async function POST(req) {
     return NextResponse.json({ ok: true });
   }
 
-  if (!isAdmin(userEmail)) {
+  // All actions below require admin JWT
+  const adminUser = await getAdminUser(req);
+  if (!adminUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+  const adminEmail = adminUser.email;
 
   try {
     if (action === 'ban_user') {
@@ -344,7 +361,7 @@ export async function POST(req) {
           graded_home_score: null,
           graded_away_score: null,
           admin_edited_at:   new Date().toISOString(),
-          admin_edited_by:   userEmail,
+          admin_edited_by:   adminEmail,
         })
         .eq('id', targetId);
       if (error) throw error;
@@ -360,7 +377,7 @@ export async function POST(req) {
       }
       if (!Object.keys(updates).length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
       updates.admin_edited_at = new Date().toISOString();
-      updates.admin_edited_by = userEmail;
+      updates.admin_edited_by = adminEmail;
       const { error } = await supabaseAdmin.from('picks').update(updates).eq('id', targetId);
       if (error) throw error;
       return NextResponse.json({ ok: true });

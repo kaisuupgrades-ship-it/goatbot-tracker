@@ -103,6 +103,7 @@ export async function GET(req) {
     skippedCount += groupPicks.length - graded.length;
 
     for (const g of graded) {
+      // Idempotency: only grade picks that are still PENDING
       const { error: updateErr } = await supabase
         .from('picks')
         .update({
@@ -112,7 +113,8 @@ export async function GET(req) {
           graded_home_score: g.home_score,
           graded_away_score: g.away_score,
         })
-        .eq('id', g.id);
+        .eq('id', g.id)
+        .is('result', null);
 
       if (!updateErr) {
         gradedCount++;

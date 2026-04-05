@@ -28,6 +28,17 @@ export async function GET(req) {
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // Check if the requester is the profile owner (optional auth)
+  let isOwner = false;
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (token) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user?.id === userId) isOwner = true;
+    } catch { /* unauthenticated — treat as non-owner */ }
+  }
+
   // Build picks query — show all picks for this user (no is_public filter).
   // is_public controls leaderboard visibility, but a profile should show all picks
   // so the record shown in the header matches what's in Pick History.
@@ -56,8 +67,9 @@ export async function GET(req) {
   const settled = allPicks.filter(p => ['WIN', 'LOSS', 'PUSH'].includes(p.result));
   const pending = allPicks.filter(p => !p.result || p.result === 'PENDING');
 
-  // Pending picks — return minimal info (blurred in UI for non-owners)
-  const pendingPicks = pending.map(p => ({
+  // Pending picks — owner gets full details; non-owners get only sport + timestamp
+  // (blurred in UI). This prevents competitors from seeing bets before game time.
+  const pendingPicks = pending.map(p => isOwner ? {
     id:         p.id,
     team:       p.team,
     sport:      p.sport,
@@ -66,7 +78,11 @@ export async function GET(req) {
     units:      p.units || 1,
     notes:      p.notes || '',
     created_at: p.created_at,
-  }));
+  } : {
+    id:         p.id,
+    sport:      p.sport,
+    created_at: p.created_at,
+  });
 
   // Compute profit per pick + aggregate stats
   let totalUnits = 0, wagered = 0;
@@ -82,7 +98,7 @@ export async function GET(req) {
       odds:         p.odds,
       units:        p.units || 1,
       result:       p.result,
-      notes:        p.notes || '',
+      notes:        isOwner ? (p.notes || '') : '',  // notes are private
       created_at:   p.created_at,
       verified:     p.audit_status === 'APPROVED',
       profit:       profit !== null ? Math.round(profit * 100) / 100 : null,

@@ -4,6 +4,22 @@ import BacktestPanel from './admin/BacktestPanel';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
+// ── Auth helper — attaches JWT to all admin API calls ────────────────────────
+async function getAuthToken() {
+  try {
+    const { supabase } = await import('@/lib/supabase');
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  } catch { return null; }
+}
+async function adminFetch(url, opts = {}) {
+  const token = await getAuthToken();
+  const headers = { ...opts.headers };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  return fetch(url, { ...opts, headers });
+}
+
 // ── Tiny reusable components ──────────────────────────────────────────────────
 
 function StatCard({ label, value, sub, color = 'var(--text-primary)', icon }) {
@@ -49,7 +65,7 @@ function OverviewPanel({ userEmail }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`/api/admin?action=stats&userEmail=${encodeURIComponent(userEmail)}`)
+    adminFetch(`/api/admin?action=stats`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
@@ -123,7 +139,7 @@ function UsersPanel({ userEmail }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/admin?action=users&userEmail=${encodeURIComponent(userEmail)}`)
+    adminFetch(`/api/admin?action=users`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
@@ -133,10 +149,10 @@ function UsersPanel({ userEmail }) {
 
   async function handleAction(action, targetId, value) {
     setActionMsg('');
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, userEmail, targetId, value }),
+      body: JSON.stringify({ action, targetId, value }),
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
@@ -148,10 +164,10 @@ function UsersPanel({ userEmail }) {
   async function handleCreateUser(e) {
     e.preventDefault();
     setCreating(true); setCreateMsg('');
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create_user', userEmail, newEmail, newPassword, newUsername }),
+      body: JSON.stringify({ action: 'create_user', newEmail, newPassword, newUsername }),
     });
     const d = await res.json();
     setCreating(false);
@@ -415,10 +431,10 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
       contest_entry: form.contest_entry,
       is_public:     form.is_public,
     };
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'edit_pick', userEmail, targetId: pick.id, ...updates }),
+      body: JSON.stringify({ action: 'edit_pick', targetId: pick.id, ...updates }),
     });
     const d = await res.json();
     if (d.error) { setError(d.error); setSaving(false); return; }
@@ -515,8 +531,8 @@ function PicksAuditPanel({ userEmail }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams({ action: 'picks', userEmail, page, ...(sport ? { sport } : {}) });
-    fetch(`/api/admin?${params}`)
+    const params = new URLSearchParams({ action: 'picks', page, ...(sport ? { sport } : {}) });
+    adminFetch(`/api/admin?${params}`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setPicks(d.picks || []); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
@@ -526,10 +542,10 @@ function PicksAuditPanel({ userEmail }) {
 
   async function handleDelete(id) {
     if (!confirm('Delete this pick? This cannot be undone.')) return;
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete_pick', userEmail, targetId: id }),
+      body: JSON.stringify({ action: 'delete_pick', targetId: id }),
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
@@ -540,10 +556,10 @@ function PicksAuditPanel({ userEmail }) {
 
   async function handleReset(id) {
     if (!confirm('Reset this pick back to PENDING? This clears the result so it will be re-graded.')) return;
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'reset_pick', userEmail, targetId: id }),
+      body: JSON.stringify({ action: 'reset_pick', targetId: id }),
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
@@ -785,7 +801,7 @@ function ContestsPanel({ userEmail }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/contest-audit?action=log&userEmail=${encodeURIComponent(userEmail)}`)
+    adminFetch(`/api/contest-audit?action=log`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setPicks(d.picks || []); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
@@ -798,10 +814,10 @@ function ContestsPanel({ userEmail }) {
       || (status === 'REJECTED' ? prompt('Rejection reason (shown to admin log):') : 'Admin approved');
     if (status === 'REJECTED' && !reason) return;
     setActionMsg('Processing…');
-    const res = await fetch('/api/contest-audit', {
+    const res = await adminFetch('/api/contest-audit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'override', pickId, userEmail, overrideStatus: status, overrideReason: reason }),
+      body: JSON.stringify({ action: 'override', pickId, overrideStatus: status, overrideReason: reason }),
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); } else { setActionMsg(`✓ Pick ${status.toLowerCase()}`); load(); }
@@ -810,10 +826,10 @@ function ContestsPanel({ userEmail }) {
 
   async function handleDelete(id) {
     if (!confirm('Permanently delete this contest pick? This cannot be undone.')) return;
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete_pick', userEmail, targetId: id }),
+      body: JSON.stringify({ action: 'delete_pick', targetId: id }),
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
@@ -824,7 +840,7 @@ function ContestsPanel({ userEmail }) {
 
   async function handleBatchAudit() {
     setActionMsg('Running AI audit…');
-    const res = await fetch('/api/contest-audit', {
+    const res = await adminFetch('/api/contest-audit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'batch-audit' }),
     });
@@ -837,9 +853,9 @@ function ContestsPanel({ userEmail }) {
   async function handleTimingSweep() {
     if (!confirm('Run timing sweep? This auto-rejects picks submitted after game start. Cannot be undone.')) return;
     setActionMsg('Running timing sweep…');
-    const res = await fetch('/api/contest-audit', {
+    const res = await adminFetch('/api/contest-audit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'timing-sweep', userEmail }),
+      body: JSON.stringify({ action: 'timing-sweep' }),
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); }
@@ -1008,7 +1024,7 @@ function ActivityPanel({ userEmail }) {
   const [sortBy,  setSortBy]  = useState('signin'); // signin | activity | created
 
   useEffect(() => {
-    fetch(`/api/admin?action=activity&userEmail=${encodeURIComponent(userEmail)}`)
+    adminFetch(`/api/admin?action=activity`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
@@ -1244,7 +1260,7 @@ function CronPanel({ userEmail }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/admin?action=cron_settings&userEmail=${encodeURIComponent(userEmail)}`);
+    const res = await adminFetch(`/api/admin?action=cron_settings`);
     const d = await res.json();
     if (!d.error && d.settings) {
       // Flatten { key: { value, updated_at } } → { key: value }
@@ -1258,10 +1274,10 @@ function CronPanel({ userEmail }) {
   useEffect(() => { load(); }, [load]);
 
   async function handleToggle(key, newVal) {
-    await fetch('/api/admin', {
+    await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'cron_toggle', userEmail, jobKey: key, enabled: newVal }),
+      body: JSON.stringify({ action: 'cron_toggle', jobKey: key, enabled: newVal }),
     });
     setSettings(s => ({ ...s, [`cron_${key}_enabled`]: String(newVal) }));
   }
@@ -1269,10 +1285,10 @@ function CronPanel({ userEmail }) {
   async function handleRun(key, path) {
     setRunning(r => ({ ...r, [key]: true }));
     setRunResults(r => ({ ...r, [key]: null }));
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'cron_run', userEmail, jobPath: path }),
+      body: JSON.stringify({ action: 'cron_run', jobPath: path }),
     });
     const d = await res.json();
     setRunning(r => ({ ...r, [key]: false }));
@@ -1430,7 +1446,7 @@ function SystemPanel({ userEmail }) {
 
   function loadGeneratedAnalyses(date) {
     const d = date || analysesDate;
-    fetch(`/api/admin?action=game_analyses&userEmail=${encodeURIComponent(userEmail)}&date=${d}`)
+    adminFetch(`/api/admin?action=game_analyses&date=${d}`)
       .then(r => r.json())
       .then(data => setGeneratedAnalyses(data.analyses || []))
       .catch(() => setGeneratedAnalyses([]));
@@ -1554,7 +1570,7 @@ function SystemPanel({ userEmail }) {
   }, []); // eslint-disable-line
 
   function loadSysInfo() {
-    fetch(`/api/admin?action=system&userEmail=${encodeURIComponent(userEmail)}`)
+    adminFetch(`/api/admin?action=system`)
       .then(r => r.json())
       .then(d => setSysInfo(d))
       .catch(() => {});
@@ -1565,10 +1581,10 @@ function SystemPanel({ userEmail }) {
   async function sendAnnouncement() {
     if (!announcement.trim()) return;
     setSending(true);
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'broadcast', userEmail, value: announcement.trim() }),
+      body: JSON.stringify({ action: 'broadcast', value: announcement.trim() }),
     });
     const d = await res.json();
     if (!d.error) {
@@ -1583,10 +1599,10 @@ function SystemPanel({ userEmail }) {
   async function clearAnnouncement() {
     if (!window.confirm('Clear the active announcement? It will be removed for all users.')) return;
     setClearing(true);
-    const res = await fetch('/api/admin', {
+    const res = await adminFetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'broadcast', userEmail, value: '' }),
+      body: JSON.stringify({ action: 'broadcast', value: '' }),
     });
     const d = await res.json();
     if (!d.error) loadSysInfo();

@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import PublicProfileModal from '../PublicProfileModal';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 function ResultStrip({ results = [] }) {
   if (!results.length) return null;
@@ -43,9 +42,9 @@ function FollowedUserCard({ entry, onUnfollow, userId, onViewProfile }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '1.1rem', overflow: 'hidden', position: 'relative',
       }}>
-        {(entry.avatar_url || (SUPABASE_URL && entry.user_id))
+        {entry.avatar_url
           ? <img
-              src={entry.avatar_url || `${SUPABASE_URL}/storage/v1/object/public/avatars/${entry.user_id}.jpg`}
+              src={entry.avatar_url}
               alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               onError={e => { e.target.style.display = 'none'; }}
             />

@@ -108,13 +108,30 @@ export async function addPick(pick) {
 }
 
 export async function updatePick(id, updates) {
-  const { data, error } = await supabase
-    .from('picks')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-  return { data, error };
+  // Route through /api/picks PATCH so server-side validation runs
+  // (game-start lock, verified status, contest field protection).
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return { data: null, error: { message: 'Not authenticated' } };
+
+    const res = await fetch('/api/picks', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ pickId: id, updates }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      return { data: null, error: { message: json.error || 'Update failed' } };
+    }
+    return { data: json.pick, error: null };
+  } catch (err) {
+    return { data: null, error: { message: err.message || 'Network error' } };
+  }
 }
 
 export async function deletePick(id) {

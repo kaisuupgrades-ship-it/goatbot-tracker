@@ -1,14 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 function UserAvatar({ userId, avatarUrl, avatarEmoji, displayName, username, size = 62 }) {
   const [imgErr, setImgErr] = useState(false);
-  // Prefer profile-stored cache-busted URL; fall back to constructed URL
-  const src = avatarUrl || (SUPABASE_URL && userId
-    ? `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg`
-    : null);
+  // Only show image if an explicit avatar_url is set (no speculative URL construction)
+  const src = avatarUrl || null;
 
   function getInitials() {
     const name = displayName || username || '?';
@@ -79,14 +76,24 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   // Nested profile drill-in (click a follower/following to view their profile)
   const [viewingEntry,   setViewingEntry]   = useState(null);
 
-  // Fetch real profile data
+  // Fetch real profile data — pass auth token so API knows if we're the owner
   useEffect(() => {
     if (!userId) { setLoadingPicks(false); return; }
     const qs = contestOnly ? `userId=${userId}&contestOnly=true` : `userId=${userId}`;
-    fetch(`/api/public-profile?${qs}`)
-      .then(r => r.json())
-      .then(d => { setProfileData(d); setLoadingPicks(false); })
-      .catch(() => setLoadingPicks(false));
+    (async () => {
+      try {
+        const headers = {};
+        try {
+          const { supabase } = await import('@/lib/supabase');
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+        } catch { /* no auth — fine, non-owner view */ }
+        const r = await fetch(`/api/public-profile?${qs}`, { headers });
+        const d = await r.json();
+        setProfileData(d);
+      } catch { /* ignore */ }
+      setLoadingPicks(false);
+    })();
   }, [userId, contestOnly]);
 
   // Check follow status

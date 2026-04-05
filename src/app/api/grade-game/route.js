@@ -52,6 +52,7 @@ export async function POST(req) {
       const gradeResult = gradePick(pick, homeTeam, awayTeam, homeScore, awayScore);
       if (!gradeResult) continue;
 
+      // Idempotency: only grade picks that are still PENDING
       const { error } = await supabase
         .from('picks')
         .update({
@@ -61,7 +62,8 @@ export async function POST(req) {
           graded_home_score: homeScore,
           graded_away_score: awayScore,
         })
-        .eq('id', pick.id);
+        .eq('id', pick.id)
+        .is('result', null);
 
       if (!error) {
         graded.push({

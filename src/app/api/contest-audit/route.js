@@ -9,7 +9,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+
+// Verify admin identity from JWT
+async function getAdminUser(req) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return null;
+    if (!ADMIN_EMAILS.includes(user.email?.toLowerCase())) return null;
+    return user;
+  } catch { return null; }
+}
 
 const RULES = {
   minOdds: -145,
@@ -194,10 +207,10 @@ Respond with EXACTLY one line: APPROVED or FLAGGED followed by a brief reason.`;
 // ── GET: Fetch audit log for admin ──────────────────────────────────────────
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const userEmail = searchParams.get('userEmail');
   const action = searchParams.get('action');
 
-  if (!ADMIN_EMAILS.includes(userEmail?.toLowerCase())) {
+  const adminUser = await getAdminUser(req);
+  if (!adminUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -248,10 +261,13 @@ export async function GET(req) {
 // ── POST: Run audit on a pick, or admin override ────────────────────────────
 export async function POST(req) {
   const body = await req.json();
-  const { action, pickId, userEmail, overrideStatus, overrideReason } = body;
+  const { action, pickId, overrideStatus, overrideReason } = body;
 
   // Admin override: manually approve/reject a pick
-  if (action === 'override' && ADMIN_EMAILS.includes(userEmail?.toLowerCase()) && pickId) {
+  if (action === 'override' && pickId) {
+    const adminUser = await getAdminUser(req);
+    if (!adminUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const adminEmail = adminUser.email;
     const isRejected = (overrideStatus || 'APPROVED') === 'REJECTED';
 
     // First fetch the current pick so we can preserve contest_date on rejection
@@ -265,7 +281,7 @@ export async function POST(req) {
       audit_status: overrideStatus || 'APPROVED',
       audit_reason: overrideReason || 'Admin override',
       audit_override: true,
-      audit_override_by: userEmail?.toLowerCase(),
+      audit_override_by: adminEmail,
       audit_override_at: new Date().toISOString(),
     };
 
@@ -363,7 +379,8 @@ export async function POST(req) {
   // Finds picks where created_at > commence_time + 2 min grace and auto-rejects them.
   // This is the retroactive fix for picks like Charlie's that slipped through.
   if (action === 'timing-sweep') {
-    if (!ADMIN_EMAILS.includes(body.userEmail?.toLowerCase())) {
+    const sweepAdmin = await getAdminUser(req);
+    if (!sweepAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

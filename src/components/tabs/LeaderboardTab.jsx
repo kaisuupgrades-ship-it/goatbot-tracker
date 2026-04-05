@@ -15,17 +15,14 @@ function useIsMobile(breakpoint = 640) {
   return isMobile;
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 // ── UserAvatar: shows real photo if available, falls back to emoji then initials
 // avatarUrl — cache-busted URL from profiles table (preferred when available)
 // userId    — fallback to construct the storage URL
 function UserAvatar({ userId, avatarUrl, avatarEmoji, displayName, username, size = 32 }) {
   const [imgErr, setImgErr] = useState(false);
-  // Prefer the profile-stored URL (has ?v=timestamp cache-buster); fall back to constructed URL
-  const src = avatarUrl || (SUPABASE_URL && userId
-    ? `${SUPABASE_URL}/storage/v1/object/public/avatars/${userId}.jpg`
-    : null);
+  // Only show image if an explicit avatar_url is set (no speculative URL construction)
+  const src = avatarUrl || null;
   const showImg = src && !imgErr;
 
   // Generate initials from display name or username
@@ -889,7 +886,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
           borderRadius: '10px', padding: '1rem 1.25rem',
           display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
         }}>
-          <UserAvatar userId={user?.id} avatarEmoji={data.userEntry.avatar_emoji} displayName={data.userEntry.display_name} username={data.userEntry.username} size={40} />
+          <UserAvatar userId={user?.id} avatarUrl={data.userEntry.avatar_url} avatarEmoji={data.userEntry.avatar_emoji} displayName={data.userEntry.display_name} username={data.userEntry.username} size={40} />
           <div>
             <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: '0.95rem' }}>
               You're ranked #{data.userRank} of {data.total}

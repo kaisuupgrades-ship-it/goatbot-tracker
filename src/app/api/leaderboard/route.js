@@ -73,23 +73,27 @@ export async function GET(req) {
 }
 
 // ── Project row fields based on filter ────────────────────────────────────────
-// In 'verified' mode, swap in the verified_* columns as the primary stats
+// In 'verified' mode, use ONLY verified stats and filter out users with 0 verified picks.
+// A pick is "verified" when it has commence_time set (ESPN confirmed the game) and was
+// submitted before game start (submitted_at < commence_time). This is what makes the
+// Sharp Board trustworthy — every pick shown was provably placed before tipoff/start.
 function applyFilter(rows, filter) {
   if (filter !== 'verified') return rows;
-  return rows.map(r => ({
-    ...r,
-    wins:        r.verified_wins   ?? r.wins,
-    losses:      r.verified_losses ?? r.losses,
-    pushes:      r.verified_pushes ?? r.pushes,
-    total:       r.verified_picks  ?? r.total,
-    units:       r.verified_units  ?? r.units,
-    roi:         r.verified_roi    ?? r.roi,
-    sharp_score: r.verified_sharp_score ?? r.sharp_score,
-    // Keep originals accessible as _all_* for tooltip reference
-    _all_wins:   r.wins,
-    _all_losses: r.losses,
-    _all_total:  (r.wins ?? 0) + (r.losses ?? 0) + (r.pushes ?? 0),
-  }));
+  return rows
+    .map(r => ({
+      ...r,
+      wins:        r.verified_wins   || 0,
+      losses:      r.verified_losses || 0,
+      pushes:      r.verified_pushes || 0,
+      total:       r.verified_picks  || 0,
+      units:       r.verified_units  || 0,
+      roi:         r.verified_roi    || 0,
+      sharp_score: r.verified_sharp_score || 0,
+      _all_wins:   r.wins,
+      _all_losses: r.losses,
+      _all_total:  (r.wins ?? 0) + (r.losses ?? 0) + (r.pushes ?? 0),
+    }))
+    .filter(r => r.total > 0);  // Only show users who have at least 1 verified pick
 }
 
 function withUserRank(ranked, userId, isDemo, filter = 'all') {
