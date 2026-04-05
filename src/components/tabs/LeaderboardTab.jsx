@@ -550,7 +550,7 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
         borderLeft: isMe ? '2px solid rgba(255,184,0,0.5)' : '2px solid transparent',
         cursor: 'pointer',
         transition: 'background 0.15s',
-        opacity: eligible ? 1 : 0.55,
+        opacity: eligible ? 1 : 0.8,
       }}
       onMouseEnter={e => { if (!isMe) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
       onMouseLeave={e => { if (!isMe) e.currentTarget.style.background = eligible && entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent'; }}

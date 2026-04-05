@@ -139,7 +139,7 @@ export async function GET(req) {
     // user who has placed and settled a pick appears in the directory.
     let query = supabase
       .from('picks')
-      .select('user_id, result, odds, units, created_at, sport, profiles(username, display_name, avatar_emoji, avatar_url)')
+      .select('user_id, result, odds, units, created_at, sport, profiles!picks_user_id_profiles_fkey(username, display_name, avatar_emoji, avatar_url)')
       .in('result', ['WIN', 'LOSS', 'PUSH']);
 
     if (fromDate) query = query.gte('created_at', fromDate);
