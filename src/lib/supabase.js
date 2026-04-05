@@ -57,7 +57,15 @@ export async function getUser() {
   // auto-refreshes the access token with the refresh token when needed.
   // This keeps users logged in across page reloads without re-prompting.
   const { data: { session } } = await supabase.auth.getSession();
-  return session?.user ?? null;
+  if (!session?.user) return null;
+
+  // getSession() returns cached user_metadata from localStorage which can be
+  // stale (e.g. avatar_url updated server-side via admin API won't appear).
+  // Fetch the authoritative user from the server so profile changes persist
+  // across refreshes and tab switches.
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return session.user; // fallback to session user if fetch fails
+  return user;
 }
 
 // ── Picks helpers ───────────────────────────────────────────────────────────
