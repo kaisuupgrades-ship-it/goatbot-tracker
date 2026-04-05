@@ -457,131 +457,187 @@ function WeatherWidget({ stadium, gameDate, sport }) {
     else                                          windContext = '↖ Cross wind (RF side)';
   }
 
+  const windColor  = windHigh ? '#fbbf24' : '#93c5fd';
+  const tempColor  = isCold ? '#60a5fa' : isHot ? '#f87171' : 'var(--text-primary)';
+  const precipColor = wx.precip_pct >= 40 ? '#f87171' : 'var(--text-primary)';
+
   return (
     <div style={{ background: 'rgba(255,255,255,0.025)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ padding: '0.6rem 0.85rem 0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+
+      {/* ── Header ── */}
+      <div style={{
+        padding: '0.55rem 0.85rem',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '1rem' }}>{wx.emoji}</span>
-          <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700 }}>
+          <span style={{ fontSize: '0.95rem', lineHeight: 1 }}>{wx.emoji}</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
             {stadium?.name || 'Stadium'}
           </span>
           {stadium?.retractable && (
-            <span style={{ fontSize: '0.58rem', color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: '3px', padding: '1px 4px' }}>
+            <span style={{ fontSize: '0.56rem', color: '#60a5fa', background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '3px', padding: '1px 5px', fontWeight: 700, letterSpacing: '0.04em' }}>
               RETRACTABLE
             </span>
           )}
         </div>
-        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-          {wx.historical ? '✓ Actual game-time conditions' : 'Game-time forecast'}
+        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          {wx.historical ? '✓ Actual conditions' : 'Game-time forecast'}
         </span>
       </div>
 
-      <div style={{ padding: '0.75rem 0.85rem', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-        {/* Stadium SVG — clean top-down view */}
-        <div style={{ flexShrink: 0, position: 'relative', width: '88px', height: '88px' }}>
-          <svg viewBox="0 0 100 100" width="88" height="88">
-            {sport === 'mlb' ? (
-              <>
-                {/* Outfield grass */}
-                <path d="M 50 80 L 12 80 A 54 54 0 0 1 88 80 Z" fill="rgba(74,222,128,0.09)" stroke="rgba(74,222,128,0.25)" strokeWidth="1.2" />
-                {/* Foul lines */}
-                <line x1="50" y1="80" x2="14" y2="26" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-                <line x1="50" y1="80" x2="86" y2="26" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-                {/* Infield dirt */}
-                <polygon points="50,46 66,62 50,78 34,62" fill="rgba(200,160,100,0.1)" stroke="rgba(200,160,100,0.25)" strokeWidth="1" />
-                {/* Base paths */}
-                <polygon points="50,46 66,62 50,78 34,62" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.6" />
-                {/* Bases */}
-                <rect x="47.5" y="43.5" width="5" height="5" rx="1" fill="rgba(255,240,200,0.7)" />
-                <rect x="63.5" y="59.5" width="5" height="5" rx="1" fill="rgba(255,240,200,0.7)" />
-                <rect x="47.5" y="75.5" width="5" height="5" rx="1" fill="rgba(255,240,200,0.7)" />
-                <rect x="31.5" y="59.5" width="5" height="5" rx="1" fill="rgba(255,240,200,0.7)" />
-                {/* Pitcher mound */}
-                <circle cx="50" cy="62" r="3" fill="rgba(200,160,100,0.3)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.8" />
-              </>
-            ) : (
-              <>
-                {/* Football field */}
-                <rect x="12" y="24" width="76" height="52" rx="5" fill="rgba(74,222,128,0.08)" stroke="rgba(74,222,128,0.25)" strokeWidth="1.2" />
-                {/* Yard lines */}
-                {[25,38,50,62,75].map(x => (
-                  <line key={x} x1={12 + (x/100)*76} y1="24" x2={12 + (x/100)*76} y2="76" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
-                ))}
-                {/* Center line */}
-                <line x1="50" y1="24" x2="50" y2="76" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-                {/* End zones */}
-                <rect x="12" y="24" width="10" height="52" rx="5" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" strokeWidth="0.6" />
-                <rect x="78" y="24" width="10" height="52" rx="5" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" strokeWidth="0.6" />
-              </>
-            )}
+      {/* ── Body ── */}
+      <div style={{ padding: '0.7rem 0.85rem', display: 'flex', gap: '12px', alignItems: 'center' }}>
+
+        {/* ── Field SVG ── */}
+        <div style={{ flexShrink: 0, position: 'relative', width: '92px', height: '92px' }}>
+          <svg viewBox="0 0 100 100" width="92" height="92" style={{ display: 'block' }}>
+            <defs>
+              <radialGradient id="grassGrad" cx="50%" cy="80%" r="70%">
+                <stop offset="0%"   stopColor="rgba(34,197,94,0.18)" />
+                <stop offset="100%" stopColor="rgba(22,163,74,0.06)" />
+              </radialGradient>
+              <radialGradient id="infieldGrad" cx="50%" cy="50%" r="60%">
+                <stop offset="0%"   stopColor="rgba(217,119,6,0.22)" />
+                <stop offset="100%" stopColor="rgba(180,83,9,0.08)"  />
+              </radialGradient>
+            </defs>
+
+            {sport === 'mlb' ? (<>
+              {/* Outfield — filled arc */}
+              <path d="M 50 82 L 8 82 A 59 59 0 0 1 92 82 Z"
+                fill="url(#grassGrad)" stroke="rgba(74,222,128,0.3)" strokeWidth="1" />
+              {/* Warning track — thin brownish band */}
+              <path d="M 50 82 L 11 82 A 56 56 0 0 1 89 82 Z"
+                fill="none" stroke="rgba(180,120,60,0.35)" strokeWidth="4" />
+              {/* Foul lines */}
+              <line x1="50" y1="82" x2="10" y2="22" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2" />
+              <line x1="50" y1="82" x2="90" y2="22" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2" />
+              {/* Infield grass circle */}
+              <circle cx="50" cy="62" r="18" fill="rgba(34,197,94,0.1)" />
+              {/* Infield dirt diamond */}
+              <polygon points="50,44 68,62 50,80 32,62"
+                fill="url(#infieldGrad)" stroke="rgba(200,160,80,0.4)" strokeWidth="1" />
+              {/* Base paths (lighter inner lines) */}
+              <polygon points="50,44 68,62 50,80 32,62"
+                fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
+              {/* Pitcher mound */}
+              <circle cx="50" cy="62" r="3.5"
+                fill="rgba(200,150,80,0.5)" stroke="rgba(220,180,100,0.5)" strokeWidth="1" />
+              {/* Bases */}
+              {[[50,41],[66,62],[50,80],[34,62]].map(([x,y], i) =>
+                i === 3 /* home plate — pentagon shape */
+                  ? <polygon key={i} points={`${x},${y-3.5} ${x+3},${y-1} ${x+3},${y+2.5} ${x-3},${y+2.5} ${x-3},${y-1}`}
+                      fill="rgba(255,248,220,0.9)" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5" />
+                  : <rect key={i} x={x-2.5} y={y-2.5} width="5" height="5" rx="0.8"
+                      fill="rgba(255,248,220,0.85)" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+              )}
+            </>) : (<>
+              {/* Football field */}
+              <rect x="10" y="22" width="80" height="56" rx="4"
+                fill="rgba(34,197,94,0.1)" stroke="rgba(74,222,128,0.3)" strokeWidth="1.2" />
+              {/* Yard lines every 10 yds */}
+              {[20,30,40,50,60,70,80].map(pct => {
+                const xPos = 10 + (pct/100)*80;
+                return <line key={pct} x1={xPos} y1="22" x2={xPos} y2="78"
+                  stroke={pct === 50 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)'} strokeWidth={pct===50?1.2:0.7} />;
+              })}
+              {/* End zones */}
+              <rect x="10" y="22" width="10" height="56" rx="4"
+                fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.8" />
+              <rect x="80" y="22" width="10" height="56" rx="4"
+                fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.8" />
+            </>)}
           </svg>
 
-          {/* Wind arrow — pure SVG, overlaid centered, pointing UP at 0deg rotation */}
-          {wx.windspeed > 2 && (() => {
-            const arrowLen = Math.min(20 + wx.windspeed * 0.7, 34);
-            const opacity  = Math.min(0.55 + wx.windspeed / 30, 1);
-            const glow     = windHigh ? `drop-shadow(0 0 5px rgba(147,197,253,0.75))` : 'none';
+          {/* Wind arrow overlay */}
+          {wx.windspeed > 2 ? (() => {
+            const arrowLen = Math.min(18 + wx.windspeed * 0.8, 32);
+            const opacity  = Math.min(0.6 + wx.windspeed / 40, 1);
             return (
-              <svg
-                viewBox="-12 -20 24 40"
-                width="24" height="40"
+              <svg viewBox="-14 -22 28 44" width="28" height="44"
                 style={{
                   position: 'absolute', top: '50%', left: '50%',
                   transform: `translate(-50%, -50%) rotate(${arrowDeg}deg)`,
-                  transition: 'transform 1s ease',
-                  pointerEvents: 'none',
-                  overflow: 'visible',
-                  filter: glow,
+                  transition: 'transform 1.2s ease',
+                  pointerEvents: 'none', overflow: 'visible',
+                  filter: windHigh ? 'drop-shadow(0 0 6px rgba(251,191,36,0.8))' : 'drop-shadow(0 0 3px rgba(147,197,253,0.5))',
                 }}
               >
-                {/* Shaft — draws from bottom toward tip (upward) */}
-                <line
-                  x1="0" y1="18"
-                  x2="0" y2={-arrowLen + 12}
-                  stroke={`rgba(147,197,253,${opacity})`}
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
-                {/* Arrowhead — points UP (negative y = up in SVG) */}
+                <line x1="0" y1="20" x2="0" y2={-arrowLen + 14}
+                  stroke={windHigh ? `rgba(251,191,36,${opacity})` : `rgba(147,197,253,${opacity})`}
+                  strokeWidth="2.8" strokeLinecap="round" />
                 <polygon
-                  points={`0,${-arrowLen + 4} -5,${-arrowLen + 14} 5,${-arrowLen + 14}`}
-                  fill={`rgba(147,197,253,${opacity})`}
-                />
+                  points={`0,${-arrowLen+4} -5.5,${-arrowLen+15} 5.5,${-arrowLen+15}`}
+                  fill={windHigh ? `rgba(251,191,36,${opacity})` : `rgba(147,197,253,${opacity})`} />
               </svg>
             );
-          })()}
-          {wx.windspeed <= 2 && (
+          })() : (
             <div style={{
               position: 'absolute', bottom: '4px', left: '50%', transform: 'translateX(-50%)',
-              fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em',
+              fontSize: '0.52rem', color: 'rgba(255,255,255,0.3)', fontWeight: 800, letterSpacing: '0.08em',
             }}>CALM</div>
           )}
         </div>
 
-        {/* Stats grid */}
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-          {[
-            { label: 'TEMP',   value: `${wx.temp_f}°F`,  alert: isCold || isHot, color: isCold ? '#60a5fa' : isHot ? '#f87171' : 'var(--text-primary)' },
-            { label: 'WIND',   value: wx.windspeed > 0 ? `${wx.windspeed} mph ${wx.compass}` : 'Calm', alert: windHigh, color: windHigh ? '#fbbf24' : 'var(--text-primary)' },
-            { label: 'PRECIP', value: `${wx.precip_pct}%`, alert: wx.precip_pct >= 40, color: wx.precip_pct >= 40 ? '#f87171' : 'var(--text-primary)' },
-            { label: 'HUMID',  value: `${wx.humidity}%`,  alert: false, color: 'var(--text-secondary)' },
-          ].map(({ label, value, alert, color }) => (
-            <div key={label}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>{label}</div>
-              <div style={{ color, fontSize: '0.82rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                {alert && <span style={{ fontSize: '0.62rem' }}>⚠</span>}{value}
+        {/* ── Stats ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+
+          {/* Top row: TEMP + PRECIP */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            {[
+              { label: 'TEMP',   val: `${wx.temp_f}°F`, color: tempColor,   alert: isCold || isHot },
+              { label: 'PRECIP', val: `${wx.precip_pct}%`, color: precipColor, alert: wx.precip_pct >= 40 },
+            ].map(({ label, val, color, alert }) => (
+              <div key={label} style={{
+                background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
+                padding: '5px 8px', border: '1px solid rgba(255,255,255,0.05)',
+              }}>
+                <div style={{ fontSize: '0.54rem', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '2px' }}>{label}</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 800, fontFamily: 'IBM Plex Mono, monospace', color, lineHeight: 1 }}>
+                  {alert && <span style={{ fontSize: '0.6rem', marginRight: '2px' }}>⚠</span>}{val}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Wind row — full width so compass never wraps */}
+          <div style={{
+            background: windHigh ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${windHigh ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.05)'}`,
+            borderRadius: '6px', padding: '5px 8px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div>
+              <div style={{ fontSize: '0.54rem', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '2px' }}>WIND</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 800, fontFamily: 'IBM Plex Mono, monospace', color: windColor, lineHeight: 1 }}>
+                  {windHigh && <span style={{ fontSize: '0.6rem', marginRight: '2px' }}>⚠</span>}
+                  {wx.windspeed > 0 ? `${wx.windspeed} mph` : 'Calm'}
+                </span>
+                {wx.windspeed > 0 && (
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: windColor, opacity: 0.8 }}>{wx.compass}</span>
+                )}
               </div>
             </div>
-          ))}
+            {windContext && (
+              <div style={{ fontSize: '0.62rem', color: windHigh ? '#fbbf24' : '#93c5fd', textAlign: 'right', lineHeight: 1.4, maxWidth: '90px' }}>
+                {windContext.replace(/^[↗←→↖]\s*/, '')}
+                {windHigh && sport === 'mlb' && <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem' }}>affects fly balls</div>}
+              </div>
+            )}
+          </div>
 
-          {/* Wind context — full width */}
-          {windContext && (
-            <div style={{ gridColumn: '1 / -1', marginTop: '2px', fontSize: '0.68rem', color: '#93c5fd', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span>{windContext}</span>
-              {windHigh && sport === 'mlb' && <span style={{ color: 'var(--text-muted)' }}>· affects fly balls</span>}
-            </div>
-          )}
+          {/* Bottom row: HUMID */}
+          <div style={{
+            background: 'rgba(255,255,255,0.03)', borderRadius: '6px',
+            padding: '4px 8px', border: '1px solid rgba(255,255,255,0.05)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: '0.54rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>HUMIDITY</span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)' }}>{wx.humidity}%</span>
+          </div>
+
         </div>
       </div>
     </div>
