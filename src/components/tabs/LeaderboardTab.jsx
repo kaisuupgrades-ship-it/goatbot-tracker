@@ -872,6 +872,141 @@ function ContestBanner() {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
+// ── Contest Row ───────────────────────────────────────────────────────────────
+function ContestRow({ entry, isMe }) {
+  const streakColor = entry.streak_type === 'W' ? '#4ade80' : entry.streak_type === 'L' ? '#f87171' : '#94a3b8';
+  const unitColor   = entry.units > 0 ? '#4ade80' : entry.units < 0 ? '#f87171' : '#94a3b8';
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '36px 36px 1fr 70px 65px 55px 60px',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '8px 12px',
+      background: isMe ? 'rgba(255,184,0,0.06)' : entry.rank <= 3 ? 'rgba(74,222,128,0.03)' : 'transparent',
+      borderBottom: '1px solid rgba(255,255,255,0.04)',
+      borderLeft: isMe ? '2px solid rgba(255,184,0,0.5)' : '2px solid transparent',
+    }}>
+      {/* Rank */}
+      <div style={{ textAlign: 'center' }}>
+        {entry.rank === 1 ? <span style={{ fontSize: '1.1rem' }}>🥇</span>
+          : entry.rank === 2 ? <span style={{ fontSize: '1.1rem' }}>🥈</span>
+          : entry.rank === 3 ? <span style={{ fontSize: '1.1rem' }}>🥉</span>
+          : <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: 'var(--text-muted)' }}>#{entry.rank}</span>}
+      </div>
+      {/* Avatar */}
+      <div style={{ fontSize: '1.1rem', textAlign: 'center' }}>{entry.avatar_emoji || '🎯'}</div>
+      {/* Name */}
+      <div style={{ overflow: 'hidden' }}>
+        <div style={{ fontSize: '0.85rem', fontWeight: isMe ? 800 : 600, color: isMe ? 'var(--gold)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {entry.display_name || entry.username}
+          {isMe && <span style={{ marginLeft: '5px', fontSize: '0.62rem', color: 'var(--gold)', fontWeight: 700 }}>YOU</span>}
+        </div>
+        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+          {entry.wins}W–{entry.losses}L{entry.pushes > 0 ? `–${entry.pushes}P` : ''}
+          {entry.pending > 0 && <span style={{ color: '#60a5fa', marginLeft: '4px' }}>+{entry.pending} live</span>}
+        </div>
+      </div>
+      {/* Units */}
+      <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.88rem', color: unitColor }}>
+        {entry.units > 0 ? '+' : ''}{entry.units}u
+      </div>
+      {/* ROI */}
+      <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: unitColor }}>
+        {entry.roi > 0 ? '+' : ''}{entry.roi}%
+      </div>
+      {/* Win% */}
+      <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+        {entry.total_settled > 0 ? ((entry.wins / entry.total_settled) * 100).toFixed(0) + '%' : '—'}
+      </div>
+      {/* Streak */}
+      <div style={{ textAlign: 'right' }}>
+        {entry.streak > 0 && entry.streak_type
+          ? <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: streakColor, fontWeight: 700 }}>
+              {entry.streak_type}{entry.streak}
+            </span>
+          : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>—</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── Contest Standings Block ────────────────────────────────────────────────────
+function ContestStandings({ userId, isDemo, refreshKey }) {
+  const [cData, setCData]   = useState(null);
+  const [cLoad, setCLoad]   = useState(true);
+
+  const load = useCallback(async () => {
+    setCLoad(true);
+    try {
+      const params = new URLSearchParams();
+      if (isDemo) params.set('demo', '1');
+      else if (userId) params.set('userId', userId);
+      const res  = await fetch(`/api/contest-leaderboard?${params.toString()}`);
+      const json = await res.json();
+      setCData(json);
+    } catch { /* silent */ }
+    finally { setCLoad(false); }
+  }, [userId, isDemo]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (refreshKey > 0) load(); }, [refreshKey]); // eslint-disable-line
+
+  const entries = cData?.leaderboard || [];
+
+  return (
+    <div style={{
+      background: 'var(--bg-surface)', border: '1px solid var(--border)',
+      borderRadius: '10px', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 12px', background: 'rgba(255,184,0,0.06)', borderBottom: '1px solid rgba(255,184,0,0.15)',
+      }}>
+        <div style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--gold)' }}>
+          🏆 Contest Standings
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {cData && (
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
+              {entries.length} entered · {new Date(cData.cachedAt).toLocaleTimeString()}
+            </span>
+          )}
+          <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 7px', fontSize: '0.7rem' }}>↺</button>
+        </div>
+      </div>
+
+      {/* Column labels */}
+      {entries.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '36px 36px 1fr 70px 65px 55px 60px', gap: '6px', padding: '5px 12px 4px', background: 'rgba(255,255,255,0.02)' }}>
+          {['', '', 'Player', 'Units', 'ROI', 'Win%', 'Streak'].map((h, i) => (
+            <div key={i} style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: i >= 3 ? 'right' : 'left' }}>{h}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Rows */}
+      {cLoad ? (
+        <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+          Loading contest standings…
+        </div>
+      ) : entries.length === 0 ? (
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '1.5rem', marginBottom: '6px' }}>🎯</div>
+          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>No contest entries yet</div>
+          <div style={{ fontSize: '0.75rem' }}>Log a pick and toggle <strong>Contest Entry</strong> to compete for the $100 prize.</div>
+        </div>
+      ) : (
+        entries.map(entry => (
+          <ContestRow key={entry.user_id} entry={entry} isMe={entry.user_id === userId} />
+        ))
+      )}
+    </div>
+  );
+}
+
 export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
@@ -920,6 +1055,9 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0 }) {
 
       {/* Monthly Contest Banner — top of page like a forum notice */}
       <ContestBanner />
+
+      {/* Contest Standings — live leaderboard for contest_entry picks */}
+      <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} />
 
       {/* Demo mode notice */}
       {(isDemo || data?.isDemo) && (
