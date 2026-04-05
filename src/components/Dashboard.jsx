@@ -131,6 +131,33 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
     }
   }, [user?.id, isDemo]);
 
+  // Global refresh: re-fetch picks from Supabase + run grading
+  const [globalRefreshing, setGlobalRefreshing] = useState(false);
+  async function refreshAll() {
+    if (isDemo || !user?.id || globalRefreshing) return;
+    setGlobalRefreshing(true);
+    try {
+      // Re-fetch picks
+      const { data } = await import('@/lib/supabase').then(m => m.supabase
+        .from('picks').select('*').eq('user_id', user.id).order('game_date', { ascending: false }));
+      if (data) setPicks(data);
+      // Run grading on updated picks
+      await fetch('/api/grade-picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      }).then(r => r.json()).then(({ graded }) => {
+        if (graded?.length) {
+          setPicks(prev => prev.map(p => {
+            const g = graded.find(gr => gr.id === p.id);
+            return g ? { ...p, result: g.result } : p;
+          }));
+        }
+      });
+    } catch { /* silent */ }
+    finally { setGlobalRefreshing(false); }
+  }
+
   async function handleSignOut() {
     if (isDemo) {
       if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('betos_demo');
@@ -165,6 +192,8 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
         onOpenProfile={() => setProfileOpen(true)}
+        onRefresh={refreshAll}
+        refreshing={globalRefreshing}
       />
 
       {/* Main */}

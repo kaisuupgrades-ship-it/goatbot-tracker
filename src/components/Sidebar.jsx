@@ -86,7 +86,7 @@ function avatarSrc(user) {
   return `${SUPABASE_URL}/storage/v1/object/public/avatars/${user.id}.jpg${ts ? `?v=${ts}` : ''}`;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile }) {
+export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, onSignOut, mobileOpen, onMobileClose, onOpenProfile, onRefresh, refreshing }) {
   const [collapsed, setCollapsed] = useState(false);
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
 
@@ -259,8 +259,8 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
             )}
           </div>
 
-          {/* User + sign out */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+          {/* User + actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
             {/* Clickable avatar/name → open profile */}
             <button
               onClick={() => !isDemo && onOpenProfile?.()}
@@ -268,8 +268,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                 display: 'flex', alignItems: 'center', gap: '7px', flex: 1,
                 background: 'none', border: 'none', cursor: isDemo ? 'default' : 'pointer',
                 padding: '3px 4px', borderRadius: '6px', textAlign: 'left',
-                transition: 'background 0.15s', overflow: 'hidden',
-                minWidth: 0,
+                transition: 'background 0.15s', overflow: 'hidden', minWidth: 0,
               }}
               title={isDemo ? 'Demo Mode' : 'Edit profile'}
               onMouseEnter={e => { if (!isDemo) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
@@ -284,28 +283,52 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                 flexShrink: 0, overflow: 'hidden',
               }}>
                 {hasAvatar ? (
-                  <img
-                    src={avatarSrc(user)}
-                    alt="avatar"
+                  <img src={avatarSrc(user)} alt="avatar"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={() => setAvatarErr(true)}
-                  />
-                ) : (
-                  username[0]?.toUpperCase() || '?'
-                )}
+                    onError={() => setAvatarErr(true)} />
+                ) : (username[0]?.toUpperCase() || '?')}
               </div>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                 {username}
               </span>
             </button>
-            <button
-              onClick={onSignOut}
-              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem', flexShrink: 0, padding: '3px' }}
-              title="Sign out"
-            >
-              ⇥
-            </button>
+            {/* Refresh button */}
+            {!isDemo && (
+              <button
+                onClick={onRefresh}
+                disabled={refreshing}
+                title="Refresh picks & grade results"
+                style={{
+                  background: 'none', border: '1px solid var(--border)', borderRadius: '6px',
+                  color: refreshing ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  cursor: refreshing ? 'default' : 'pointer',
+                  fontSize: '0.82rem', padding: '4px 6px', flexShrink: 0,
+                  transition: 'all 0.15s', lineHeight: 1,
+                  animation: refreshing ? 'spin 1s linear infinite' : 'none',
+                }}
+                onMouseEnter={e => { if (!refreshing) { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = 'var(--gold)'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+              >
+                ⟳
+              </button>
+            )}
           </div>
+
+          {/* Prominent Sign Out button */}
+          <button
+            onClick={onSignOut}
+            style={{
+              width: '100%', padding: '7px 10px', borderRadius: '7px',
+              background: 'rgba(255,69,96,0.08)', border: '1px solid rgba(255,69,96,0.25)',
+              color: '#ff4560', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,69,96,0.16)'; e.currentTarget.style.borderColor = 'rgba(255,69,96,0.5)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,69,96,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,69,96,0.25)'; }}
+          >
+            <span>⇥</span> Sign Out
+          </button>
         </div>
       )}
 

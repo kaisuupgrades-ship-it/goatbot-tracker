@@ -126,21 +126,36 @@ function gradePick(pick, game) {
 
 export async function POST(req) {
   try {
-    const { userId } = await req.json();
+    const body = await req.json();
+    const { userId, force = false } = body;
     if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
 
-    // Fetch PENDING picks whose game date is in the past
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const cutoff = yesterday.toISOString().split('T')[0];
+    // Grade picks whose game_date <= today (not just yesterday).
+    // gradePick() already checks ESPN for STATUS_FINAL so in-progress games are skipped safely.
+    const todayStr = new Date().toISOString().split('T')[0];
 
-    const { data: picks, error } = await supabase
+    let query = supabase
       .from('picks')
       .select('*')
       .eq('user_id', userId)
-      .eq('result', 'PENDING')
-      .lte('game_date', cutoff)
-      .limit(50);
+      .lte('game_date', todayStr)
+      .limit(100);
+
+    // Normal mode: only PENDING picks. Force mode: re-check recent picks too (last 7 days).
+    if (force) {
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+      query = supabase
+        .from('picks')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('game_date', weekAgo)
+        .lte('game_date', todayStr)
+        .limit(100);
+    } else {
+      query = query.eq('result', 'PENDING');
+    }
+
+    const { data: picks, error } = await query;
 
     if (error) throw error;
     if (!picks?.length) return NextResponse.json({ graded: [], count: 0 });

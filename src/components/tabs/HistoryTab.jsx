@@ -474,25 +474,36 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
   // ── Auto-grade concluded pending picks on mount ─────────────────────────
-  useEffect(() => {
-    if (!user?.id || isDemo) return;
-    const hasPending = picks.some(p => p.result === 'PENDING');
-    if (!hasPending) return;
-    fetch('/api/grade-picks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id }),
-    })
-      .then(r => r.json())
-      .then(({ graded }) => {
-        if (!graded?.length) return;
-        // Update local state with newly graded picks
+  const [grading, setGrading] = useState(false);
+  const [gradeMsg, setGradeMsg] = useState('');
+
+  async function runGrade(force = false) {
+    if (!user?.id || isDemo || grading) return;
+    setGrading(true);
+    setGradeMsg('');
+    try {
+      const res = await fetch('/api/grade-picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, force }),
+      });
+      const { graded, count } = await res.json();
+      if (count > 0) {
         setPicks(prev => prev.map(p => {
           const g = graded.find(gr => gr.id === p.id);
-          return g ? { ...p, result: g.result } : p;
+          return g ? { ...p, result: g.result, graded_home_score: g.home_score, graded_away_score: g.away_score } : p;
         }));
-      })
-      .catch(() => {});
+        setGradeMsg(`✓ Graded ${count} pick${count !== 1 ? 's' : ''}`);
+      } else {
+        setGradeMsg(force ? 'No new results found' : '');
+      }
+    } catch { setGradeMsg('Grade check failed'); }
+    finally { setGrading(false); setTimeout(() => setGradeMsg(''), 4000); }
+  }
+
+  useEffect(() => {
+    if (!user?.id || isDemo) return;
+    runGrade(false); // auto-grade on mount (silent, no force)
   }, [user?.id, isDemo]); // eslint-disable-line
 
   // Batch-load analyses for visible picks on mount
@@ -702,7 +713,21 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
             {picks.length} picks logged • {picks.filter(p => p.result === 'WIN').length}W / {picks.filter(p => p.result === 'LOSS').length}L
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {gradeMsg && (
+            <span style={{ fontSize: '0.75rem', color: gradeMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)', padding: '0 4px' }}>
+              {gradeMsg}
+            </span>
+          )}
+          <button
+            className="btn-ghost"
+            onClick={() => runGrade(true)}
+            disabled={grading || isDemo}
+            title="Re-check ESPN for final scores on recent picks"
+            style={{ fontSize: '0.78rem', opacity: grading ? 0.6 : 1 }}
+          >
+            {grading ? '⟳ Checking...' : '⟳ Refresh & Grade'}
+          </button>
           <button className="btn-ghost" onClick={() => setContestForm(!contestForm)} style={{ fontSize: '0.8rem' }}>
             ⚙️ Contest Settings
           </button>
