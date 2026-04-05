@@ -105,12 +105,13 @@ export async function GET(req) {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Fetch all contest picks (not rejected)
+    // Fetch all contest picks — include unaudited (null) and approved, exclude only rejected
+    // NOTE: .neq() in Supabase excludes NULLs, so we must use .or() to include null audit_status
     let query = supabase
       .from('picks')
       .select('user_id, result, profit, created_at, audit_status')
       .eq('contest_entry', true)
-      .neq('audit_status', 'REJECTED');
+      .or('audit_status.is.null,audit_status.eq.APPROVED');
 
     // Optional month filter — filter by the pick's created_at month
     if (month) {
