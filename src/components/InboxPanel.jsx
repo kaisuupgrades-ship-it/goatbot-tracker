@@ -154,7 +154,7 @@ function MessageThread({ userId, partner, messages, loading, sending, onSend, on
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Thread header */}
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px', flexShrink: 0 }}><-</button>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px', flexShrink: 0 }}>{'<-'}</button>
         <Avatar userId={partner?.id} emoji={partner?.avatar_emoji} size={32} />
         <div>
           <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{partner?.display_name || partner?.username}</div>
@@ -270,7 +270,7 @@ function ComposeView({ userId, onSent, onCancel }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px' }}><-</button>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px' }}>{'<-'}</button>
         <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>New Message</span>
       </div>
 
@@ -468,21 +468,4 @@ export default function InboxPanel({ user, isOpen, onClose, initialRecipient = n
             <MessageThread
               userId={userId}
               partner={activePartner}
-              messages={messages}
-              loading={loadingThread}
-              sending={sending}
-              onSend={sendMessage}
-              onBack={() => { setView('list'); loadInbox(); }}
-            />
-          ) : (
-            <ComposeView
-              userId={userId}
-              onSent={(recipient) => openThread({ id: recipient.user_id, ...recipient })}
-              onCancel={() => setView('list')}
-            />
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
+              messages={

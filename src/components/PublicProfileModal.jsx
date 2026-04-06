@@ -523,7 +523,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                         {p.result === 'WIN' ? 'W' : p.result === 'PUSH' ? 'P' : 'L'}
                       </div>
                     ))}
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', paddingLeft: '4px' }}><- most recent</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', paddingLeft: '4px' }}>{'<- most recent'}</span>
                   </div>
                 </div>
               )}
@@ -630,25 +630,4 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
           {/* For own profile: quick inbox link */}
           {isMe && onOpenInbox && (
             <button onClick={() => { onClose(); onOpenInbox(); }} style={{
-              marginLeft: 'auto', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
-              borderRadius: '6px', color: '#60a5fa', fontSize: '0.7rem', fontWeight: 600,
-              padding: '3px 10px', cursor: 'pointer',
-            }}>
-              [chat] Open Inbox
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Nested profile drill-in - when clicking a follower/following */}
-      {viewingEntry && (
-        <PublicProfileModal
-          entry={viewingEntry}
-          onClose={() => setViewingEntry(null)}
-          onOpenInbox={onOpenInbox}
-          currentUser={currentUser}
-        />
-      )}
-    </div>
-  );
-}
+              marginLeft: 'auto
