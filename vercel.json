@@ -12,8 +12,8 @@
       "path": "/api/cron/grade-picks",
       "schedule": "*/5 0-9 * * *"
     },
-    { "path": "/api/cron/pregenerate-analysis?sport=mlb",  "schedule": "0  9 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nba",  "schedule": "6  9 * * *" },
+    { "path": "/api/cron/pregenerate-analysis?sport=mlb",  "schedule": "0 9 * * *" },
+    { "path": "/api/cron/pregenerate-analysis?sport=nba",  "schedule": "6 9 * * *" },
     { "path": "/api/cron/pregenerate-analysis?sport=nhl",  "schedule": "12 9 * * *" },
     { "path": "/api/cron/pregenerate-analysis?sport=nfl",  "schedule": "18 9 * * *" },
     { "path": "/api/cron/pregenerate-analysis?sport=mls",  "schedule": "24 9 * * *" }
