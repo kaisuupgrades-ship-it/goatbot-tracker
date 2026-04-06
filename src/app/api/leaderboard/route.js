@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 15;
 
-const CACHE_TTL = 60 * 1000; // 1 min
-// Separate cache buckets for 'all' and 'verified' filter modes
-let cache = { all: { data: null, ts: 0 }, verified: { data: null, ts: 0 } };
+// NOTE: No in-memory cache here. Vercel runs multiple serverless instances
+// simultaneously, each with isolated memory — a module-level cache causes
+// different users to see different (stale) data depending on which instance
+// handles their request. The leaderboard_stats view is fast enough to query
+// directly on every request (~20-50ms). Supabase PostgREST handles caching.
 
 // ── Demo leaderboard data ─────────────────────────────────────────────────────
 const DUMMY_DATA = [
@@ -39,13 +41,7 @@ export async function GET(req) {
     return NextResponse.json(withUserRank(applyFilter(DUMMY_DATA, filter), null, true, filter));
   }
 
-  // ── Serve from cache if fresh ─────────────────────────────────────────────
-  const cacheKey = filter; // separate cache entries per filter
-  if (cache[cacheKey]?.data && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
-    return NextResponse.json(withUserRank(cache[cacheKey].data, userId, false, filter));
-  }
-
-  // ── Try Supabase ──────────────────────────────────────────────────────────
+  // ── Query Supabase fresh every time ──────────────────────────────────────
   try {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -75,7 +71,6 @@ export async function GET(req) {
 
     const ranked = projected.map((row, i) => ({ ...row, rank: i + 1 }));
 
-    cache[cacheKey] = { data: ranked, ts: Date.now() };
     return NextResponse.json(withUserRank(ranked, userId, false, actualFilter));
   } catch (err) {
     console.warn('Leaderboard: Supabase error.', err.message);
