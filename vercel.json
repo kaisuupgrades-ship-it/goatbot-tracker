@@ -5,10 +5,6 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/trends",
-      "schedule": "0 17 * * *"
-    },
-    {
       "path": "/api/cron/grade-picks",
       "schedule": "*/5 15-23 * * *"
     },
@@ -16,21 +12,11 @@
       "path": "/api/cron/grade-picks",
       "schedule": "*/5 0-9 * * *"
     },
-    { "path": "/api/cron/pregenerate-analysis?sport=mlb",  "schedule": "0 12 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nba",  "schedule": "8 12 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nhl",  "schedule": "16 12 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nfl",  "schedule": "24 12 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=mls",  "schedule": "32 12 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=mlb",  "schedule": "0 20 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nba",  "schedule": "8 20 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nhl",  "schedule": "16 20 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nfl",  "schedule": "24 20 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=mls",  "schedule": "32 20 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=mlb",  "schedule": "0 23 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nba",  "schedule": "8 23 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nhl",  "schedule": "16 23 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=nfl",  "schedule": "24 23 * * *" },
-    { "path": "/api/cron/pregenerate-analysis?sport=mls",  "schedule": "32 23 * * *" }
+    { "path": "/api/cron/pregenerate-analysis?sport=mlb",  "schedule": "0  9 * * *" },
+    { "path": "/api/cron/pregenerate-analysis?sport=nba",  "schedule": "6  9 * * *" },
+    { "path": "/api/cron/pregenerate-analysis?sport=nhl",  "schedule": "12 9 * * *" },
+    { "path": "/api/cron/pregenerate-analysis?sport=nfl",  "schedule": "18 9 * * *" },
+    { "path": "/api/cron/pregenerate-analysis?sport=mls",  "schedule": "24 9 * * *" }
   ],
   "redirects": [
     {

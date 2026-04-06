@@ -81,26 +81,31 @@ async function fetchTodaysGames(sport, dateStr) {
   try {
     const res = await fetch(`${ESPN_BASE}/${path}/scoreboard?dates=${dateStr}`, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15_000), // raised from 8s — ESPN can be slow
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn(`[pregenerate] ESPN ${sport} returned ${res.status} for ${dateStr}`);
+      return [];
+    }
     const data = await res.json();
-    return (data.events || []).filter(ev => {
+    const all = data.events || [];
+    const filtered = all.filter(ev => {
       const comp  = ev.competitions?.[0];
       const state = comp?.status?.type?.state;
       // Always include pre-game (scheduled/upcoming)
       if (state === 'pre') return true;
-      // Also include recently-started games (within 90 min of first pitch/tipoff)
-      // so that late-afternoon cron runs can still generate for early games that
-      // started between the 8am and 4pm runs. Skip 'post' (final) games.
+      // Include in-progress games started less than 90 min ago
       if (state === 'in' && comp?.date) {
         const started = new Date(comp.date).getTime();
         const elapsed = Date.now() - started;
-        return elapsed < 90 * 60 * 1000; // less than 90 min ago
+        return elapsed < 90 * 60 * 1000;
       }
       return false;
     });
-  } catch {
+    console.log(`[pregenerate] ESPN ${sport.toUpperCase()} ${dateStr}: ${all.length} total events, ${filtered.length} pre/in-progress`);
+    return filtered;
+  } catch (e) {
+    console.warn(`[pregenerate] ESPN fetch failed for ${sport}:`, e.message);
     return [];
   }
 }
@@ -154,8 +159,32 @@ async function fetchCachedOdds(sport, homeTeam, awayTeam) {
   }
 }
 
-async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext) {
-  const prompt = `Analyze this ${sport.toUpperCase()} matchup for ${gameDate}:
+// ── Quick-refresh system prompt (used when a fresh analysis already exists) ───
+// Lightweight: web search only, no full re-analysis, cheap on tokens.
+const QUICK_REFRESH_SYSTEM = `You are BetOS — a sharp sports analyst performing a quick data refresh on a pre-existing analysis. Do NOT re-write the full analysis. Only check for recent changes that would materially affect the pick.
+
+Search ONLY for:
+1. Lineup/starter changes announced in the last 4 hours (confirmed SP, goalie, key injuries)
+2. Significant line movement (more than 10 cents ML or 1 point spread since open)
+3. Any major news (suspensions, weather upgrades, trade deadline moves)
+
+If nothing significant changed: respond with exactly "NO MATERIAL CHANGE" on the first line, then 1 sentence summary.
+If something changed: respond with "UPDATE NEEDED" on the first line, then a revised THE PICK line and 2-sentence explanation.
+
+Keep response under 150 words. Do NOT repeat prior analysis. Be fast and factual.`;
+
+// Maximum games to process per sport per run. Prevents timeout on heavy slates (MLB 15+ games).
+const MAX_GAMES_PER_SPORT = 10;
+
+// ── generateAnalysis ──────────────────────────────────────────────────────────
+// mode: 'full' = complete analysis (new games)
+//       'refresh' = lightweight freshness check (existing analyses, low tokens)
+async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, mode = 'full') {
+  const isRefresh = mode === 'refresh';
+
+  const prompt = isRefresh
+    ? `Quick freshness check — ${sport.toUpperCase()} on ${gameDate}: ${awayTeam} @ ${homeTeam}${oddsContext ? `\nCurrent odds reference: ${oddsContext.split('\n')[0]}` : ''}\n\nAny lineup changes, significant line movement, or major news in the last 4 hours?`
+    : `Analyze this ${sport.toUpperCase()} matchup for ${gameDate}:
 
 ${awayTeam} @ ${homeTeam}
 ${oddsContext ? `\nKnown odds context:\n${oddsContext}` : ''}
@@ -163,10 +192,14 @@ ${performanceContext || ''}
 
 Provide a full BetOS sharp analysis report. Search for confirmed lineups/starters, current odds and line movement, injury reports, and any situational edges. Pick the sharpest play.`;
 
-  const xaiKey = process.env.XAI_API_KEY;
-  const claudeKey = process.env.ANTHROPIC_API_KEY;
+  const systemToUse   = isRefresh ? QUICK_REFRESH_SYSTEM : ANALYSIS_SYSTEM;
+  const maxTokens     = isRefresh ? 400 : 1600;   // refresh = tiny; full = capped lower than before
+  const grokTimeout   = isRefresh ? 30_000 : 55_000; // fail fast — no waiting 90s
+  // NO Claude fallback during bulk runs. One timeout = skip, not retry-with-Claude.
+  // Claude is reserved for live user queries (goatbot route) where the UX demands a result.
 
-  // Tier 1: Grok-4 + web search (primary for pre-generation — thorough)
+  const xaiKey = process.env.XAI_API_KEY;
+
   if (xaiKey) {
     try {
       const t0 = Date.now();
@@ -178,12 +211,12 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
         },
         body: JSON.stringify({
           model: 'grok-4',
-          instructions: ANALYSIS_SYSTEM,
+          instructions: systemToUse,
           input: [{ role: 'user', content: prompt }],
           tools: [{ type: 'web_search' }],
-          max_output_tokens: 2500,
+          max_output_tokens: maxTokens,
         }),
-        signal: AbortSignal.timeout(90_000),
+        signal: AbortSignal.timeout(grokTimeout),
       });
       if (res.ok) {
         const data = await res.json();
@@ -194,6 +227,7 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
         const text = texts.join('\n\n').trim();
         if (text) return {
           text,
+          mode,
           model: 'BetOS AI',
           model_used: 'grok-4',
           provider: 'xai',
@@ -201,62 +235,17 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
           latency_ms: latency,
           tokens_in: data.usage?.input_tokens || null,
           tokens_out: data.usage?.output_tokens || null,
-          system_prompt: ANALYSIS_SYSTEM,
+          system_prompt: systemToUse,
           user_prompt: prompt,
           prompt_version: PROMPT_VERSION,
         };
       }
     } catch (e) {
-      console.log(`[pregenerate] grok-4 failed for ${awayTeam}@${homeTeam}:`, e.message);
+      console.log(`[pregenerate] grok-4 ${mode} failed for ${awayTeam}@${homeTeam}:`, e.message);
     }
   }
 
-  // Tier 2: Claude Opus 4.6 + web search
-  if (claudeKey) {
-    try {
-      const t0 = Date.now();
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': claudeKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-opus-4-6',
-          system: ANALYSIS_SYSTEM,
-          tools: [{ type: 'web_search_20260209' }],
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 2500,
-          temperature: 1,
-        }),
-        signal: AbortSignal.timeout(80_000),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const latency = Date.now() - t0;
-        const text = (data.content || [])
-          .filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
-        if (text) return {
-          text,
-          model: 'BetOS AI',
-          model_used: 'claude-opus-4-6',
-          provider: 'claude',
-          was_fallback: true,
-          latency_ms: latency,
-          tokens_in: data.usage?.input_tokens || null,
-          tokens_out: data.usage?.output_tokens || null,
-          system_prompt: ANALYSIS_SYSTEM,
-          user_prompt: prompt,
-          prompt_version: PROMPT_VERSION,
-        };
-      }
-    } catch (e) {
-      console.log(`[pregenerate] Claude failed for ${awayTeam}@${homeTeam}:`, e.message);
-    }
-  }
-
-  return null;
+  return null; // skip — no Claude fallback in bulk mode to protect against cascading timeouts
 }
 
 export async function GET(req) {
@@ -326,10 +315,8 @@ export async function GET(req) {
     }
   }
 
-  // If not force, skip analyses generated in the last 3.5 hours
-  const staleAfter = new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString();
-
   const generated = [];
+  const refreshed = []; // lightweight quick-refresh runs
   const skipped   = [];
   const errors    = [];
 
@@ -399,8 +386,16 @@ export async function GET(req) {
       const awayTeam = awayComp.team?.displayName || awayComp.team?.name || '';
       if (!homeTeam || !awayTeam) continue;
 
-      // Check if we already have a fresh analysis for this game
+      // ── Smart freshness check ─────────────────────────────────────────────
+      // Three-tier logic:
+      //   SKIP    — analysis updated < 3h ago (still fresh, save tokens)
+      //   REFRESH — analysis updated 3–10h ago (quick lightweight update, ~400 tokens)
+      //   FULL    — no analysis OR force=true (complete report, ~1600 tokens)
+      let gameMode = 'full';
       if (!force) {
+        const freshCutoff   = new Date(Date.now() - 3   * 60 * 60 * 1000).toISOString(); // 3 h
+        const refreshCutoff = new Date(Date.now() - 10  * 60 * 60 * 1000).toISOString(); // 10 h
+
         const { data: existing } = await supabase
           .from('game_analyses')
           .select('id, updated_at')
@@ -408,11 +403,18 @@ export async function GET(req) {
           .eq('game_date', todayStr)
           .ilike('home_team', homeTeam)
           .ilike('away_team', awayTeam)
-          .single();
+          .maybeSingle();
 
-        if (existing && existing.updated_at > staleAfter) {
-          skipped.push(`${awayTeam}@${homeTeam}`);
-          continue;
+        if (existing) {
+          if (existing.updated_at > freshCutoff) {
+            // Very fresh — skip entirely
+            skipped.push(`${awayTeam}@${homeTeam}`);
+            continue;
+          } else if (existing.updated_at > refreshCutoff) {
+            // Getting stale — lightweight refresh only
+            gameMode = 'refresh';
+          }
+          // else: old enough to warrant a full re-analysis
         }
       }
 
@@ -430,24 +432,34 @@ export async function GET(req) {
         ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
         : '';
 
-      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime });
+      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode });
     }
 
     if (!gamesToProcess.length) continue;
 
-    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (parallel batches of 3)`);
+    // Cap to MAX_GAMES_PER_SPORT so heavy slates (MLB 15+ games) don't blow the timer.
+    // Games are naturally ordered by start time so we process the earliest ones first.
+    if (gamesToProcess.length > MAX_GAMES_PER_SPORT) {
+      console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} → ${MAX_GAMES_PER_SPORT} games this run`);
+      gamesToProcess.splice(MAX_GAMES_PER_SPORT);
+    }
 
-    // ── Process games in PARALLEL batches of 3 ──────────────────────────────
-    // Each AI call takes 60-90s. Sequential = timeout after 3-4 games.
-    // Parallel batches of 3: 15 games = 5 batches × 90s = ~7.5 min worst case.
-    // With per-sport cron (max ~8 games/sport), 3 batches × 90s = ~4.5 min.
-    const BATCH_SIZE = 3;
+    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 6, 55s timeout each, no Claude fallback)`);
+
+    // ── Process games in PARALLEL batches of 6 ──────────────────────────────
+    // Key timeout fixes vs old code:
+    //   • Grok timeout: 90s → 55s  (fail faster)
+    //   • No Claude fallback        (saves 80s per failed game)
+    //   • Batch size: 3 → 6        (more parallelism, fewer batch boundaries)
+    //   • Max 10 games/sport        (hard cap on heavy slates)
+    // Expected: 10 games / 6 per batch = 2 batches × 55s = ~110s ≈ 1.8 min per sport
+    const BATCH_SIZE = 6;
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
       const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
 
-      // Check if we're approaching the 5-min Vercel timeout (leave 30s buffer)
+      // Safety cutoff: stop 60s before Vercel's hard limit
       const elapsed = Date.now() - started;
-      if (elapsed > 270_000) { // 4.5 min
+      if (elapsed > 240_000) { // 4 min (was 4.5 min — extra safety margin)
         console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
         for (const g of gamesToProcess.slice(i)) {
           errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
@@ -456,10 +468,11 @@ export async function GET(req) {
       }
 
       const batchResults = await Promise.allSettled(
-        batch.map(async ({ homeTeam, awayTeam, oddsContext, gameTime }) => {
-          console.log(`[pregenerate] Generating: ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) ${gameTime}`);
+        batch.map(async ({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode }) => {
+          const label = `${awayTeam}@${homeTeam} (${sport.toUpperCase()}) [${gameMode}]`;
+          console.log(`[pregenerate] ${gameMode === 'refresh' ? '↻ Refreshing' : '⚡ Generating'}: ${label} ${gameTime}`);
 
-          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport]);
+          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], gameMode);
           if (!result) throw new Error('no AI response');
 
           // Parse pick/conf/edge from the response
@@ -520,7 +533,7 @@ export async function GET(req) {
             run_id:          runId,
           }]).catch(e => console.warn('[pregenerate] Audit log insert failed:', e.message));
 
-          return `${awayTeam}@${homeTeam} (${sport.toUpperCase()})`;
+          return { label: `${awayTeam}@${homeTeam} (${sport.toUpperCase()})`, mode: gameMode };
         })
       );
 
@@ -529,7 +542,8 @@ export async function GET(req) {
         const r = batchResults[j];
         const g = batch[j];
         if (r.status === 'fulfilled') {
-          generated.push(r.value);
+          if (r.value.mode === 'refresh') refreshed.push(r.value.label);
+          else generated.push(r.value.label);
         } else {
           errors.push(`${g.awayTeam}@${g.homeTeam}: ${r.reason?.message || 'unknown error'}`);
         }
@@ -541,10 +555,11 @@ export async function GET(req) {
   }
 
   const summary = {
-    generated: generated.length,
-    skipped:   skipped.length,
-    errors:    errors.length,
-    games:     generated,
+    generated:  generated.length,
+    refreshed:  refreshed.length,
+    skipped:    skipped.length,
+    errors:     errors.length,
+    games:      [...generated, ...refreshed],
     error_list: errors,
     duration_ms: Date.now() - started,
     run_at: new Date().toISOString(),
