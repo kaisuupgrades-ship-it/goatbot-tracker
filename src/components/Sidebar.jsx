@@ -167,6 +167,32 @@ function UnreadMessages({ userId }) {
   );
 }
 
+function UnreadChat({ userId }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!userId) return;
+    function poll() {
+      fetch(`/api/chat?unreadCount=1&userId=${userId}`)
+        .then(r => r.json())
+        .then(d => setCount(d.unread || 0))
+        .catch(() => {});
+    }
+    poll();
+    const t = setInterval(poll, 15000);
+    return () => clearInterval(t);
+  }, [userId]);
+  if (!count) return null;
+  return (
+    <span style={{
+      marginLeft: 'auto', background: 'rgba(96,165,250,0.15)',
+      color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)',
+      borderRadius: '10px', padding: '1px 7px', fontSize: '0.68rem', fontWeight: 700,
+    }}>
+      {count}
+    </span>
+  );
+}
+
 function StarredCount() {
   const [count, setCount] = useState(0);
   useEffect(() => {
@@ -395,6 +421,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isDemo, picks, 
                       <span style={{ flex: 1, fontSize: '0.875rem' }}>{item.label}</span>
                       {item.live && <LiveCount />}
                       {item.starred && <StarredCount />}
+                      {item.id === 'chatroom' && <UnreadChat userId={userId} />}
                     </>
                   )}
                 </button>

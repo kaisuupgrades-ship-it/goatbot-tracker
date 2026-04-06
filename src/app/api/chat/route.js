@@ -18,8 +18,45 @@ async function getAuthUser(req) {
 }
 
 // GET /api/chat?limit=50&before=ISO_DATE  → fetch recent chat messages
+// GET /api/chat?unreadCount=1&userId=UUID  → count messages since user last saw chat
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
+
+  // ── Unread count mode ──────────────────────────────────────────────────────
+  if (searchParams.get('unreadCount') === '1') {
+    const userId = searchParams.get('userId');
+    if (!userId) return NextResponse.json({ unread: 0 });
+    try {
+      // Get user's last-seen timestamp from settings
+      const { data: setting } = await db()
+        .from('settings')
+        .select('value')
+        .eq('key', `chat_last_seen_${userId}`)
+        .maybeSingle();
+      const lastSeen = setting?.value || '2000-01-01T00:00:00Z';
+      // Count messages after last seen (exclude own messages)
+      const { count, error } = await db()
+        .from('chat_messages')
+        .select('id', { count: 'exact', head: true })
+        .gt('created_at', lastSeen)
+        .neq('user_id', userId);
+      if (error) return NextResponse.json({ unread: 0 });
+      return NextResponse.json({ unread: count || 0 });
+    } catch {
+      return NextResponse.json({ unread: 0 });
+    }
+  }
+
+  // ── Mark chat as seen (when userId provided without unreadCount) ───────────
+  const seenUserId = searchParams.get('markSeen');
+  if (seenUserId) {
+    await db().from('settings').upsert(
+      [{ key: `chat_last_seen_${seenUserId}`, value: new Date().toISOString() }],
+      { onConflict: 'key' }
+    ).catch(() => {});
+  }
+
+  // ── Normal message fetch ───────────────────────────────────────────────────
   const limit  = Math.min(parseInt(searchParams.get('limit') || '60', 10), 100);
   const before = searchParams.get('before'); // for pagination
 

@@ -743,6 +743,9 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
   const [profile, setProfile]         = useState(null);
   const [editOpen, setEditOpen]       = useState(false);
   const [viewEntry, setViewEntry]     = useState(null); // for PublicProfileModal
+  const [sortKey, setSortKey]         = useState('sharp_score'); // 'record' | 'win_pct' | 'units' | 'roi' | 'sharp_score'
+  const [sortDir, setSortDir]         = useState('desc'); // 'asc' | 'desc'
+  const [searchQuery, setSearchQuery] = useState('');
 
   const userId = user?.id;
   const isMobile = useIsMobile();
@@ -778,8 +781,29 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
     fetchProfile(userId).then(({ data }) => { if (data) setProfile(data); });
   }, [userId, isDemo]);
 
-  const maxScore = data?.leaderboard?.[0]?.sharp_score || 1;
-  const entries  = data?.leaderboard || [];
+  // Filter by search
+  const searchedEntries = (data?.leaderboard || []).filter(e => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (e.display_name || '').toLowerCase().includes(q) ||
+           (e.username || '').toLowerCase().includes(q);
+  });
+
+  // Sort
+  const sortedEntries = [...searchedEntries].sort((a, b) => {
+    let av, bv;
+    switch (sortKey) {
+      case 'record':    av = a.wins || 0; bv = b.wins || 0; break;
+      case 'win_pct':   av = a.total ? a.wins / a.total : 0; bv = b.total ? b.wins / b.total : 0; break;
+      case 'units':     av = parseFloat(a.units) || 0; bv = parseFloat(b.units) || 0; break;
+      case 'roi':       av = parseFloat(a.roi) || 0; bv = parseFloat(b.roi) || 0; break;
+      case 'sharp_score': default: av = parseFloat(a.sharp_score) || 0; bv = parseFloat(b.sharp_score) || 0; break;
+    }
+    return sortDir === 'desc' ? bv - av : av - bv;
+  });
+
+  const maxScore = sortedEntries[0]?.sharp_score || data?.leaderboard?.[0]?.sharp_score || 1;
+  const entries = sortedEntries;
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -858,6 +882,16 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               </p>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search handicapper..."
+                style={{
+                  background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                  borderRadius: '6px', padding: '5px 10px', color: 'var(--text-primary)',
+                  fontSize: '0.78rem', width: '170px', fontFamily: 'inherit',
+                }}
+              />
               {data && (
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
                   {entries.length} ranked · {new Date(data.cachedAt).toLocaleTimeString()}
@@ -923,9 +957,44 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
           gap: isMobile ? '6px' : '8px',
           padding: isMobile ? '0 0.75rem' : '0 1rem',
         }}>
-          {(isMobile ? ['', 'Handicapper', 'Units', 'ROI'] : ['', 'Handicapper', 'Record', 'Win %', 'Units', 'ROI', 'Sharp Score']).map((h, i) => (
-            <span key={h} style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: isMobile && i >= 2 ? 'right' : 'left' }}>
-              {h}
+          {(isMobile
+            ? [
+                { key: null, label: '' },
+                { key: null, label: 'Handicapper' },
+                { key: 'units', label: 'Units' },
+                { key: 'roi', label: 'ROI' },
+              ]
+            : [
+                { key: null, label: '' },
+                { key: null, label: 'Handicapper' },
+                { key: 'record', label: 'Record' },
+                { key: 'win_pct', label: 'Win %' },
+                { key: 'units', label: 'Units' },
+                { key: 'roi', label: 'ROI' },
+                { key: 'sharp_score', label: 'Sharp Score' },
+              ]
+          ).map((col, i) => (
+            <span
+              key={col.label || i}
+              onClick={() => {
+                if (!col.key) return;
+                if (sortKey === col.key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+                else { setSortKey(col.key); setSortDir('desc'); }
+              }}
+              style={{
+                fontSize: '0.68rem', color: sortKey === col.key ? 'var(--gold)' : 'var(--text-muted)',
+                textTransform: 'uppercase', letterSpacing: '0.07em',
+                textAlign: isMobile && i >= 2 ? 'right' : 'left',
+                cursor: col.key ? 'pointer' : 'default',
+                userSelect: 'none',
+                display: 'flex', alignItems: 'center', gap: '3px',
+                justifyContent: isMobile && i >= 2 ? 'flex-end' : 'flex-start',
+              }}
+            >
+              {col.label}
+              {col.key && sortKey === col.key && (
+                <span style={{ fontSize: '0.55rem' }}>{sortDir === 'desc' ? '▼' : '▲'}</span>
+              )}
             </span>
           ))}
         </div>

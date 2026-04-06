@@ -82,6 +82,21 @@ function groupByDate(games) {
   return order.map(k => map[k]);
 }
 
+function getDateStr(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().split('T')[0];
+}
+
+function getDateLabel(offset) {
+  if (offset === -1) return 'Yesterday';
+  if (offset === 0)  return 'Today';
+  if (offset === 1)  return 'Tomorrow';
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 function hasExtremeOdds(awayML, homeML) {
   return (awayML != null && Math.abs(awayML) > 500) ||
          (homeML != null && Math.abs(homeML) > 500);
@@ -590,12 +605,14 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [remaining, setRemaining]   = useState(null);
   const [search, setSearch]         = useState('');
   const [gameFilter, setGameFilter] = useState('upcoming');
+  const [dateOffset, setDateOffset] = useState(0); // -1=yesterday, 0=today, 1=tomorrow
 
-  const load = useCallback(async (s) => {
+  const load = useCallback(async (s, dateOff = dateOffset) => {
     setLoading(true);
     setError('');
     try {
-      const res  = await fetch(`/api/odds?sport=${s}&market=all`);
+      const dateParam = dateOff !== 0 ? `&date=${getDateStr(dateOff)}` : '';
+      const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}`);
       const data = await res.json();
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.error);
@@ -618,7 +635,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   }, []);
 
   // Reset filter + reload on sport change
-  useEffect(() => { setGameFilter('upcoming'); load(sport); }, [sport, load]);
+  useEffect(() => { setGameFilter(dateOffset === 0 ? 'upcoming' : 'all'); load(sport, dateOffset); }, [sport, dateOffset, load]);
 
   if (!configured) return <SetupScreen />;
 
@@ -662,6 +679,32 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
               {s.emoji} {s.label}
             </button>
           ))}
+        </div>
+
+        {/* Date nav */}
+        <div style={{ display: 'flex', gap: '2px', alignItems: 'center', background: '#111', borderRadius: '6px', padding: '2px' }}>
+          <button onClick={() => setDateOffset(d => d - 1)}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: '4px 8px', fontSize: '0.78rem', borderRadius: '4px' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#FFB800'}
+            onMouseLeave={e => e.currentTarget.style.color = '#555'}>
+            ‹
+          </button>
+          <button onClick={() => setDateOffset(0)}
+            style={{
+              background: dateOffset === 0 ? 'rgba(255,184,0,0.08)' : 'transparent',
+              border: dateOffset === 0 ? '1px solid rgba(255,184,0,0.3)' : '1px solid transparent',
+              color: dateOffset === 0 ? '#FFB800' : '#888',
+              cursor: 'pointer', padding: '4px 12px', fontSize: '0.74rem', fontWeight: 600,
+              borderRadius: '4px', fontFamily: 'inherit', whiteSpace: 'nowrap',
+            }}>
+            {getDateLabel(dateOffset)}
+          </button>
+          <button onClick={() => setDateOffset(d => d + 1)}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: '4px 8px', fontSize: '0.78rem', borderRadius: '4px' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#FFB800'}
+            onMouseLeave={e => e.currentTarget.style.color = '#555'}>
+            ›
+          </button>
         </div>
 
         {/* Filter pills */}
@@ -739,7 +782,9 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
               </span>
             : search
             ? 'No games match your search.'
-            : 'No lines posted yet for this sport.'
+            : dateOffset !== 0
+            ? `No odds data for ${getDateLabel(dateOffset)}. Odds are only available for today's games.`
+            : 'No lines posted yet for this sport. Try refreshing or check back closer to game time.'
           }
         </div>
       ) : (

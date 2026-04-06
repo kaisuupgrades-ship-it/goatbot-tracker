@@ -65,12 +65,17 @@ function OverviewPanel({ userEmail }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     adminFetch(`/api/admin?action=stats`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [userEmail]);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading analytics…</div>;
   if (error)   return <div style={{ color: '#f87171', padding: '1rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>⚠ {error}</div>;
@@ -79,6 +84,13 @@ function OverviewPanel({ userEmail }) {
 
   return (
     <div>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', justifyContent: 'flex-end' }}>
+        <button onClick={load} style={{
+          background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
+          color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
+          fontFamily: 'inherit',
+        }}>↺ Refresh</button>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '1.5rem' }}>
         <StatCard label="Total Users"    value={data?.totalUsers}  icon="👥" />
         <StatCard label="Total Picks"    value={data?.totalPicks}  icon="📋" />
@@ -236,6 +248,11 @@ function UsersPanel({ userEmail }) {
           <option value="active">Sort: Last Active</option>
         </select>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', flex: 1 }}>{users.length} users</span>
+        <button onClick={load} style={{
+          background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
+          color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
+          fontFamily: 'inherit',
+        }}>↺ Refresh</button>
         <button
           onClick={() => { setShowCreate(v => !v); setCreateMsg(''); }}
           style={{
@@ -918,7 +935,11 @@ function ContestsPanel({ userEmail }) {
         <button onClick={() => setShowDeclare(true)} style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.5)', background: 'rgba(255,184,0,0.12)', color: '#FFB800' }}>🏆 Declare Winner</button>
         <button onClick={handleBatchAudit} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.25)', background: 'rgba(255,184,0,0.06)', color: '#FFB800' }}>🎯 AI Audit</button>
         <button onClick={handleTimingSweep} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.07)', color: '#f87171' }} title="Auto-reject picks submitted after game start">⏱ Timing</button>
-        <button onClick={load} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', border: '1px solid #222', background: 'transparent', color: '#666' }}>↻</button>
+        <button onClick={load} style={{
+          background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
+          color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
+          fontFamily: 'inherit',
+        }}>↺ Refresh</button>
       </div>
 
       {/* Rules bar */}
@@ -1024,12 +1045,17 @@ function ActivityPanel({ userEmail }) {
   const [search,  setSearch]  = useState('');
   const [sortBy,  setSortBy]  = useState('signin'); // signin | activity | created
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     adminFetch(`/api/admin?action=activity`)
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [userEmail]);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   function fmtDate(iso) {
     if (!iso) return '—';
@@ -1093,6 +1119,11 @@ function ActivityPanel({ userEmail }) {
           <option value="created">Sort: Newest Account</option>
         </select>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', flex: 1 }}>{rows.length} users</span>
+        <button onClick={load} style={{
+          background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
+          color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
+          fontFamily: 'inherit',
+        }}>↺ Refresh</button>
       </div>
 
       {!hasIPs && (
@@ -1302,8 +1333,15 @@ function CronPanel({ userEmail }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem 0.75rem', background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.12)', borderRadius: '8px' }}>
-        ℹ Toggling pauses the job without redeploying. "Run Now" triggers it immediately regardless of schedule.
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem 0.75rem', background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.12)', borderRadius: '8px', flex: 1 }}>
+          ℹ Toggling pauses the job without redeploying. "Run Now" triggers it immediately regardless of schedule.
+        </div>
+        <button onClick={load} style={{
+          background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
+          color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
+          fontFamily: 'inherit', flexShrink: 0,
+        }}>↺ Refresh</button>
       </div>
 
       {CRON_DEFS.map(job => {

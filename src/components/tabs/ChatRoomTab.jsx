@@ -105,12 +105,13 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    const res  = await fetch('/api/chat?limit=60');
+    const markSeen = user?.id ? `&markSeen=${user.id}` : '';
+    const res  = await fetch(`/api/chat?limit=60${markSeen}`);
     const json = await res.json();
     // API returns newest-first, reverse for display
     setMessages((json.messages || []).reverse());
     if (!silent) setLoading(false);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     load();
