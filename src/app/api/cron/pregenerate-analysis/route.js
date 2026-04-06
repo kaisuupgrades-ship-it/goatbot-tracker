@@ -8,7 +8,7 @@
  *
  * When users hit the GoatBot Analyzer, it checks this cache first and
  * returns the pre-generated report (~instant) + a quick news-delta check
- * instead of waiting 60-90s for a fresh full analysis.
+ * instead of waiting 60–90s for a fresh full analysis.
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -46,7 +46,7 @@ REQUIRED RESEARCH (use web search for each item):
 2. Current moneyline, spread, total from at least 3 major books (DraftKings, FanDuel, BetMGM, Caesars, DraftKings)
 3. Opening line vs current line — direction and magnitude of movement
 4. Injury/availability reports confirmed by beat reporters or official team sources
-5. Recent form — last 5-10 games for each team (record, run/goal differential, any slumps)
+5. Recent form — last 5–10 games for each team (record, run/goal differential, any slumps)
 6. Head-to-head record this season AND historically (last 3 years at minimum)
 7. Home/away splits for each team (road record, home record, relevant stat differences)
 8. Situational edges: rest advantage, travel fatigue, back-to-back, schedule spot
@@ -63,17 +63,17 @@ ODDS INTEGRITY — non-negotiable:
 - If a "Known odds context" block is provided below, those numbers come from a VERIFIED live feed — use them as the authoritative line. Do NOT override them.
 - If searching for odds, ONLY cite specific numbers from named sources. Never guess or interpolate.
 - Sanity-check every number: a heavy favorite at +EV odds is a red flag (e.g. -300 team priced at -110). Flag anything suspicious with "verify before betting."
-- Label all web-searched odds as "(web search - verify on your book)".
-- If odds are unconfirmed, write: "[Team] - [Bet Type] - odds not confirmed, verify before betting."
+- Label all web-searched odds as "(web search — verify on your book)".
+- If odds are unconfirmed, write: "[Team] — [Bet Type] — odds not confirmed, verify before betting."
 
 ---
 Output format — follow EXACTLY (no markdown asterisks, no bullet points replaced by dashes inside sections):
 
 THE PICK: [Team + Bet Type + Odds (source) + Book] — one sharp decisive recommendation
 
-ALTERNATE ANGLES: [1-2 secondary bets worth considering with odds — e.g. a same-game parlay leg, a total, or a first-half play]
+ALTERNATE ANGLES: [1–2 secondary bets worth considering with odds — e.g. a same-game parlay leg, a total, or a first-half play]
 
-EDGE BREAKDOWN: [3-4 sentences. What the market is pricing in, what you found that the market may be under/over-weighting. Cite specific stats and numbers found in your research.]
+EDGE BREAKDOWN: [3–4 sentences. What the market is pricing in, what you found that the market may be under/over-weighting. Cite specific stats and numbers found in your research.]
 
 KEY FACTORS:
 1. [Starter/lineup confirmed finding with specific stats]
@@ -81,7 +81,7 @@ KEY FACTORS:
 3. [Situational or contextual edge — rest, travel, weather, motivation]
 4. [Betting market signal — line movement, public %, steam, CLV opportunity]
 
-LINE MOVEMENT: [Opening line -> current line. Direction: sharp-driven or public-driven? Any steam?]
+LINE MOVEMENT: [Opening line → current line. Direction: sharp-driven or public-driven? Any steam?]
 
 ATS/OU TRENDS: [ATS record for each team this season and recently. O/U trend relevant to this game.]
 
@@ -91,11 +91,11 @@ CONFIDENCE: [LOW / MEDIUM / HIGH / ELITE]
 
 EDGE SCORE: [X/10]
 
-BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y-Z%. Based on: specific reasoning from your research.]
+BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y–Z%. Based on: specific reasoning from your research.]
 
-UNIT SIZING: [Recommended unit size 0.5u-3u and brief justification tied to confidence level.]
+UNIT SIZING: [Recommended unit size 0.5u–3u and brief justification tied to confidence level.]
 
-[!] ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets.
+⚠️ ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets.
 
 Rules: Be decisive. Cite specific numbers from your web searches. If you cannot verify something, say so — never fabricate. This analysis will be displayed to users as BetOS's official pre-game breakdown.`;
 
@@ -213,12 +213,12 @@ async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext
   const isRefresh = mode === 'refresh';
 
   const prompt = isRefresh
-    ? `Quick freshness check - ${sport.toUpperCase()} on ${gameDate}: ${awayTeam} @ ${homeTeam}${oddsContext ? `\nCurrent odds reference: ${oddsContext.split('\n')[0]}` : ''}\n\nAny lineup changes, significant line movement, or major news in the last 4 hours?`
+    ? `Quick freshness check — ${sport.toUpperCase()} on ${gameDate}: ${awayTeam} @ ${homeTeam}${oddsContext ? `\nCurrent odds reference: ${oddsContext.split('\n')[0]}` : ''}\n\nAny lineup changes, significant line movement, or major news in the last 4 hours?`
     : `Generate a comprehensive BetOS sharp analysis for this ${sport.toUpperCase()} matchup on ${gameDate}:
 
 MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
 DATE: ${gameDate}
-${oddsContext ? `\nKNOWN ODDS (verified live feed - use these exact numbers, do NOT override):\n${oddsContext}` : ''}
+${oddsContext ? `\nKNOWN ODDS (verified live feed — use these exact numbers, do NOT override):\n${oddsContext}` : ''}
 ${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE CONTEXT (use to calibrate confidence):\n${performanceContext}` : ''}
 
 TASK: Perform a thorough sharp analysis. Use web search to research ALL required items in your instructions before writing your output. This analysis will be cached and shown to users as BetOS's official pre-game breakdown — make it comprehensive and data-rich.
@@ -226,7 +226,7 @@ TASK: Perform a thorough sharp analysis. Use web search to research ALL required
 Cover all output sections: THE PICK, ALTERNATE ANGLES, EDGE BREAKDOWN, KEY FACTORS (all 4), LINE MOVEMENT, ATS/OU TRENDS, INJURY REPORT, CONFIDENCE, EDGE SCORE, BetOS WIN PROBABILITY, UNIT SIZING, and the disclaimer.`;
 
   const systemToUse   = isRefresh ? QUICK_REFRESH_SYSTEM : ANALYSIS_SYSTEM;
-  // Full: rich comprehensive analysis — 3500 tokens gives ~700-900 words which covers all
+  // Full: rich comprehensive analysis — 3500 tokens gives ~700–900 words which covers all
   // required sections. This is "expensive AI once, serve many users from cache."
   // Refresh: lightweight freshness check only (400 tokens, 30s).
   const maxTokens     = isRefresh ? 400 : 3500;
@@ -427,8 +427,8 @@ export async function GET(req) {
 
       // ── Smart freshness check ─────────────────────────────────────────────
       // Three-tier logic:
-      //   SKIP    - analysis updated < 3h ago (still fresh, save tokens)
-      //   REFRESH — analysis updated 3-10h ago (quick lightweight update, ~400 tokens)
+      //   SKIP    — analysis updated < 3h ago (still fresh, save tokens)
+      //   REFRESH — analysis updated 3–10h ago (quick lightweight update, ~400 tokens)
       //   FULL    — no analysis OR force=true (complete report, ~1600 tokens)
       let gameMode = 'full';
       if (!force) {
@@ -479,7 +479,7 @@ export async function GET(req) {
     // Cap to MAX_GAMES_PER_SPORT so heavy slates (MLB 15+ games) don't blow the timer.
     // Games are naturally ordered by start time so we process the earliest ones first.
     if (gamesToProcess.length > MAX_GAMES_PER_SPORT) {
-      console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} -> ${MAX_GAMES_PER_SPORT} games this run`);
+      console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} → ${MAX_GAMES_PER_SPORT} games this run`);
       gamesToProcess.splice(MAX_GAMES_PER_SPORT);
     }
 
@@ -487,11 +487,11 @@ export async function GET(req) {
 
     // ── Process games in PARALLEL batches of 4 ──────────────────────────────
     // Upgraded for "expensive AI once, serve many" model:
-    //   - Grok timeout: 55s -> 90s   (deep web search + 3500 tokens needs more time)
-    //   - max_output_tokens: 1600 -> 3500 (comprehensive multi-section analysis)
-    //   - Batch size: 6 -> 4         (fewer in parallel to avoid xAI rate limits at high tokens)
-    //   - No Claude fallback         (skip on timeout, re-runs on next cron cycle)
-    // Expected: 10 games / 4 per batch = 3 batches x 90s = ~270s ~ 4.5 min per sport
+    //   • Grok timeout: 55s → 90s   (deep web search + 3500 tokens needs more time)
+    //   • max_output_tokens: 1600 → 3500 (comprehensive multi-section analysis)
+    //   • Batch size: 6 → 4         (fewer in parallel to avoid xAI rate limits at high tokens)
+    //   • No Claude fallback         (skip on timeout, re-runs on next cron cycle)
+    // Expected: 10 games / 4 per batch = 3 batches × 90s = ~270s ≈ 4.5 min per sport
     // With 4-min safety cutoff: processes ~2.6 batches = 10 games safely
     const BATCH_SIZE = 4;
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
@@ -510,7 +510,7 @@ export async function GET(req) {
       const batchResults = await Promise.allSettled(
         batch.map(async ({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode }) => {
           const label = `${awayTeam}@${homeTeam} (${sport.toUpperCase()}) [${gameMode}]`;
-          console.log(`[pregenerate] ${gameMode === 'refresh' ? '[refresh] Refreshing' : '[sharp] Generating'}: ${label} ${gameTime}`);
+          console.log(`[pregenerate] ${gameMode === 'refresh' ? '↻ Refreshing' : '⚡ Generating'}: ${label} ${gameTime}`);
 
           const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], gameMode);
           if (!result) throw new Error('no AI response');
@@ -656,4 +656,3 @@ export async function POST(req) {
     return NextResponse.json({ error: String(e.message || e) }, { status: 500 });
   }
 }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     

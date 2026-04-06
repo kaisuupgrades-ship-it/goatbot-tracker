@@ -5,7 +5,7 @@ import AILabPanel from './admin/AILabPanel';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
-// ── Auth helper - attaches JWT to all admin API calls ────────────────────────
+// ── Auth helper — attaches JWT to all admin API calls ────────────────────────
 async function getAuthToken() {
   try {
     const { supabase } = await import('@/lib/supabase');
@@ -32,7 +32,7 @@ function StatCard({ label, value, sub, color = 'var(--text-primary)', icon }) {
       <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         {icon && <span style={{ marginRight: '5px' }}>{icon}</span>}{label}
       </div>
-      <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'IBM Plex Mono, monospace', color }}>{value ?? '-'}</div>
+      <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'IBM Plex Mono, monospace', color }}>{value ?? '—'}</div>
       {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{sub}</div>}
     </div>
   );
@@ -77,8 +77,8 @@ function OverviewPanel({ userEmail }) {
     load();
   }, [load]);
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading analytics...</div>;
-  if (error)   return <div style={{ color: '#f87171', padding: '1rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>[!] {error}</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading analytics…</div>;
+  if (error)   return <div style={{ color: '#f87171', padding: '1rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>⚠ {error}</div>;
 
   const topSport = data?.sportCounts ? Object.entries(data.sportCounts).sort((a, b) => b[1] - a[1])[0] : null;
 
@@ -89,13 +89,13 @@ function OverviewPanel({ userEmail }) {
           background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
           color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
           fontFamily: 'inherit',
-        }}>[refresh] Refresh</button>
+        }}>↺ Refresh</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '1.5rem' }}>
-        <StatCard label="Total Users"    value={data?.totalUsers}  icon="[users]" />
-        <StatCard label="Total Picks"    value={data?.totalPicks}  icon="[list]" />
-        <StatCard label="Win Rate"       value={data?.winRate ? `${data.winRate}%` : '-'} icon="[target]" color={parseFloat(data?.winRate) >= 55 ? '#4ade80' : parseFloat(data?.winRate) >= 50 ? '#fbbf24' : '#f87171'} sub="last 200 picks" />
-        <StatCard label="Top Sport"      value={topSport?.[0] || '-'} icon="[trophy]" sub={topSport ? `${topSport[1]} picks` : ''} />
+        <StatCard label="Total Users"    value={data?.totalUsers}  icon="👥" />
+        <StatCard label="Total Picks"    value={data?.totalPicks}  icon="📋" />
+        <StatCard label="Win Rate"       value={data?.winRate ? `${data.winRate}%` : '—'} icon="🎯" color={parseFloat(data?.winRate) >= 55 ? '#4ade80' : parseFloat(data?.winRate) >= 50 ? '#fbbf24' : '#f87171'} sub="last 200 picks" />
+        <StatCard label="Top Sport"      value={topSport?.[0] || '—'} icon="🏆" sub={topSport ? `${topSport[1]} picks` : ''} />
       </div>
 
       <AdminSection title="Recent Signups">
@@ -111,11 +111,11 @@ function OverviewPanel({ userEmail }) {
               </div>
               {u.is_banned && <Badge label="BANNED" color="#f87171" bg="rgba(248,113,113,0.1)" border="rgba(248,113,113,0.2)" />}
               <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>
-                {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
+                {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
               </div>
             </div>
           ))}
-          {(!data?.recentUsers?.length) && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1rem' }}>No user data - may need service role key</div>}
+          {(!data?.recentUsers?.length) && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1rem' }}>No user data — may need service role key</div>}
         </div>
       </AdminSection>
 
@@ -182,10 +182,10 @@ function EditUserModal({ user: u, onClose, onSaved }) {
         onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--gold)' }}>[edit] Edit Profile</div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--gold)' }}>✏️ Edit Profile</div>
             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>{u.email || u.id}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>x</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
         </div>
 
         {error && <div style={{ color: '#f87171', fontSize: '0.78rem', marginBottom: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(248,113,113,0.07)', borderRadius: '6px' }}>{error}</div>}
@@ -193,7 +193,7 @@ function EditUserModal({ user: u, onClose, onSaved }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
           {row('Username', inp('username', { placeholder: 'SharpBettor99' }))}
           {row('Display Name', inp('display_name', { placeholder: 'Jon S.' }))}
-          {row('Avatar Emoji', inp('avatar_emoji', { placeholder: '[GOAT]', maxLength: 4 }))}
+          {row('Avatar Emoji', inp('avatar_emoji', { placeholder: '🐐', maxLength: 4 }))}
           {row('Twitter / X Handle', inp('twitter_handle', { placeholder: '@bettor' }))}
           {row('Location', inp('location', { placeholder: 'Las Vegas, NV' }))}
           {row('Role', (
@@ -213,14 +213,14 @@ function EditUserModal({ user: u, onClose, onSaved }) {
         <div style={{ display: 'flex', gap: '16px', marginTop: '12px', marginBottom: '1.25rem' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: form.is_banned ? '#f87171' : 'var(--text-muted)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.is_banned} onChange={e => field('is_banned', e.target.checked)} />
-            [X] Banned
+            🚫 Banned
           </label>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '6px 16px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>Cancel</button>
           <button onClick={save} disabled={saving} style={{ padding: '6px 18px', borderRadius: '7px', border: 'none', background: saving ? 'rgba(255,184,0,0.3)' : 'rgba(255,184,0,0.85)', color: '#000', fontWeight: 800, cursor: saving ? 'default' : 'pointer', fontSize: '0.82rem' }}>
-            {saving ? 'Saving...' : '[save] Save Profile'}
+            {saving ? 'Saving…' : '💾 Save Profile'}
           </button>
         </div>
       </div>
@@ -263,7 +263,7 @@ function UsersPanel({ userEmail, onNavigate }) {
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
-    setActionMsg(`[ok] Done`);
+    setActionMsg(`✓ Done`);
     load();
     setTimeout(() => setActionMsg(''), 3000);
   }
@@ -279,7 +279,7 @@ function UsersPanel({ userEmail, onNavigate }) {
     const d = await res.json();
     setCreating(false);
     if (d.error) { setCreateMsg(`Error: ${d.error}`); return; }
-    setCreateMsg(`[ok] Account created for ${newEmail}`);
+    setCreateMsg(`✓ Account created for ${newEmail}`);
     setNewEmail(''); setNewPassword(''); setNewUsername('');
     setShowCreate(false);
     load();
@@ -306,18 +306,18 @@ function UsersPanel({ userEmail, onNavigate }) {
       return new Date(b.created_at) - new Date(a.created_at); // joined
     });
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading users...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading users…</div>;
 
   return (
     <div>
-      {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>[!] {error}</div>}
+      {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
       {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
 
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
-          placeholder="Search name or email..."
+          placeholder="Search name or email…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ width: '200px' }}
@@ -346,7 +346,7 @@ function UsersPanel({ userEmail, onNavigate }) {
           background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
           color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
           fontFamily: 'inherit',
-        }}>[refresh] Refresh</button>
+        }}>↺ Refresh</button>
         <button
           onClick={() => { setShowCreate(v => !v); setCreateMsg(''); }}
           style={{
@@ -357,7 +357,7 @@ function UsersPanel({ userEmail, onNavigate }) {
             border: showCreate ? '1px solid rgba(255,184,0,0.3)' : 'none',
           }}
         >
-          {showCreate ? 'x Cancel' : '+ Create User'}
+          {showCreate ? '✕ Cancel' : '+ Create User'}
         </button>
       </div>
 
@@ -415,7 +415,7 @@ function UsersPanel({ userEmail, onNavigate }) {
                 background: creating ? '#333' : 'linear-gradient(135deg, #FFB800, #FF9500)',
                 color: creating ? '#666' : '#000', fontSize: '0.8rem', fontWeight: 800, fontFamily: 'inherit',
               }}
-            >{creating ? 'Creating...' : 'Create Account'}</button>
+            >{creating ? 'Creating…' : 'Create Account'}</button>
             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', alignSelf: 'center' }}>
               They can log in immediately with these credentials.
             </div>
@@ -463,7 +463,7 @@ function UsersPanel({ userEmail, onNavigate }) {
                         {u.units >= 0 ? '+' : ''}{u.units}u
                       </span>
                     )}
-                    {u.top_sport && <span style={{ color: '#94a3b8', fontSize: '0.65rem' }}>[pin] {u.top_sport}</span>}
+                    {u.top_sport && <span style={{ color: '#94a3b8', fontSize: '0.65rem' }}>📌 {u.top_sport}</span>}
                   </>
                 ) : (
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>No picks yet</span>
@@ -481,7 +481,7 @@ function UsersPanel({ userEmail, onNavigate }) {
                   border: '1px solid rgba(255,184,0,0.3)', background: 'rgba(255,184,0,0.06)', color: 'var(--gold)',
                 }}
               >
-                [edit] Edit
+                ✏️ Edit
               </button>
               <button
                 onClick={() => handleAction('ban_user', u.id, !u.is_banned)}
@@ -513,7 +513,7 @@ function UsersPanel({ userEmail, onNavigate }) {
         ))}
         {!users.length && (
           <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-            No users found{search ? ` matching "${search}"` : ''} - ensure Supabase service role key is configured
+            No users found{search ? ` matching "${search}"` : ''} — ensure Supabase service role key is configured
           </div>
         )}
       </div>
@@ -595,11 +595,11 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '14px', width: '100%', maxWidth: '520px', padding: '1.5rem', boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}
         onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--gold)' }}>[edit] Edit Pick</div>
+          <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--gold)' }}>✏️ Edit Pick</div>
           <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-            {pick.profiles?.username || pick.username || pick.user_id?.slice(0,8)} . {pick.date}
+            {pick.profiles?.username || pick.username || pick.user_id?.slice(0,8)} · {pick.date}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>x</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
         </div>
 
         {error && <div style={{ color: '#f87171', fontSize: '0.78rem', marginBottom: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(248,113,113,0.07)', borderRadius: '6px' }}>{error}</div>}
@@ -636,18 +636,18 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
         <div style={{ display: 'flex', gap: '16px', marginTop: '12px', marginBottom: '1.25rem' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.contest_entry} onChange={e => field('contest_entry', e.target.checked)} />
-            [trophy] Contest Entry
+            🏆 Contest Entry
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.is_public} onChange={e => field('is_public', e.target.checked)} />
-            [web] Public
+            🌐 Public
           </label>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '6px 16px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>Cancel</button>
           <button onClick={save} disabled={saving} style={{ padding: '6px 18px', borderRadius: '7px', border: 'none', background: saving ? 'rgba(255,184,0,0.3)' : 'rgba(255,184,0,0.85)', color: '#000', fontWeight: 800, cursor: saving ? 'default' : 'pointer', fontSize: '0.82rem' }}>
-            {saving ? 'Saving...' : '[save] Save Changes'}
+            {saving ? 'Saving…' : '💾 Save Changes'}
           </button>
         </div>
       </div>
@@ -686,7 +686,7 @@ function PicksAuditPanel({ userEmail }) {
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
-    setActionMsg('[ok] Pick deleted');
+    setActionMsg('✓ Pick deleted');
     setPicks(prev => prev.filter(p => p.id !== id));
     setTimeout(() => setActionMsg(''), 3000);
   }
@@ -700,32 +700,32 @@ function PicksAuditPanel({ userEmail }) {
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
-    setActionMsg('[refresh] Pick reset to PENDING');
+    setActionMsg('↺ Pick reset to PENDING');
     setPicks(prev => prev.map(p => p.id === id ? { ...p, result: null, profit: null, graded_at: null } : p));
     setTimeout(() => setActionMsg(''), 3000);
   }
 
   function handleSaved(updated) {
     setPicks(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
-    setActionMsg('[ok] Pick updated');
+    setActionMsg('✓ Pick updated');
     setTimeout(() => setActionMsg(''), 3000);
   }
 
   function handleAdded(newPick) {
     if (newPick) setPicks(prev => [newPick, ...prev]);
-    setActionMsg('[ok] Pick added successfully');
+    setActionMsg('✓ Pick added successfully');
     setTimeout(() => setActionMsg(''), 3000);
   }
 
   const resultColor = r => r === 'WIN' ? '#4ade80' : r === 'LOSS' ? '#f87171' : r === 'PUSH' ? '#94a3b8' : 'var(--text-muted)';
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading picks...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading picks…</div>;
 
   return (
     <div>
       {editPick && <EditPickModal pick={editPick} userEmail={userEmail} onClose={() => setEditPick(null)} onSaved={handleSaved} />}
       {showAddPick && <AddPickModal userEmail={userEmail} onClose={() => setShowAddPick(false)} onAdded={handleAdded} />}
-      {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>[!] {error}</div>}
+      {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
       {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -738,13 +738,13 @@ function PicksAuditPanel({ userEmail }) {
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button onClick={() => setShowAddPick(true)}
             style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(74,222,128,0.4)', background: 'rgba(74,222,128,0.08)', color: '#4ade80', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700 }}>
-            + Add Pick
+            ➕ Add Pick
           </button>
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: page === 0 ? 'not-allowed' : 'pointer', fontSize: '0.75rem' }}>{'<- Prev'}</button>
+            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: page === 0 ? 'not-allowed' : 'pointer', fontSize: '0.75rem' }}>← Prev</button>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', alignSelf: 'center' }}>Page {page + 1}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={picks.length < 50}
-            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: picks.length < 50 ? 'not-allowed' : 'pointer', fontSize: '0.75rem' }}>{'Next ->'}</button>
+            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: picks.length < 50 ? 'not-allowed' : 'pointer', fontSize: '0.75rem' }}>Next →</button>
         </div>
       </div>
 
@@ -765,14 +765,14 @@ function PicksAuditPanel({ userEmail }) {
                 <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: adminEdited ? 'rgba(255,184,0,0.03)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {username}
-                    {adminEdited && <span style={{ marginLeft: '4px', fontSize: '0.58rem', color: '#FFB800' }} title={`Edited by ${p.admin_edited_by || 'admin'}`}>[edit]</span>}
+                    {adminEdited && <span style={{ marginLeft: '4px', fontSize: '0.58rem', color: '#FFB800' }} title={`Edited by ${p.admin_edited_by || 'admin'}`}>✏</span>}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{p.date}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     <span style={{ color: '#60a5fa', background: '#0d1a2b', padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem', fontWeight: 600 }}>{p.sport}</span>
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-primary)', fontWeight: 700, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{p.bet_type || '-'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{p.bet_type || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{p.units || 1}u</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'IBM Plex Mono, monospace', color: p.odds > 0 ? '#4ade80' : 'var(--text-primary)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
                     {p.odds > 0 ? `+${p.odds}` : p.odds}
@@ -784,14 +784,14 @@ function PicksAuditPanel({ userEmail }) {
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: parseFloat(p.profit) >= 0 ? '#4ade80' : '#f87171', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                     {(p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH') && p.profit != null
-                      ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '-'}
+                      ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '—'}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
-                    {p.contest_entry ? <span style={{ color: 'var(--gold)', fontSize: '0.85rem' }}>[trophy]</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>-</span>}
+                    {p.contest_entry ? <span style={{ color: 'var(--gold)', fontSize: '0.85rem' }}>🏆</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>—</span>}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.68rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     title={p.notes || ''}>
-                    {p.notes || '-'}
+                    {p.notes || '—'}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     <div style={{ display: 'flex', gap: '4px' }}>
@@ -799,8 +799,8 @@ function PicksAuditPanel({ userEmail }) {
                         Edit
                       </button>
                       {p.result && (
-                        <button onClick={() => handleReset(p.id)} style={{ padding: '2px 7px', borderRadius: '4px', border: '1px solid rgba(148,163,184,0.3)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '0.68rem' }} title="Reset to PENDING - re-grades next cron">
-                          [refresh]
+                        <button onClick={() => handleReset(p.id)} style={{ padding: '2px 7px', borderRadius: '4px', border: '1px solid rgba(148,163,184,0.3)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '0.68rem' }} title="Reset to PENDING — re-grades next cron">
+                          ↺
                         </button>
                       )}
                       <button onClick={() => handleDelete(p.id)} style={{ padding: '2px 7px', borderRadius: '4px', border: '1px solid rgba(248,113,113,0.3)', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem' }}>
@@ -925,8 +925,8 @@ function AddPickModal({ userEmail, onClose, onAdded }) {
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '14px', width: '100%', maxWidth: '560px', padding: '1.5rem', boxShadow: '0 24px 64px rgba(0,0,0,0.7)', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4ade80' }}>+ Add Pick for User</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>x</button>
+          <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4ade80' }}>➕ Add Pick for User</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
         </div>
 
         {error && <div style={{ color: '#f87171', fontSize: '0.78rem', marginBottom: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(248,113,113,0.07)', borderRadius: '6px' }}>{error}</div>}
@@ -935,22 +935,22 @@ function AddPickModal({ userEmail, onClose, onAdded }) {
         <div style={{ position: 'relative', marginBottom: '1rem' }}>
           {row('User (search by username or email)', (
             <input className="input" value={form.userSearch} onChange={e => { field('userSearch', e.target.value); if (selectedUser) setSelectedUser(null); field('userId', ''); }}
-              placeholder="Type username or email..." style={{ fontSize: '0.82rem', padding: '5px 8px' }} />
+              placeholder="Type username or email…" style={{ fontSize: '0.82rem', padding: '5px 8px' }} />
           ))}
           {selectedUser && (
             <div style={{ fontSize: '0.68rem', color: '#4ade80', marginTop: '3px' }}>
-              [ok] {selectedUser.username || selectedUser.email} <span style={{ color: 'var(--text-muted)' }}>({selectedUser.id?.slice(0, 8)}...)</span>
+              ✓ {selectedUser.username || selectedUser.email} <span style={{ color: 'var(--text-muted)' }}>({selectedUser.id?.slice(0, 8)}…)</span>
             </div>
           )}
           {(userResults.length > 0 || searching) && (
             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', zIndex: 50, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '2px', overflow: 'hidden' }}>
-              {searching && <div style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>Searching...</div>}
+              {searching && <div style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>Searching…</div>}
               {userResults.map(u => (
                 <div key={u.id} onClick={() => pickUser(u)}
                   style={{ padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: '8px', alignItems: 'center' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.82rem' }}>{u.username || '-'}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.82rem' }}>{u.username || '—'}</span>
                   {u.email && <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>{u.email}</span>}
                   <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.62rem' }}>{u.pick_count || 0} picks</span>
                 </div>
@@ -983,7 +983,7 @@ function AddPickModal({ userEmail, onClose, onAdded }) {
               <option value="PUSH">PUSH</option>
             </select>
           ))}
-          {row('Book', inp('book', { placeholder: 'DraftKings, FanDuel...' }))}
+          {row('Book', inp('book', { placeholder: 'DraftKings, FanDuel…' }))}
         </div>
 
         {row('Notes / Line Info', (
@@ -994,18 +994,18 @@ function AddPickModal({ userEmail, onClose, onAdded }) {
         <div style={{ display: 'flex', gap: '16px', marginTop: '12px', marginBottom: '1.25rem' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.contest_entry} onChange={e => field('contest_entry', e.target.checked)} />
-            [trophy] Contest Entry
+            🏆 Contest Entry
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.is_public} onChange={e => field('is_public', e.target.checked)} />
-            [view] Public Pick
+            👁 Public Pick
           </label>
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>Cancel</button>
           <button onClick={save} disabled={saving} style={{ flex: 2, padding: '9px', borderRadius: '8px', border: 'none', background: saving ? 'rgba(74,222,128,0.1)' : 'rgba(74,222,128,0.15)', color: '#4ade80', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.82rem' }}>
-            {saving ? 'Adding...' : '+ Add Pick'}
+            {saving ? 'Adding…' : '➕ Add Pick'}
           </button>
         </div>
       </div>
@@ -1044,7 +1044,7 @@ function DeclareWinnerModal({ userEmail, onClose, onDeclared }) {
       body: JSON.stringify({
         adminEmail: userEmail,
         type: 'contest_winner',
-        title: `[trophy] ${month} Contest Winner: ${selected.display_name || selected.username}!`,
+        title: `🏆 ${month} Contest Winner: ${selected.display_name || selected.username}!`,
         message: `Congratulations to ${selected.display_name || selected.username} for winning the ${month} contest with a ${record} record and ${selected.units > 0 ? '+' : ''}${selected.units}u profit!`,
         month,
         winner: {
@@ -1068,8 +1068,8 @@ function DeclareWinnerModal({ userEmail, onClose, onDeclared }) {
       <div style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,184,0,0.3)', borderRadius: '16px', width: '100%', maxWidth: '520px', padding: '1.75rem', boxShadow: '0 24px 64px rgba(0,0,0,0.8)' }}
         onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <div style={{ fontWeight: 900, fontSize: '1.1rem', color: '#FFB800' }}>[trophy] Declare Contest Winner</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>x</button>
+          <div style={{ fontWeight: 900, fontSize: '1.1rem', color: '#FFB800' }}>🏆 Declare Contest Winner</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
         </div>
 
         <div style={{ marginBottom: '1rem' }}>
@@ -1078,13 +1078,13 @@ function DeclareWinnerModal({ userEmail, onClose, onDeclared }) {
         </div>
 
         {loading ? (
-          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>Loading eligible entries...</div>
+          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>Loading eligible entries…</div>
         ) : entries.length === 0 ? (
           <div style={{ color: '#f87171', textAlign: 'center', padding: '1.5rem', fontSize: '0.82rem' }}>No users have reached 15+ settled picks for {month}.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.25rem', maxHeight: '280px', overflowY: 'auto' }}>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '4px' }}>
-              Eligible Competitors ({entries.length}) - select winner
+              Eligible Competitors ({entries.length}) — select winner
             </div>
             {entries.map((e, i) => {
               const isSelected = selected?.user_id === e.user_id;
@@ -1095,13 +1095,13 @@ function DeclareWinnerModal({ userEmail, onClose, onDeclared }) {
                   border: `1px solid ${isSelected ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`,
                   borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s',
                 }}>
-                  <span style={{ fontSize: '1rem' }}>{i === 0 ? '[1st]' : i === 1 ? '[2nd]' : i === 2 ? '[3rd]' : `#${i + 1}`}</span>
+                  <span style={{ fontSize: '1rem' }}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}</span>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, color: isSelected ? '#FFB800' : 'var(--text-primary)', fontSize: '0.85rem' }}>
                       {e.display_name || e.username}
                     </div>
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                      {e.wins}W-{e.losses}L . {e.total_settled} picks
+                      {e.wins}W-{e.losses}L · {e.total_settled} picks
                     </div>
                   </div>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.9rem', color: e.units >= 0 ? '#4ade80' : '#f87171' }}>
@@ -1121,7 +1121,7 @@ function DeclareWinnerModal({ userEmail, onClose, onDeclared }) {
             padding: '7px 20px', borderRadius: '7px', border: 'none', fontWeight: 800, cursor: saving || !selected ? 'default' : 'pointer', fontSize: '0.82rem',
             background: saving || !selected ? 'rgba(255,184,0,0.3)' : 'rgba(255,184,0,0.85)', color: '#000',
           }}>
-            {saving ? 'Declaring...' : '[trophy] Declare Winner & Announce'}
+            {saving ? 'Declaring…' : '🏆 Declare Winner & Announce'}
           </button>
         </div>
       </div>
@@ -1153,14 +1153,14 @@ function ContestsPanel({ userEmail }) {
     const reason = customReason
       || (status === 'REJECTED' ? prompt('Rejection reason (shown to admin log):') : 'Admin approved');
     if (status === 'REJECTED' && !reason) return;
-    setActionMsg('Processing...');
+    setActionMsg('Processing…');
     const res = await adminFetch('/api/contest-audit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'override', pickId, overrideStatus: status, overrideReason: reason }),
     });
     const d = await res.json();
-    if (d.error) { setActionMsg(`Error: ${d.error}`); } else { setActionMsg(`[ok] Pick ${status.toLowerCase()}`); load(); }
+    if (d.error) { setActionMsg(`Error: ${d.error}`); } else { setActionMsg(`✓ Pick ${status.toLowerCase()}`); load(); }
     setTimeout(() => setActionMsg(''), 3000);
   }
 
@@ -1173,39 +1173,39 @@ function ContestsPanel({ userEmail }) {
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); return; }
-    setActionMsg('[ok] Pick deleted');
+    setActionMsg('✓ Pick deleted');
     setPicks(prev => prev.filter(p => p.id !== id));
     setTimeout(() => setActionMsg(''), 3000);
   }
 
   async function handleBatchAudit() {
-    setActionMsg('Running AI audit...');
+    setActionMsg('Running AI audit…');
     const res = await adminFetch('/api/contest-audit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'batch-audit' }),
     });
     const d = await res.json();
-    setActionMsg(`[ok] Audited ${d.audited || 0} picks`);
+    setActionMsg(`✓ Audited ${d.audited || 0} picks`);
     load();
     setTimeout(() => setActionMsg(''), 4000);
   }
 
   async function handleTimingSweep() {
     if (!confirm('Run timing sweep? This auto-rejects picks submitted after game start. Cannot be undone.')) return;
-    setActionMsg('Running timing sweep...');
+    setActionMsg('Running timing sweep…');
     const res = await adminFetch('/api/contest-audit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'timing-sweep' }),
     });
     const d = await res.json();
     if (d.error) { setActionMsg(`Error: ${d.error}`); }
-    else { setActionMsg(`[time] Swept ${d.swept} picks - ${d.violations} in-game submissions rejected`); load(); }
+    else { setActionMsg(`⏱ Swept ${d.swept} picks — ${d.violations} in-game submissions rejected`); load(); }
     setTimeout(() => setActionMsg(''), 6000);
   }
 
   function handleSavedPick(updated) {
     setPicks(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
-    setActionMsg('[ok] Pick updated');
+    setActionMsg('✓ Pick updated');
     setTimeout(() => setActionMsg(''), 3000);
   }
 
@@ -1225,20 +1225,20 @@ function ContestsPanel({ userEmail }) {
   const statusColor = s => s === 'APPROVED' ? '#4ade80' : s === 'FLAGGED' ? '#fbbf24' : s === 'REJECTED' ? '#f87171' : '#94a3b8';
   const statusBg    = s => s === 'APPROVED' ? 'rgba(74,222,128,0.08)' : s === 'FLAGGED' ? 'rgba(251,191,36,0.08)' : s === 'REJECTED' ? 'rgba(248,113,113,0.08)' : 'rgba(148,163,184,0.08)';
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading contest audit...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading contest audit…</div>;
 
   return (
     <div>
       {editPick && <EditPickModal pick={editPick} userEmail={userEmail} onClose={() => setEditPick(null)} onSaved={handleSavedPick} />}
-      {showDeclare && <DeclareWinnerModal userEmail={userEmail} onClose={() => setShowDeclare(false)} onDeclared={() => setActionMsg('[ok] Winner announced!')} />}
+      {showDeclare && <DeclareWinnerModal userEmail={userEmail} onClose={() => setShowDeclare(false)} onDeclared={() => setActionMsg('✓ Winner announced!')} />}
 
-      {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>[!] {error}</div>}
+      {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
       {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
 
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         {[
-          ['review',   `[!] Review Queue${reviewQueue.length > 0 ? ` (${reviewQueue.length})` : ''}`],
+          ['review',   `⚠️ Review Queue${reviewQueue.length > 0 ? ` (${reviewQueue.length})` : ''}`],
           ['all',      'All'],
           ['approved', 'Approved'],
           ['flagged',  'Flagged'],
@@ -1254,19 +1254,19 @@ function ContestsPanel({ userEmail }) {
           }}>{l}</button>
         ))}
         <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', flex: 1 }}>{filtered.length} picks</span>
-        <button onClick={() => setShowDeclare(true)} style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.5)', background: 'rgba(255,184,0,0.12)', color: '#FFB800' }}>[trophy] Declare Winner</button>
-        <button onClick={handleBatchAudit} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.25)', background: 'rgba(255,184,0,0.06)', color: '#FFB800' }}>[target] AI Audit</button>
-        <button onClick={handleTimingSweep} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.07)', color: '#f87171' }} title="Auto-reject picks submitted after game start">[time] Timing</button>
+        <button onClick={() => setShowDeclare(true)} style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.5)', background: 'rgba(255,184,0,0.12)', color: '#FFB800' }}>🏆 Declare Winner</button>
+        <button onClick={handleBatchAudit} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(255,184,0,0.25)', background: 'rgba(255,184,0,0.06)', color: '#FFB800' }}>🎯 AI Audit</button>
+        <button onClick={handleTimingSweep} style={{ padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, border: '1px solid rgba(248,113,113,0.35)', background: 'rgba(248,113,113,0.07)', color: '#f87171' }} title="Auto-reject picks submitted after game start">⏱ Timing</button>
         <button onClick={load} style={{
           background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
           color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
           fontFamily: 'inherit',
-        }}>[refresh] Refresh</button>
+        }}>↺ Refresh</button>
       </div>
 
       {/* Rules bar */}
       <div style={{ padding: '0.5rem 0.85rem', background: '#0a0800', border: '1px solid rgba(255,184,0,0.12)', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.7rem', color: '#666', lineHeight: 1.6 }}>
-        <span style={{ color: '#FFB800', fontWeight: 700 }}>RULES:</span> 1 play/day . Min odds -145, max +400 . Straight bets only (ML/Spread/Total) . No parlays/props . Locked on submit . AI audited . 15 settled picks to win
+        <span style={{ color: '#FFB800', fontWeight: 700 }}>RULES:</span> 1 play/day · Min odds -145, max +400 · Straight bets only (ML/Spread/Total) · No parlays/props · Locked on submit · AI audited · 15 settled picks to win
       </div>
 
       {/* Pick rows */}
@@ -1285,15 +1285,15 @@ function ContestsPanel({ userEmail }) {
             let hint = null;
             // Detect known AI false-positives and add admin context
             if (/future.*202[0-9]|202[0-9].*future/i.test(reason)) {
-              hint = '[tip] Likely false positive - AI flagged the year 2026 as "future" from old training data. If the pick looks valid, click [ok] Admit.';
+              hint = '💡 Likely false positive — AI flagged the year 2026 as "future" from old training data. If the pick looks valid, click ✓ Admit.';
             } else if (/timing/i.test(reason) && !/submitted.*after/i.test(reason)) {
-              hint = '[tip] AI had a timing concern. Check if the pick was placed before game start.';
+              hint = '💡 AI had a timing concern. Check if the pick was placed before game start.';
             } else if (/pinnacle/i.test(reason)) {
-              hint = '[tip] Odds were flagged vs Pinnacle sharp line. Could be an outlier book - verify the line was real.';
+              hint = '💡 Odds were flagged vs Pinnacle sharp line. Could be an outlier book — verify the line was real.';
             }
             flags.push({ text: reason, hint });
           }
-          if (!p.audit_status && !p.audit_override) flags.push({ text: 'Pending AI audit - not yet verified', hint: null });
+          if (!p.audit_status && !p.audit_override) flags.push({ text: 'Pending AI audit — not yet verified', hint: null });
 
           return (
             <div key={p.id} style={{
@@ -1331,7 +1331,7 @@ function ContestsPanel({ userEmail }) {
                         return (
                           <div key={i}>
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', padding: '4px 8px', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: flagHint ? '5px 5px 0 0' : '5px', fontSize: '0.68rem' }}>
-                              <span style={{ color: '#fbbf24', flexShrink: 0 }}>[!]</span>
+                              <span style={{ color: '#fbbf24', flexShrink: 0 }}>⚠</span>
                               <span style={{ color: '#e2c97e', lineHeight: 1.4 }}>{flagText}</span>
                             </div>
                             {flagHint && (
@@ -1350,22 +1350,22 @@ function ContestsPanel({ userEmail }) {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', flexShrink: 0 }}>
                   {p.result && (
                     <span style={{ padding: '3px 10px', borderRadius: '5px', fontSize: '0.72rem', fontWeight: 800, background: p.result === 'WIN' ? 'rgba(74,222,128,0.12)' : p.result === 'LOSS' ? 'rgba(248,113,113,0.12)' : 'rgba(148,163,184,0.12)', color: p.result === 'WIN' ? '#4ade80' : p.result === 'LOSS' ? '#f87171' : '#94a3b8' }}>
-                      {p.result}{p.profit != null ? ` . ${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : ''}
+                      {p.result}{p.profit != null ? ` · ${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : ''}
                     </span>
                   )}
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button onClick={() => handleOverride(p.id, 'APPROVED', 'Admin approved')}
                       title="Admit to contest"
-                      style={{ padding: '4px 9px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(74,222,128,0.3)', background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>[ok] Admit</button>
+                      style={{ padding: '4px 9px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(74,222,128,0.3)', background: 'rgba(74,222,128,0.1)', color: '#4ade80' }}>✓ Admit</button>
                     <button onClick={() => handleOverride(p.id, 'REJECTED')}
                       title="Reject from contest"
-                      style={{ padding: '4px 9px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>x Reject</button>
+                      style={{ padding: '4px 9px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>✕ Reject</button>
                     <button onClick={() => setEditPick(p)}
                       title="Edit pick details"
-                      style={{ padding: '4px 9px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(255,184,0,0.25)', background: 'rgba(255,184,0,0.07)', color: '#FFB800' }}>[edit] Edit</button>
+                      style={{ padding: '4px 9px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(255,184,0,0.25)', background: 'rgba(255,184,0,0.07)', color: '#FFB800' }}>✏ Edit</button>
                     <button onClick={() => handleDelete(p.id)}
                       title="Delete pick permanently"
-                      style={{ padding: '4px 8px', borderRadius: '5px', fontSize: '0.7rem', cursor: 'pointer', border: '1px solid rgba(248,113,113,0.2)', background: 'transparent', color: 'rgba(248,113,113,0.6)' }}>[del]</button>
+                      style={{ padding: '4px 8px', borderRadius: '5px', fontSize: '0.7rem', cursor: 'pointer', border: '1px solid rgba(248,113,113,0.2)', background: 'transparent', color: 'rgba(248,113,113,0.6)' }}>🗑</button>
                   </div>
                 </div>
               </div>
@@ -1374,7 +1374,7 @@ function ContestsPanel({ userEmail }) {
         })}
         {!filtered.length && (
           <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2.5rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-            {filter === 'review' ? '[ok] No picks need review - everything looks clean.' : `No contest picks with filter "${filter}".`}
+            {filter === 'review' ? '✅ No picks need review — everything looks clean.' : `No contest picks with filter "${filter}".`}
           </div>
         )}
       </div>
@@ -1403,7 +1403,7 @@ function ActivityPanel({ userEmail }) {
   }, [load]);
 
   function fmtDate(iso) {
-    if (!iso) return '-';
+    if (!iso) return '—';
     const d = new Date(iso);
     const now = new Date();
     const diff = now - d;
@@ -1418,12 +1418,12 @@ function ActivityPanel({ userEmail }) {
   }
 
   function fmtFull(iso) {
-    if (!iso) return '-';
+    if (!iso) return '—';
     return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   }
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading activity...</div>;
-  if (error)   return <div style={{ color: '#f87171', padding: '1rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>[!] {error}</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading activity…</div>;
+  if (error)   return <div style={{ color: '#f87171', padding: '1rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>⚠ {error}</div>;
 
   const rows = (data?.activity || [])
     .filter(u => {
@@ -1452,7 +1452,7 @@ function ActivityPanel({ userEmail }) {
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
-          placeholder="Search user or email..."
+          placeholder="Search user or email…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ width: '200px' }}
@@ -1468,12 +1468,12 @@ function ActivityPanel({ userEmail }) {
           background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
           color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
           fontFamily: 'inherit',
-        }}>[refresh] Refresh</button>
+        }}>↺ Refresh</button>
       </div>
 
       {!hasIPs && (
         <div style={{ padding: '0.6rem 0.85rem', background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.12)', borderRadius: '7px', marginBottom: '1rem', fontSize: '0.72rem', color: '#888' }}>
-          <span style={{ color: '#FFB800', fontWeight: 700 }}>[i] IP addresses</span> - requires Supabase service role key with audit log access. IPs will appear here once configured.
+          <span style={{ color: '#FFB800', fontWeight: 700 }}>ℹ IP addresses</span> — requires Supabase service role key with audit log access. IPs will appear here once configured.
         </div>
       )}
 
@@ -1507,11 +1507,11 @@ function ActivityPanel({ userEmail }) {
                           <div style={{ position: 'absolute', bottom: 0, right: 0, width: '7px', height: '7px', borderRadius: '50%', background: '#4ade80', border: '1.5px solid var(--bg-elevated)' }} />
                         )}
                       </div>
-                      <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{u.username || '-'}</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{u.username || '—'}</span>
                     </div>
                   </td>
                   {/* Email */}
-                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{u.email || '-'}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{u.email || '—'}</td>
                   {/* Last Sign-In */}
                   <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>
                     <span
@@ -1531,7 +1531,7 @@ function ActivityPanel({ userEmail }) {
                         {fmtDate(lastActivity)}
                       </span>
                       {u.last_pick && (
-                        <span style={{ color: '#60a5fa', fontSize: '0.6rem' }}>[list] pick</span>
+                        <span style={{ color: '#60a5fa', fontSize: '0.6rem' }}>📋 pick</span>
                       )}
                     </div>
                   </td>
@@ -1547,16 +1547,16 @@ function ActivityPanel({ userEmail }) {
                           <span style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>{u.session_count} session{u.session_count !== 1 ? 's' : ''}</span>
                         </div>
                       );
-                    })() : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>-</span>}
+                    })() : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>—</span>}
                   </td>
                   {/* Joined */}
                   <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
-                    {u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
+                    {u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </td>
                   {/* IP (conditional column) */}
                   {hasIPs && (
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.68rem', color: u.ip_address ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
-                      {u.ip_address || '-'}
+                      {u.ip_address || '—'}
                     </td>
                   )}
                   {/* Status */}
@@ -1572,7 +1572,7 @@ function ActivityPanel({ userEmail }) {
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={hasIPs ? 7 : 6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No user data - ensure Supabase service role key is configured</td></tr>
+              <tr><td colSpan={hasIPs ? 7 : 6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No user data — ensure Supabase service role key is configured</td></tr>
             )}
           </tbody>
         </table>
@@ -1585,15 +1585,15 @@ function ActivityPanel({ userEmail }) {
 const CRON_DEFS = [
   {
     key:      'grade_picks',
-    label:    '[trophy] Grade Picks',
+    label:    '🏆 Grade Picks',
     desc:     'Grades pending picks for all users by checking final ESPN scores.',
-    schedule: 'Every 5 min, 12 PM-4 AM ET',
+    schedule: 'Every 5 min, 12 PM–4 AM ET',
     path:     '/api/cron/grade-picks',
     lastRunKey: 'cron_grade_last_run',
   },
   {
     key:      'pregenerate',
-    label:    '[AI] Pre-Generate Analyses',
+    label:    '🤖 Pre-Generate Analyses',
     desc:     'Runs AI analysis on today\'s games and caches results so the Analyzer loads instantly.',
     schedule: '8 AM & 4 PM ET daily',
     path:     '/api/cron/pregenerate-analysis',
@@ -1601,7 +1601,7 @@ const CRON_DEFS = [
   },
   {
     key:      'trends',
-    label:    '[up] Daily Trends',
+    label:    '📈 Daily Trends',
     desc:     'Generates today\'s sharp betting edges using AI with live web search.',
     schedule: '5 AM & 1 PM ET daily',
     path:     '/api/cron/trends',
@@ -1654,7 +1654,7 @@ function CronPanel({ userEmail }) {
     const res = await adminFetch(`/api/admin?action=cron_settings`);
     const d = await res.json();
     if (!d.error && d.settings) {
-      // Flatten { key: { value, updated_at } } -> { key: value }
+      // Flatten { key: { value, updated_at } } → { key: value }
       const flat = {};
       Object.entries(d.settings).forEach(([k, v]) => { flat[k] = v?.value ?? v; });
       setSettings(flat);
@@ -1688,19 +1688,19 @@ function CronPanel({ userEmail }) {
     load(); // refresh last-run stats
   }
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading cron status...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading cron status…</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem 0.75rem', background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.12)', borderRadius: '8px', flex: 1 }}>
-          [i] Toggling pauses the job without redeploying. "Run Now" triggers it immediately regardless of schedule.
+          ℹ Toggling pauses the job without redeploying. "Run Now" triggers it immediately regardless of schedule.
         </div>
         <button onClick={load} style={{
           background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
           color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem',
           fontFamily: 'inherit', flexShrink: 0,
-        }}>[refresh] Refresh</button>
+        }}>↺ Refresh</button>
       </div>
 
       {CRON_DEFS.map(job => {
@@ -1735,23 +1735,23 @@ function CronPanel({ userEmail }) {
             <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '0.7rem' }}>
               <div>
                 <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1px' }}>Schedule</div>
-                <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono, monospace' }}>[time] {job.schedule}</div>
+                <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono, monospace' }}>🕐 {job.schedule}</div>
               </div>
               <div>
                 <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1px' }}>Last Run</div>
                 <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono, monospace' }}>
-                  {lastRun ? timeAgo(lastRun.last_run_at || lastRun.run_at || lastRun.generated_at) : '-'}
+                  {lastRun ? timeAgo(lastRun.last_run_at || lastRun.run_at || lastRun.generated_at) : '—'}
                 </div>
               </div>
               {lastRun && (
                 <div>
                   <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '1px' }}>Result</div>
                   <div style={{ fontSize: '0.73rem', fontFamily: 'IBM Plex Mono, monospace' }}>
-                    {lastRun.graded   != null && <span style={{ color: '#4ade80' }}>[ok] {lastRun.graded} graded</span>}
-                    {lastRun.edges    != null && <span style={{ color: '#4ade80' }}>[ok] {lastRun.edges} edges</span>}
-                    {lastRun.generated != null && <span style={{ color: '#4ade80' }}>[ok] {lastRun.generated} games</span>}
-                    {lastRun.errors   != null && lastRun.errors > 0 && <span style={{ color: '#f87171', marginLeft: '8px' }}>[!] {lastRun.errors} errors</span>}
-                    {lastRun.error    && <span style={{ color: '#f87171' }}>x {String(lastRun.error).slice(0, 60)}</span>}
+                    {lastRun.graded   != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.graded} graded</span>}
+                    {lastRun.edges    != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.edges} edges</span>}
+                    {lastRun.generated != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.generated} games</span>}
+                    {lastRun.errors   != null && lastRun.errors > 0 && <span style={{ color: '#f87171', marginLeft: '8px' }}>⚠ {lastRun.errors} errors</span>}
+                    {lastRun.error    && <span style={{ color: '#f87171' }}>✗ {String(lastRun.error).slice(0, 60)}</span>}
                   </div>
                 </div>
               )}
@@ -1768,7 +1768,7 @@ function CronPanel({ userEmail }) {
                   color: isRunning ? '#555' : '#000',
                 }}
               >
-                {isRunning ? '[wait] Running...' : '> Run Now'}
+                {isRunning ? '⏳ Running…' : '▶ Run Now'}
               </button>
               {result && (
                 <span style={{
@@ -1779,11 +1779,11 @@ function CronPanel({ userEmail }) {
                   border: `1px solid ${result.error ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)'}`,
                 }}>
                   {result.error
-                    ? `x ${String(result.error).slice(0, 80)}`
-                    : result.graded   != null ? `[ok] ${result.graded} picks graded in ${result.duration_ms}ms`
-                    : result.edges    != null ? `[ok] ${result.edges} edges generated in ${result.duration_ms}ms`
-                    : result.generated != null ? `[ok] ${result.generated} analyses in ${result.duration_ms}ms`
-                    : '[ok] Done'}
+                    ? `✗ ${String(result.error).slice(0, 80)}`
+                    : result.graded   != null ? `✓ ${result.graded} picks graded in ${result.duration_ms}ms`
+                    : result.edges    != null ? `✓ ${result.edges} edges generated in ${result.duration_ms}ms`
+                    : result.generated != null ? `✓ ${result.generated} analyses in ${result.duration_ms}ms`
+                    : '✓ Done'}
                 </span>
               )}
             </div>
@@ -1823,7 +1823,7 @@ function SystemPanel({ userEmail }) {
   async function handleBackfill() {
     if (!confirm('Backfill commence_time on all historical picks using ESPN? This looks up game start times and updates the database.')) return;
     setBackfillRunning(true);
-    setBackfillMsg('Running backfill...');
+    setBackfillMsg('Running backfill…');
     try {
       const res = await adminFetch('/api/admin/backfill-commence-time', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1831,7 +1831,7 @@ function SystemPanel({ userEmail }) {
       });
       const d = await res.json();
       if (d.error) setBackfillMsg(`Error: ${d.error}`);
-      else setBackfillMsg(`[ok] ${d.updated} updated, ${d.skipped} not found, ${d.failed} failed (${d.espnCalls || 0} ESPN calls)`);
+      else setBackfillMsg(`✅ ${d.updated} updated, ${d.skipped} not found, ${d.failed} failed (${d.espnCalls || 0} ESPN calls)`);
     } catch (e) { setBackfillMsg(`Error: ${e.message}`); }
     setBackfillRunning(false);
     setTimeout(() => setBackfillMsg(''), 12000);
@@ -1839,7 +1839,7 @@ function SystemPanel({ userEmail }) {
 
   async function handleAutoGrade() {
     setAutoGradeRunning(true);
-    setAutoGradeMsg('Auto-grading analyses against ESPN scores...');
+    setAutoGradeMsg('Auto-grading analyses against ESPN scores…');
     try {
       const res = await adminFetch('/api/admin/auto-grade-analyses', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1847,7 +1847,7 @@ function SystemPanel({ userEmail }) {
       });
       const d = await res.json();
       if (d.error) setAutoGradeMsg(`Error: ${d.error}`);
-      else setAutoGradeMsg(`[ok] ${d.graded} graded (${d.wins}W-${d.losses}L-${d.pushes}P), ${d.skipped} skipped, ${d.noScore} no score yet`);
+      else setAutoGradeMsg(`✅ ${d.graded} graded (${d.wins}W-${d.losses}L-${d.pushes}P), ${d.skipped} skipped, ${d.noScore} no score yet`);
     } catch (e) { setAutoGradeMsg(`Error: ${e.message}`); }
     setAutoGradeRunning(false);
     loadAiRecord();
@@ -1919,7 +1919,7 @@ function SystemPanel({ userEmail }) {
 
   // Fires ONE request per sport, sequentially. Each sport gets its own
   // 5-minute Vercel function call so we never hit the timeout regardless of
-  // how many games are on the slate (e.g. 15 MLB games x 30s = fine).
+  // how many games are on the slate (e.g. 15 MLB games × 30s = fine).
   async function runPregenAnalysis(targetDate = null) {
     setPregenRunning(true);
     setPregenResult(null);
@@ -2072,7 +2072,7 @@ function SystemPanel({ userEmail }) {
       setAnnouncement('');
       loadSysInfo(); // refresh to show new active announcement
     }
-    setMsg(d.error ? `Error: ${d.error}` : '[ok] Announcement broadcast');
+    setMsg(d.error ? `Error: ${d.error}` : '✓ Announcement broadcast');
     setSending(false);
     setTimeout(() => setMsg(''), 5000);
   }
@@ -2087,7 +2087,7 @@ function SystemPanel({ userEmail }) {
     });
     const d = await res.json();
     if (!d.error) loadSysInfo();
-    setMsg(d.error ? `Error: ${d.error}` : '[ok] Announcement cleared');
+    setMsg(d.error ? `Error: ${d.error}` : '✓ Announcement cleared');
     setClearing(false);
     setTimeout(() => setMsg(''), 5000);
   }
@@ -2097,27 +2097,27 @@ function SystemPanel({ userEmail }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {msg && <div style={{ color: msg.startsWith('[ok]') ? '#4ade80' : '#f87171', padding: '0.5rem 0.75rem', background: msg.startsWith('[ok]') ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', borderRadius: '6px', fontSize: '0.8rem' }}>{msg}</div>}
+      {msg && <div style={{ color: msg.startsWith('✓') ? '#4ade80' : '#f87171', padding: '0.5rem 0.75rem', background: msg.startsWith('✓') ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', borderRadius: '6px', fontSize: '0.8rem' }}>{msg}</div>}
 
       {/* ── Analyzer Pre-Generation ── */}
       <div className="card" style={{ padding: '1.2rem', borderColor: pregenRunning ? 'rgba(96,165,250,0.3)' : 'var(--border)' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          [sharp] Pre-Generate Analyses
+          ⚡ Pre-Generate Analyses
           <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', letterSpacing: '0.07em' }}>AUTO 8AM + 4PM ET</span>
-          {pregenRunning && <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa', letterSpacing: '0.07em', animation: 'pulse 1.5s infinite' }}>* RUNNING</span>}
+          {pregenRunning && <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa', letterSpacing: '0.07em', animation: 'pulse 1.5s infinite' }}>● RUNNING</span>}
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.85rem', lineHeight: 1.5 }}>
-          Generates a full BetOS AI analysis for every pre-game matchup and caches it in Supabase. Users get instant results instead of waiting 60-90s.
+          Generates a full BetOS AI analysis for every pre-game matchup and caches it in Supabase. Users get instant results instead of waiting 60–90s.
         </p>
 
         {/* Last run summary */}
         {pregenLog && !pregenRunning && (
           <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.12)', borderRadius: '7px', fontSize: '0.72rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ color: '#60a5fa' }}>[time] Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
-            <span style={{ color: '#4ade80' }}>[ok] {pregenLog.generated} generated</span>
-            <span style={{ color: 'var(--text-muted)' }}>{'>>'} {pregenLog.skipped} skipped</span>
-            {pregenLog.errors > 0 && <span style={{ color: '#f87171' }}>[!] {pregenLog.errors} errors</span>}
-            <span style={{ color: 'var(--text-muted)' }}>[wait] {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
+            <span style={{ color: '#60a5fa' }}>⏱ Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
+            <span style={{ color: '#4ade80' }}>✅ {pregenLog.generated} generated</span>
+            <span style={{ color: 'var(--text-muted)' }}>⏭ {pregenLog.skipped} skipped</span>
+            {pregenLog.errors > 0 && <span style={{ color: '#f87171' }}>⚠ {pregenLog.errors} errors</span>}
+            <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
           </div>
         )}
 
@@ -2148,20 +2148,20 @@ function SystemPanel({ userEmail }) {
               <div style={{ fontSize: '0.65rem', color: '#888', display: 'flex', gap: '12px' }}>
                 <span>Sport {doneSports + (runningSport ? 1 : 0)}/{totalSports}</span>
                 {totalGen > 0 && <span style={{ color: '#4ade80' }}>{totalGen} cached so far</span>}
-                {runningSport && <span style={{ color: '#60a5fa' }}>Processing {runningSport.sport.toUpperCase()}...</span>}
+                {runningSport && <span style={{ color: '#60a5fa' }}>Processing {runningSport.sport.toUpperCase()}…</span>}
               </div>
             )}
             {/* Per-sport breakdown */}
             {pregenLiveLog.map(({ sport, status, count, skipped: sk, games, error, error_list }) => (
               <div key={sport} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
                 <span style={{ width: '44px', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: status === 'running' ? '#60a5fa' : '#888', fontSize: '0.65rem' }}>{sport.toUpperCase()}</span>
-                {status === 'running' && <span style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #60a5fa', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} /> Generating analyses...</span>}
+                {status === 'running' && <span style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #60a5fa', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} /> Generating analyses…</span>}
                 {status === 'done' && count > 0 && (
-                  <span style={{ color: '#4ade80' }}>[ok] {count} generated{sk > 0 ? `, ${sk} skipped` : ''}{games?.length ? ` . ${games.slice(0,3).map(g => g.split('(')[0].trim()).join(', ')}${games.length > 3 ? ` +${games.length-3}` : ''}` : ''}</span>
+                  <span style={{ color: '#4ade80' }}>✓ {count} generated{sk > 0 ? `, ${sk} skipped` : ''}{games?.length ? ` · ${games.slice(0,3).map(g => g.split('(')[0].trim()).join(', ')}${games.length > 3 ? ` +${games.length-3}` : ''}` : ''}</span>
                 )}
-                {status === 'done' && count === 0 && <span style={{ color: '#555' }}>- No games found</span>}
-                {status === 'skipped' && <span style={{ color: '#555' }}>- {sk > 0 ? `${sk} already cached` : 'No pre-game games'}</span>}
-                {status === 'error' && <span style={{ color: '#f87171' }}>x {error?.slice(0, 80) || 'Failed'}</span>}
+                {status === 'done' && count === 0 && <span style={{ color: '#555' }}>— No games found</span>}
+                {status === 'skipped' && <span style={{ color: '#555' }}>— {sk > 0 ? `${sk} already cached` : 'No pre-game games'}</span>}
+                {status === 'error' && <span style={{ color: '#f87171' }}>✗ {error?.slice(0, 80) || 'Failed'}</span>}
                 {error_list?.length > 0 && <span style={{ color: '#f87171', fontSize: '0.6rem' }}> ({error_list.length} timeouts)</span>}
               </div>
             ))}
@@ -2177,11 +2177,11 @@ function SystemPanel({ userEmail }) {
             border: `1px solid ${pregenResult.generated > 0 ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)'}`,
           }}>
             <span style={{ color: '#4ade80', fontWeight: 700 }}>
-              [ok] Done - {pregenResult.generated} generated . {pregenResult.skipped} skipped . {Math.round((pregenResult.duration_ms || 0) / 1000)}s
+              ✓ Done — {pregenResult.generated} generated · {pregenResult.skipped} skipped · {Math.round((pregenResult.duration_ms || 0) / 1000)}s
             </span>
             {pregenResult.error_list?.length > 0 && (
               <div style={{ color: '#f87171', marginTop: '5px', fontSize: '0.68rem' }}>
-                [!] {pregenResult.error_list.slice(0, 3).join(' . ')}
+                ⚠ {pregenResult.error_list.slice(0, 3).join(' · ')}
               </div>
             )}
           </div>
@@ -2213,7 +2213,7 @@ function SystemPanel({ userEmail }) {
               disabled={pregenRunning}
               style={{ opacity: pregenRunning ? 0.6 : 1 }}
             >
-              {pregenRunning ? '[refresh] Running... (safe to switch tabs)' : `[sharp] Generate Today - ${labelFmt(todayET)}`}
+              {pregenRunning ? '⟳ Running… (safe to switch tabs)' : `⚡ Generate Today — ${labelFmt(todayET)}`}
             </button>
             <button
               onClick={() => { setAnalysesDate(tomorrowET); loadGeneratedAnalyses(tomorrowET); runPregenAnalysis(tomorrowET); }}
@@ -2226,7 +2226,7 @@ function SystemPanel({ userEmail }) {
                 fontFamily: 'inherit', transition: 'all 0.12s',
               }}
             >
-              [date] Generate Tomorrow - {labelFmt(tomorrowET)}
+              📅 Generate Tomorrow — {labelFmt(tomorrowET)}
             </button>
           </div>
           );
@@ -2237,7 +2237,7 @@ function SystemPanel({ userEmail }) {
       <div className="card" style={{ padding: '1.2rem' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            [list] Generated Analyses
+            📋 Generated Analyses
             {generatedAnalyses && (
               <span style={{ fontSize: '0.62rem', fontWeight: 600, color: generatedAnalyses.length > 0 ? '#4ade80' : '#555', background: generatedAnalyses.length > 0 ? 'rgba(74,222,128,0.1)' : 'rgba(255,255,255,0.04)', border: `1px solid ${generatedAnalyses.length > 0 ? 'rgba(74,222,128,0.25)' : 'var(--border)'}`, borderRadius: '4px', padding: '2px 7px' }}>
                 {generatedAnalyses.length} cached
@@ -2254,8 +2254,8 @@ function SystemPanel({ userEmail }) {
                 setAnalysesDate(s); loadGeneratedAnalyses(s);
               }}
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem', lineHeight: 1 }}
-            >{'<'}</button>
-            {/* Date label - clicking opens the date input */}
+            >‹</button>
+            {/* Date label — clicking opens the date input */}
             <label style={{ position: 'relative', cursor: 'pointer' }}>
               <span style={{
                 display: 'inline-block', padding: '3px 10px', borderRadius: '5px',
@@ -2284,12 +2284,12 @@ function SystemPanel({ userEmail }) {
                 setAnalysesDate(s); loadGeneratedAnalyses(s);
               }}
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem', lineHeight: 1 }}
-            >{'>'}</button>
+            >›</button>
             {/* Refresh */}
             <button
               onClick={() => loadGeneratedAnalyses()}
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem' }}
-            >[refresh]</button>
+            >↻</button>
           </div>
         </div>
 
@@ -2297,9 +2297,9 @@ function SystemPanel({ userEmail }) {
         {aiRecord && (aiRecord.wins > 0 || aiRecord.losses > 0) && (
           <div style={{ marginBottom: '0.85rem', padding: '10px 14px', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.18)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--gold)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>[AI] AI Record</span>
+              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--gold)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>🤖 AI Record</span>
               <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {aiRecord.wins}W - {aiRecord.losses}L{aiRecord.pushes > 0 ? ` - ${aiRecord.pushes}P` : ''}
+                {aiRecord.wins}W – {aiRecord.losses}L{aiRecord.pushes > 0 ? ` – ${aiRecord.pushes}P` : ''}
               </span>
               {aiRecord.winPct !== null && (
                 <span style={{
@@ -2329,7 +2329,7 @@ function SystemPanel({ userEmail }) {
         )}
 
         {generatedAnalyses === null && (
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Loading...</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Loading…</div>
         )}
         {generatedAnalyses?.length === 0 && (
           <div style={{ color: '#444', fontSize: '0.75rem', padding: '1rem 0', textAlign: 'center' }}>
@@ -2394,7 +2394,7 @@ function SystemPanel({ userEmail }) {
                       <span style={{ fontSize: '0.62rem', color: '#444', flexShrink: 0 }}>{ageLabel}</span>
                     </button>
 
-                    {/* Grade buttons - always visible inline */}
+                    {/* Grade buttons — always visible inline */}
                     <div style={{ display: 'flex', gap: '4px', padding: '0 8px', alignItems: 'center', flexShrink: 0 }}>
                       <GradeBtn result="WIN"  label="W" color="#4ade80" />
                       <GradeBtn result="LOSS" label="L" color="#f87171" />
@@ -2404,14 +2404,14 @@ function SystemPanel({ userEmail }) {
                     <button
                       onClick={() => setExpandedAnalysis(isOpen ? null : a.id)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px', color: '#444', fontSize: '0.65rem', flexShrink: 0 }}
-                    >{isOpen ? '^' : 'v'}</button>
+                    >{isOpen ? '▲' : '▼'}</button>
                   </div>
 
                   {isOpen && (
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '10px 12px', background: 'rgba(0,0,0,0.25)' }}>
                       {pickLine && (
                         <div style={{ marginBottom: '8px', padding: '6px 10px', background: 'rgba(255,184,0,0.07)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#FFB800', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                          <span>[target] {pickLine}</span>
+                          <span>🎯 {pickLine}</span>
                           {graded && (
                             <span style={{
                               fontSize: '0.65rem', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', flexShrink: 0,
@@ -2419,7 +2419,7 @@ function SystemPanel({ userEmail }) {
                               background: graded === 'WIN' ? 'rgba(74,222,128,0.12)' : graded === 'LOSS' ? 'rgba(248,113,113,0.12)' : 'rgba(148,163,184,0.12)',
                               border: `1px solid ${graded === 'WIN' ? 'rgba(74,222,128,0.3)' : graded === 'LOSS' ? 'rgba(248,113,113,0.3)' : 'rgba(148,163,184,0.3)'}`,
                             }}>
-                              {graded === 'WIN' ? '[ok] WIN' : graded === 'LOSS' ? 'x LOSS' : '~ PUSH'}
+                              {graded === 'WIN' ? '✓ WIN' : graded === 'LOSS' ? '✗ LOSS' : '≈ PUSH'}
                             </span>
                           )}
                         </div>
@@ -2443,7 +2443,7 @@ function SystemPanel({ userEmail }) {
 
       <div className="card" style={{ padding: '1.2rem' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          [!] Site Announcement
+          📢 Site Announcement
           {activeMsg
             ? <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '4px', padding: '2px 7px', letterSpacing: '0.06em' }}>ACTIVE</span>
             : <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '4px', padding: '2px 7px', letterSpacing: '0.06em' }}>NONE</span>
@@ -2468,19 +2468,19 @@ function SystemPanel({ userEmail }) {
                 title="Clear / delete this announcement"
                 style={{ flexShrink: 0, background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171', borderRadius: '6px', padding: '0.3rem 0.7rem', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', opacity: clearing ? 0.6 : 1 }}
               >
-                {clearing ? 'Clearing...' : '[del] Clear'}
+                {clearing ? 'Clearing…' : '🗑 Clear'}
               </button>
             </div>
             <button
               onClick={() => setAnnouncement(activeMsg)}
               style={{ marginTop: '0.6rem', background: 'none', border: 'none', color: 'var(--gold)', fontSize: '0.7rem', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
             >
-              [edit] Edit this message
+              ✏️ Edit this message
             </button>
           </div>
         ) : (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.75rem' }}>
-            No active announcement. Compose one below - it will appear as a banner for all users.
+            No active announcement. Compose one below — it will appear as a banner for all users.
           </p>
         )}
 
@@ -2499,7 +2499,7 @@ function SystemPanel({ userEmail }) {
           />
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button className="btn-gold" onClick={sendAnnouncement} disabled={sending || !announcement.trim()}>
-              {sending ? 'Sending...' : activeMsg ? '[!] Replace Announcement' : '[!] Broadcast Announcement'}
+              {sending ? 'Sending…' : activeMsg ? '📢 Replace Announcement' : '📢 Broadcast Announcement'}
             </button>
             {announcement && (
               <button
@@ -2515,30 +2515,30 @@ function SystemPanel({ userEmail }) {
 
       {/* ── Admin Tools ── */}
       <div className="card" style={{ padding: '1.2rem' }}>
-        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>[?] Admin Tools</div>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>🛠️ Admin Tools</div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             onClick={handleBackfill}
             disabled={backfillRunning}
             style={{ padding: '6px 14px', borderRadius: '6px', cursor: backfillRunning ? 'wait' : 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(20,184,166,0.35)', background: 'rgba(20,184,166,0.07)', color: '#14b8a6', opacity: backfillRunning ? 0.6 : 1 }}
           >
-            {backfillRunning ? '[refresh] Running...' : '[time] Backfill Commence Times'}
+            {backfillRunning ? '⟳ Running…' : '🕐 Backfill Commence Times'}
           </button>
           <button
             onClick={handleAutoGrade}
             disabled={autoGradeRunning}
             style={{ padding: '6px 14px', borderRadius: '6px', cursor: autoGradeRunning ? 'wait' : 'pointer', fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(96,165,250,0.35)', background: 'rgba(96,165,250,0.07)', color: '#60a5fa', opacity: autoGradeRunning ? 0.6 : 1 }}
           >
-            {autoGradeRunning ? '[refresh] Grading...' : '[AI] Auto-Grade AI Picks'}
+            {autoGradeRunning ? '⟳ Grading…' : '🤖 Auto-Grade AI Picks'}
           </button>
         </div>
         {backfillMsg && (
-          <div style={{ marginTop: '8px', fontSize: '0.72rem', color: backfillMsg.startsWith('[ok]') ? '#4ade80' : backfillMsg.startsWith('Error') ? '#f87171' : '#60a5fa', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ marginTop: '8px', fontSize: '0.72rem', color: backfillMsg.startsWith('✅') ? '#4ade80' : backfillMsg.startsWith('Error') ? '#f87171' : '#60a5fa', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
             {backfillMsg}
           </div>
         )}
         {autoGradeMsg && (
-          <div style={{ marginTop: '8px', fontSize: '0.72rem', color: autoGradeMsg.startsWith('[ok]') ? '#4ade80' : autoGradeMsg.startsWith('Error') ? '#f87171' : '#60a5fa', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ marginTop: '8px', fontSize: '0.72rem', color: autoGradeMsg.startsWith('✅') ? '#4ade80' : autoGradeMsg.startsWith('Error') ? '#f87171' : '#60a5fa', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
             {autoGradeMsg}
           </div>
         )}
@@ -2548,17 +2548,17 @@ function SystemPanel({ userEmail }) {
       </div>
 
       <div className="card" style={{ padding: '1.2rem' }}>
-        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>[fix] System Info</div>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>🔧 System Info</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
           {[
-            { label: 'Admin Email', value: ADMIN_EMAILS.join(', ') || user?.email || '-' },
-            { label: 'Environment', value: sysInfo ? sysInfo.environment : '...' },
+            { label: 'Admin Email', value: ADMIN_EMAILS.join(', ') || user?.email || '—' },
+            { label: 'Environment', value: sysInfo ? sysInfo.environment : '…' },
             {
               label: 'Service Role',
-              value: sysInfo === null ? '...' : (sysInfo.serviceRole ? '[ok] Configured' : 'x Missing (limited access)'),
+              value: sysInfo === null ? '…' : (sysInfo.serviceRole ? '✓ Configured' : '✗ Missing (limited access)'),
               color: sysInfo === null ? undefined : (sysInfo.serviceRole ? '#4ade80' : '#f87171'),
             },
-            { label: 'Supabase URL', value: sysInfo ? sysInfo.supabaseUrl : '...' },
+            { label: 'Supabase URL', value: sysInfo ? sysInfo.supabaseUrl : '…' },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>{label}</div>
@@ -2568,7 +2568,7 @@ function SystemPanel({ userEmail }) {
         </div>
         {sysInfo && !sysInfo.serviceRole && (
           <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '7px', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--gold)' }}>[i] To unlock full admin access</strong> - add <code style={{ background: 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: '3px' }}>SUPABASE_SERVICE_ROLE_KEY</code> to your Vercel environment variables (for production) or <code>.env.local</code> (for local dev). This grants the admin panel access to all rows regardless of RLS policies.
+            <strong style={{ color: 'var(--gold)' }}>ℹ To unlock full admin access</strong> — add <code style={{ background: 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: '3px' }}>SUPABASE_SERVICE_ROLE_KEY</code> to your Vercel environment variables (for production) or <code>.env.local</code> (for local dev). This grants the admin panel access to all rows regardless of RLS policies.
           </div>
         )}
       </div>
@@ -2580,7 +2580,7 @@ function SystemPanel({ userEmail }) {
 // ── AI CHAT PANEL ─────────────────────────────────────────────────────────────
 function AIChatPanel({ userEmail }) {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hey! Ask me anything about the app - bugs, data, features, code, or anything BetOS-related.' }
+    { role: 'assistant', content: 'Hey! Ask me anything about the app — bugs, data, features, code, or anything BetOS-related.' }
   ]);
   const [input, setInput]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -2658,7 +2658,7 @@ function AIChatPanel({ userEmail }) {
             </div>
             {msg.role === 'assistant' && msg.model && (
               <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '3px', paddingLeft: '2px' }}>
-                {msg.provider === 'xai' ? '[sharp] Grok' : '[AI] Claude'} . {msg.model}
+                {msg.provider === 'xai' ? '⚡ Grok' : '🤖 Claude'} · {msg.model}
               </div>
             )}
           </div>
@@ -2689,7 +2689,7 @@ function AIChatPanel({ userEmail }) {
             background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)',
             borderRadius: '8px', padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: '#f87171',
           }}>
-            [!] {error} - message restored above, try again.
+            ⚠ {error} — message restored above, try again.
           </div>
         )}
 
@@ -2702,7 +2702,7 @@ function AIChatPanel({ userEmail }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Ask about bugs, users, data, code... (Enter to send, Shift+Enter for newline)"
+          placeholder="Ask about bugs, users, data, code… (Enter to send, Shift+Enter for newline)"
           rows={2}
           style={{
             flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
@@ -2722,7 +2722,7 @@ function AIChatPanel({ userEmail }) {
               fontWeight: 700, fontSize: '0.82rem', transition: 'all 0.12s', whiteSpace: 'nowrap',
             }}
           >
-            {loading ? '...' : 'Send '}
+            {loading ? '…' : 'Send ↵'}
           </button>
           <button
             onClick={clearChat}
@@ -2762,7 +2762,7 @@ function AIErrorQueuePanel({ userEmail }) {
       method: 'POST',
       body: JSON.stringify({ action: 'resolve_ai_error', targetId: id }),
     });
-    setActionMsg('[ok] Marked resolved');
+    setActionMsg('✓ Marked resolved');
     load();
     setTimeout(() => setActionMsg(''), 3000);
   }
@@ -2773,14 +2773,14 @@ function AIErrorQueuePanel({ userEmail }) {
     return true;
   });
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading AI error queue...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading AI error queue…</div>;
 
   return (
     <div>
       {actionMsg && <div style={{ color: '#4ade80', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{actionMsg}</div>}
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center' }}>
-        {[['unresolved','[rec] Unresolved'],['resolved','[ok] Resolved'],['all','All']].map(([v,l]) => (
+        {[['unresolved','🔴 Unresolved'],['resolved','✅ Resolved'],['all','All']].map(([v,l]) => (
           <button key={v} onClick={() => setFilter(v)} style={{
             padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem',
             border: `1px solid ${filter === v ? '#f87171' : 'var(--border)'}`,
@@ -2789,13 +2789,13 @@ function AIErrorQueuePanel({ userEmail }) {
           }}>{l}</button>
         ))}
         <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
-        <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem' }}>[refresh]</button>
+        <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem' }}>↺</button>
       </div>
 
       {errors.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[ok]</div>
-          <div>{filter === 'unresolved' ? 'No unresolved AI errors - great shape!' : 'No errors in this filter.'}</div>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
+          <div>{filter === 'unresolved' ? 'No unresolved AI errors — great shape!' : 'No errors in this filter.'}</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2816,16 +2816,16 @@ function AIErrorQueuePanel({ userEmail }) {
                       {e.resolved && <span style={{ fontSize: '0.65rem', color: '#4ade80', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', padding: '1px 6px' }}>RESOLVED</span>}
                     </div>
                     <div style={{ fontSize: '0.85rem', color: '#f87171', fontWeight: 600, marginBottom: '6px' }}>
-                      [!] {e.error_message}
+                      ⚠ {e.error_message}
                     </div>
                     {pickData && (
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 8px', marginBottom: '6px', fontFamily: 'IBM Plex Mono, monospace' }}>
-                        Pick: {pickData.team} . {pickData.bet_type} . {pickData.odds > 0 ? '+' : ''}{pickData.odds} . {pickData.sport}
+                        Pick: {pickData.team} · {pickData.bet_type} · {pickData.odds > 0 ? '+' : ''}{pickData.odds} · {pickData.sport}
                       </div>
                     )}
                     {e.ai_diagnosis && (
                       <div style={{ fontSize: '0.78rem', color: '#fbbf24', background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '6px', padding: '6px 8px' }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: '6px' }}>[AI] AI Diagnosis:</span>
+                        <span style={{ fontWeight: 700, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: '6px' }}>🤖 AI Diagnosis:</span>
                         {e.ai_diagnosis}
                       </div>
                     )}
@@ -2835,7 +2835,7 @@ function AIErrorQueuePanel({ userEmail }) {
                       onClick={() => resolve(e.id)}
                       style={{ padding: '5px 12px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(74,222,128,0.12)', color: '#4ade80', flexShrink: 0 }}
                     >
-                      [ok] Resolve
+                      ✓ Resolve
                     </button>
                   )}
                 </div>
@@ -2870,7 +2870,7 @@ function ConcernsPanel({ userEmail }) {
       method: 'POST',
       body: JSON.stringify({ action: 'resolve_concern', targetId: id }),
     });
-    setActionMsg('[ok] Marked resolved');
+    setActionMsg('✓ Marked resolved');
     load();
     setTimeout(() => setActionMsg(''), 3000);
   }
@@ -2881,18 +2881,18 @@ function ConcernsPanel({ userEmail }) {
     return true;
   });
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading concerns...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading concerns…</div>;
 
   return (
     <div>
       {actionMsg && <div style={{ color: '#4ade80', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{actionMsg}</div>}
 
       <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(251,191,36,0.04)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '7px', marginBottom: '1rem', fontSize: '0.75rem', color: '#888' }}>
-        <span style={{ color: '#fbbf24', fontWeight: 700 }}>[!] Serious Concerns</span> - these are issues the AI chatbot determined were significant enough to escalate to admin review. Review each one and mark resolved when handled.
+        <span style={{ color: '#fbbf24', fontWeight: 700 }}>⚠ Serious Concerns</span> — these are issues the AI chatbot determined were significant enough to escalate to admin review. Review each one and mark resolved when handled.
       </div>
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center' }}>
-        {[['unresolved','[!] Unresolved'],['resolved','[ok] Resolved'],['all','All']].map(([v,l]) => (
+        {[['unresolved','⚠ Unresolved'],['resolved','✅ Resolved'],['all','All']].map(([v,l]) => (
           <button key={v} onClick={() => setFilter(v)} style={{
             padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem',
             border: `1px solid ${filter === v ? '#fbbf24' : 'var(--border)'}`,
@@ -2901,12 +2901,12 @@ function ConcernsPanel({ userEmail }) {
           }}>{l}</button>
         ))}
         <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{concerns.length} concern{concerns.length !== 1 ? 's' : ''}</span>
-        <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem' }}>[refresh]</button>
+        <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem' }}>↺</button>
       </div>
 
       {concerns.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[ok]</div>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
           <div>{filter === 'unresolved' ? 'No unresolved concerns.' : 'No concerns in this filter.'}</div>
         </div>
       ) : (
@@ -2931,7 +2931,7 @@ function ConcernsPanel({ userEmail }) {
                     onClick={() => resolve(c.id)}
                     style={{ padding: '5px 12px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(74,222,128,0.12)', color: '#4ade80', flexShrink: 0 }}
                   >
-                    [ok] Resolve
+                    ✓ Resolve
                   </button>
                 )}
               </div>
@@ -2950,8 +2950,8 @@ function FlagsPanel({ userEmail }) {
     <div>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
         {[
-          { id: 'ai_errors', label: '[rec] AI Errors' },
-          { id: 'concerns',  label: '[!] Concerns' },
+          { id: 'ai_errors', label: '🔴 AI Errors' },
+          { id: 'concerns',  label: '⚠️ Concerns' },
         ].map(t => (
           <button key={t.id} onClick={() => setSub(t.id)}
             style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
@@ -2972,8 +2972,8 @@ function AIToolsPanel({ userEmail }) {
     <div>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
         {[
-          { id: 'ailab',    label: '[test] AI Lab' },
-          { id: 'backtest', label: '[up] Backtester' },
+          { id: 'ailab',    label: '🧪 AI Lab' },
+          { id: 'backtest', label: '📈 Backtester' },
         ].map(t => (
           <button key={t.id} onClick={() => setSub(t.id)}
             style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
@@ -2994,9 +2994,9 @@ function SystemMegaPanel({ userEmail }) {
     <div>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
         {[
-          { id: 'system', label: '⚙ Settings' },
-          { id: 'cron',   label: '[time] Cron Jobs' },
-          { id: 'chat',   label: '[AI] AI Chat' },
+          { id: 'system', label: '⚙️ Settings' },
+          { id: 'cron',   label: '⏱ Cron Jobs' },
+          { id: 'chat',   label: '🤖 AI Chat' },
         ].map(t => (
           <button key={t.id} onClick={() => setSub(t.id)}
             style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
@@ -3018,8 +3018,8 @@ function UsersMegaPanel({ userEmail }) {
     <div>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
         {[
-          { id: 'users',    label: '[users] Accounts' },
-          { id: 'activity', label: '[live] Activity' },
+          { id: 'users',    label: '👥 Accounts' },
+          { id: 'activity', label: '📡 Activity' },
         ].map(t => (
           <button key={t.id} onClick={() => setSub(t.id)}
             style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
@@ -3125,9 +3125,9 @@ function ChatRoomAdminPanel({ userEmail }) {
       {/* Sub-nav */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem', flexWrap: 'wrap' }}>
         {[
-          { id: 'settings', label: '⚙ Settings' },
-          { id: 'mods',     label: ` Mods (${mods.length})` },
-          { id: 'bans',     label: `[X] Bans (${bans.length})` },
+          { id: 'settings', label: '⚙️ Settings' },
+          { id: 'mods',     label: `🛡️ Mods (${mods.length})` },
+          { id: 'bans',     label: `🚫 Bans (${bans.length})` },
           { id: 'xp',       label: '⭐ XP / Ranks' },
         ].map(t => (
           <button key={t.id} onClick={() => setSub(t.id)}
@@ -3153,12 +3153,12 @@ function ChatRoomAdminPanel({ userEmail }) {
             <input type="number" min="0" max="10000" value={settings.min_xp_to_chat || '0'} onChange={e => setSettings(s => ({ ...s, min_xp_to_chat: e.target.value }))} style={{ width: '80px', ...fieldStyle, padding: '4px 8px' }} />
           </div>
           <div style={{ ...rowStyle, borderBottom: 'none' }}>
-            <div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Max message length</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Characters per message (50-2000)</div></div>
+            <div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Max message length</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Characters per message (50–2000)</div></div>
             <input type="number" min="50" max="2000" value={settings.max_message_length || '500'} onChange={e => setSettings(s => ({ ...s, max_message_length: e.target.value }))} style={{ width: '80px', ...fieldStyle, padding: '4px 8px' }} />
           </div>
           <button onClick={saveSettings} disabled={saving}
             style={{ marginTop: '1rem', padding: '8px 20px', borderRadius: '8px', background: saved ? 'rgba(74,222,128,0.2)' : 'rgba(255,184,0,0.18)', border: `1px solid ${saved ? 'rgba(74,222,128,0.5)' : 'rgba(255,184,0,0.4)'}`, color: saved ? '#4ade80' : 'var(--gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', alignSelf: 'flex-start' }}>
-            {saved ? '[ok] Saved' : saving ? 'Saving...' : 'Save Settings'}
+            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Settings'}
           </button>
         </div>
       )}
@@ -3167,7 +3167,7 @@ function ChatRoomAdminPanel({ userEmail }) {
       {sub === 'mods' && (
         <div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
-            <input value={promoteId} onChange={e => setPromoteId(e.target.value)} placeholder="User UUID to promote..." style={{ ...fieldStyle, flex: 1 }} />
+            <input value={promoteId} onChange={e => setPromoteId(e.target.value)} placeholder="User UUID to promote…" style={{ ...fieldStyle, flex: 1 }} />
             <button onClick={promoteMod} style={{ padding: '6px 14px', borderRadius: '6px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
               + Promote
             </button>
@@ -3177,7 +3177,7 @@ function ChatRoomAdminPanel({ userEmail }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {mods.map(m => (
               <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                <span style={{ fontSize: '1.1rem' }}>{m.profiles?.avatar_emoji || '[user]'}</span>
+                <span style={{ fontSize: '1.1rem' }}>{m.profiles?.avatar_emoji || '👤'}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{m.profiles?.display_name || m.profiles?.username || 'Unknown'}</div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{m.user_id}</div>
@@ -3215,8 +3215,8 @@ function ChatRoomAdminPanel({ userEmail }) {
           <div style={{ marginBottom: '1.5rem' }}>
             <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Award / Deduct XP</div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input value={xpUserId} onChange={e => setXpUserId(e.target.value)} placeholder="User UUID..." style={{ ...fieldStyle, flex: 1 }} />
-              <input type="number" value={xpAmount} onChange={e => setXpAmount(e.target.value)} placeholder="+/-XP" style={{ ...fieldStyle, width: '80px' }} />
+              <input value={xpUserId} onChange={e => setXpUserId(e.target.value)} placeholder="User UUID…" style={{ ...fieldStyle, flex: 1 }} />
+              <input type="number" value={xpAmount} onChange={e => setXpAmount(e.target.value)} placeholder="±XP" style={{ ...fieldStyle, width: '80px' }} />
               <button onClick={awardXp} style={{ padding: '6px 14px', borderRadius: '6px', background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.4)', color: 'var(--gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>Award</button>
             </div>
             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '5px' }}>Use negative values to deduct. Rank title updates automatically.</div>
@@ -3224,16 +3224,16 @@ function ChatRoomAdminPanel({ userEmail }) {
           <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Rank Tiers</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {[
-              { title: 'Degenerate',   minXp: 0,     emoji: '[bet]', color: '#888' },
-              { title: 'Square',       minXp: 100,   emoji: '[target]', color: '#a78bfa' },
-              { title: 'Handicapper',  minXp: 300,   emoji: '[stats]', color: '#60a5fa' },
-              { title: 'Sharp',        minXp: 700,   emoji: '[sharp]', color: '#34d399' },
-              { title: 'Steam Chaser', minXp: 1500,  emoji: '[fire]', color: '#fb923c' },
-              { title: 'Wiseguy',      minXp: 3000,  emoji: '[vibe]', color: '#f472b6' },
-              { title: 'Line Mover',   minXp: 6000,  emoji: '[up]', color: '#facc15' },
-              { title: 'Syndicate',    minXp: 10000, emoji: '[gem]', color: '#38bdf8' },
-              { title: 'Whale',        minXp: 20000, emoji: '[whale]', color: '#c084fc' },
-              { title: 'Legend',       minXp: 40000, emoji: '[crown]', color: '#FFB800' },
+              { title: 'Degenerate',   minXp: 0,     emoji: '🎰', color: '#888' },
+              { title: 'Square',       minXp: 100,   emoji: '🎯', color: '#a78bfa' },
+              { title: 'Handicapper',  minXp: 300,   emoji: '📊', color: '#60a5fa' },
+              { title: 'Sharp',        minXp: 700,   emoji: '⚡', color: '#34d399' },
+              { title: 'Steam Chaser', minXp: 1500,  emoji: '🔥', color: '#fb923c' },
+              { title: 'Wiseguy',      minXp: 3000,  emoji: '🕶️', color: '#f472b6' },
+              { title: 'Line Mover',   minXp: 6000,  emoji: '📈', color: '#facc15' },
+              { title: 'Syndicate',    minXp: 10000, emoji: '💎', color: '#38bdf8' },
+              { title: 'Whale',        minXp: 20000, emoji: '🐳', color: '#c084fc' },
+              { title: 'Legend',       minXp: 40000, emoji: '👑', color: '#FFB800' },
             ].map(r => (
               <div key={r.title} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px', background: 'var(--bg-elevated)', border: `1px solid ${r.color}22`, borderRadius: '6px' }}>
                 <span style={{ fontSize: '1rem' }}>{r.emoji}</span>
@@ -3243,7 +3243,7 @@ function ChatRoomAdminPanel({ userEmail }) {
             ))}
           </div>
           <div style={{ marginTop: '1rem', padding: '10px 12px', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '8px', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--gold)' }}>How users earn XP:</strong> +1 XP per day for chatting . +5 XP per pick submitted . +20 XP per WIN . +3 XP per PUSH . XP is automatically calculated and rank title updates on each action.
+            <strong style={{ color: 'var(--gold)' }}>How users earn XP:</strong> +1 XP per day for chatting · +5 XP per pick submitted · +20 XP per WIN · +3 XP per PUSH · XP is automatically calculated and rank title updates on each action.
           </div>
         </div>
       )}
@@ -3253,14 +3253,14 @@ function ChatRoomAdminPanel({ userEmail }) {
 
 // ── Consolidated tab definitions ──────────────────────────────────────────────
 const ADMIN_TABS = [
-  { id: 'overview', label: '[stats] Overview',  desc: 'Site-wide stats, leaderboard, and recent sign-ups' },
-  { id: 'users',    label: '[users] Users',     desc: 'Manage accounts, roles, bans, and view activity' },
-  { id: 'picks',    label: '[list] Picks',     desc: 'Audit and moderate all user picks' },
-  { id: 'contests', label: '[trophy] Contests',  desc: 'Active contests and participants' },
-  { id: 'chat',     label: '[chat] Chat Room', desc: 'Chat settings, mods, bans, and XP/rank management' },
-  { id: 'flags',    label: '[!] Flags',     desc: 'AI analysis errors and chatbot-escalated concerns' },
-  { id: 'aitools',  label: '[test] AI Tools',  desc: 'AI Lab performance tracker and historical backtester' },
-  { id: 'system',   label: '⚙ System',   desc: 'Site settings, scheduled jobs, and AI chat console' },
+  { id: 'overview', label: '📊 Overview',  desc: 'Site-wide stats, leaderboard, and recent sign-ups' },
+  { id: 'users',    label: '👥 Users',     desc: 'Manage accounts, roles, bans, and view activity' },
+  { id: 'picks',    label: '📋 Picks',     desc: 'Audit and moderate all user picks' },
+  { id: 'contests', label: '🏆 Contests',  desc: 'Active contests and participants' },
+  { id: 'chat',     label: '💬 Chat Room', desc: 'Chat settings, mods, bans, and XP/rank management' },
+  { id: 'flags',    label: '🔔 Flags',     desc: 'AI analysis errors and chatbot-escalated concerns' },
+  { id: 'aitools',  label: '🧪 AI Tools',  desc: 'AI Lab performance tracker and historical backtester' },
+  { id: 'system',   label: '⚙️ System',   desc: 'Site settings, scheduled jobs, and AI chat console' },
 ];
 
 export default function AdminTab({ user }) {
@@ -3278,7 +3278,7 @@ export default function AdminTab({ user }) {
   if (!isAdmin) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem', textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>[X]</div>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🚫</div>
         <div style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: '1.1rem', marginBottom: '8px' }}>Access Denied</div>
         <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>This panel is restricted to admins only.</div>
       </div>
@@ -3302,7 +3302,7 @@ export default function AdminTab({ user }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div>
-          <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', margin: 0 }}> Admin Panel</h1>
+          <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', margin: 0 }}>🛡 Admin Panel</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '3px 0 0' }}>
             Signed in as <strong style={{ color: 'var(--text-secondary)' }}>{user?.email}</strong>
           </p>
@@ -3312,7 +3312,7 @@ export default function AdminTab({ user }) {
         </div>
       </div>
 
-      {/* Tab nav - compact, grouped feel */}
+      {/* Tab nav — compact, grouped feel */}
       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '6px' }}>
         {ADMIN_TABS.map(t => (
           <button key={t.id} onClick={() => setActive(t.id)}
@@ -3330,7 +3330,7 @@ export default function AdminTab({ user }) {
       </div>
       <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '-0.5rem 0 0' }}>{desc}</p>
 
-      {/* Panel content - lazy-mount (first visit) then stay mounted forever.
+      {/* Panel content — lazy-mount (first visit) then stay mounted forever.
           display:none hides the inactive panel without unmounting it, so any
           in-flight operations (pre-gen, batch grade, AI runs, etc.) continue
           uninterrupted even when the admin switches panels mid-run. */}

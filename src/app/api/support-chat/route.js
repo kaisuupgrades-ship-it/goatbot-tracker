@@ -20,12 +20,12 @@ About BetOS:
 - The Leaderboard shows public picks sorted by ROI and profit
 
 Common troubleshooting:
-- "My pick won't save" -> Check that game hasn't started yet, odds are in valid range (-200 to +600 for contests), and you're not over daily limits
-- "AI analysis not working" -> Analysis runs on-demand; try clicking Analyze on the pick card. Service may be temporarily unavailable
-- "Contest pick flagged" -> Picks are reviewed by AI + Pinnacle odds check. Common flags: line submitted after game started, odds way off market
-- "Can't see my picks" -> Make sure picks are set to Public if you want them visible to others
-- "Chat not working" -> Email verification required. Check your inbox for a verification link
-- "Golf/Tennis scores missing" -> Live data depends on ESPN API; may not be available for all events
+- "My pick won't save" → Check that game hasn't started yet, odds are in valid range (-200 to +600 for contests), and you're not over daily limits
+- "AI analysis not working" → Analysis runs on-demand; try clicking Analyze on the pick card. Service may be temporarily unavailable
+- "Contest pick flagged" → Picks are reviewed by AI + Pinnacle odds check. Common flags: line submitted after game started, odds way off market
+- "Can't see my picks" → Make sure picks are set to Public if you want them visible to others
+- "Chat not working" → Email verification required. Check your inbox for a verification link
+- "Golf/Tennis scores missing" → Live data depends on ESPN API; may not be available for all events
 
 When users report SERIOUS concerns (bugs causing data loss, payment issues, abuse, harassment, or anything safety-related), you MUST include the exact text "SERIOUS_CONCERN:" followed by a brief summary at the very END of your response. This will be logged for admin review.
 

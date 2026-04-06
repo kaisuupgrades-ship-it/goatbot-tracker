@@ -33,7 +33,7 @@ function calcStats(picks) {
   const roi     = settled.length ? (units / settled.length) * 100 : 0;
   const streak  = calcStreak(settled);
   const pending = picks.filter(p => !p.result || p.result === 'PENDING').length;
-  // Correct avg odds: convert each line -> implied prob -> average -> back to American
+  // Correct avg odds: convert each line → implied prob → average → back to American
   // (cannot simply average American numbers — they're non-linear)
   const oddsWithValues = settled.filter(p => p.odds && parseInt(p.odds) !== 0);
   const avgOdds = oddsWithValues.length
@@ -131,11 +131,11 @@ function picksByDate(picks) {
 }
 
 const SPORT_EMOJI = {
-  MLB: '[MLB]', NBA: '[NBA]', NFL: '[NFL]', NHL: '[NHL]', NCAAF: '[NFL]',
-  NCAAB: '[NBA]', MLS: '[MLS]', WNBA: '[NBA]', UFC: '[fight]', Tennis: '[tennis]',
+  MLB: '⚾', NBA: '🏀', NFL: '🏈', NHL: '🏒', NCAAF: '🏈',
+  NCAAB: '🏀', MLS: '⚽', WNBA: '🏀', UFC: '🥊', Tennis: '🎾',
 };
 function sportEmoji(sport) {
-  return SPORT_EMOJI[(sport || '').toUpperCase()] || '[target]';
+  return SPORT_EMOJI[(sport || '').toUpperCase()] || '🎯';
 }
 
 // Build date range from preset key — uses user's timezone so "today" is correct
@@ -161,7 +161,7 @@ function presetRange(key, picks, timezone) {
 }
 
 // ── Pick Calendar — Heat Tile Design ─────────────────────────────────────────
-// Revolutionary: GitHub-style heat tiles x betting dashboard
+// Revolutionary: GitHub-style heat tiles × betting dashboard
 
 const WEEKDAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -273,10 +273,10 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <button onClick={prevMonth} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1 }}>{'<'}</button>
+          <button onClick={prevMonth} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1 }}>‹</button>
           <button onClick={() => { setViewYear(todayYear); setViewMonth(todayMonth); setSelected(null); }}
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600 }}>Today</button>
-          <button onClick={nextMonth} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1 }}>{'>'}</button>
+          <button onClick={nextMonth} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1 }}>›</button>
         </div>
       </div>
 
@@ -309,14 +309,14 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
             const n = dayPicks.length;
             // Density levels: D1=1, D2=2-3, D3=4-6, D4=7+
             const density = n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4;
-            // Team name length shrinks with density: 9 -> 7 -> 4 -> 0
+            // Team name length shrinks with density: 9 → 7 → 4 → 0
             const teamNameLen = density === 1 ? 9 : density === 2 ? 7 : 4;
             const teamShort = firstPick ? ((firstPick.team || '').split(' ').pop().slice(0, teamNameLen)) : '';
-            // Emoji size shrinks: 0.90 -> 0.80 -> 0.70 -> hidden (smaller on mobile)
+            // Emoji size shrinks: 0.90 → 0.80 → 0.70 → hidden (smaller on mobile)
             const emojiSize = isMobile
               ? (density === 1 ? '0.62rem' : density === 2 ? '0.55rem' : '0.48rem')
               : (density === 1 ? '0.9rem'  : density === 2 ? '0.80rem' : '0.70rem');
-            // Text label size: 0.65 -> 0.58 -> 0.52 (smaller on mobile)
+            // Text label size: 0.65 → 0.58 → 0.52 (smaller on mobile)
             const labelSize = isMobile
               ? (density === 1 ? '0.52rem' : density === 2 ? '0.48rem' : '0.44rem')
               : (density === 1 ? '0.65rem' : density === 2 ? '0.58rem' : '0.52rem');
@@ -363,7 +363,7 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                   )}
                 </div>
 
-                {/* Pick content - D1: single pick */}
+                {/* Pick content — D1: single pick */}
                 {density === 1 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', overflow: 'hidden' }}>
                     <span style={{
@@ -383,7 +383,7 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                   </div>
                 )}
 
-                {/* D2: 2-3 picks - emoji row + W/L/P badges */}
+                {/* D2: 2-3 picks — emoji row + W/L/P badges */}
                 {density === 2 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '1px' }}>
                     <div style={{ display: 'flex', gap: '1px', flexWrap: 'wrap' }}>
@@ -403,7 +403,7 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                   </div>
                 )}
 
-                {/* D3: 4-6 picks - tiny emoji row (max 4) + overflow count + W/L/P */}
+                {/* D3: 4-6 picks — tiny emoji row (max 4) + overflow count + W/L/P */}
                 {density === 3 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '1px' }}>
                     <div style={{ display: 'flex', gap: '1px', alignItems: 'center', flexWrap: 'nowrap', overflow: 'hidden' }}>
@@ -424,7 +424,7 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                   </div>
                 )}
 
-                {/* D4: 7+ picks - ultra-compact: just count + W/L/P numbers */}
+                {/* D4: 7+ picks — ultra-compact: just count + W/L/P numbers */}
                 {density === 4 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
                     <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontWeight: 700, lineHeight: 1 }}>{n} picks</span>
@@ -461,7 +461,7 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
             <div style={{ fontSize: '0.72rem', color: 'var(--gold)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {new Date(selected + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
             </div>
-            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}>x</button>
+            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}>✕</button>
           </div>
           {byDate[selected].map(p => {
             const profit = parseFloat(p.profit);
@@ -470,7 +470,7 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                 <span style={{ fontSize: '0.9rem', flexShrink: 0 }}>{sportEmoji(p.sport)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{p.bet_type} . {p.sport}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{p.bet_type} · {p.sport}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexShrink: 0 }}>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)' }}>
@@ -482,7 +482,7 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                     color: p.result === 'WIN' ? 'var(--green)' : p.result === 'LOSS' ? 'var(--red)' : 'var(--gold)',
                   }}>{p.result || 'PENDING'}</span>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: 700, color: profit >= 0 ? 'var(--green)' : 'var(--red)', minWidth: '40px', textAlign: 'right' }}>
-                    {p.profit != null && p.profit !== '' ? `${profit >= 0 ? '+' : ''}${profit.toFixed(2)}u` : '-'}
+                    {p.profit != null && p.profit !== '' ? `${profit >= 0 ? '+' : ''}${profit.toFixed(2)}u` : '—'}
                   </span>
                 </div>
               </div>
@@ -510,11 +510,11 @@ function MomentumStrip({ picks }) {
   const w10 = last10.filter(p => p.result === 'WIN').length;
   const pl10 = last10.reduce((s, p) => s + (parseFloat(p.profit) || 0), 0);
 
-  let heatEmoji = '[ice]', heatLabel = 'Cold', heatColor = '#60a5fa';
-  if (w5 >= 4) { heatEmoji = '[fire]'; heatLabel = 'On Fire'; heatColor = '#FF6B35'; }
-  else if (w5 === 3) { heatEmoji = '[ok]'; heatLabel = 'Warm'; heatColor = '#4ade80'; }
-  else if (w5 <= 1) { heatEmoji = '[ice]'; heatLabel = 'Cold'; heatColor = '#60a5fa'; }
-  else { heatEmoji = '[scale]'; heatLabel = 'Neutral'; heatColor = 'var(--text-muted)'; }
+  let heatEmoji = '🧊', heatLabel = 'Cold', heatColor = '#60a5fa';
+  if (w5 >= 4) { heatEmoji = '🔥'; heatLabel = 'On Fire'; heatColor = '#FF6B35'; }
+  else if (w5 === 3) { heatEmoji = '✅'; heatLabel = 'Warm'; heatColor = '#4ade80'; }
+  else if (w5 <= 1) { heatEmoji = '🧊'; heatLabel = 'Cold'; heatColor = '#60a5fa'; }
+  else { heatEmoji = '⚖️'; heatLabel = 'Neutral'; heatColor = 'var(--text-muted)'; }
 
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
@@ -544,7 +544,7 @@ function MomentumStrip({ picks }) {
 
       {/* Pick strip */}
       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginRight: '2px' }}>{'<- older'}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginRight: '2px' }}>← older</span>
         {last.map((p, i) => (
           <div
             key={i}
@@ -563,7 +563,7 @@ function MomentumStrip({ picks }) {
             {p.result === 'WIN' ? 'W' : p.result === 'LOSS' ? 'L' : 'P'}
           </div>
         ))}
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginLeft: '2px' }}>{'recent ->'}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginLeft: '2px' }}>recent →</span>
       </div>
     </div>
   );
@@ -594,7 +594,7 @@ function DayOfWeekGrid({ picks }) {
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
       <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
-        [?] Win Rate by Day of Week
+        📆 Win Rate by Day of Week
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
         {byDow.map(d => {
@@ -612,10 +612,10 @@ function DayOfWeekGrid({ picks }) {
                 )}
               </div>
               <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', fontWeight: 800, color: d.total === 0 ? 'var(--text-muted)' : d.wr >= 0.55 ? 'var(--green)' : d.wr < 0.4 ? 'var(--red)' : 'var(--text-secondary)' }}>
-                {d.total > 0 ? `${Math.round(pct)}%` : '-'}
+                {d.total > 0 ? `${Math.round(pct)}%` : '—'}
               </div>
               <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}>
-                {d.total > 0 ? `${d.wins}-${d.total - d.wins}` : '-'}
+                {d.total > 0 ? `${d.wins}-${d.total - d.wins}` : '–'}
               </div>
             </div>
           );
@@ -659,24 +659,24 @@ function CustomTooltip({ active, payload, label }) {
 
 function NeutralSummaryBar({ stats, picks }) {
   const winPct = stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : null;
-  const avgOddsDisplay = stats.avgOdds ? `${stats.avgOdds >= 0 ? '+' : ''}${Math.round(stats.avgOdds)}` : '-';
+  const avgOddsDisplay = stats.avgOdds ? `${stats.avgOdds >= 0 ? '+' : ''}${Math.round(stats.avgOdds)}` : '—';
 
   const settled = [...picks].filter(p => p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH').sort((a,b) => new Date(a.date)-new Date(b.date));
   const last5 = settled.slice(-5);
   const w5 = last5.filter(p => p.result === 'WIN').length;
-  let heatEmoji = '[ice]', heatColor = '#60a5fa';
-  if (w5 >= 4) { heatEmoji = '[fire]'; heatColor = '#FF6B35'; }
-  else if (w5 === 3) { heatEmoji = '[ok]'; heatColor = '#4ade80'; }
-  else if (w5 === 2) { heatEmoji = '[scale]'; heatColor = 'var(--text-muted)'; }
-  else { heatEmoji = '[ice]'; heatColor = '#60a5fa'; }
+  let heatEmoji = '🧊', heatColor = '#60a5fa';
+  if (w5 >= 4) { heatEmoji = '🔥'; heatColor = '#FF6B35'; }
+  else if (w5 === 3) { heatEmoji = '✅'; heatColor = '#4ade80'; }
+  else if (w5 === 2) { heatEmoji = '⚖️'; heatColor = 'var(--text-muted)'; }
+  else { heatEmoji = '🧊'; heatColor = '#60a5fa'; }
 
   const statItems = [
     { label: 'Record',    value: `${stats.wins}-${stats.losses}`, sub: winPct ? `${winPct}%` : null, tone: stats.wins > stats.losses ? 'green' : stats.losses > stats.wins ? 'red' : null },
     { label: 'Units P/L', value: `${stats.units >= 0 ? '+' : ''}${stats.units.toFixed(2)}u`, sub: `${stats.total} settled`, tone: stats.units >= 0 ? 'green' : 'red' },
     { label: 'ROI',       value: `${stats.roi >= 0 ? '+' : ''}${stats.roi.toFixed(1)}%`, sub: 'per pick', tone: stats.roi >= 0 ? 'green' : 'red' },
-    { label: 'Streak',    value: stats.streak.count > 0 ? `${stats.streak.type === 'WIN' ? 'W' : 'L'}${stats.streak.count}` : '-', sub: 'current', tone: stats.streak.type === 'WIN' ? 'green' : stats.streak.type === 'LOSS' ? 'red' : null },
+    { label: 'Streak',    value: stats.streak.count > 0 ? `${stats.streak.type === 'WIN' ? 'W' : 'L'}${stats.streak.count}` : '—', sub: 'current', tone: stats.streak.type === 'WIN' ? 'green' : stats.streak.type === 'LOSS' ? 'red' : null },
     { label: 'Avg Odds',  value: avgOddsDisplay, sub: 'settled picks', tone: 'gold' },
-    { label: 'Best Win',  value: stats.biggestWin > 0 ? `+${stats.biggestWin.toFixed(2)}u` : '-', sub: 'single pick', tone: stats.biggestWin > 0 ? 'green' : null },
+    { label: 'Best Win',  value: stats.biggestWin > 0 ? `+${stats.biggestWin.toFixed(2)}u` : '—', sub: 'single pick', tone: stats.biggestWin > 0 ? 'green' : null },
     ...(stats.pending > 0 ? [{ label: 'Pending', value: stats.pending, sub: 'awaiting', tone: 'gold' }] : []),
   ];
 
@@ -688,7 +688,7 @@ function NeutralSummaryBar({ stats, picks }) {
         <span style={{ fontWeight: 800, color: heatColor, fontSize: '0.88rem' }}>
           {w5 >= 4 ? 'On Fire' : w5 === 3 ? 'Warm' : w5 <= 1 ? 'Cold' : 'Neutral'}
         </span>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>. Last 5: {w5}-{last5.length - w5}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>· Last 5: {w5}-{last5.length - w5}</span>
         {/* Mini strip */}
         <div style={{ display: 'flex', gap: '3px', marginLeft: '4px' }}>
           {settled.slice(-10).map((p, i) => (
@@ -766,13 +766,13 @@ function DateRangeSelector({ range, onChange }) {
         background: activePreset === 'custom' ? 'var(--gold-subtle)' : 'transparent',
         color: activePreset === 'custom' ? 'var(--gold)' : 'var(--text-muted)',
         fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.12s',
-      }}>Custom {showCustom ? '^' : 'v'}</button>
+      }}>Custom {showCustom ? '▲' : '▼'}</button>
 
       {showCustom && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '4px' }}>
           <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', padding: '3px 8px', fontSize: '0.75rem' }} />
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{'->'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>→</span>
           <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', padding: '3px 8px', fontSize: '0.75rem' }} />
           <button onClick={applyCustom} style={{
@@ -784,7 +784,7 @@ function DateRangeSelector({ range, onChange }) {
 
       {(range.start || range.end) && (
         <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-          {range.start || '...'} {'->'} {range.end || 'today'}
+          {range.start || '…'} → {range.end || 'today'}
         </span>
       )}
     </div>
@@ -822,15 +822,15 @@ export default function TrackerTab({ picks, user }) {
       {/* ── Date range selector ── */}
       <DateRangeSelector range={dateRange} onChange={setDateRange} />
 
-      {/* ── Calendar + Equity Curve side by side - matched heights ── */}
+      {/* ── Calendar + Equity Curve side by side — matched heights ── */}
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'stretch', flexWrap: 'wrap' }}>
 
-        {/* Calendar - ~57%, stacks to full width on mobile */}
+        {/* Calendar — ~57%, stacks to full width on mobile */}
         <div style={{ flex: '3 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <PickCalendar picks={filteredPicks} dateRange={dateRange} onRangeChange={setDateRange} timezone={timezone} />
         </div>
 
-        {/* Equity Curve - ~43%, stacks to full width on mobile */}
+        {/* Equity Curve — ~43%, stacks to full width on mobile */}
         <div style={{ flex: '2 1 240px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{
             background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px',
@@ -839,10 +839,10 @@ export default function TrackerTab({ picks, user }) {
             {/* Curve header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.85rem', flexShrink: 0 }}>
               <div>
-                <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem' }}>[up] Equity Curve</div>
+                <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem' }}>📈 Equity Curve</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>
                   {filtStats.total} picks settled
-                  {(dateRange.start || dateRange.end) && <span style={{ color: 'var(--gold)', marginLeft: '6px' }}>. filtered</span>}
+                  {(dateRange.start || dateRange.end) && <span style={{ color: 'var(--gold)', marginLeft: '6px' }}>· filtered</span>}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -855,11 +855,11 @@ export default function TrackerTab({ picks, user }) {
               </div>
             </div>
 
-            {/* Chart - fills remaining space */}
+            {/* Chart — fills remaining space */}
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               {curve.length < 2 ? (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gap: '8px' }}>
-                  <div style={{ fontSize: '2rem', opacity: 0.4 }}>[stats]</div>
+                  <div style={{ fontSize: '2rem', opacity: 0.4 }}>📊</div>
                   <div style={{ fontSize: '0.8rem', textAlign: 'center' }}>No settled picks yet.<br />Your equity curve will appear here.</div>
                 </div>
               ) : (
@@ -887,8 +887,8 @@ export default function TrackerTab({ picks, user }) {
               <div style={{ display: 'flex', gap: '0', marginTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.6rem', flexShrink: 0 }}>
                 {[
                   { label: 'W-L', value: `${filtStats.wins}-${filtStats.losses}`, color: filtStats.wins > filtStats.losses ? 'var(--green)' : 'var(--red)' },
-                  { label: 'Win%', value: filtStats.total > 0 ? `${((filtStats.wins / filtStats.total) * 100).toFixed(0)}%` : '-', color: 'var(--text-secondary)' },
-                  { label: 'Streak', value: filtStats.streak.count > 0 ? `${filtStats.streak.type === 'WIN' ? 'W' : 'L'}${filtStats.streak.count}` : '-', color: filtStats.streak.type === 'WIN' ? 'var(--green)' : filtStats.streak.type === 'LOSS' ? 'var(--red)' : 'var(--text-muted)' },
+                  { label: 'Win%', value: filtStats.total > 0 ? `${((filtStats.wins / filtStats.total) * 100).toFixed(0)}%` : '—', color: 'var(--text-secondary)' },
+                  { label: 'Streak', value: filtStats.streak.count > 0 ? `${filtStats.streak.type === 'WIN' ? 'W' : 'L'}${filtStats.streak.count}` : '—', color: filtStats.streak.type === 'WIN' ? 'var(--green)' : filtStats.streak.type === 'LOSS' ? 'var(--red)' : 'var(--text-muted)' },
                 ].map(s => (
                   <div key={s.label} style={{ flex: 1, textAlign: 'center', borderRight: '1px solid var(--border-subtle)' }}>
                     <div style={{ fontFamily: 'IBM Plex Mono', fontWeight: 700, fontSize: '0.82rem', color: s.color }}>{s.value}</div>
@@ -897,7 +897,7 @@ export default function TrackerTab({ picks, user }) {
                 ))}
                 <div style={{ flex: 1, textAlign: 'center' }}>
                   <div style={{ fontFamily: 'IBM Plex Mono', fontWeight: 700, fontSize: '0.82rem', color: 'var(--gold)' }}>
-                    {filtStats.avgOdds ? `${filtStats.avgOdds >= 0 ? '+' : ''}${Math.round(filtStats.avgOdds)}` : '-'}
+                    {filtStats.avgOdds ? `${filtStats.avgOdds >= 0 ? '+' : ''}${Math.round(filtStats.avgOdds)}` : '—'}
                   </div>
                   <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Avg Odds</div>
                 </div>
@@ -947,7 +947,7 @@ export default function TrackerTab({ picks, user }) {
                   <span style={{ fontSize: '0.88rem' }}>{sportEmoji(p.sport)}</span>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '68px' }}>{p.date}</span>
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{p.team}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{p.sport} . {p.bet_type}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{p.sport} · {p.bet_type}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.88rem', fontFamily: 'IBM Plex Mono' }}>
@@ -957,7 +957,7 @@ export default function TrackerTab({ picks, user }) {
                     {p.result || 'PENDING'}
                   </span>
                   <span style={{ color: parseFloat(p.profit) >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600, fontSize: '0.82rem', fontFamily: 'IBM Plex Mono', minWidth: '50px', textAlign: 'right' }}>
-                    {p.profit != null && p.profit !== '' ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '-'}
+                    {p.profit != null && p.profit !== '' ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '—'}
                   </span>
                 </div>
               </div>

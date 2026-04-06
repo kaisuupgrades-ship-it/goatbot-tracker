@@ -23,7 +23,7 @@ const CONTEST_RULES = {
   maxUnits: 5,
   // LOCKED: once posted, no changing, editing, or deleting
   locked: true,
-  // Reschedules != void. Play stands for new date.
+  // Reschedules ≠ void. Play stands for new date.
   reschedulePolicy: 'play_stands',
 };
 
@@ -36,13 +36,13 @@ function verifyPick(pick) {
   const odds = parseInt(pick.odds);
   if (!isNaN(odds)) {
     if (odds < CONTEST_RULES.minOdds) {
-      issues.push(`Odds ${odds} too juicy - contest minimum is ${CONTEST_RULES.minOdds}. No heavy favorites allowed.`);
+      issues.push(`Odds ${odds} too juicy — contest minimum is ${CONTEST_RULES.minOdds}. No heavy favorites allowed.`);
     }
     if (odds > CONTEST_RULES.maxOdds) {
-      issues.push(`Odds +${odds} too long - contest maximum is +${CONTEST_RULES.maxOdds}.`);
+      issues.push(`Odds +${odds} too long — contest maximum is +${CONTEST_RULES.maxOdds}.`);
     }
   } else {
-    issues.push('Invalid odds - must be a valid American odds number (e.g. -110, +150).');
+    issues.push('Invalid odds — must be a valid American odds number (e.g. -110, +150).');
   }
 
   // 2. Bet type check (straight bets only)
@@ -50,7 +50,7 @@ function verifyPick(pick) {
     if (CONTEST_RULES.excludedBetTypes.includes(pick.bet_type)) {
       issues.push(`"${pick.bet_type}" is not contest-eligible. Straight bets only (ML, spread, totals).`);
     } else if (!CONTEST_RULES.allowedBetTypes.includes(pick.bet_type)) {
-      warnings.push(`"${pick.bet_type}" - will be reviewed for eligibility.`);
+      warnings.push(`"${pick.bet_type}" — will be reviewed for eligibility.`);
     }
   }
 
@@ -62,7 +62,7 @@ function verifyPick(pick) {
 
   // 4. Date required
   if (!pick.date) {
-    issues.push('No date set - pick must have a game date.');
+    issues.push('No date set — pick must have a game date.');
   }
 
   // 5. Team/pick required
@@ -150,7 +150,7 @@ export async function POST(req) {
 
     if ((existingPicks?.length || 0) >= CONTEST_RULES.maxPicksPerDay) {
       result.eligible = false;
-      result.issues.push(`You already have a contest pick for ${pick.date}. One play per day - no exceptions.`);
+      result.issues.push(`You already have a contest pick for ${pick.date}. One play per day — no exceptions.`);
     }
   }
 
@@ -162,7 +162,7 @@ export async function POST(req) {
     submittedBeforeGameStart = now < gameDate;
     if (!submittedBeforeGameStart) {
       result.warnings = result.warnings || [];
-      result.warnings.push(`Submitted after game date (${pick.date}) - will NOT count as verified.`);
+      result.warnings.push(`Submitted after game date (${pick.date}) — will NOT count as verified.`);
     }
   }
 

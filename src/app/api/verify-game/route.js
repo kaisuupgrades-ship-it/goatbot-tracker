@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 15;
 
-// ── Sport -> ESPN endpoint map ────────────────────────────────────────────────
+// ── Sport → ESPN endpoint map ────────────────────────────────────────────────
 const ESPN_ENDPOINTS = {
   // Basketball
   'NBA':       'basketball/nba',
@@ -123,12 +123,12 @@ async function fetchESPNGames(sportKey, dateStr) {
  *   found: true,
  *   game: {
  *     id, name, shortName,
- *     commence_time,          <- ISO timestamp of actual tip-off/start
+ *     commence_time,          ← ISO timestamp of actual tip-off/start
  *     home: { name, abbr },
  *     away: { name, abbr },
  *     venue, status,
  *   },
- *   warning: string | null    <- e.g. "low confidence match"
+ *   warning: string | null    ← e.g. "low confidence match"
  * }
  */
 export async function GET(req) {
@@ -150,7 +150,7 @@ export async function GET(req) {
     });
   }
 
-  // Fetch games — try the exact date first, then +/-1 day if no results
+  // Fetch games — try the exact date first, then ±1 day if no results
   let events = await fetchESPNGames(sportKey, dateStr);
 
   // If empty for the exact date, try adjacent days (handles timezone edge cases)
@@ -195,11 +195,11 @@ export async function GET(req) {
   const home = competitors.find(c => c.homeAway === 'home')?.team || {};
   const away = competitors.find(c => c.homeAway === 'away')?.team || {};
 
-  // ESPN date is UTC ISO - this is the actual scheduled start time
+  // ESPN date is UTC ISO — this is the actual scheduled start time
   const commenceTime = evt.date;   // e.g. "2025-04-06T01:20:00Z"
 
   const warning = best.score < 50
-    ? `Low confidence match (score ${best.score}) - please verify "${evt.name}" is the correct game.`
+    ? `Low confidence match (score ${best.score}) — please verify "${evt.name}" is the correct game.`
     : null;
 
   return NextResponse.json({

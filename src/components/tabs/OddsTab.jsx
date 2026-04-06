@@ -2,13 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const SPORTS = [
-  { key: 'mlb',   label: 'MLB',   emoji: '[MLB]' },
-  { key: 'nfl',   label: 'NFL',   emoji: '[NFL]' },
-  { key: 'nba',   label: 'NBA',   emoji: '[NBA]' },
-  { key: 'nhl',   label: 'NHL',   emoji: '[NHL]' },
-  { key: 'ncaaf', label: 'NCAAF', emoji: '[NFL]' },
-  { key: 'ncaab', label: 'NCAAB', emoji: '[NBA]' },
-  { key: 'mls',   label: 'MLS',   emoji: '[MLS]' },
+  { key: 'mlb',   label: 'MLB',   emoji: '⚾' },
+  { key: 'nfl',   label: 'NFL',   emoji: '🏈' },
+  { key: 'nba',   label: 'NBA',   emoji: '🏀' },
+  { key: 'nhl',   label: 'NHL',   emoji: '🏒' },
+  { key: 'ncaaf', label: 'NCAAF', emoji: '🏈' },
+  { key: 'ncaab', label: 'NCAAB', emoji: '🏀' },
+  { key: 'mls',   label: 'MLS',   emoji: '⚽' },
 ];
 
 const BOOK_LABELS = {
@@ -23,7 +23,7 @@ const BOOK_LABELS = {
 };
 
 function formatOdds(price) {
-  if (price == null) return '-';
+  if (price == null) return '—';
   return price > 0 ? `+${price}` : `${price}`;
 }
 
@@ -46,15 +46,15 @@ function isGameLive(game) {
   return new Date(game.commence_time) <= new Date(Date.now() - LIVE_BUFFER_MS);
 }
 
-// Smart time label: "Today . 7:10 PM", "Tomorrow . 1:05 PM", "Mon, Apr 7 . 1:05 PM"
+// Smart time label: "Today · 7:10 PM", "Tomorrow · 1:05 PM", "Mon, Apr 7 · 1:05 PM"
 function smartTimeLabel(commenceTime) {
   const dt   = new Date(commenceTime);
   const now  = new Date();
   const tom  = new Date(Date.now() + 86400000);
   const time = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  if (dt.toDateString() === now.toDateString())  return `Today . ${time}`;
-  if (dt.toDateString() === tom.toDateString())  return `Tomorrow . ${time}`;
-  return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` . ${time}`;
+  if (dt.toDateString() === now.toDateString())  return `Today · ${time}`;
+  if (dt.toDateString() === tom.toDateString())  return `Tomorrow · ${time}`;
+  return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`;
 }
 
 // Group games by calendar day for date-header rendering
@@ -68,10 +68,10 @@ function groupByDate(games) {
     let key, label;
     if (dt.toDateString() === now.toDateString()) {
       key   = 'today';
-      label = `Today - ${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
+      label = `Today — ${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
     } else if (dt.toDateString() === tom.toDateString()) {
       key   = 'tomorrow';
-      label = `Tomorrow - ${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
+      label = `Tomorrow — ${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
     } else {
       key   = dt.toDateString();
       label = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
@@ -207,10 +207,10 @@ function buildUnifiedPrompt(game) {
   const mlStr  = awayML != null && homeML != null ? `ML: ${away.split(' ').pop()} ${formatOdds(awayML)} / ${home.split(' ').pop()} ${formatOdds(homeML)}` : '';
   const sprStr = spr.awayPoint != null ? `Spread: ${away.split(' ').pop()} ${spr.awayPoint > 0 ? '+' : ''}${spr.awayPoint} (${formatOdds(spr.awayPrice)}) / ${home.split(' ').pop()} ${spr.homePoint > 0 ? '+' : ''}${spr.homePoint} (${formatOdds(spr.homePrice)})` : '';
   const totStr = total.line != null ? `O/U: ${total.line} (O ${formatOdds(total.overPrice)} / U ${formatOdds(total.underPrice)})` : '';
-  const oddsStr = [mlStr, sprStr, totStr].filter(Boolean).join(' . ');
+  const oddsStr = [mlStr, sprStr, totStr].filter(Boolean).join(' · ');
 
   const dateCtx = `[Game date: ${dateLabel}. Today is ${today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.]\n`;
-  return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles - moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
+  return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
@@ -232,7 +232,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
     bk.markets?.some(m => ['h2h', 'spreads', 'totals'].includes(m.key))
   );
 
-  // Split "City Nickname" -> city + nickname
+  // Split "City Nickname" → city + nickname
   const awayParts = away.split(' ');
   const awayNick  = awayParts.pop();
   const awayCity  = awayParts.join(' ');
@@ -275,14 +275,14 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
           {timeLabel}
         </span>
         {game.suspectOdds && (
-          <span title="Lines diverge from Pinnacle sharp number - verify before betting" style={{
+          <span title="Lines diverge from Pinnacle sharp number — verify before betting" style={{
             fontSize: '0.58rem', fontWeight: 800, color: '#f59e0b',
             background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.28)',
             borderRadius: '3px', padding: '1px 5px', cursor: 'help', whiteSpace: 'nowrap',
-          }}>[!] LINE CHECK</span>
+          }}>⚠ LINE CHECK</span>
         )}
         {game.pinnacle && !game.suspectOdds && (
-          <span style={{ fontSize: '0.62rem', color: '#4ade80', opacity: 0.45 }}>[sharp] sharp</span>
+          <span style={{ fontSize: '0.62rem', color: '#4ade80', opacity: 0.45 }}>⚡ sharp</span>
         )}
         <span style={{ marginLeft: 'auto', fontSize: '0.62rem', color: dimText }}>
           {allBooks.length} book{allBooks.length !== 1 ? 's' : ''}
@@ -326,7 +326,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                   {spr.awayPoint > 0 ? '+' : ''}{spr.awayPoint}
                   <span style={{ color: '#4a4a4a', fontSize: '0.72rem', marginLeft: '3px' }}>({formatOdds(spr.awayPrice)})</span>
                 </span>
-              : <span style={{ color: '#333', fontFamily: 'monospace' }}>-</span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
             }
           </div>
           <div style={{ textAlign: 'center' }}>
@@ -334,7 +334,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
               ? <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: oddsColor(total.overPrice) }}>
                   O {formatOdds(total.overPrice)}
                 </span>
-              : <span style={{ color: '#333', fontFamily: 'monospace' }}>-</span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
             }
           </div>
         </div>
@@ -359,7 +359,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                   {spr.homePoint > 0 ? '+' : ''}{spr.homePoint}
                   <span style={{ color: '#4a4a4a', fontSize: '0.72rem', marginLeft: '3px' }}>({formatOdds(spr.homePrice)})</span>
                 </span>
-              : <span style={{ color: '#333', fontFamily: 'monospace' }}>-</span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
             }
           </div>
           <div style={{ textAlign: 'center' }}>
@@ -367,7 +367,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
               ? <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: oddsColor(total.underPrice) }}>
                   U {formatOdds(total.underPrice)}
                 </span>
-              : <span style={{ color: '#333', fontFamily: 'monospace' }}>-</span>
+              : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
             }
           </div>
         </div>
@@ -381,7 +381,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
           <span style={{ fontSize: '0.62rem', color: dimText }}>
             {expanded ? 'Hide book comparison' : 'Compare all books'}
           </span>
-          <span style={{ color: dimText, fontSize: '0.6rem' }}>{expanded ? '^' : 'v'}</span>
+          <span style={{ color: dimText, fontSize: '0.6rem' }}>{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
@@ -395,7 +395,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
               background: 'rgba(255,69,96,0.06)', border: '1px solid rgba(255,69,96,0.15)',
               borderRadius: '6px', fontSize: '0.7rem', color: 'rgba(255,100,100,0.7)',
             }}>
-              [sharp] Extreme live odds - one team heavily favored. Not reliable for pre-game betting.
+              ⚡ Extreme live odds — one team heavily favored. Not reliable for pre-game betting.
             </div>
           )}
 
@@ -448,7 +448,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                 }
 
                 function OddsCell({ price, isBest, point }) {
-                  if (price == null) return <td style={{ padding: '5px 8px', textAlign: 'center', color: '#2a2a2a' }}>-</td>;
+                  if (price == null) return <td style={{ padding: '5px 8px', textAlign: 'center', color: '#2a2a2a' }}>—</td>;
                   return (
                     <td style={{ padding: '5px 8px', textAlign: 'center' }}>
                       {point != null && (
@@ -490,7 +490,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                               {formatOdds(awaySprOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#2a2a2a' }}>-</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
                     <td style={{ padding: '5px 8px', textAlign: 'center' }}>
@@ -501,7 +501,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                               {formatOdds(homeSprOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#2a2a2a' }}>-</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
                     <td style={{ padding: '5px 8px', textAlign: 'center', borderLeft: '1px solid #1a1a1a' }}>
@@ -512,7 +512,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                               {formatOdds(overOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#2a2a2a' }}>-</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
                     <td style={{ padding: '5px 8px', textAlign: 'center' }}>
@@ -523,11 +523,11 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                               {formatOdds(underOut.price)}
                             </span>
                           </>
-                        : <span style={{ color: '#2a2a2a' }}>-</span>
+                        : <span style={{ color: '#2a2a2a' }}>—</span>
                       }
                     </td>
                     <td style={{ padding: '5px 0 5px 8px', color: '#333', fontSize: '0.62rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {bk.last_update ? new Date(bk.last_update).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-'}
+                      {bk.last_update ? new Date(bk.last_update).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}
                     </td>
                   </tr>
                 );
@@ -550,7 +550,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.16)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.07)'; }}
               >
-                [target] Analyze with BetOS
+                🎯 Analyze with BetOS
               </button>
             </div>
           )}
@@ -564,15 +564,15 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 function SetupScreen() {
   return (
     <div style={{ maxWidth: '560px', margin: '3rem auto', textAlign: 'center' }}>
-      <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>[up]</div>
+      <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📈</div>
       <h2 style={{ fontWeight: 800, color: '#f0f0f0', marginBottom: '0.5rem' }}>Odds Board</h2>
       <p style={{ color: '#666', marginBottom: '1.5rem', lineHeight: 1.7, fontSize: '0.9rem' }}>
-        Pull live lines from FanDuel, DraftKings, and more - all in one place, updated every 3 minutes.
+        Pull live lines from FanDuel, DraftKings, and more — all in one place, updated every 3 minutes.
       </p>
       <div className="card" style={{ padding: '1.5rem', textAlign: 'left', marginBottom: '1rem' }}>
-        <p style={{ color: '#FFB800', fontWeight: 700, marginBottom: '0.8rem', fontSize: '0.85rem' }}>[sharp] Quick Setup (2 min)</p>
+        <p style={{ color: '#FFB800', fontWeight: 700, marginBottom: '0.8rem', fontSize: '0.85rem' }}>⚡ Quick Setup (2 min)</p>
         <ol style={{ color: '#777', fontSize: '0.84rem', lineHeight: 2.1, paddingLeft: '1.2rem' }}>
-          <li>Go to <a href="https://odds-api.io" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>odds-api.io</a>{' -> Sign up free'}</li>
+          <li>Go to <a href="https://odds-api.io" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>odds-api.io</a> → Sign up free</li>
           <li>Copy your API key from the dashboard</li>
           <li>Open <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#ddd', fontSize: '0.8rem' }}>goatbot-app/.env.local</code></li>
           <li>Add: <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#4ade80', fontSize: '0.8rem' }}>ODDS_API_KEY=your-key-here</code></li>
@@ -580,7 +580,7 @@ function SetupScreen() {
         </ol>
       </div>
       <p style={{ color: '#444', fontSize: '0.74rem' }}>
-        Free tier includes FanDuel &amp; DraftKings - with 3-min caching, you&apos;ll have plenty of quota.
+        Free tier includes FanDuel &amp; DraftKings — with 3-min caching, you&apos;ll have plenty of quota.
       </p>
     </div>
   );
@@ -687,7 +687,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
             style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: '4px 8px', fontSize: '0.78rem', borderRadius: '4px' }}
             onMouseEnter={e => e.currentTarget.style.color = '#FFB800'}
             onMouseLeave={e => e.currentTarget.style.color = '#555'}>
-            {'<'}
+            ‹
           </button>
           <button onClick={() => setDateOffset(0)}
             style={{
@@ -703,7 +703,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
             style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: '4px 8px', fontSize: '0.78rem', borderRadius: '4px' }}
             onMouseEnter={e => e.currentTarget.style.color = '#FFB800'}
             onMouseLeave={e => e.currentTarget.style.color = '#555'}>
-            {'>'}
+            ›
           </button>
         </div>
 
@@ -738,7 +738,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
         </div>
 
         {/* Search */}
-        <input className="input" placeholder="Search team..." value={search}
+        <input className="input" placeholder="Search team…" value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ width: '150px', padding: '4px 10px', fontSize: '0.8rem' }} />
 
@@ -752,7 +752,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
             style={{ background: 'none', border: '1px solid #1e1e1e', borderRadius: '6px', color: '#555', padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', transition: 'border-color 0.1s' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = '#333'}
             onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}>
-            [refresh] Refresh
+            ↻ Refresh
           </button>
         </div>
       </div>
@@ -760,22 +760,22 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
       {/* ── Content ── */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '4rem', color: '#3a3a3a', fontSize: '0.85rem' }}>
-          Loading odds...
+          Loading odds…
         </div>
       ) : error ? (
         <div style={{ padding: '1rem', background: '#1a0a0a', border: '1px solid #3a1a1a', borderRadius: '8px', color: '#f87171', fontSize: '0.84rem' }}>
-          [!] {error}
+          ⚠️ {error}
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '4rem', color: '#444', fontSize: '0.85rem' }}>
           {gameFilter === 'upcoming' && liveGames.length > 0
-            ? <span>All today&apos;s games are in progress -{' '}
+            ? <span>All today&apos;s games are in progress —{' '}
                 <button onClick={() => setGameFilter('live')} style={{ color: '#FF4560', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', padding: 0 }}>
                   view live
                 </button>
               </span>
             : gameFilter === 'live' && upcomingGames.length > 0
-            ? <span>No live games right now -{' '}
+            ? <span>No live games right now —{' '}
                 <button onClick={() => setGameFilter('upcoming')} style={{ color: '#FFB800', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', padding: 0 }}>
                   view upcoming
                 </button>
@@ -802,13 +802,13 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.72rem', color: '#3a3a3a' }}>
               {filtered.length} game{filtered.length !== 1 ? 's' : ''}
-              {gameFilter === 'upcoming' && ' . pre-game'}
-              {gameFilter === 'live'     && ' . in-game'}
-              {gameFilter === 'all'      && ' . upcoming + live'}
-              {' . '}
+              {gameFilter === 'upcoming' && ' · pre-game'}
+              {gameFilter === 'live'     && ' · in-game'}
+              {gameFilter === 'all'      && ' · upcoming + live'}
+              {' · '}
               <span style={{ color: '#FFB800', opacity: 0.7 }}>gold = best line</span>
             </span>
-            <span style={{ fontSize: '0.65rem', color: '#2e2e2e' }}>ML . Spread . O/U</span>
+            <span style={{ fontSize: '0.65rem', color: '#2e2e2e' }}>ML · Spread · O/U</span>
           </div>
 
           {/* Games grouped by date */}

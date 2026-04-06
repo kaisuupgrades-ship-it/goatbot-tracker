@@ -39,7 +39,7 @@ export async function POST(req) {
     const totalUnits  = settled.reduce((s, p) => s + (parseFloat(p.profit) || 0), 0);
     const roi         = ((totalUnits / totalPicks) * 100).toFixed(1);
 
-    const prompt = `You are an elite sports betting analyst. Analyze this bettor's pick history and provide sharp, honest, actionable coaching. Be specific - reference actual picks, sports, odds ranges, and patterns you see. Don't be generic.
+    const prompt = `You are an elite sports betting analyst. Analyze this bettor's pick history and provide sharp, honest, actionable coaching. Be specific — reference actual picks, sports, odds ranges, and patterns you see. Don't be generic.
 
 OVERALL STATS:
 - Record: ${wins}-${losses} (${((wins/totalPicks)*100).toFixed(1)}% win rate)

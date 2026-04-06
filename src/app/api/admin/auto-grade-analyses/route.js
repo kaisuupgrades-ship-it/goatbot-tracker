@@ -119,12 +119,12 @@ function findGame(events, awayTeam, homeTeam) {
 /**
  * Parse "THE PICK" line from analysis text.
  * Examples:
- *   "Cubs ML -136 FanDuel"       -> { team: 'Cubs', type: 'ml', line: -136 }
- *   "Pirates ML -131 ESPN"       -> { team: 'Pirates', type: 'ml', line: -131 }
- *   "Over 9 -110 at ESPN Bet"    -> { type: 'over', total: 9, line: -110 }
- *   "Under 8.5 -115"             -> { type: 'under', total: 8.5, line: -115 }
- *   "Nets +6.5 -110"             -> { team: 'Nets', type: 'spread', spread: 6.5, line: -110 }
- *   "Bucks -4.5 -110"            -> { team: 'Bucks', type: 'spread', spread: -4.5, line: -110 }
+ *   "Cubs ML -136 FanDuel"       → { team: 'Cubs', type: 'ml', line: -136 }
+ *   "Pirates ML -131 ESPN"       → { team: 'Pirates', type: 'ml', line: -131 }
+ *   "Over 9 -110 at ESPN Bet"    → { type: 'over', total: 9, line: -110 }
+ *   "Under 8.5 -115"             → { type: 'under', total: 8.5, line: -115 }
+ *   "Nets +6.5 -110"             → { team: 'Nets', type: 'spread', spread: 6.5, line: -110 }
+ *   "Bucks -4.5 -110"            → { team: 'Bucks', type: 'spread', spread: -4.5, line: -110 }
  */
 function parsePick(analysis) {
   const pickMatch = analysis?.match(/THE PICK[:\s]+([^\n]{5,150})/i);

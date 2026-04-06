@@ -306,7 +306,7 @@ export async function POST(req) {
     if (!name?.trim()) return NextResponse.json({ error: 'Edge name required' }, { status: 400 });
 
     const seasonRange = filters.seasonStart && filters.seasonEnd
-      ? `${filters.seasonStart}-${filters.seasonEnd}`
+      ? `${filters.seasonStart}–${filters.seasonEnd}`
       : filters.seasonStart || filters.seasonEnd || 'All seasons';
 
     const { data, error } = await supabase.from('sharp_edges').insert([{

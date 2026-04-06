@@ -20,19 +20,19 @@ function getCached(key) {
   return entry.data;
 }
 
-// Weather code -> description + emoji
+// Weather code → description + emoji
 function describeWeather(code) {
-  if (code === 0) return { desc: 'Clear', emoji: '[day]' };
+  if (code === 0) return { desc: 'Clear', emoji: '☀️' };
   if (code <= 2)  return { desc: 'Partly Cloudy', emoji: '⛅' };
-  if (code === 3) return { desc: 'Overcast', emoji: '☁' };
-  if (code <= 49) return { desc: 'Foggy', emoji: '[?]' };
-  if (code <= 59) return { desc: 'Drizzle', emoji: '[?]' };
-  if (code <= 69) return { desc: 'Rain', emoji: '[?]' };
-  if (code <= 79) return { desc: 'Snow', emoji: '❄' };
-  if (code <= 84) return { desc: 'Rain Showers', emoji: '[?]' };
-  if (code <= 86) return { desc: 'Snow Showers', emoji: '[?]' };
-  if (code >= 95) return { desc: 'Thunderstorm', emoji: '⛈' };
-  return { desc: 'Mixed', emoji: '[?]' };
+  if (code === 3) return { desc: 'Overcast', emoji: '☁️' };
+  if (code <= 49) return { desc: 'Foggy', emoji: '🌫️' };
+  if (code <= 59) return { desc: 'Drizzle', emoji: '🌦️' };
+  if (code <= 69) return { desc: 'Rain', emoji: '🌧️' };
+  if (code <= 79) return { desc: 'Snow', emoji: '❄️' };
+  if (code <= 84) return { desc: 'Rain Showers', emoji: '🌧️' };
+  if (code <= 86) return { desc: 'Snow Showers', emoji: '🌨️' };
+  if (code >= 95) return { desc: 'Thunderstorm', emoji: '⛈️' };
+  return { desc: 'Mixed', emoji: '🌥️' };
 }
 
 // Cardinal direction from degrees
@@ -121,7 +121,7 @@ export async function GET(req) {
         code:       codes[idx] ?? 0,
         desc:       weather.desc,
         emoji:      weather.emoji,
-        historical: true, // <- tells UI to say "Actual conditions" not "Forecast"
+        historical: true, // ← tells UI to say "Actual conditions" not "Forecast"
       };
 
     } else {

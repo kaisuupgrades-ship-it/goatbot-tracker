@@ -94,7 +94,7 @@ export async function GET(req) {
     if (Array.isArray(injData.injuries)) {
       rawInjuries = injData.injuries;
     } else if (Array.isArray(injData.seasons)) {
-      // Flatten: seasons -> teams -> injuries
+      // Flatten: seasons → teams → injuries
       for (const season of injData.seasons) {
         for (const teamObj of (season.teams || [])) {
           const teamName = teamObj.team?.abbreviation || teamObj.team?.shortName || '';

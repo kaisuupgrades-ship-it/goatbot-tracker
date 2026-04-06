@@ -23,7 +23,7 @@ import SupportChatWidget    from './SupportChatWidget';
 
 const ADMIN_EMAILS = ['kaisuupgrades@gmail.com', 'jjroh97@gmail.com'];
 
-// ── Announcement Banner — reads from admin broadcast (settings table) ──────────
+// ââ Announcement Banner â reads from admin broadcast (settings table) ââââââââââ
 function AnnouncementBanner() {
   const [text,      setText]      = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -66,7 +66,7 @@ function AnnouncementBanner() {
       minHeight: '34px', flexShrink: 0,
       animation: 'fadeIn 0.3s ease',
     }}>
-      <span style={{ color: '#FFB800', fontSize: '0.78rem', flexShrink: 0 }}>📣</span>
+      <span style={{ color: '#FFB800', fontSize: '0.78rem', flexShrink: 0 }}>ð£</span>
       {/* Scrolling ticker for long messages, static for short */}
       <div style={{
         flex: 1, overflow: 'hidden',
@@ -95,13 +95,13 @@ function AnnouncementBanner() {
         onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,184,0,0.5)'; }}
         title="Dismiss"
       >
-        ✕
+        â
       </button>
     </div>
   );
 }
 
-// ── Server Job Banner — shows when background server jobs are running ───────────
+// ââ Server Job Banner â shows when background server jobs are running âââââââââââ
 // Polls the pregenerate_progress key in settings so the banner persists across
 // tab switches, page refreshes, etc. The server writes progress as it goes.
 function ServerJobBanner() {
@@ -152,14 +152,14 @@ function ServerJobBanner() {
       minHeight: '34px', flexShrink: 0,
       animation: 'fadeIn 0.3s ease',
     }}>
-      <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>{done ? '✅' : '⟳'}</span>
+      <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>{done ? 'â' : 'â³'}</span>
       <span style={{
         fontSize: '0.78rem', fontWeight: 600,
         color: done ? 'rgba(74,222,128,0.9)' : 'rgba(147,197,253,0.9)',
       }}>
         {done
-          ? `Pre-generation complete — ${job.generated || 0} analyses cached`
-          : `Pre-generating analyses… ${sportLabel ? `(${sportLabel})` : ''} ${pct}%`
+          ? `Pre-generation complete â ${job.generated || 0} analyses cached`
+          : `Pre-generating analysesâ¦ ${sportLabel ? `(${sportLabel})` : ''} ${pct}%`
         }
       </span>
       {!done && (
@@ -180,16 +180,16 @@ const TAB_META = {
   leaderboard: { label: 'Contest',      sub: 'Monthly contest standings & verified picks' },
   sharpboard:  { label: 'Sharp Board',  sub: 'All-time public handicapper rankings' },
   usersearch:  { label: 'User Search',  sub: 'Find and follow the sharpest bettors in the community' },
-  following:   { label: 'Following',    sub: 'Cappers you follow — all-time stats' },
-  chatroom:    { label: 'Chat Room',    sub: 'Community chat — discuss picks & sharp action' },
+  following:   { label: 'Following',    sub: 'Cappers you follow â all-time stats' },
+  chatroom:    { label: 'Chat Room',    sub: 'Community chat â discuss picks & sharp action' },
   featured:     { label: 'Featured Games',  sub: 'Your starred games & quick BetOS access' },
-  admin:        { label: '🛡 Admin Panel',  sub: 'User management, analytics & system settings' },
+  admin:        { label: 'ð¡ Admin Panel',  sub: 'User management, analytics & system settings' },
 };
 
 export default function Dashboard({ user, initialPicks, initialContest, isDemo }) {
   const router = useRouter();
   const [activeTab, setActiveTab]   = useState('tracker');
-  // Shared sport selection — kept in sync between Scoreboard and Odds Board
+  // Shared sport selection â kept in sync between Scoreboard and Odds Board
   const [activeSport, setActiveSport] = useState('mlb');
   const [picks, setPicks]           = useState(initialPicks || []);
   const [contest, setContest]       = useState(initialContest || {
@@ -211,7 +211,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
   // Preserved state for cross-tab navigation
   const [goatPrompt, setGoatPrompt] = useState('');
   const [goatReport, setGoatReport] = useState(null);
-  // Pick → Scoreboard navigation
+  // Pick â Scoreboard navigation
   const [scoreboardGame, setScoreboardGame] = useState(null);
   function onViewGame(pick) {
     setScoreboardGame(pick);
@@ -226,7 +226,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
     }
   }, [user?.id, isDemo]);
 
-  // Leaderboard refresh key — increment to trigger LeaderboardTab re-load
+  // Leaderboard refresh key â increment to trigger LeaderboardTab re-load
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
 
   // Global refresh: re-fetch picks from Supabase + run grading
@@ -250,7 +250,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             const g = graded.find(gr => gr.id === p.id);
             return g ? { ...p, result: g.result } : p;
           }));
-          // 🔊 Sound notifications for graded picks
+          // ð Sound notifications for graded picks
           const wins   = graded.filter(g => g.result === 'WIN').length;
           const losses = graded.filter(g => g.result === 'LOSS').length;
           const pushes = graded.filter(g => g.result === 'PUSH').length;
@@ -318,7 +318,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <button className="hamburger-btn" onClick={() => setMobileNavOpen(o => !o)} title="Menu">
-              ☰
+              â°
             </button>
             <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>{meta.label}</span>
             <span className="header-sub" style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginLeft: '10px' }}>{meta.sub}</span>
@@ -333,13 +333,13 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           </div>
         </header>
 
-        {/* Announcement Banner — only shows when admin has broadcast a message */}
+        {/* Announcement Banner â only shows when admin has broadcast a message */}
         <AnnouncementBanner />
 
-        {/* Server Job Banner — shows progress for background server tasks */}
+        {/* Server Job Banner â shows progress for background server tasks */}
         <ServerJobBanner />
 
-        {/* Tab content — all tabs stay mounted, hidden when inactive to preserve state */}
+        {/* Tab content â all tabs stay mounted, hidden when inactive to preserve state */}
         <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }} className="fade-up main-content">
           <div style={{ display: activeTab === 'tracker'    ? 'block' : 'none' }}><TrackerTab    picks={picks} user={user} /></div>
           <div style={{ display: activeTab === 'scoreboard' ? 'block' : 'none' }}>
@@ -373,11 +373,11 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
               goatReport={goatReport} onGoatReportConsumed={() => setGoatReport(null)}
             />
           </div>
-          {/* Contest — standalone, always mounts Contest sub-tab */}
+          {/* Contest â standalone, always mounts Contest sub-tab */}
           <div style={{ display: activeTab === 'leaderboard' ? 'block' : 'none' }}>
             <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="contest" onOpenInbox={openInbox} isActive={activeTab === 'leaderboard'} />
           </div>
-          {/* Sharp Board — standalone sharp rankings */}
+          {/* Sharp Board â standalone sharp rankings */}
           <div style={{ display: activeTab === 'sharpboard' ? 'block' : 'none' }}>
             <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="sharp" onOpenInbox={openInbox} isActive={activeTab === 'sharpboard'} />
           </div>
@@ -423,7 +423,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         />
       )}
 
-      {/* My Public Profile — full forum-style profile view */}
+      {/* My Public Profile â full forum-style profile view */}
       {myProfileOpen && !isDemo && currentUser && (
         <PublicProfileModal
           entry={{
@@ -438,7 +438,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         />
       )}
 
-      {/* Inbox Panel — slide-in DM overlay */}
+      {/* Inbox Panel â slide-in DM overlay */}
       <InboxPanel
         user={currentUser}
         isOpen={inboxOpen}
@@ -447,7 +447,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         isDemo={isDemo}
       />
 
-      {/* Support Chat Widget — bottom left, always visible */}
+      {/* Support Chat Widget â bottom left, always visible */}
       {!isDemo && <SupportChatWidget user={currentUser} />}
     </div>
   );

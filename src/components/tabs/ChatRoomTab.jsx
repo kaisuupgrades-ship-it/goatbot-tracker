@@ -7,16 +7,16 @@ const POLL_INTERVAL = 6000;
 
 // ── Rank system (mirrors src/app/api/chat/route.js) ──────────────────────────
 export const RANKS = [
-  { title: 'Degenerate',   minXp: 0,     emoji: '[bet]', color: '#888' },
-  { title: 'Square',       minXp: 100,   emoji: '[target]', color: '#a78bfa' },
-  { title: 'Handicapper',  minXp: 300,   emoji: '[stats]', color: '#60a5fa' },
-  { title: 'Sharp',        minXp: 700,   emoji: '[sharp]', color: '#34d399' },
-  { title: 'Steam Chaser', minXp: 1500,  emoji: '[fire]', color: '#fb923c' },
-  { title: 'Wiseguy',      minXp: 3000,  emoji: '[vibe]', color: '#f472b6' },
-  { title: 'Line Mover',   minXp: 6000,  emoji: '[up]', color: '#facc15' },
-  { title: 'Syndicate',    minXp: 10000, emoji: '[gem]', color: '#38bdf8' },
-  { title: 'Whale',        minXp: 20000, emoji: '[whale]', color: '#c084fc' },
-  { title: 'Legend',       minXp: 40000, emoji: '[crown]', color: '#FFB800' },
+  { title: 'Degenerate',   minXp: 0,     emoji: '🎰', color: '#888' },
+  { title: 'Square',       minXp: 100,   emoji: '🎯', color: '#a78bfa' },
+  { title: 'Handicapper',  minXp: 300,   emoji: '📊', color: '#60a5fa' },
+  { title: 'Sharp',        minXp: 700,   emoji: '⚡', color: '#34d399' },
+  { title: 'Steam Chaser', minXp: 1500,  emoji: '🔥', color: '#fb923c' },
+  { title: 'Wiseguy',      minXp: 3000,  emoji: '🕶️', color: '#f472b6' },
+  { title: 'Line Mover',   minXp: 6000,  emoji: '📈', color: '#facc15' },
+  { title: 'Syndicate',    minXp: 10000, emoji: '💎', color: '#38bdf8' },
+  { title: 'Whale',        minXp: 20000, emoji: '🐳', color: '#c084fc' },
+  { title: 'Legend',       minXp: 40000, emoji: '👑', color: '#FFB800' },
 ];
 
 export function getRankForXp(xp) {
@@ -68,7 +68,7 @@ function Avatar({ emoji, size = 34 }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: size * 0.42, overflow: 'hidden',
     }}>
-      <span>{emoji || '[user]'}</span>
+      <span>{emoji || '👤'}</span>
     </div>
   );
 }
@@ -96,13 +96,13 @@ function MsgContextMenu({ msg, onClose, onDelete, onMute, onBan, onPromoteMod, i
 
   return (
     <div ref={ref} style={menuStyle} onClick={e => e.stopPropagation()}>
-      <button style={itemStyle('#f87171')} onClick={() => { onDelete(msg.id); onClose(); }}>[del] Delete message</button>
+      <button style={itemStyle('#f87171')} onClick={() => { onDelete(msg.id); onClose(); }}>🗑 Delete message</button>
       {(isMod || isAdmin) && <>
         <div style={{ height: '1px', background: 'var(--border)', margin: '3px 0' }} />
-        <button style={itemStyle('#fb923c')} onClick={() => { onMute(msg.user_id, msg.author?.display_name || msg.author?.username); onClose(); }}>[mute] Mute user</button>
-        <button style={itemStyle('#f87171')} onClick={() => { onBan(msg.user_id, msg.author?.display_name || msg.author?.username); onClose(); }}>[X] Chat ban</button>
+        <button style={itemStyle('#fb923c')} onClick={() => { onMute(msg.user_id, msg.author?.display_name || msg.author?.username); onClose(); }}>🔇 Mute user</button>
+        <button style={itemStyle('#f87171')} onClick={() => { onBan(msg.user_id, msg.author?.display_name || msg.author?.username); onClose(); }}>🚫 Chat ban</button>
         {isAdmin && (
-          <button style={itemStyle('#a78bfa')} onClick={() => { onPromoteMod(msg.user_id, msg.author?.display_name || msg.author?.username); onClose(); }}> Promote to Mod</button>
+          <button style={itemStyle('#a78bfa')} onClick={() => { onPromoteMod(msg.user_id, msg.author?.display_name || msg.author?.username); onClose(); }}>🛡️ Promote to Mod</button>
         )}
       </>}
     </div>
@@ -143,12 +143,12 @@ function ChatBubble({ msg, isMe, isMod, isAdmin, onDelete, onMute, onBan, onProm
           {/* Role badges */}
           {authorIsAdmin && (
             <span style={{ fontSize: '0.56rem', fontWeight: 800, padding: '1px 4px', borderRadius: '3px', background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.4)', color: '#FFB800' }}>
-              [crown] ADMIN
+              👑 ADMIN
             </span>
           )}
           {!authorIsAdmin && authorIsMod && (
             <span style={{ fontSize: '0.56rem', fontWeight: 800, padding: '1px 4px', borderRadius: '3px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa' }}>
-               MOD
+              🛡️ MOD
             </span>
           )}
           <RankBadge rankTitle={rank.title} size="xs" />
@@ -169,14 +169,14 @@ function ChatBubble({ msg, isMe, isMod, isAdmin, onDelete, onMute, onBan, onProm
             <button onClick={() => onDelete(msg.id)}
               title="Delete message"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: '0.7rem', padding: '2px 5px', opacity: 0.7, borderRadius: '4px' }}>
-              x
+              ✕
             </button>
           )}
           {canModerate && (
             <button onClick={() => setShowMenu(v => !v)}
               title="Mod actions"
               style={{ background: showMenu ? 'var(--bg-surface)' : 'none', border: showMenu ? '1px solid var(--border)' : 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.72rem', padding: '2px 5px', borderRadius: '4px' }}>
-              ...
+              ⋯
             </button>
           )}
           {showMenu && (
@@ -214,7 +214,7 @@ function MuteDialog({ target, onConfirm, onClose }) {
       onClick={onClose}>
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', width: '320px', maxWidth: '92vw' }}
         onClick={e => e.stopPropagation()}>
-        <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: '0.3rem' }}>[mute] Mute {target}</div>
+        <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: '0.3rem' }}>🔇 Mute {target}</div>
         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '1rem' }}>User won't be able to send messages for the selected duration.</div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
           {options.map(o => (
@@ -276,10 +276,10 @@ function ModPanel({ userEmail, isAdmin, adminFetch, onRefresh }) {
   };
 
   const tabs = [
-    { id: 'settings', label: '⚙ Settings' },
+    { id: 'settings', label: '⚙️ Settings' },
     ...(isAdmin ? [
-      { id: 'mods',   label: ` Mods${mods.length ? ` (${mods.length})` : ''}` },
-      { id: 'bans',   label: `[X] Bans${bans.length ? ` (${bans.length})` : ''}` },
+      { id: 'mods',   label: `🛡️ Mods${mods.length ? ` (${mods.length})` : ''}` },
+      { id: 'bans',   label: `🚫 Bans${bans.length ? ` (${bans.length})` : ''}` },
     ] : []),
   ];
 
@@ -323,14 +323,14 @@ function ModPanel({ userEmail, isAdmin, adminFetch, onRefresh }) {
                 onBlur={e => saveSetting('max_message_length', e.target.value)}
                 style={{ width: '60px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '4px', padding: '2px 5px', color: 'var(--text-primary)', fontSize: '0.75rem', textAlign: 'right' }} />
             </label>
-            {saving && <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'center' }}>Saving...</div>}
+            {saving && <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'center' }}>Saving…</div>}
           </div>
         )}
 
         {tab === 'mods' && (
           <div>
             <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>Chat Moderators</div>
-            {mods.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>No mods yet. Use the ... menu on any message to promote.</div>}
+            {mods.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>No mods yet. Use the ⋯ menu on any message to promote.</div>}
             {mods.map(m => (
               <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                 <Avatar emoji={m.profiles?.avatar_emoji} size={22} />
@@ -341,7 +341,7 @@ function ModPanel({ userEmail, isAdmin, adminFetch, onRefresh }) {
                   <RankBadge rankTitle={m.profiles?.rank_title} size="xs" />
                 </div>
                 <button onClick={() => demoteMod(m.user_id)}
-                  title="Remove mod" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: '0.7rem', flexShrink: 0 }}>x</button>
+                  title="Remove mod" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: '0.7rem', flexShrink: 0 }}>✕</button>
               </div>
             ))}
           </div>
@@ -446,7 +446,7 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
     if (!content || !userId || sending) return;
     setSending(true); setError('');
     const token = await getToken();
-    if (!token) { setError('Session expired - please sign in again.'); setSending(false); return; }
+    if (!token) { setError('Session expired — please sign in again.'); setSending(false); return; }
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -533,20 +533,20 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexShrink: 0 }}>
         <div>
-          <h2 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f0f0f0', marginBottom: '2px' }}>[chat] Community Chat</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: 0 }}>Live chat for all BetOS users - discuss picks, lines, and sharp action.</p>
+          <h2 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f0f0f0', marginBottom: '2px' }}>💬 Community Chat</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: 0 }}>Live chat for all BetOS users — discuss picks, lines, and sharp action.</p>
         </div>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.7rem', color: '#4ade80' }}>
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4ade80', display: 'inline-block', animation: 'pulse 2s ease-in-out infinite' }} />
             Live
           </div>
-          <button onClick={() => load()} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.72rem' }}>[refresh]</button>
+          <button onClick={() => load()} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.72rem' }}>↺</button>
           {canModerate && (
             <button onClick={() => setShowModPanel(v => !v)}
               title="Mod Panel"
               style={{ background: showModPanel ? 'rgba(167,139,250,0.15)' : 'var(--bg-surface)', border: `1px solid ${showModPanel ? 'rgba(167,139,250,0.5)' : 'var(--border)'}`, borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', color: showModPanel ? '#a78bfa' : 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>
-               Mod
+              🛡️ Mod
             </button>
           )}
         </div>
@@ -576,7 +576,7 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
             )}
             {!loading && messages.length === 0 && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gap: '8px' }}>
-                <div style={{ fontSize: '2.5rem' }}>[chat]</div>
+                <div style={{ fontSize: '2.5rem' }}>💬</div>
                 <div style={{ fontWeight: 700 }}>No messages yet</div>
                 <div style={{ fontSize: '0.78rem' }}>Be the first to say something!</div>
               </div>
@@ -619,12 +619,12 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
               </div>
             ) : myStatus.banned ? (
               <div style={{ flex: 1, textAlign: 'center', padding: '0.5rem' }}>
-                <div style={{ fontSize: '0.8rem', color: '#f87171', fontWeight: 600 }}>[X] You are banned from Community Chat.</div>
+                <div style={{ fontSize: '0.8rem', color: '#f87171', fontWeight: 600 }}>🚫 You are banned from Community Chat.</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>Contact an admin if you believe this is an error.</div>
               </div>
             ) : myStatus.muted ? (
               <div style={{ flex: 1, textAlign: 'center', padding: '0.5rem' }}>
-                <div style={{ fontSize: '0.8rem', color: '#fb923c', fontWeight: 600 }}>[mute] You are muted.</div>
+                <div style={{ fontSize: '0.8rem', color: '#fb923c', fontWeight: 600 }}>🔇 You are muted.</div>
                 {myStatus.muteExpiry && (
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                     Expires {new Date(myStatus.muteExpiry).toLocaleString()}
@@ -638,7 +638,7 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
                   value={text}
                   onChange={e => setText(e.target.value)}
                   onKeyDown={handleKey}
-                  placeholder={`Message as ${username}... (Enter to send, Shift+Enter for newline)`}
+                  placeholder={`Message as ${username}… (Enter to send, Shift+Enter for newline)`}
                   maxLength={parseInt(500)}
                   rows={2}
                   style={{ flex: 1, resize: 'none', padding: '8px 12px', fontSize: '0.82rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-primary)', outline: 'none', fontFamily: 'inherit', lineHeight: 1.4 }}
@@ -646,7 +646,7 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end', flexShrink: 0 }}>
                   <button onClick={send} disabled={!text.trim() || sending}
                     style={{ padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.82rem', background: text.trim() && !sending ? 'rgba(255,184,0,0.18)' : 'var(--bg-surface)', border: `1px solid ${text.trim() && !sending ? 'rgba(255,184,0,0.4)' : 'var(--border)'}`, color: text.trim() && !sending ? 'var(--gold)' : 'var(--text-muted)', cursor: text.trim() && !sending ? 'pointer' : 'default', transition: 'all 0.15s' }}>
-                    {sending ? '...' : '^ Send'}
+                    {sending ? '…' : '↑ Send'}
                   </button>
                   {text.length > 400 && (
                     <span style={{ fontSize: '0.6rem', color: text.length > 480 ? '#f87171' : 'var(--text-muted)' }}>{text.length}/500</span>

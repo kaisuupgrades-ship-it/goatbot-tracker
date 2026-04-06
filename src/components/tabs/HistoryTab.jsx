@@ -7,7 +7,7 @@ import { validateContestEntry, DEFAULT_CONTEST_RULES } from '@/lib/contestValida
 
 // ── Live Score Engine ─────────────────────────────────────────────────────────
 // Polls ESPN every 30s for PENDING picks whose game is today.
-// Returns a map of { pickId -> liveData } and fires onGameFinal when STATUS_FINAL detected.
+// Returns a map of { pickId → liveData } and fires onGameFinal when STATUS_FINAL detected.
 
 const LIVE_SPORT_PATHS = {
   mlb: 'baseball/mlb', nfl: 'football/nfl', nba: 'basketball/nba',
@@ -26,7 +26,7 @@ function liveTeamMatches(a, b) {
   return n1 === n2 || n1.includes(n2) || n2.includes(n1);
 }
 function liveParseSide(matchup, pickTeam) {
-  // "BOS @ TB" -> away=bos, home=tb; match against pickTeam
+  // "BOS @ TB" → away=bos, home=tb; match against pickTeam
   if (!matchup || !pickTeam) return null;
   const lower = matchup.toLowerCase();
   const atIdx = lower.indexOf(' @ ');
@@ -166,11 +166,11 @@ const BOOKS   = ['FanDuel', 'DraftKings', 'BetMGM', 'Caesars', 'PointsBet', 'Bet
 const RESULTS = ['WIN', 'LOSS', 'PUSH', 'PENDING'];
 
 const SPORT_EMOJI = {
-  MLB: '[MLB]', NBA: '[NBA]', NFL: '[NFL]', NHL: '[NHL]', NCAAF: '[NFL]',
-  NCAAB: '[NBA]', MLS: '[MLS]', WNBA: '[NBA]', UFC: '[fight]', Tennis: '[tennis]',
+  MLB: '⚾', NBA: '🏀', NFL: '🏈', NHL: '🏒', NCAAF: '🏈',
+  NCAAB: '🏀', MLS: '⚽', WNBA: '🏀', UFC: '🥊', Tennis: '🎾',
 };
 function sportEmoji(sport) {
-  return SPORT_EMOJI[(sport || '').toUpperCase()] || '[target]';
+  return SPORT_EMOJI[(sport || '').toUpperCase()] || '🎯';
 }
 
 const EMPTY_FORM = {
@@ -283,9 +283,9 @@ function SlipImport({ onFilled }) {
   }
 
   const MODES = [
-    { id: 'image', label: '[img] Screenshot' },
-    { id: 'url',   label: '[?] Share Link' },
-    { id: 'text',  label: '[list] Paste Text' },
+    { id: 'image', label: '📸 Screenshot' },
+    { id: 'url',   label: '🔗 Share Link' },
+    { id: 'text',  label: '📋 Paste Text' },
   ];
 
   return (
@@ -299,11 +299,11 @@ function SlipImport({ onFilled }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '1rem' }}>[img]</span>
+          <span style={{ fontSize: '1rem' }}>📸</span>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>Quick Import from Bet Slip</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Screenshot, share link, or paste</span>
         </div>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{open ? '^' : 'v'}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
@@ -341,7 +341,7 @@ function SlipImport({ onFilled }) {
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
                 onChange={e => { setFile(e.target.files[0]); setParsed(null); }} />
               {file
-                ? <p style={{ color: 'var(--gold)', fontSize: '0.85rem', fontWeight: 600 }}>[ok] {file.name}</p>
+                ? <p style={{ color: 'var(--gold)', fontSize: '0.85rem', fontWeight: 600 }}>✓ {file.name}</p>
                 : <>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Click to upload a bet slip screenshot</p>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>Works with FanDuel, DraftKings, BetMGM, Caesars, and more</p>
@@ -370,7 +370,7 @@ function SlipImport({ onFilled }) {
                 marginBottom: '0.6rem',
                 display: 'flex', gap: '8px', alignItems: 'flex-start',
               }}>
-                <span style={{ fontSize: '0.85rem', flexShrink: 0, marginTop: '1px' }}>[tip]</span>
+                <span style={{ fontSize: '0.85rem', flexShrink: 0, marginTop: '1px' }}>💡</span>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   <strong style={{ color: 'var(--gold)' }}>No slip? No problem.</strong> Just type your bet in plain language and we'll extract it automatically.
                   <br />
@@ -383,7 +383,7 @@ function SlipImport({ onFilled }) {
                 className="input"
                 value={text}
                 onChange={e => setText(e.target.value)}
-                placeholder={'Type or paste your bet - team, odds, matchup, book...\n\nExamples:\n  "Yankees moneyline -145 tonight"\n  "Over 8.5 runs, Cubs vs Cardinals, -110 FanDuel"\n  "Chiefs -3 spread, DraftKings"'}
+                placeholder={'Type or paste your bet — team, odds, matchup, book...\n\nExamples:\n  "Yankees moneyline -145 tonight"\n  "Over 8.5 runs, Cubs vs Cardinals, -110 FanDuel"\n  "Chiefs -3 spread, DraftKings"'}
                 rows={5}
                 style={{ resize: 'vertical' }}
               />
@@ -396,7 +396,7 @@ function SlipImport({ onFilled }) {
             disabled={loading}
             style={{ fontSize: '0.85rem' }}
           >
-            {loading ? '[search] Parsing...' : '[search] Parse Slip'}
+            {loading ? '🔍 Parsing...' : '🔍 Parse Slip'}
           </button>
 
           {error && (
@@ -409,9 +409,9 @@ function SlipImport({ onFilled }) {
           {parsed && (
             <div style={{ marginTop: '1rem', background: 'var(--bg-elevated)', border: '1px solid var(--gold)', borderRadius: '8px', padding: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <span style={{ color: 'var(--gold)', fontWeight: 700, fontSize: '0.85rem' }}>[ok] Parsed Successfully</span>
+                <span style={{ color: 'var(--gold)', fontWeight: 700, fontSize: '0.85rem' }}>✓ Parsed Successfully</span>
                 <button className="btn btn-primary" onClick={handleUse} style={{ fontSize: '0.78rem', padding: '4px 12px' }}>
-                  {'Fill Form ->'}
+                  Fill Form →
                 </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', fontSize: '0.8rem' }}>
@@ -533,7 +533,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
   return (
     <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
       <h3 style={{ fontWeight: 700, color: '#FFB800', marginBottom: '1.2rem', fontSize: '0.95rem' }}>
-        {form.id ? '[edit] Edit Pick' : '+ Add New Pick'}
+        {form.id ? '✏️ Edit Pick' : '➕ Add New Pick'}
       </h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.9rem' }}>
         {[
@@ -571,7 +571,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
             )}
           </div>
         ))}
-        {/* Notes - full width */}
+        {/* Notes — full width */}
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
             <label style={{ color: '#aaa', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -592,12 +592,12 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
                 display: 'flex', alignItems: 'center', gap: '4px',
               }}
             >
-              {notesParsing ? '[wait] Parsing...' : notesParsed ? '[ok] Fields Filled' : '[AI] Auto-Fill'}
+              {notesParsing ? '⏳ Parsing...' : notesParsed ? '✓ Fields Filled' : '🤖 Auto-Fill'}
             </button>
           </div>
           <textarea
             className="input"
-            placeholder='Type your bet naturally - e.g. "LAD ML -135 FanDuel tonight vs SD" - then hit Auto-Fill'
+            placeholder='Type your bet naturally — e.g. "LAD ML -135 FanDuel tonight vs SD" — then hit Auto-Fill'
             value={form.notes}
             onChange={(e) => handleChange('notes', e.target.value)}
             rows={2}
@@ -605,12 +605,12 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
           />
           {notesParsed && (
             <div style={{ fontSize: '0.7rem', color: 'var(--green)', marginTop: '4px' }}>
-              [ok] Fields auto-filled from your notes - review and adjust as needed
+              ✓ Fields auto-filled from your notes — review and adjust as needed
             </div>
           )}
         </div>
 
-        {/* Contest entry toggle - full width with inline validation */}
+        {/* Contest entry toggle — full width with inline validation */}
         <div style={{ gridColumn: '1 / -1' }}>
           {(() => {
             const cv = validateContestEntry(form, DEFAULT_CONTEST_RULES);
@@ -648,7 +648,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
                   </div>
                   <div style={{ textAlign: 'left', flex: 1 }}>
                     <div style={{ color: form.contest_entry ? 'var(--gold)' : blocked ? '#f87171' : 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: 700 }}>
-                      [trophy] Enter to Contest
+                      🏆 Enter to Contest
                     </div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>
                       {form.contest_entry
@@ -660,7 +660,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
                   </div>
                   {form.contest_entry && (
                     <span style={{ fontSize: '0.65rem', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '4px', padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>
-                      [ok] ENTERED
+                      ✓ ENTERED
                     </span>
                   )}
                 </button>
@@ -670,7 +670,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
                   <div style={{ marginTop: '6px', padding: '8px 12px', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '6px' }}>
                     {cv.errors.map((e, i) => (
                       <div key={i} style={{ fontSize: '0.7rem', color: '#f87171', display: 'flex', alignItems: 'flex-start', gap: '5px', marginBottom: i < cv.errors.length - 1 ? '3px' : 0 }}>
-                        <span style={{ flexShrink: 0, marginTop: '1px' }}>x</span> {e}
+                        <span style={{ flexShrink: 0, marginTop: '1px' }}>✕</span> {e}
                       </div>
                     ))}
                   </div>
@@ -680,7 +680,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
                   <div style={{ marginTop: '6px', padding: '6px 12px', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '6px' }}>
                     {cv.warnings.map((w, i) => (
                       <div key={i} style={{ fontSize: '0.7rem', color: 'var(--gold)', display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-                        <span style={{ flexShrink: 0 }}>[!]</span> {w}
+                        <span style={{ flexShrink: 0 }}>⚠</span> {w}
                       </div>
                     ))}
                   </div>
@@ -700,7 +700,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
               display: 'flex', alignItems: 'center', gap: '8px',
               fontSize: '0.72rem', color: 'var(--text-muted)',
             }}>
-              <span style={{ opacity: 0.6 }}>[wait]</span> Verifying game time with ESPN...
+              <span style={{ opacity: 0.6 }}>⏳</span> Verifying game time with ESPN…
             </div>
           )}
           {!verifying && gameVerify?.found && (
@@ -709,7 +709,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
               background: 'rgba(0,212,139,0.06)', border: '1px solid rgba(0,212,139,0.25)',
               display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap',
             }}>
-              <span style={{ color: 'var(--green)', fontSize: '0.75rem', flexShrink: 0, marginTop: '1px' }}>[ok]</span>
+              <span style={{ color: 'var(--green)', fontSize: '0.75rem', flexShrink: 0, marginTop: '1px' }}>✓</span>
               <div style={{ flex: 1 }}>
                 <span style={{ color: 'var(--green)', fontWeight: 700, fontSize: '0.75rem' }}>
                   Game found: {gameVerify.game.shortName || gameVerify.game.name}
@@ -727,11 +727,11 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
                 )}
                 {gameVerify.warning && (
                   <div style={{ color: 'var(--gold)', fontSize: '0.68rem', marginTop: '3px', opacity: 0.85 }}>
-                    [!] {gameVerify.warning}
+                    ⚠ {gameVerify.warning}
                   </div>
                 )}
                 <div style={{ color: 'rgba(0,212,139,0.6)', fontSize: '0.65rem', marginTop: '2px' }}>
-                  Tip-off time locked - this pick will be verified if submitted now
+                  Tip-off time locked — this pick will be verified if submitted now
                 </div>
               </div>
             </div>
@@ -743,7 +743,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
               display: 'flex', alignItems: 'flex-start', gap: '8px',
               fontSize: '0.72rem',
             }}>
-              <span style={{ color: '#f87171', flexShrink: 0, marginTop: '1px' }}>x</span>
+              <span style={{ color: '#f87171', flexShrink: 0, marginTop: '1px' }}>✕</span>
               <div>
                 <span style={{ color: '#f87171', fontWeight: 600 }}>Game not found</span>
                 <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>{gameVerify.error}</span>
@@ -812,7 +812,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
         if (wins > 0)        { playWin();   if (wins   > 1) setTimeout(playWin,  350); }
         else if (losses > 0) { playLoss();  if (losses > 1) setTimeout(playLoss, 400); }
         else if (pushes > 0) { playGrade(); }
-        setGradeMsg(`[ok] ${homeTeam} vs ${awayTeam} graded - ${wins}W ${losses}L${pushes ? ' '+pushes+'P' : ''}`);
+        setGradeMsg(`✓ ${homeTeam} vs ${awayTeam} graded — ${wins}W ${losses}L${pushes ? ' '+pushes+'P' : ''}`);
         setTimeout(() => setGradeMsg(''), 5000);
         // Cascade to leaderboard if any contest pick was graded
         const hasContestPick = myGraded.some(g => g.contest_entry);
@@ -843,14 +843,14 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
           const g = graded.find(gr => gr.id === p.id);
           return g ? { ...p, result: g.result, graded_home_score: g.home_score, graded_away_score: g.away_score } : p;
         }));
-        // [loud] Play sounds for graded results
+        // 🔊 Play sounds for graded results
         const wins   = graded.filter(g => g.result === 'WIN').length;
         const losses = graded.filter(g => g.result === 'LOSS').length;
         const pushes = graded.filter(g => g.result === 'PUSH').length;
         if (wins > 0)        { playWin();   if (wins > 1)   setTimeout(playWin,  350); }
         else if (losses > 0) { playLoss();  if (losses > 1) setTimeout(playLoss, 400); }
         else if (pushes > 0) { playGrade(); }
-        setGradeMsg(`[ok] Graded ${count} pick${count !== 1 ? 's' : ''}`);
+        setGradeMsg(`✓ Graded ${count} pick${count !== 1 ? 's' : ''}`);
       } else {
         setGradeMsg(force ? 'No new results found' : '');
       }
@@ -974,7 +974,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
         const checkRes = await fetch(`/api/verify-pick?action=daily-check&userId=${user.id}`);
         const checkData = await checkRes.json();
         if (checkData.hasContestPickToday) {
-          alert('You already have a contest pick today. One play per day - no exceptions.');
+          alert('You already have a contest pick today. One play per day — no exceptions.');
           return;
         }
         // Verify pick eligibility (odds range, bet type, etc.)
@@ -993,7 +993,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
 
     // If toggling OFF a contest pick — it's LOCKED, block it
     if (!newVal && pick.contest_entry) {
-      alert('Contest picks are locked. Once posted, it cannot be removed - no changing, no editing, no deleting.');
+      alert('Contest picks are locked. Once posted, it cannot be removed — no changing, no editing, no deleting.');
       return;
     }
 
@@ -1071,8 +1071,8 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   }
 
   const SortArrow = ({ field }) => sortField === field
-    ? <span style={{ color: '#FFB800', marginLeft: '3px' }}>{sortDir === 'asc' ? '^' : 'v'}</span>
-    : <span style={{ color: 'var(--text-muted)', marginLeft: '3px' }}>^v</span>;
+    ? <span style={{ color: '#FFB800', marginLeft: '3px' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+    : <span style={{ color: 'var(--text-muted)', marginLeft: '3px' }}>↕</span>;
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -1096,12 +1096,12 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
             {contest?.name || 'My Picks'}
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-            {picks.length} picks logged - {picks.filter(p => p.result === 'WIN').length}W / {picks.filter(p => p.result === 'LOSS').length}L
+            {picks.length} picks logged • {picks.filter(p => p.result === 'WIN').length}W / {picks.filter(p => p.result === 'LOSS').length}L
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {gradeMsg && (
-            <span style={{ fontSize: '0.75rem', color: gradeMsg.startsWith('[ok]') ? 'var(--green)' : 'var(--text-muted)', padding: '0 4px' }}>
+            <span style={{ fontSize: '0.75rem', color: gradeMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)', padding: '0 4px' }}>
               {gradeMsg}
             </span>
           )}
@@ -1112,18 +1112,18 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
             title="Re-check ESPN for final scores on recent picks"
             style={{ fontSize: '0.78rem', opacity: grading ? 0.6 : 1 }}
           >
-            {grading ? '[refresh] Checking...' : '[refresh] Refresh & Grade'}
+            {grading ? '⟳ Checking...' : '⟳ Refresh & Grade'}
           </button>
           <button className="btn-ghost" onClick={() => setContestForm(!contestForm)} style={{ fontSize: '0.8rem' }}>
-            ⚙ Contest Settings
+            ⚙️ Contest Settings
           </button>
           <button className="btn-gold" onClick={addMode ? cancelAdd : openAddPick}>
-            {addMode ? 'x Cancel' : '+ Add Pick'}
+            {addMode ? '✕ Cancel' : '+ Add Pick'}
           </button>
         </div>
       </div>
 
-      {/* ── Add Pick - Import or Manual choice ── */}
+      {/* ── Add Pick — Import or Manual choice ── */}
       {addMode === 'choose' && (
         <div style={{ marginBottom: '1.25rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
           <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', marginBottom: '1rem' }}>How do you want to add this pick?</div>
@@ -1138,10 +1138,10 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.background = 'rgba(255,184,0,0.06)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,184,0,0.3)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
             >
-              <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>[img]</div>
+              <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>📸</div>
               <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem', marginBottom: '3px' }}>Import Bet Slip</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                Screenshot, share link, or paste text - we'll auto-fill everything for you.
+                Screenshot, share link, or paste text — we'll auto-fill everything for you.
               </div>
             </button>
 
@@ -1155,7 +1155,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'; e.currentTarget.style.background = 'rgba(96,165,250,0.04)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
             >
-              <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>[edit]</div>
+              <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>✏️</div>
               <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem', marginBottom: '3px' }}>Manual Entry</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
                 Fill in the details yourself. Defaults to 1 unit risk unless you specify otherwise.
@@ -1251,7 +1251,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
             fontWeight: filterContest ? 700 : 400,
             display: 'flex', alignItems: 'center', gap: '4px',
           }}
-        >[trophy] Contest Only</button>
+        >🏆 Contest Only</button>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginLeft: 'auto' }}>{filtered.length} picks shown</span>
       </div>
 
@@ -1278,13 +1278,13 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                 color: sortField === field ? 'var(--gold)' : 'var(--text-muted)',
                 fontWeight: sortField === field ? 700 : 400,
               }}>
-                {label}{sortField === field ? (sortDir === 'asc' ? ' ^' : ' v') : ''}
+                {label}{sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
               </button>
             ))}
             <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{filtered.length} slips</span>
           </div>
 
-          {/* Card Grid - DraftKings-style bet slips */}
+          {/* Card Grid — DraftKings-style bet slips */}
           <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
             {filtered.map((pick) => {
               const live = liveScores[pick.id] || null;
@@ -1300,10 +1300,10 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                 isTracking && live?.liveStatus === 'LOSING'  ? '#f87171' : '#FFB800';
 
               const profitVal = pick.profit != null ? parseFloat(pick.profit) : null;
-              const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '-';
+              const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
               const profitDisplay = profitVal != null
                 ? `${profitVal >= 0 ? '+' : ''}${profitVal.toFixed(2)}u`
-                : '-';
+                : '—';
 
               return (
                 <div key={pick.id} style={{
@@ -1362,7 +1362,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                           fontSize: '0.62rem', color: '#FFB800',
                           background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.25)',
                           borderRadius: '4px', padding: '1px 5px', fontWeight: 700,
-                        }}>[trophy]</span>
+                        }}>🏆</span>
                       )}
                       {pick.day_number && (
                         <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '1px 5px', borderRadius: '4px', border: '1px solid var(--border)' }}>
@@ -1409,7 +1409,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                           color: live.liveStatus === 'WINNING' ? '#4ade80' : live.liveStatus === 'LOSING' ? '#f87171' : '#94a3b8',
                           letterSpacing: '-0.02em',
                         }}>
-                          {live.awayAbbr} {live.awayScore} - {live.homeScore} {live.homeAbbr}
+                          {live.awayAbbr} {live.awayScore} – {live.homeScore} {live.homeAbbr}
                         </span>
                       </div>
                     )}
@@ -1419,7 +1419,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         marginTop: '5px', fontFamily: 'IBM Plex Mono, monospace',
                         fontWeight: 700, fontSize: '0.72rem', color: '#94a3b8',
                       }}>
-                        {live.awayScore}-{live.homeScore} <span style={{ fontWeight: 400, color: '#555' }}>FINAL . grading...</span>
+                        {live.awayScore}–{live.homeScore} <span style={{ fontWeight: 400, color: '#555' }}>FINAL · grading…</span>
                       </div>
                     )}
                     {/* Final score if server-graded */}
@@ -1454,7 +1454,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         {isTracking && live?.liveStatus
                           ? live.liveStatus
                           : isFinalNow && !pick.result
-                            ? <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>GRADING...</span>
+                            ? <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>GRADING…</span>
                             : pick.result || 'PENDING'}
                       </div>
                     </div>
@@ -1487,10 +1487,10 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                       borderBottom: '1px solid rgba(255,184,0,0.1)',
                     }}>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                        <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>[target]</span>
+                        <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>🎯</span>
                         <div style={{ fontSize: '0.74rem', color: '#ccc', lineHeight: 1.55 }}>
                           {analysisLoading && !analyses[pick.id]
-                            ? <span style={{ color: '#888' }}>Analyzing pick...</span>
+                            ? <span style={{ color: '#888' }}>Analyzing pick…</span>
                             : analyses[pick.id]
                               ? analyses[pick.id]
                               : <span style={{ color: '#555' }}>No analysis available</span>
@@ -1525,10 +1525,10 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                             background: 'white', transition: 'left 0.2s',
                           }} />
                         </div>
-                        <span style={{ fontSize: '0.65rem', color: pick.contest_entry ? 'var(--gold)' : 'var(--text-muted)' }}>[trophy]</span>
+                        <span style={{ fontSize: '0.65rem', color: pick.contest_entry ? 'var(--gold)' : 'var(--text-muted)' }}>🏆</span>
                       </button>
-                      {/* All picks are public - shown on leaderboard indicator */}
-                      <span title="Public - visible on leaderboard" style={{ fontSize: '0.62rem', color: 'rgba(255,184,0,0.45)', padding: '2px 4px', letterSpacing: '0.04em' }}>PUB</span>
+                      {/* All picks are public — shown on leaderboard indicator */}
+                      <span title="Public — visible on leaderboard" style={{ fontSize: '0.62rem', color: 'rgba(255,184,0,0.45)', padding: '2px 4px', letterSpacing: '0.04em' }}>PUB</span>
                     </div>
 
                     {/* Right: Action buttons */}
@@ -1538,7 +1538,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                           onClick={() => onViewGame(pick)}
                           title="View game on Scoreboard"
                           style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid rgba(96,165,250,0.3)', background: 'transparent', color: '#60a5fa', cursor: 'pointer', fontSize: '0.72rem' }}
-                        >[TV]</button>
+                        >📺</button>
                       )}
                       <button
                         onClick={async () => {
@@ -1559,25 +1559,25 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         }}
                         title={analyses[pick.id] ? 'View AI analysis' : 'Get AI analysis'}
                         style={{ padding: '3px 7px', borderRadius: '5px', border: `1px solid ${analyses[pick.id] ? 'rgba(255,184,0,0.3)' : '#333'}`, background: expandedAnalysis === pick.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: analyses[pick.id] ? '#FFB800' : '#666', cursor: 'pointer', fontSize: '0.72rem' }}
-                      >[target]</button>
+                      >🎯</button>
                       {/* Rejected notice */}
                       {!pick.contest_entry && pick.contest_rejected_date && (
                         <span
-                          title={`Contest pick rejected${pick.audit_reason ? ': ' + pick.audit_reason : ''} - resubmit available`}
+                          title={`Contest pick rejected${pick.audit_reason ? ': ' + pick.audit_reason : ''} — resubmit available`}
                           style={{ fontSize: '0.6rem', color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '4px', padding: '2px 5px', fontWeight: 700, cursor: 'help' }}
-                        >x</span>
+                        >✕</span>
                       )}
                       {/* Contest badge */}
                       {pick.contest_entry && (
-                        <span title="Contest entry" style={{ fontSize: '0.65rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>[trophy]</span>
+                        <span title="Contest entry" style={{ fontSize: '0.65rem', color: '#FFB800', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🏆</span>
                       )}
                       {/* Edit / Delete — available on all PENDING picks before game starts */}
                       {(() => {
                         const isSettled = pick.result && pick.result !== 'PENDING';
                         const gameStarted = pick.commence_time && Date.now() > new Date(pick.commence_time).getTime() + 120000;
-                        if (isSettled) return null; // graded - no edits
+                        if (isSettled) return null; // graded — no edits
                         if (gameStarted) return (
-                          <span title="Game started - locked" style={{ fontSize: '0.65rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>[lock]</span>
+                          <span title="Game started — locked" style={{ fontSize: '0.65rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🔒</span>
                         );
                         return (
                           <>
@@ -1585,14 +1585,14 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                               onClick={() => handleEdit(pick)}
                               title={pick.contest_entry ? 'Edit pick (team name & notes only for contest picks)' : 'Edit pick'}
                               style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.72rem' }}
-                            >[edit]</button>
+                            >✏️</button>
                             {!pick.contest_entry && (
                               <button
                                 onClick={() => handleDelete(pick.id)}
                                 disabled={deleting === pick.id}
                                 title="Delete pick"
                                 style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.72rem', opacity: deleting === pick.id ? 0.5 : 1 }}
-                              >{deleting === pick.id ? '...' : '[del]'}</button>
+                              >{deleting === pick.id ? '…' : '🗑️'}</button>
                             )}
                           </>
                         );
@@ -1609,4 +1609,3 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
     </div>
   );
 }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             

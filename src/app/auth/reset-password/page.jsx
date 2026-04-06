@@ -43,7 +43,7 @@ export default function ResetPasswordPage() {
         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>[target]</div>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎯</div>
           <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#EDEDF5' }}>Set new password</div>
           <div style={{ fontSize: '0.78rem', color: '#6A6A88', marginTop: '4px' }}>Choose a strong password for your BetOS account.</div>
         </div>
@@ -54,7 +54,7 @@ export default function ResetPasswordPage() {
               New Password
             </label>
             <input
-              type="password" placeholder="--------" value={password}
+              type="password" placeholder="••••••••" value={password}
               onChange={e => setPassword(e.target.value)} required minLength={6}
               style={inputStyle}
               onFocus={e => { e.target.style.borderColor = '#FFB800'; e.target.style.boxShadow = '0 0 0 3px rgba(255,184,0,0.08)'; }}
@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
               Confirm Password
             </label>
             <input
-              type="password" placeholder="--------" value={confirm}
+              type="password" placeholder="••••••••" value={confirm}
               onChange={e => setConfirm(e.target.value)} required
               style={inputStyle}
               onFocus={e => { e.target.style.borderColor = '#FFB800'; e.target.style.boxShadow = '0 0 0 3px rgba(255,184,0,0.08)'; }}

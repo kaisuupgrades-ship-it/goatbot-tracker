@@ -19,9 +19,9 @@ async function getAuthUser(req) {
   } catch { return null; }
 }
 
-// GET /api/follow?followerId=X&followingId=Y  -> check relationship
-// GET /api/follow?followerId=X                -> list all users this user follows
-// GET /api/follow?followingId=X               -> list all users who follow this user
+// GET /api/follow?followerId=X&followingId=Y  → check relationship
+// GET /api/follow?followerId=X                → list all users this user follows
+// GET /api/follow?followingId=X               → list all users who follow this user
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const followerId  = searchParams.get('followerId');
@@ -59,7 +59,7 @@ export async function GET(req) {
   return NextResponse.json({ error: 'followerId or followingId required' }, { status: 400 });
 }
 
-// POST /api/follow  body: { followerId, followingId }  -> follow
+// POST /api/follow  body: { followerId, followingId }  → follow
 export async function POST(req) {
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -76,7 +76,7 @@ export async function POST(req) {
   return NextResponse.json({ success: true });
 }
 
-// DELETE /api/follow  body: { followerId, followingId }  -> unfollow
+// DELETE /api/follow  body: { followerId, followingId }  → unfollow
 export async function DELETE(req) {
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

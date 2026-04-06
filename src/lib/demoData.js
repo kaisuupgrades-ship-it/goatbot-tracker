@@ -20,7 +20,7 @@ export const DEMO_PICKS = [
     book: 'FanDuel',
     result: 'WIN',
     profit: 0.847,
-    notes: 'Reynaldo Lopez vs Ryne Nelson - clean pitching mismatch',
+    notes: 'Reynaldo Lopez vs Ryne Nelson — clean pitching mismatch',
   },
   {
     id: 'pick-2',

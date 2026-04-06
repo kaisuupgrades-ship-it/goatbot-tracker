@@ -107,7 +107,7 @@ export function useVoiceInput({ onResult, onPartial } = {}) {
         setTranscribing(false);
       };
 
-      // Collect in 250ms chunks - finer granularity reduces chance of empty final chunk
+      // Collect in 250ms chunks — finer granularity reduces chance of empty final chunk
       mr.start(250);
       setListening(true);
 
@@ -139,7 +139,7 @@ export default function VoiceButton({ value = '', onChange, size = 'md', style =
       const cur  = valueRef.current || '';
       const next = cur ? `${cur.trimEnd()} ${transcript}` : transcript;
       onChangeRef.current?.(next);
-    }, []), // stable - uses refs internally
+    }, []), // stable — uses refs internally
   });
 
   if (!supported) return null;
@@ -163,9 +163,9 @@ export default function VoiceButton({ value = '', onChange, size = 'md', style =
           isActive ? stop() : start();
         }}
         title={
-          noSpeech    ? 'No speech detected - try again'
-          : transcribing ? 'Transcribing...'
-          : listening   ? 'Recording - click to stop'
+          noSpeech    ? 'No speech detected — try again'
+          : transcribing ? 'Transcribing…'
+          : listening   ? 'Recording — click to stop'
           : 'Click to speak'
         }
         style={{
@@ -202,7 +202,7 @@ export default function VoiceButton({ value = '', onChange, size = 'md', style =
           }
         }}
       >
-        {noSpeech ? 'x' : transcribing ? '[wait]' : listening ? '[stop]' : '[mic]'}
+        {noSpeech ? '✗' : transcribing ? '⏳' : listening ? '⏹' : '🎤'}
       </button>
       {/* Tooltip shown when no speech detected */}
       {noSpeech && (

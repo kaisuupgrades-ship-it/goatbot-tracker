@@ -25,7 +25,7 @@ function parseCSV(text) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtOdds(n) {
-  if (n == null) return '-';
+  if (n == null) return '—';
   return n > 0 ? `+${n}` : `${n}`;
 }
 
@@ -94,7 +94,7 @@ function ImportPanel({ userEmail, onImported }) {
         const parsed = parseCSV(e.target.result);
         setRows(parsed);
       } catch {
-        setError('Could not parse CSV - make sure it has a header row.');
+        setError('Could not parse CSV — make sure it has a header row.');
       }
     };
     reader.readAsText(f);
@@ -157,7 +157,7 @@ function ImportPanel({ userEmail, onImported }) {
 
       {rows && (
         <div style={{ fontSize: '0.78rem', color: '#86efac', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '6px', padding: '8px 12px' }}>
-          [ok] Parsed <strong>{rows.length}</strong> rows from <strong>{file?.name}</strong>. Columns: {Object.keys(rows[0]).slice(0, 8).join(', ')}{Object.keys(rows[0]).length > 8 ? '...' : ''}
+          ✓ Parsed <strong>{rows.length}</strong> rows from <strong>{file?.name}</strong>. Columns: {Object.keys(rows[0]).slice(0, 8).join(', ')}{Object.keys(rows[0]).length > 8 ? '…' : ''}
         </div>
       )}
 
@@ -169,7 +169,7 @@ function ImportPanel({ userEmail, onImported }) {
 
       {result && (
         <div style={{ fontSize: '0.82rem', color: '#4ade80', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '6px', padding: '10px 14px' }}>
-          [ok] Imported <strong>{result.inserted}</strong> of <strong>{result.total_parsed}</strong> rows into the database.
+          ✓ Imported <strong>{result.inserted}</strong> of <strong>{result.total_parsed}</strong> rows into the database.
         </div>
       )}
 
@@ -179,7 +179,7 @@ function ImportPanel({ userEmail, onImported }) {
         disabled={!rows?.length || loading}
         style={{ alignSelf: 'flex-start', opacity: (!rows?.length || loading) ? 0.5 : 1 }}
       >
-        {loading ? 'Importing...' : `Import ${rows ? rows.length.toLocaleString() + ' Rows' : 'CSV'}`}
+        {loading ? 'Importing…' : `Import ${rows ? rows.length.toLocaleString() + ' Rows' : 'CSV'}`}
       </button>
     </div>
   );
@@ -194,7 +194,7 @@ const SITUATIONS = [
   { value: 'away_big_dog', label: 'Away Big Dog (+150 or more)' },
   { value: 'home_fav',     label: 'Home Favorite' },
   { value: 'away_fav',     label: 'Away Favorite' },
-  { value: 'pick_em',      label: 'Pick \'em (within +/-115)' },
+  { value: 'pick_em',      label: 'Pick \'em (within ±115)' },
 ];
 
 const BET_TYPES = [
@@ -206,12 +206,12 @@ const BET_TYPES = [
 
 const SPORT_OPTS = [
   { value: 'ALL', label: 'All Sports' },
-  { value: 'MLB', label: '[MLB] MLB' },
-  { value: 'NFL', label: '[NFL] NFL' },
-  { value: 'NBA', label: '[NBA] NBA' },
-  { value: 'NHL', label: '[NHL] NHL' },
-  { value: 'NCAAF', label: '[NFL] NCAAF' },
-  { value: 'NCAAB', label: '[NBA] NCAAB' },
+  { value: 'MLB', label: '⚾ MLB' },
+  { value: 'NFL', label: '🏈 NFL' },
+  { value: 'NBA', label: '🏀 NBA' },
+  { value: 'NHL', label: '🏒 NHL' },
+  { value: 'NCAAF', label: '🏈 NCAAF' },
+  { value: 'NCAAB', label: '🏀 NCAAB' },
 ];
 
 const currentYear = new Date().getFullYear();
@@ -280,8 +280,8 @@ function RunBacktest({ userEmail }) {
       {gameCount !== null && (
         <div style={{ fontSize: '0.75rem', color: gameCount > 0 ? '#86efac' : '#fbbf24', background: gameCount > 0 ? 'rgba(74,222,128,0.06)' : 'rgba(251,191,36,0.06)', border: `1px solid ${gameCount > 0 ? 'rgba(74,222,128,0.2)' : 'rgba(251,191,36,0.2)'}`, borderRadius: '6px', padding: '8px 12px' }}>
           {gameCount > 0
-            ? `[?] ${gameCount.toLocaleString()} historical games available for ${filters.sport === 'ALL' ? 'all sports' : filters.sport}`
-            : `[!] No historical data found for ${filters.sport === 'ALL' ? 'any sport' : filters.sport}. Import CSV data first.`}
+            ? `📚 ${gameCount.toLocaleString()} historical games available for ${filters.sport === 'ALL' ? 'all sports' : filters.sport}`
+            : `⚠ No historical data found for ${filters.sport === 'ALL' ? 'any sport' : filters.sport}. Import CSV data first.`}
         </div>
       )}
 
@@ -334,7 +334,7 @@ function RunBacktest({ userEmail }) {
       </div>
 
       <button className="btn-gold" onClick={run} disabled={loading} style={{ alignSelf: 'flex-start', opacity: loading ? 0.6 : 1 }}>
-        {loading ? '[wait] Running Backtest...' : '> Run Backtest'}
+        {loading ? '⏳ Running Backtest…' : '▶ Run Backtest'}
       </button>
 
       {error && (
@@ -390,8 +390,8 @@ function RunBacktest({ userEmail }) {
                           {' / '}
                           <span style={{ color: '#f87171' }}>{fmtOdds(g.away_ml)}</span>
                         </td>
-                        <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', fontSize: '0.72rem' }}>{g.spread ?? '-'}</td>
-                        <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', fontSize: '0.72rem' }}>{g.total ?? '-'}</td>
+                        <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', fontSize: '0.72rem' }}>{g.spread ?? '—'}</td>
+                        <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', fontSize: '0.72rem' }}>{g.total ?? '—'}</td>
                         <td style={{ padding: '7px 10px' }}>
                           <span style={{
                             fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: '4px',
@@ -414,10 +414,10 @@ function RunBacktest({ userEmail }) {
           {results.total >= 20 && results.roi > 2 && !saved && (
             <div style={{ background: 'rgba(255,184,0,0.04)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '10px', padding: '1rem' }}>
               <div style={{ fontWeight: 700, color: '#FFB800', fontSize: '0.85rem', marginBottom: '8px' }}>
-                [sharp] Save as Sharp Edge
+                ⚡ Save as Sharp Edge
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
-                This system shows a +{results.roi}% ROI over {results.total} games - save it as a named edge to track and surface in AI prompts.
+                This system shows a +{results.roi}% ROI over {results.total} games — save it as a named edge to track and surface in AI prompts.
               </p>
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: '200px' }}>
@@ -434,14 +434,14 @@ function RunBacktest({ userEmail }) {
                   <Label>Description</Label>
                   <input
                     className="input"
-                    placeholder="Optional - context for the AI"
+                    placeholder="Optional — context for the AI"
                     value={saveDesc}
                     onChange={e => setSaveDesc(e.target.value)}
                     style={{ width: '100%', fontSize: '0.82rem' }}
                   />
                 </div>
                 <button className="btn-gold" onClick={saveEdge} disabled={saving || !saveName.trim()} style={{ opacity: (!saveName.trim() || saving) ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-                  {saving ? 'Saving...' : '[save] Save Edge'}
+                  {saving ? 'Saving…' : '💾 Save Edge'}
                 </button>
               </div>
             </div>
@@ -449,7 +449,7 @@ function RunBacktest({ userEmail }) {
 
           {saved && (
             <div style={{ fontSize: '0.82rem', color: '#4ade80', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '6px', padding: '10px 14px' }}>
-              [ok] Edge saved! It will now appear in the Active Edges list and be surfaced in AI trend analysis.
+              ✓ Edge saved! It will now appear in the Active Edges list and be surfaced in AI trend analysis.
             </div>
           )}
         </div>
@@ -495,11 +495,11 @@ function ActiveEdges({ userEmail }) {
     load();
   }
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', padding: '1rem' }}>Loading edges...</div>;
+  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', padding: '1rem' }}>Loading edges…</div>;
   if (error)   return <div style={{ color: '#f87171', fontSize: '0.78rem' }}>{error}</div>;
   if (!edges.length) return (
     <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-      No edges saved yet. Run a backtest with positive ROI and a sample size {'>='} 20 games to save your first edge.
+      No edges saved yet. Run a backtest with positive ROI and a sample size ≥ 20 games to save your first edge.
     </div>
   );
 
@@ -524,7 +524,7 @@ function ActiveEdges({ userEmail }) {
                   {edge.is_active ? 'ACTIVE' : 'PAUSED'}
                 </span>
                 <span style={{ fontSize: '0.6rem', color: '#555', background: '#111', border: '1px solid #222', padding: '1px 6px', borderRadius: '3px' }}>
-                  {edge.sport} . {edge.bet_type}
+                  {edge.sport} · {edge.bet_type}
                 </span>
               </div>
               {edge.description && (
@@ -536,7 +536,7 @@ function ActiveEdges({ userEmail }) {
                   { label: 'Win%', value: `${edge.win_pct}%`, color: edge.win_pct >= 53 ? '#4ade80' : '#fbbf24' },
                   { label: 'ROI', value: `${edge.roi > 0 ? '+' : ''}${edge.roi}%`, color: roiColor(edge.roi) },
                   { label: 'Avg Odds', value: fmtOdds(edge.avg_odds) },
-                  { label: 'Seasons', value: edge.season_range || '-' },
+                  { label: 'Seasons', value: edge.season_range || '—' },
                 ].map(s => (
                   <div key={s.label}>
                     <div style={{ fontSize: '0.58rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
@@ -569,7 +569,7 @@ function ActiveEdges({ userEmail }) {
                   transition: 'all 0.12s',
                 }}
               >
-                x
+                ✕
               </button>
             </div>
           </div>
@@ -577,7 +577,7 @@ function ActiveEdges({ userEmail }) {
       ))}
 
       <button onClick={load} style={{ alignSelf: 'flex-end', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '0.72rem', padding: '4px 10px', cursor: 'pointer' }}>
-        [refresh] Refresh
+        🔄 Refresh
       </button>
     </div>
   );
@@ -585,9 +585,9 @@ function ActiveEdges({ userEmail }) {
 
 // ── Main BacktestPanel ────────────────────────────────────────────────────────
 const PANEL_TABS = [
-  { id: 'run',    label: '> Run Backtest' },
-  { id: 'edges',  label: '[sharp] Saved Edges' },
-  { id: 'import', label: '[?] Import CSV' },
+  { id: 'run',    label: '▶ Run Backtest' },
+  { id: 'edges',  label: '⚡ Saved Edges' },
+  { id: 'import', label: '📥 Import CSV' },
 ];
 
 export default function BacktestPanel({ userEmail }) {
@@ -599,7 +599,7 @@ export default function BacktestPanel({ userEmail }) {
 
       {/* Intro */}
       <div style={{ padding: '1rem 1.2rem', background: 'linear-gradient(135deg, #0a0a14, #100e08)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '12px' }}>
-        <div style={{ fontWeight: 800, color: '#FFB800', fontSize: '0.95rem', marginBottom: '4px' }}>[up] Historical Backtester</div>
+        <div style={{ fontWeight: 800, color: '#FFB800', fontSize: '0.95rem', marginBottom: '4px' }}>📈 Historical Backtester</div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.77rem', lineHeight: 1.6, margin: 0 }}>
           Import historical game data, build situational filters, and discover edges with provable ROI. Saved edges feed into the AI trend engine automatically.
         </p>
@@ -618,7 +618,7 @@ export default function BacktestPanel({ userEmail }) {
         ))}
       </div>
 
-      {/* Panel body - all three stay mounted so switching tabs mid-backtest
+      {/* Panel body — all three stay mounted so switching tabs mid-backtest
           doesn't cancel an in-flight run. display:none keeps them alive. */}
       <div style={{ display: tab === 'run' ? 'block' : 'none' }}>
         <Section title="Filter Builder & Results">

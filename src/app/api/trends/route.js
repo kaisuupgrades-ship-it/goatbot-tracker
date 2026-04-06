@@ -44,10 +44,10 @@ async function checkAndIncrementUsage(userId) {
 
 // ── ESPN game fetcher (server-side) ──────────────────────────────────────────
 const SPORT_MAP = {
-  mlb: { sport: 'baseball',    league: 'mlb',           emoji: '[MLB]' },
-  nba: { sport: 'basketball',  league: 'nba',           emoji: '[NBA]' },
-  nhl: { sport: 'hockey',      league: 'nhl',           emoji: '[NHL]' },
-  nfl: { sport: 'football',    league: 'nfl',           emoji: '[NFL]' },
+  mlb: { sport: 'baseball',    league: 'mlb',           emoji: '⚾' },
+  nba: { sport: 'basketball',  league: 'nba',           emoji: '🏀' },
+  nhl: { sport: 'hockey',      league: 'nhl',           emoji: '🏒' },
+  nfl: { sport: 'football',    league: 'nfl',           emoji: '🏈' },
 };
 
 async function fetchTodaysGames() {
@@ -158,13 +158,13 @@ Return ONLY a valid JSON array. Each object must have these exact fields:
 {
   "matchup": "AWAY @ HOME (short form)",
   "sport": "MLB|NBA|NHL|NFL",
-  "sport_emoji": "[MLB]|[NBA]|[NHL]|[NFL]",
+  "sport_emoji": "⚾|🏀|🏒|🏈",
   "pick": "Team name or Over/Under X",
   "bet_type": "Moneyline|Spread|Total (Over)|Total (Under)",
   "odds": <integer American odds or null>,
   "confidence": "HIGH|MEDIUM|LOW",
   "sharp": true|false,
-  "reason": "One sentence - the specific edge",
+  "reason": "One sentence — the specific edge",
   "analysis": "2-3 sentences of detailed analysis with the why",
   "trend_record": "e.g. 58-42 (58%) ATS last 3 seasons or null",
   "trend_roi": "e.g. +4.2% ROI or null",
@@ -334,7 +334,7 @@ Answer questions about sports betting trends and edges. Rules:
     }
   }
 
-  // isEdgeScan: true -> full slate scan from TrendsTab (no rate limit consumed, uses shared endpoint)
+  // isEdgeScan: true → full slate scan from TrendsTab (no rate limit consumed, uses shared endpoint)
   try {
     const aiResult = await callAI({
       system: 'You are BetOS, a sharp sports betting analyst. Return ONLY valid JSON arrays, no markdown or explanation.',

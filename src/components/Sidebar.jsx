@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-// ── SVG icon components — thin stroke, consistent 14×14 grid ─────────────────
+// ââ SVG icon components â thin stroke, consistent 14Ã14 grid âââââââââââââââââ
 const Icons = {
   Dashboard: () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -84,7 +84,7 @@ const Icons = {
   ),
 };
 
-// Grouped nav sections — no indent, uniform alignment throughout
+// Grouped nav sections â no indent, uniform alignment throughout
 const NAV_SECTIONS = [
   {
     section: 'My Picks',
@@ -260,7 +260,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
       }}
     >
 
-      {/* Logo — clickable to expand when collapsed */}
+      {/* Logo â clickable to expand when collapsed */}
       <div
         onClick={() => { if (collapsed) setCollapsed(false); }}
         style={{
@@ -296,11 +296,11 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
           }}
           title="Collapse"
         >
-          ‹‹
+          â¹â¹
         </button>
       </div>
 
-      {/* ── Contest — special glowing nav item ───────────────────────────────── */}
+      {/* ââ Contest â special glowing nav item âââââââââââââââââââââââââââââââââ */}
       <style>{`
         @keyframes contestPulse {
           0%, 100% { box-shadow: 0 0 10px rgba(255,184,0,0.25), 0 0 24px rgba(255,184,0,0.08), inset 0 0 12px rgba(255,184,0,0.06); border-color: rgba(255,184,0,0.45); }
@@ -318,7 +318,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
         <button
           onClick={() => { setActiveTab('leaderboard'); if (collapsed) setCollapsed(false); if (mobileOpen) onMobileClose?.(); }}
           className={`contest-glow-btn${activeTab === 'leaderboard' ? ' active' : ''}`}
-          title={collapsed ? '🏆 Contest' : undefined}
+          title={collapsed ? 'ð Contest' : undefined}
           style={{
             width: '100%', display: 'flex', alignItems: 'center',
             gap: collapsed ? 0 : '8px',
@@ -366,7 +366,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
         </button>
       </div>
 
-      {/* Nav Items — grouped sections */}
+      {/* Nav Items â grouped sections */}
       <nav style={{ flex: 1, padding: '0.25rem 0.4rem 0.5rem', display: 'flex', flexDirection: 'column', gap: '0', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}>
         {NAV_SECTIONS.map((section, si) => (
           <div key={section.section}>
@@ -451,7 +451,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
         ))}
       </nav>
 
-      {/* Admin nav item — only visible for admin account */}
+      {/* Admin nav item â only visible for admin account */}
       {isAdmin && (
         <div style={{ padding: '0 0.4rem 0.4rem' }}>
           {!collapsed && (
@@ -480,7 +480,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
         </div>
       )}
 
-      {/* Footer — pick summary */}
+      {/* Footer â pick summary */}
       {!collapsed && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '0.85rem', flexShrink: 0 }}>
           {/* Stats panel */}
@@ -494,7 +494,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {wins}–{losses}
+                {wins}â{losses}
               </span>
               <span style={{
                 fontFamily: 'IBM Plex Mono', fontSize: '0.88rem', fontWeight: 600,
@@ -505,14 +505,14 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
             </div>
             {pending > 0 && (
               <div style={{ marginTop: '6px', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                <span style={{ color: '#60a5fa' }}>⏳</span> {pending} pending
+                <span style={{ color: '#60a5fa' }}>â³</span> {pending} pending
               </div>
             )}
           </div>
 
           {/* User + actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-            {/* Clickable avatar/name → open profile */}
+            {/* Clickable avatar/name â open profile */}
             <button
               onClick={() => !isDemo && onOpenProfile?.()}
               style={{
@@ -560,7 +560,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
                 onMouseEnter={e => { if (!refreshing) { e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = 'var(--gold)'; }}}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
               >
-                ⟳
+                â³
               </button>
             )}
           </div>
@@ -578,12 +578,12 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,69,96,0.16)'; e.currentTarget.style.borderColor = 'rgba(255,69,96,0.5)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,69,96,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,69,96,0.25)'; }}
           >
-            <span>⇥</span> Sign Out
+            <span>â¥</span> Sign Out
           </button>
         </div>
       )}
 
-      {/* Collapsed expand button — prominent */}
+      {/* Collapsed expand button â prominent */}
       {collapsed && (
         <button
           onClick={() => setCollapsed(false)}
@@ -597,7 +597,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, isAdmin: isAdmi
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,184,0,0.06)'}
           title="Expand sidebar"
         >
-          ››
+          âºâº
         </button>
       )}
     </aside>

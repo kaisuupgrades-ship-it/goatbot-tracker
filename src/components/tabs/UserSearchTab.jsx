@@ -4,12 +4,12 @@ import PublicProfileModal from '../PublicProfileModal';
 
 // ── Sort options (independent of date range) ──────────────────────────────────
 const SORT_OPTIONS = [
-  { id: 'hot',    label: '[fire] Hot',         desc: 'Most wins in selected period' },
-  { id: 'roi',    label: '[up] Top ROI',      desc: 'Best return on investment' },
-  { id: 'streak', label: '[sharp] Best Streak',  desc: 'Longest current win streak' },
-  { id: 'units',  label: '[$] Most Units',   desc: 'Highest unit profit' },
-  { id: 'record', label: '[?] Best Record',  desc: 'Highest win rate' },
-  { id: 'volume', label: '[stats] Most Active',  desc: 'Most picks logged' },
+  { id: 'hot',    label: '🔥 Hot',         desc: 'Most wins in selected period' },
+  { id: 'roi',    label: '📈 Top ROI',      desc: 'Best return on investment' },
+  { id: 'streak', label: '⚡ Best Streak',  desc: 'Longest current win streak' },
+  { id: 'units',  label: '💰 Most Units',   desc: 'Highest unit profit' },
+  { id: 'record', label: '🏅 Best Record',  desc: 'Highest win rate' },
+  { id: 'volume', label: '📊 Most Active',  desc: 'Most picks logged' },
 ];
 
 // ── Date range presets ─────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ const DATE_PRESETS = [
   { id: '30',  label: '30d' },
   { id: '90',  label: '90d' },
   { id: '0',   label: 'All Time' },
-  { id: 'custom', label: '[date] Custom' },
+  { id: 'custom', label: '📅 Custom' },
 ];
 
 const SPORT_FILTERS = ['All Sports', 'MLB', 'NBA', 'NFL', 'NHL', 'NCAAF', 'NCAAB', 'Soccer', 'UFC'];
@@ -138,10 +138,10 @@ function UserCard({ entry, rank, currentUserId, onViewProfile }) {
           {rank}
         </div>
 
-        {/* Avatar - only show uploaded photo if avatar_url is explicitly set */}
+        {/* Avatar — only show uploaded photo if avatar_url is explicitly set */}
         <UserSearchAvatar entry={entry} />
 
-        {/* Name + record + strip - flex grow */}
+        {/* Name + record + strip — flex grow */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -162,7 +162,7 @@ function UserCard({ entry, rank, currentUserId, onViewProfile }) {
           {/* Record text + W/L strip */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-              {entry.wins}W-{entry.losses}L{(entry.pushes ?? 0) > 0 ? `-${entry.pushes}P` : ''} . {entry.total} picks
+              {entry.wins}W-{entry.losses}L{(entry.pushes ?? 0) > 0 ? `-${entry.pushes}P` : ''} · {entry.total} picks
             </span>
             <ResultStrip results={entry.recent_results || []} />
           </div>
@@ -185,7 +185,7 @@ function UserCard({ entry, rank, currentUserId, onViewProfile }) {
           <div style={{ textAlign: 'right', minWidth: '36px' }}>
             <div style={{ fontSize: '0.56rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Streak</div>
             <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: streakColor }}>
-              {streak > 0 ? `W${streak}` : streak < 0 ? `L${Math.abs(streak)}` : '-'}
+              {streak > 0 ? `W${streak}` : streak < 0 ? `L${Math.abs(streak)}` : '—'}
             </div>
           </div>
         </div>
@@ -269,10 +269,10 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
       {/* Header */}
       <div>
         <h2 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f0f0f0', marginBottom: '2px' }}>
-          [search] User Search
+          🔍 User Search
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', margin: 0 }}>
-          Find the sharpest bettors - filter by sport, date range, and performance.
+          Find the sharpest bettors — filter by sport, date range, and performance.
         </p>
       </div>
 
@@ -322,7 +322,7 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
               onChange={e => setDateFrom(e.target.value)}
               style={{ padding: '3px 8px', fontSize: '0.75rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
             />
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{'->'}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>→</span>
             <input
               type="date"
               value={dateTo}
@@ -351,7 +351,7 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
         ))}
         <input
           type="text"
-          placeholder="Search username..."
+          placeholder="Search username…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ marginLeft: 'auto', width: '165px', padding: '4px 10px', fontSize: '0.78rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
@@ -362,8 +362,8 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
       {selectedSort && (
         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '-4px' }}>
           {selectedSort.desc}
-          {datePreset !== 'custom' && datePreset !== '0' && ` . last ${datePreset} days`}
-          {datePreset === 'custom' && dateFrom && dateTo && ` . ${dateFrom} -> ${dateTo}`}
+          {datePreset !== 'custom' && datePreset !== '0' && ` · last ${datePreset} days`}
+          {datePreset === 'custom' && dateFrom && dateTo && ` · ${dateFrom} → ${dateTo}`}
         </div>
       )}
 
@@ -378,7 +378,7 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
         <div style={{ padding: '2rem', textAlign: 'center', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>
       ) : filtered.length === 0 ? (
         <div style={{ padding: '3rem 2rem', textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '8px' }}>[search]</div>
+          <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🔍</div>
           <div style={{ fontWeight: 700, marginBottom: '4px' }}>No bettors found</div>
           <div style={{ fontSize: '0.78rem' }}>Try a wider date range or different filter.</div>
         </div>

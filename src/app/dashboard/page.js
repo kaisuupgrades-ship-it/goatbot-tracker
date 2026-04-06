@@ -41,7 +41,7 @@ function BetOSSplash({ dataReady, onComplete }) {
     return () => clearInterval(tick);
   }, []);
 
-  // Once bar is done AND real data is ready -> fade out -> call onComplete
+  // Once bar is done AND real data is ready → fade out → call onComplete
   useEffect(() => {
     if (!barDone || !dataReady) return;
     setFading(true);
@@ -82,7 +82,7 @@ function BetOSSplash({ dataReady, onComplete }) {
         />
       </div>
 
-      {/* BetOS wordmark - text only, icon is already shown above */}
+      {/* BetOS wordmark — text only, icon is already shown above */}
       <div style={{ marginBottom: '0.35rem' }}>
         <img
           src="/wordmark.svg"
@@ -124,7 +124,7 @@ function BetOSSplash({ dataReady, onComplete }) {
           }} />
         </div>
 
-        {/* Message - keyed so it re-animates when it changes */}
+        {/* Message — keyed so it re-animates when it changes */}
         <div style={{ height: '1.4em', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div
             key={currentMsg}
@@ -149,10 +149,10 @@ function BetOSSplash({ dataReady, onComplete }) {
         animation: 'splash-fadein 1s ease 0.7s both',
       }}>
         {[
-          { icon: '[MLB]', label: '8 SPORTS' },
-          { icon: '[live]', label: 'LIVE ODDS' },
-          { icon: '[AI]', label: 'AI PICKS'  },
-          { icon: '[sharp]', label: 'CLV ENGINE' },
+          { icon: '⚾', label: '8 SPORTS' },
+          { icon: '📡', label: 'LIVE ODDS' },
+          { icon: '🤖', label: 'AI PICKS'  },
+          { icon: '⚡', label: 'CLV ENGINE' },
         ].map(({ icon, label }) => (
           <div key={label} style={{
             display: 'flex', alignItems: 'center', gap: '5px',
@@ -177,7 +177,7 @@ function BetOSSplash({ dataReady, onComplete }) {
           {Math.round(progress).toString().padStart(3, ' ')}%
         </div>
         <div style={{ color: '#1e1e2e', fontSize: '0.55rem', letterSpacing: '0.1em' }}>
-          v2.0 . ALPHA
+          v2.0 · ALPHA
         </div>
       </div>
     </div>
@@ -217,13 +217,13 @@ function DashboardInner() {
       if (!u) { router.push('/'); return; }
       setUser(u);
 
-      // Fetch picks with retry - on mobile, auth session can take a moment to propagate
+      // Fetch picks with retry — on mobile, auth session can take a moment to propagate
       let picksData = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         const result = await fetchPicks(u.id);
         if (result.data && result.data.length > 0) { picksData = result.data; break; }
         if (!result.error && result.data !== null) { picksData = result.data; break; }
-        // Wait a bit and retry - session may not be propagated yet on mobile
+        // Wait a bit and retry — session may not be propagated yet on mobile
         if (attempt < 2) await new Promise(r => setTimeout(r, 600));
       }
 
@@ -237,12 +237,12 @@ function DashboardInner() {
 
   return (
     <>
-      {/* Splash overlay - always renders first; fades once bar done + data ready */}
+      {/* Splash overlay — always renders first; fades once bar done + data ready */}
       {showSplash && (
         <BetOSSplash dataReady={dataReady} onComplete={handleSplashComplete} />
       )}
 
-      {/* Dashboard - render behind splash (or alone once splash is gone) */}
+      {/* Dashboard — render behind splash (or alone once splash is gone) */}
       {dataReady && !showSplash && (
         <Dashboard
           user={user}

@@ -6,15 +6,15 @@
  *   import { formatOdds, formatGameTime, getUserPrefs } from '@/lib/userPrefs';
  *
  *   const prefs = getUserPrefs(user);
- *   formatOdds(-150, prefs.odds_format)   -> '-150' or '1.67'
- *   formatGameTime('2026-04-05T19:10Z', prefs.timezone) -> '3:10 PM ET'
+ *   formatOdds(-150, prefs.odds_format)   → '-150' or '1.67'
+ *   formatGameTime('2026-04-05T19:10Z', prefs.timezone) → '3:10 PM ET'
  */
 
 // ── Odds formatting ──────────────────────────────────────────────────────────
 
 /**
  * Convert American ML odds to decimal.
- * -150 -> 1.67,  +130 -> 2.30
+ * -150 → 1.67,  +130 → 2.30
  */
 export function americanToDecimal(american) {
   const n = parseInt(american);
@@ -31,10 +31,10 @@ export function americanToDecimal(american) {
  */
 export function formatOdds(american, format = 'american') {
   const n = parseInt(american);
-  if (!n || isNaN(n)) return '-';
+  if (!n || isNaN(n)) return '—';
   if (format === 'decimal') {
     const d = americanToDecimal(n);
-    return d !== null ? d.toFixed(2) : '-';
+    return d !== null ? d.toFixed(2) : '—';
   }
   return n > 0 ? `+${n}` : `${n}`;
 }

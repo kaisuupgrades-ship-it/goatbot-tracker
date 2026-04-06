@@ -148,11 +148,11 @@ function CountdownUnit({ value, label }) {
 
 // Mock leaderboard preview data for landing page
 const PREVIEW_LEADERS = [
-  { rank: 1, name: 'SharpDave',   record: '18-7',  units: '+14.2', emoji: '[trophy]' },
-  { rank: 2, name: 'BetKingJon',  record: '21-11', units: '+11.8', emoji: '[fire]' },
-  { rank: 3, name: 'EdgeFinder',  record: '15-6',  units: '+9.4',  emoji: '[gem]' },
-  { rank: 4, name: 'ZeroJuice',   record: '12-5',  units: '+7.1',  emoji: '[sharp]' },
-  { rank: 5, name: '???',         record: '-',     units: '-',     emoji: '[target]', you: true },
+  { rank: 1, name: 'SharpDave',   record: '18-7',  units: '+14.2', emoji: '🏆' },
+  { rank: 2, name: 'BetKingJon',  record: '21-11', units: '+11.8', emoji: '🔥' },
+  { rank: 3, name: 'EdgeFinder',  record: '15-6',  units: '+9.4',  emoji: '💎' },
+  { rank: 4, name: 'ZeroJuice',   record: '12-5',  units: '+7.1',  emoji: '⚡' },
+  { rank: 5, name: '???',         record: '—',     units: '—',     emoji: '🎯', you: true },
 ];
 
 function TournamentBanner({ onCTAClick }) {
@@ -166,7 +166,7 @@ function TournamentBanner({ onCTAClick }) {
       overflow: 'hidden',
       boxShadow: '0 0 60px rgba(255,184,0,0.08), 0 20px 40px rgba(0,0,0,0.4)',
     }}>
-      {/* Spinning conic gradient - the glow that travels around the border */}
+      {/* Spinning conic gradient — the glow that travels around the border */}
       <div style={{
         position: 'absolute',
         top: '50%',
@@ -199,7 +199,7 @@ function TournamentBanner({ onCTAClick }) {
               textTransform: 'uppercase', letterSpacing: '0.12em',
               animation: 'pulse-glow 2.5s ease-in-out infinite',
             }}>
-              [trophy] LIVE TOURNAMENT
+              🏆 LIVE TOURNAMENT
             </div>
             <h2 style={{
               fontSize: 'clamp(1.5rem, 4vw, 2.3rem)', fontWeight: 900, lineHeight: 1.15,
@@ -209,7 +209,7 @@ function TournamentBanner({ onCTAClick }) {
             </h2>
             <p style={{ color: '#8888AA', fontSize: '0.9rem', lineHeight: 1.6, margin: 0, maxWidth: '460px' }}>
               Compete against the sharpest bettors on the platform. Log your picks, build your record, and climb the leaderboard.
-              Top performers earn prizes - and bragging rights money can't buy.
+              Top performers earn prizes — and bragging rights money can't buy.
             </p>
           </div>
 
@@ -253,13 +253,13 @@ function TournamentBanner({ onCTAClick }) {
                 <CountdownUnit value={countdown.seconds} label="Secs"  />
               </div>
             ) : (
-              <div style={{ color: '#FFB800', fontWeight: 700 }}>Results being tabulated...</div>
+              <div style={{ color: '#FFB800', fontWeight: 700 }}>Results being tabulated…</div>
             )}
 
             <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: '#666', lineHeight: 1.7 }}>
-              <div>[date] Season-long competition</div>
-              <div>[ok] Free to enter - just sign up</div>
-              <div>[sharp] Verified picks earn bonus Sharp Score</div>
+              <div>📅 Season-long competition</div>
+              <div>✓ Free to enter — just sign up</div>
+              <div>⚡ Verified picks earn bonus Sharp Score</div>
             </div>
           </div>
 
@@ -286,7 +286,7 @@ function TournamentBanner({ onCTAClick }) {
                     color: p.you ? '#FFB800' : '#EDEDF5',
                     fontStyle: p.you ? 'italic' : 'normal',
                   }}>
-                    {p.you ? 'You? [you]' : p.name}
+                    {p.you ? 'You? 👈' : p.name}
                   </span>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: '#888' }}>{p.record}</span>
                   <span style={{
@@ -316,7 +316,7 @@ function TournamentBanner({ onCTAClick }) {
             onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(255,184,0,0.45)'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(255,184,0,0.3)'; }}
           >
-            [trophy] Enter the Tournament - Free
+            🏆 Enter the Tournament — Free
           </button>
           <span style={{ fontSize: '0.75rem', color: '#6A6A88' }}>
             No credit card. No entry fee. Just sharp picks.
@@ -338,12 +338,12 @@ function TournamentBanner({ onCTAClick }) {
 
 // ── Feature card with hover glow ─────────────────────────────────────────────
 const FEATURES = [
-  { icon: '[live]', label: 'Live Scores', desc: 'MLB, NBA, NFL, NHL - real-time scoreboard with smart context', color: '#FF6B35' },
-  { icon: '[target]', label: 'BetOS AI', desc: 'AI-powered pick analysis with live web search', color: '#FFB800' },
-  { icon: '[stats]', label: 'Edge Finder', desc: '20+ built-in sharp betting trends and angles', color: '#4E9BF5' },
-  { icon: '[injury]', label: 'Injury Intel', desc: 'Real-time injury scanning from Twitter + beat reporters', color: '#00D48B' },
-  { icon: '[up]', label: 'Pick Tracker', desc: 'Full P/L tracking, equity curves, and heat metrics', color: '#9B6DFF' },
-  { icon: '[mic]', label: 'Voice Input', desc: 'Talk to BetOS - hands-free pick analysis', color: '#FF4560' },
+  { icon: '📡', label: 'Live Scores', desc: 'MLB, NBA, NFL, NHL — real-time scoreboard with smart context', color: '#FF6B35' },
+  { icon: '🎯', label: 'BetOS AI', desc: 'AI-powered pick analysis with live web search', color: '#FFB800' },
+  { icon: '📊', label: 'Edge Finder', desc: '20+ built-in sharp betting trends and angles', color: '#4E9BF5' },
+  { icon: '🏥', label: 'Injury Intel', desc: 'Real-time injury scanning from Twitter + beat reporters', color: '#00D48B' },
+  { icon: '📈', label: 'Pick Tracker', desc: 'Full P/L tracking, equity curves, and heat metrics', color: '#9B6DFF' },
+  { icon: '🎤', label: 'Voice Input', desc: 'Talk to BetOS — hands-free pick analysis', color: '#FF4560' },
 ];
 
 const TAGLINES = [
@@ -388,7 +388,7 @@ export default function AuthPage() {
     setError(''); setSuccess(''); setLoading(true);
 
     if (!SUPABASE_CONFIGURED) {
-      setError('Supabase not configured - use Demo Mode to explore the app.');
+      setError('Supabase not configured — use Demo Mode to explore the app.');
       setLoading(false); return;
     }
 
@@ -831,7 +831,7 @@ export default function AuthPage() {
                 )}
               </div>
               <input
-                type="password" placeholder="--------"
+                type="password" placeholder="••••••••"
                 value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
                 style={inputStyle}
                 onFocus={e => { e.target.style.borderColor = '#FFB800'; e.target.style.boxShadow = '0 0 0 3px rgba(255,184,0,0.08)'; }}
@@ -902,10 +902,10 @@ export default function AuthPage() {
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.1)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.3)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.15)'; }}
           >
-            <span style={{ fontSize: '1.1rem' }}>[target]</span>
+            <span style={{ fontSize: '1.1rem' }}>🎯</span>
             <div style={{ textAlign: 'left' }}>
               <div style={{ color: '#FFB800', fontWeight: 700, fontSize: '0.85rem', lineHeight: 1 }}>Try Demo Mode</div>
-              <div style={{ color: '#6A6A88', fontSize: '0.7rem', marginTop: '3px' }}>No account needed - picks save to browser</div>
+              <div style={{ color: '#6A6A88', fontSize: '0.7rem', marginTop: '3px' }}>No account needed — picks save to browser</div>
             </div>
           </button>
         </div>

@@ -81,16 +81,16 @@ function fmt(n, decimals = 2) {
 }
 
 function winPct(wins, total) {
-  if (!total) return '-';
+  if (!total) return '—';
   return ((wins / total) * 100).toFixed(1) + '%';
 }
 
 // ── Medal Badge (leaderboard position) ────────────────────────────────────────
 
 function MedalBadge({ rank }) {
-  if (rank === 1) return <span style={{ fontSize: '1.3rem' }}>[1st]</span>;
-  if (rank === 2) return <span style={{ fontSize: '1.3rem' }}>[2nd]</span>;
-  if (rank === 3) return <span style={{ fontSize: '1.3rem' }}>[3rd]</span>;
+  if (rank === 1) return <span style={{ fontSize: '1.3rem' }}>🥇</span>;
+  if (rank === 2) return <span style={{ fontSize: '1.3rem' }}>🥈</span>;
+  if (rank === 3) return <span style={{ fontSize: '1.3rem' }}>🥉</span>;
   return (
     <span style={{
       fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
@@ -113,7 +113,7 @@ function VerifiedBadge({ count }) {
       borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 700,
       cursor: 'help',
     }}>
-      [ok] {count}
+      ✓ {count}
     </span>
   );
 }
@@ -176,12 +176,12 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
             {!isMobile && <VerifiedBadge count={verified_picks} />}
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {isMobile ? `${wins}-${losses} . ${winPct(wins, total)}` : `@${username}`}
+            {isMobile ? `${wins}-${losses} · ${winPct(wins, total)}` : `@${username}`}
           </div>
         </div>
       </div>
 
-      {/* Record - desktop only */}
+      {/* Record — desktop only */}
       {!isMobile && (
         <span style={{
           fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
@@ -191,7 +191,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
         </span>
       )}
 
-      {/* Win % - desktop only */}
+      {/* Win % — desktop only */}
       {!isMobile && (
         <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
           {winPct(wins, total)}
@@ -216,7 +216,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
         {fmt(roi, 1)}%
       </span>
 
-      {/* Sharp Score - desktop only */}
+      {/* Sharp Score — desktop only */}
       {!isMobile && <SharpBar score={sharp_score} maxScore={maxScore} />}
     </div>
   );
@@ -225,11 +225,11 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
 
 // ── Profile Editor ────────────────────────────────────────────────────────────
 
-const AVATARS = ['[GOAT]', '[fire]', '[sharp]', '[?]', '[target]', '[gem]', '[trophy]', '[?]', '[?]', '[?]', '[?]', '[up]'];
+const AVATARS = ['🐐', '🔥', '⚡', '🦅', '🎯', '💎', '🏆', '🐺', '🦁', '🐉', '🤑', '📈'];
 
 function ProfileEditor({ user, profile, onSave, onClose }) {
   const [displayName, setDisplayName] = useState(profile?.display_name || '');
-  const [avatar, setAvatar]           = useState(profile?.avatar_emoji || '[target]');
+  const [avatar, setAvatar]           = useState(profile?.avatar_emoji || '🎯');
   const [isPublic, setIsPublic]       = useState(profile?.is_public || false);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
@@ -261,7 +261,7 @@ function ProfileEditor({ user, profile, onSave, onClose }) {
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
           <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1rem' }}>Edit Public Profile</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}>x</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
         </div>
 
         {/* Avatar picker */}
@@ -351,7 +351,7 @@ function ContestBanner() {
   const urgent = daysLeft <= 5;
 
   return (
-    /* Outer wrapper: static gradient border with gold -> green money theme */
+    /* Outer wrapper: static gradient border with gold → green money theme */
     <div style={{
       position: 'relative',
       borderRadius: '14px',
@@ -368,7 +368,7 @@ function ContestBanner() {
         overflow: 'hidden',
       }}>
 
-      {/* Corner glow - top left gold, bottom right green */}
+      {/* Corner glow — top left gold, bottom right green */}
       <div style={{
         position: 'absolute', top: '-30px', left: '-10px',
         width: '120px', height: '120px',
@@ -382,7 +382,7 @@ function ContestBanner() {
         pointerEvents: 'none',
       }} />
 
-      {/* Main header row - always visible */}
+      {/* Main header row — always visible */}
       <div
         onClick={() => setOpen(v => !v)}
         style={{ padding: '0.9rem 1.25rem', cursor: 'pointer', userSelect: 'none', position: 'relative' }}
@@ -393,13 +393,13 @@ function ContestBanner() {
             <span style={{
               fontSize: '1.8rem', lineHeight: 1,
               display: 'inline-block', filter: 'drop-shadow(0 0 6px rgba(255,184,0,0.4))',
-            }}>[trophy]</span>
+            }}>🏆</span>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 900, color: '#FFD700', fontSize: '1.05rem', letterSpacing: '-0.02em', textShadow: '0 0 12px rgba(255,184,0,0.4)' }}>
                   Monthly Sharp Contest
                 </span>
-                {/* Prize pill - green money theme */}
+                {/* Prize pill — green money theme */}
                 <span style={{
                   background: 'linear-gradient(90deg, rgba(74,222,128,0.2), rgba(52,211,153,0.15))',
                   color: '#4ade80',
@@ -419,7 +419,7 @@ function ContestBanner() {
                 </span>
               </div>
               <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.73rem', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>{month} . {start} - {end}</span>
+                <span>{month} · {start} – {end}</span>
                 {daysLeft > 0 && (
                   <span style={{
                     color: urgent ? '#f87171' : '#60a5fa',
@@ -428,14 +428,14 @@ function ContestBanner() {
                     border: `1px solid ${urgent ? 'rgba(248,113,113,0.3)' : 'rgba(96,165,250,0.2)'}`,
                     borderRadius: '4px', padding: '0 5px',
                   }}>
-                    {urgent ? '[fire]' : '[time]'} {daysLeft}d left
+                    {urgent ? '🔥' : '⏱'} {daysLeft}d left
                   </span>
                 )}
               </div>
             </div>
           </div>
           <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.04em' }}>
-            {open ? 'Hide rules ^' : 'View rules v'}
+            {open ? 'Hide rules ▲' : 'View rules ▼'}
           </span>
         </div>
       </div>
@@ -447,10 +447,10 @@ function ContestBanner() {
           {/* Prize stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
             {[
-              { label: 'Prize',     value: '$100',       sub: 'Cash - top Sharp Score', icon: '[?]' },
-              { label: 'Period',    value: '1st - Last', sub: 'Resets each month',       icon: '[date]' },
-              { label: 'Entry',     value: 'FREE',       sub: 'No cost to compete',      icon: '[?]' },
-              { label: 'Min Picks', value: '15',         sub: 'Settled required to win',  icon: '[ok]' },
+              { label: 'Prize',     value: '$100',       sub: 'Cash — top Sharp Score', icon: '💵' },
+              { label: 'Period',    value: '1st – Last', sub: 'Resets each month',       icon: '📅' },
+              { label: 'Entry',     value: 'FREE',       sub: 'No cost to compete',      icon: '🎟' },
+              { label: 'Min Picks', value: '15',         sub: 'Settled required to win',  icon: '✅' },
             ].map(s => (
               <div key={s.label} style={{
                 background: 'rgba(255,184,0,0.05)', borderRadius: '8px',
@@ -472,15 +472,15 @@ function ContestBanner() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {[
-                { icon: '1⃣', text: 'ONE PLAY PER DAY - each user gets exactly one contest pick per day. Choose wisely.' },
-                { icon: '[?]', text: 'MINIMUM ODDS: -145 - no heavy favorites. Max +400. Straight bets only (Moneyline, Spread, Totals). No parlays, props, or futures.' },
-                { icon: '[lock]', text: 'LOCKED ONCE POSTED - once your pick is submitted as a contest entry, it cannot be changed, edited, or deleted. Period.' },
-                { icon: '[date]', text: 'RESCHEDULES != VOID - if your game gets rescheduled, the pick stands for the new date. You may post a new pick for that day, but do NOT delete the original.' },
-                { icon: '[ok]', text: 'All contest picks are AI-audited for legitimacy - odds range, timing, and bet type are verified automatically. Flagged picks are reviewed by admin.' },
-                { icon: '[stats]', text: 'Ranked by units profit. Both win rate AND volume matter - you need at least 15 settled picks to be eligible to win.' },
-                { icon: '', text: 'One account per person - duplicate accounts detected via IP and device fingerprint are permanently disqualified.' },
-                { icon: '[X]', text: 'Manipulation, backdating, or fake accounts = permanent ban from all future contests.' },
-                { icon: '[?]', text: 'Winner paid via PayPal, Venmo, or Cash App within 3 business days of month end.' },
+                { icon: '1️⃣', text: 'ONE PLAY PER DAY — each user gets exactly one contest pick per day. Choose wisely.' },
+                { icon: '📐', text: 'MINIMUM ODDS: -145 — no heavy favorites. Max +400. Straight bets only (Moneyline, Spread, Totals). No parlays, props, or futures.' },
+                { icon: '🔒', text: 'LOCKED ONCE POSTED — once your pick is submitted as a contest entry, it cannot be changed, edited, or deleted. Period.' },
+                { icon: '📅', text: 'RESCHEDULES ≠ VOID — if your game gets rescheduled, the pick stands for the new date. You may post a new pick for that day, but do NOT delete the original.' },
+                { icon: '✅', text: 'All contest picks are AI-audited for legitimacy — odds range, timing, and bet type are verified automatically. Flagged picks are reviewed by admin.' },
+                { icon: '📊', text: 'Ranked by units profit. Both win rate AND volume matter — you need at least 15 settled picks to be eligible to win.' },
+                { icon: '🛡', text: 'One account per person — duplicate accounts detected via IP and device fingerprint are permanently disqualified.' },
+                { icon: '🚫', text: 'Manipulation, backdating, or fake accounts = permanent ban from all future contests.' },
+                { icon: '💸', text: 'Winner paid via PayPal, Venmo, or Cash App within 3 business days of month end.' },
               ].map((r, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '0.45rem 0.65rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
                   <span style={{ fontSize: '0.8rem', flexShrink: 0, marginTop: '1px' }}>{r.icon}</span>
@@ -493,13 +493,13 @@ function ContestBanner() {
           {/* How to enter */}
           <div>
             <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px', fontWeight: 700 }}>
-              How to Enter - 3 Steps
+              How to Enter — 3 Steps
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {[
-                'Log picks in Pick History BEFORE games start - timestamped as verified.',
-                'Mark picks as Public using the [view] toggle in Pick History.',
-                'Open [edit] My Profile -> enable "Show on Leaderboard." Done.',
+                'Log picks in Pick History BEFORE games start — timestamped as verified.',
+                'Mark picks as Public using the 👁 toggle in Pick History.',
+                'Open ✎ My Profile → enable "Show on Leaderboard." Done.',
               ].map((text, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
                   <span style={{
@@ -515,7 +515,7 @@ function ContestBanner() {
           </div>
 
           <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center', paddingTop: '4px' }}>
-            [target] <strong style={{ color: 'rgba(255,184,0,0.8)' }}>BetOS</strong> users have the edge - use the Analyzer, log sharp plays, climb the board.
+            🎯 <strong style={{ color: 'rgba(255,184,0,0.8)' }}>BetOS</strong> users have the edge — use the Analyzer, log sharp plays, climb the board.
           </div>
         </div>
       )}
@@ -557,11 +557,11 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
       {/* Rank */}
       <div style={{ textAlign: 'center' }}>
         {eligible
-          ? (entry.rank === 1 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>[1st]</span>
-            : entry.rank === 2 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>[2nd]</span>
-            : entry.rank === 3 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>[3rd]</span>
+          ? (entry.rank === 1 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥇</span>
+            : entry.rank === 2 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥈</span>
+            : entry.rank === 3 ? <span style={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>🥉</span>
             : <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{entry.rank}</span>)
-          : <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>-</span>}
+          : <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>—</span>}
       </div>
       {/* Avatar */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -572,12 +572,12 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
         <div style={{ fontSize: isMobile ? '0.82rem' : '0.85rem', fontWeight: isMe ? 800 : 600, color: isMe ? 'var(--gold)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {entry.display_name || entry.username}
           {isMe && <span style={{ marginLeft: '4px', fontSize: '0.6rem', color: 'var(--gold)', fontWeight: 700 }}>YOU</span>}
-          {eligible && entry.rank <= 3 && <span style={{ marginLeft: '5px', fontSize: '0.58rem', color: '#4ade80', fontWeight: 700 }}>[ok] ELIGIBLE</span>}
+          {eligible && entry.rank <= 3 && <span style={{ marginLeft: '5px', fontSize: '0.58rem', color: '#4ade80', fontWeight: 700 }}>✓ ELIGIBLE</span>}
         </div>
         <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
           {entry.wins}W-{entry.losses}L{entry.pushes > 0 ? `-${entry.pushes}P` : ''}
           {!isMobile && entry.pending > 0 && <span style={{ color: '#60a5fa', marginLeft: '4px' }}>+{entry.pending} live</span>}
-          {!eligible && <span style={{ color: 'rgba(255,255,255,0.3)', marginLeft: '4px' }}>. needs {picksNeeded} more</span>}
+          {!eligible && <span style={{ color: 'rgba(255,255,255,0.3)', marginLeft: '4px' }}>· needs {picksNeeded} more</span>}
         </div>
       </div>
       {/* Units */}
@@ -588,20 +588,20 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
       <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: isMobile ? '0.75rem' : '0.78rem', color: unitColor }}>
         {entry.roi > 0 ? '+' : ''}{entry.roi}%
       </div>
-      {/* Win% - desktop only */}
+      {/* Win% — desktop only */}
       {!isMobile && (
         <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          {entry.total_settled > 0 ? ((entry.wins / entry.total_settled) * 100).toFixed(0) + '%' : '-'}
+          {entry.total_settled > 0 ? ((entry.wins / entry.total_settled) * 100).toFixed(0) + '%' : '—'}
         </div>
       )}
-      {/* Streak - desktop only */}
+      {/* Streak — desktop only */}
       {!isMobile && (
         <div style={{ textAlign: 'right' }}>
           {entry.streak > 0 && entry.streak_type
             ? <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: streakColor, fontWeight: 700 }}>
                 {entry.streak_type}{entry.streak}
               </span>
-            : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>-</span>}
+            : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>—</span>}
         </div>
       )}
     </div>
@@ -632,7 +632,7 @@ function AnnouncementBanner() {
           display: 'flex', alignItems: 'flex-start', gap: '12px',
         }}>
           <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>
-            {a.type === 'contest_winner' ? '[trophy]' : '[!]'}
+            {a.type === 'contest_winner' ? '🏆' : '📢'}
           </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '0.9rem', color: a.type === 'contest_winner' ? '#FFB800' : '#60a5fa', marginBottom: '3px' }}>
@@ -640,7 +640,7 @@ function AnnouncementBanner() {
             </div>
             {a.type === 'contest_winner' && a.winner_display_name && (
               <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                [!] <strong style={{ color: 'var(--gold)' }}>{a.winner_display_name}</strong>
+                🎉 <strong style={{ color: 'var(--gold)' }}>{a.winner_display_name}</strong>
                 {a.winner_record && <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>{a.winner_record}</span>}
                 {a.winner_units != null && (
                   <span style={{ color: '#4ade80', fontFamily: 'IBM Plex Mono', fontWeight: 700, marginLeft: '8px' }}>
@@ -651,7 +651,7 @@ function AnnouncementBanner() {
             )}
             {a.body && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{a.body}</div>}
             <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.25)', marginTop: '5px' }}>
-              {a.month ? `${a.month} . ` : ''}{new Date(a.created_at).toLocaleDateString()}
+              {a.month ? `${a.month} · ` : ''}{new Date(a.created_at).toLocaleDateString()}
             </div>
           </div>
         </div>
@@ -694,15 +694,15 @@ function ContestStandings({ userId, isDemo, refreshKey, onViewProfile, isMobile 
         padding: '10px 12px', background: 'rgba(255,184,0,0.06)', borderBottom: '1px solid rgba(255,184,0,0.15)',
       }}>
         <div style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--gold)' }}>
-          [trophy] Contest Standings
+          🏆 Contest Standings
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {cData && (
             <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
-              {entries.length} entered . {new Date(cData.cachedAt).toLocaleTimeString()}
+              {entries.length} entered · {new Date(cData.cachedAt).toLocaleTimeString()}
             </span>
           )}
-          <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 7px', fontSize: '0.7rem' }}>[refresh]</button>
+          <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 7px', fontSize: '0.7rem' }}>↺</button>
         </div>
       </div>
 
@@ -718,11 +718,11 @@ function ContestStandings({ userId, isDemo, refreshKey, onViewProfile, isMobile 
       {/* Rows */}
       {cLoad ? (
         <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-          Loading contest standings...
+          Loading contest standings…
         </div>
       ) : entries.length === 0 ? (
         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '1.5rem', marginBottom: '6px' }}>[target]</div>
+          <div style={{ fontSize: '1.5rem', marginBottom: '6px' }}>🎯</div>
           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>No contest entries yet</div>
           <div style={{ fontSize: '0.75rem' }}>Log a pick and toggle <strong>Contest Entry</strong> to compete for the $100 prize.</div>
         </div>
@@ -832,8 +832,8 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
       {/* ── Sub-tab switcher ── */}
       <div style={{ display: 'flex', gap: '4px', padding: '3px', background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px solid var(--border)', alignSelf: 'flex-start' }}>
         {[
-          { id: 'contest', label: '[trophy] Contest' },
-          { id: 'sharp',   label: '[stats] Leaderboard' },
+          { id: 'contest', label: '🏆 Contest' },
+          { id: 'sharp',   label: '📊 Leaderboard' },
         ].map(t => (
           <button
             key={t.id}
@@ -876,8 +876,8 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               padding: '0.6rem 1rem', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
               borderRadius: '8px', fontSize: '0.78rem', color: '#93c5fd', display: 'flex', gap: '8px', alignItems: 'center',
             }}>
-              <span>[view]</span>
-              <span><strong>Demo Preview</strong> - This is sample data. Create an account and log picks to appear on the real leaderboard.</span>
+              <span>👁</span>
+              <span><strong>Demo Preview</strong> — This is sample data. Create an account and log picks to appear on the real leaderboard.</span>
             </div>
           )}
 
@@ -885,10 +885,10 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', letterSpacing: '-0.02em', margin: 0 }}>
-                [stats] Leaderboard
+                📊 Leaderboard
               </h1>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                Ranked by Sharp Score - ROI x pick volume
+                Ranked by Sharp Score — ROI × pick volume
                 <button
                   onClick={() => { const next = sharpFilter === 'all' ? 'verified' : 'all'; setSharpFilter(next); load(next); }}
                   style={{
@@ -899,7 +899,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
                     cursor: 'pointer', lineHeight: 1.4,
                   }}
                 >
-                  {sharpFilter === 'verified' ? '[ok] Verified Only' : 'o All Picks'}
+                  {sharpFilter === 'verified' ? '✓ Verified Only' : '○ All Picks'}
                 </button>
                 <button
                   onClick={() => setVerifiedInfoOpen(true)}
@@ -926,20 +926,20 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               />
               {data && (
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
-                  {entries.length} ranked . {new Date(data.cachedAt).toLocaleTimeString()}
+                  {entries.length} ranked · {new Date(data.cachedAt).toLocaleTimeString()}
                 </span>
               )}
               <button onClick={load} style={{
                 background: 'var(--bg-surface)', border: '1px solid var(--border)',
                 borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
                 color: 'var(--text-muted)', fontSize: '0.75rem',
-              }}>[refresh] Refresh</button>
+              }}>↺ Refresh</button>
               {!isDemo && (
                 <button onClick={() => setEditOpen(true)} style={{
                   background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.4)',
                   borderRadius: '6px', padding: '5px 10px', cursor: 'pointer',
                   color: 'var(--gold)', fontSize: '0.75rem', fontWeight: 700,
-                }}>[edit] My Profile</button>
+                }}>✎ My Profile</button>
               )}
             </div>
           </div>
@@ -958,7 +958,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               You're ranked #{data.userRank} of {data.total}
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              {data.userEntry.wins}-{data.userEntry.losses} . {fmt(data.userEntry.units)}u . Sharp Score {parseFloat(data.userEntry.sharp_score || 0).toFixed(1)}
+              {data.userEntry.wins}-{data.userEntry.losses} · {fmt(data.userEntry.units)}u · Sharp Score {parseFloat(data.userEntry.sharp_score || 0).toFixed(1)}
             </div>
           </div>
         </div>
@@ -971,10 +971,10 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
           borderRadius: '10px', padding: '1rem 1.25rem',
         }}>
           <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px', fontSize: '0.9rem' }}>
-            [!] Get on the board
+            📣 Get on the board
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.6 }}>
-            Mark picks as <strong style={{ color: 'var(--text-secondary)' }}>Public</strong> in Pick History - that's all it takes.
+            Mark picks as <strong style={{ color: 'var(--text-secondary)' }}>Public</strong> in Pick History — that's all it takes.
             You appear here as soon as you have <strong style={{ color: 'var(--gold)' }}>1 public settled pick</strong>.
             <strong style={{ color: '#4ade80' }}> Verified picks</strong> (AI-audited before game start) boost your Sharp Score and show in the Verified filter.
           </div>
@@ -1025,7 +1025,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
             >
               {col.label}
               {col.key && sortKey === col.key && (
-                <span style={{ fontSize: '0.55rem' }}>{sortDir === 'desc' ? 'v' : '^'}</span>
+                <span style={{ fontSize: '0.55rem' }}>{sortDir === 'desc' ? '▼' : '▲'}</span>
               )}
             </span>
           ))}
@@ -1062,8 +1062,8 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
           padding: '0.55rem 0.9rem', background: 'rgba(250,204,21,0.06)', border: '1px solid rgba(250,204,21,0.2)',
           borderRadius: '8px', fontSize: '0.75rem', color: '#facc15', display: 'flex', gap: '8px', alignItems: 'center',
         }}>
-          <span>[list]</span>
-          <span>Showing <strong>all public picks</strong> - verified pick tracking is being set up. Once game start times sync, picks submitted before tipoff will earn [ok] Verified status and boost your Sharp Score.</span>
+          <span>📋</span>
+          <span>Showing <strong>all public picks</strong> — verified pick tracking is being set up. Once game start times sync, picks submitted before tipoff will earn ✓ Verified status and boost your Sharp Score.</span>
         </div>
       )}
 
@@ -1073,7 +1073,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
           padding: '3rem 2rem', textAlign: 'center',
           background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
         }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>[trophy]</div>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏆</div>
           <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>No public handicappers yet</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
             Be the first to go public. Mark picks as Public in History and enable your leaderboard profile.
@@ -1102,8 +1102,8 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
         padding: '1rem', background: 'var(--bg-surface)', border: '1px solid var(--border)',
         borderRadius: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
       }}>
-        <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI x [ok](picks) / 10. High ROI alone isn't enough - you need volume and consistency.{' '}
-        Picks submitted before game start earn <button onClick={() => setVerifiedInfoOpen(true)} style={{ background: 'none', border: 'none', padding: 0, color: '#4ade80', fontWeight: 700, cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline' }}>[ok] Verified</button> status.{' '}
+        <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(picks) ÷ 10. High ROI alone isn't enough — you need volume and consistency.{' '}
+        Picks submitted before game start earn <button onClick={() => setVerifiedInfoOpen(true)} style={{ background: 'none', border: 'none', padding: 0, color: '#4ade80', fontWeight: 700, cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline' }}>✓ Verified</button> status.{' '}
         Any user with at least <strong style={{ color: 'var(--gold)' }}>1 graded pick</strong> appears here. Toggle "Verified Only" above to filter to pre-game picks only.
       </div>
         </>
@@ -1128,23 +1128,23 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '1.4rem' }}>[ok]</span>
+              <span style={{ fontSize: '1.4rem' }}>✓</span>
               <h3 style={{ margin: 0, fontWeight: 800, color: '#4ade80', fontSize: '1.1rem' }}>
                 What is a Verified Pick?
               </h3>
               <button
                 onClick={() => setVerifiedInfoOpen(false)}
                 style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}
-              >x</button>
+              >×</button>
             </div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.7 }}>
               <p style={{ margin: '0 0 0.75rem' }}>
                 A <strong style={{ color: '#4ade80' }}>Verified Pick</strong> is one that has passed a multi-step AI audit before the game starts:
               </p>
               <ul style={{ margin: '0 0 0.75rem', paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <li><strong>Submitted before game start</strong> - picks entered after tip-off or first pitch don't count.</li>
-                <li><strong>Legitimate line</strong> - the odds are cross-checked against Pinnacle (the market's sharpest book) to confirm it's a real number.</li>
-                <li><strong>AI-audited</strong> - our system checks for inconsistencies or retroactive edits.</li>
+                <li><strong>Submitted before game start</strong> — picks entered after tip-off or first pitch don't count.</li>
+                <li><strong>Legitimate line</strong> — the odds are cross-checked against Pinnacle (the market's sharpest book) to confirm it's a real number.</li>
+                <li><strong>AI-audited</strong> — our system checks for inconsistencies or retroactive edits.</li>
               </ul>
               <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.78rem' }}>
                 Only verified picks count toward your Sharp Score and appear on this leaderboard. This keeps the rankings honest.
@@ -1154,7 +1154,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
         </div>
       )}
 
-      {/* Modals - outside tabs so they render regardless of active tab */}
+      {/* Modals — outside tabs so they render regardless of active tab */}
       {editOpen && (
         <ProfileEditor
           user={user}

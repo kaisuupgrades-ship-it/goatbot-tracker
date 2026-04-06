@@ -124,7 +124,7 @@ function CropModal({ imageSrc, onConfirm, onCancel }) {
           Crop Avatar
         </div>
         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '-0.5rem' }}>
-          Drag to reposition . Zoom to fit
+          Drag to reposition · Zoom to fit
         </div>
 
         {/* Crop frame */}
@@ -162,7 +162,7 @@ function CropModal({ imageSrc, onConfirm, onCancel }) {
 
         {/* Zoom slider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '1rem', color: 'var(--text-muted)', lineHeight: 1 }}>-</span>
+          <span style={{ fontSize: '1rem', color: 'var(--text-muted)', lineHeight: 1 }}>−</span>
           <input
             type="range"
             min={minScale}
@@ -192,7 +192,7 @@ function CropModal({ imageSrc, onConfirm, onCancel }) {
               background: 'linear-gradient(135deg, #FFB800, #FF9500)',
               border: 'none', color: '#000', fontSize: '0.82rem', fontWeight: 700, fontFamily: 'inherit',
             }}
-          >[ok] Use Photo</button>
+          >✓ Use Photo</button>
         </div>
       </div>
     </div>
@@ -220,7 +220,7 @@ function FieldRow({ label, children, hint, locked, lockedMsg }) {
         <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{label}</label>
         {locked && lockedMsg && (
           <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '2px 7px', borderRadius: '4px' }}>
-            [lock] {lockedMsg}
+            🔒 {lockedMsg}
           </span>
         )}
       </div>
@@ -305,7 +305,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
     return { ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}), ...extra };
   }
 
-  // ── Avatar pick -> open crop modal ──────────────────────────────────────
+  // ── Avatar pick → open crop modal ──────────────────────────────────────
   function handleAvatarChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -372,7 +372,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
 
       const trimmedDisplayName = displayName.trim();
       if (trimmedDisplayName && trimmedDisplayName !== originalDisplayName) {
-        if (displayNameWait > 0) throw new Error(`Display name locked for ${msToReadable(displayNameWait)} - can change once per week.`);
+        if (displayNameWait > 0) throw new Error(`Display name locked for ${msToReadable(displayNameWait)} — can change once per week.`);
         if (trimmedDisplayName.length < 2) throw new Error('Display name must be at least 2 characters.');
         if (trimmedDisplayName.length > 40) throw new Error('Display name must be 40 characters or less.');
         updates.display_name = trimmedDisplayName;
@@ -513,7 +513,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem', padding: '4px 7px', borderRadius: '6px' }}
           >
-            x
+            ✕
           </button>
         </div>
 
@@ -535,7 +535,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                 textTransform: 'capitalize',
               }}
             >
-              {tab === 'profile' ? '[user] Profile' : '[lock] Security'}
+              {tab === 'profile' ? '👤 Profile' : '🔒 Security'}
             </button>
           ))}
         </div>
@@ -586,7 +586,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                     onMouseEnter={e => e.currentTarget.style.opacity = 1}
                     onMouseLeave={e => e.currentTarget.style.opacity = 0}
                   >
-                    [photo]
+                    📷
                   </div>
                 </div>
                 <div>
@@ -599,10 +599,10 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                       display: 'block', marginBottom: '5px',
                     }}
                   >
-                    {avatarFile ? '[ok] Cropped & ready' : 'Upload & crop photo'}
+                    {avatarFile ? '✓ Cropped & ready' : 'Upload & crop photo'}
                   </button>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    JPEG, PNG, WebP or GIF . drag to crop<br />Can update anytime
+                    JPEG, PNG, WebP or GIF · drag to crop<br />Can update anytime
                   </div>
                 </div>
                 <input
@@ -636,14 +636,14 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                   onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
                 />
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
-                  {displayName.length}/40 . Can change every 7 days
+                  {displayName.length}/40 · Can change every 7 days
                 </div>
               </FieldRow>
 
               {/* Username / @handle */}
               <FieldRow
                 label="Username"
-                hint="Your @handle - shown on the leaderboard and in picks. 3-24 characters, no spaces."
+                hint="Your @handle — shown on the leaderboard and in picks. 3–24 characters, no spaces."
                 locked={usernameWait > 0}
                 lockedMsg={usernameWait > 0 ? `changes in ${msToReadable(usernameWait)}` : null}
               >
@@ -665,7 +665,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                   />
                 </div>
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
-                  {username.length}/24 . Can change every 7 days
+                  {username.length}/24 · Can change every 7 days
                 </div>
               </FieldRow>
 
@@ -783,10 +783,10 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                     opacity: pwSending ? 0.6 : 1,
                   }}
                 >
-                  {pwSending ? 'Sending...' : '[?] Send Reset Link'}
+                  {pwSending ? 'Sending…' : '📧 Send Reset Link'}
                 </button>
-                {pwSuccess && <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#4ade80' }}>[ok] {pwSuccess}</div>}
-                {pwError   && <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--red)' }}>x {pwError}</div>}
+                {pwSuccess && <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#4ade80' }}>✓ {pwSuccess}</div>}
+                {pwError   && <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--red)' }}>✗ {pwError}</div>}
               </div>
 
               <SectionLabel>Account Info</SectionLabel>
@@ -797,18 +797,18 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                     <span style={{ color: 'var(--text-muted)' }}>User ID</span>
-                    <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{userId?.slice(0, 8)}...</span>
+                    <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{userId?.slice(0, 8)}…</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Email verified</span>
                     <span style={{ color: meta.email_verified ? '#4ade80' : 'var(--gold)' }}>
-                      {meta.email_verified ? '[ok] Verified' : '[!] Unverified'}
+                      {meta.email_verified ? '✓ Verified' : '⚠ Unverified'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Member since</span>
                     <span style={{ color: 'var(--text-secondary)' }}>
-                      {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '-'}
+                      {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}
                     </span>
                   </div>
                 </div>
@@ -817,8 +817,8 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
           )}
 
           {/* Status messages */}
-          {error   && <div style={{ marginTop: '12px', padding: '9px 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', color: 'var(--red)', fontSize: '0.78rem' }}>x {error}</div>}
-          {success && <div style={{ marginTop: '12px', padding: '9px 12px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '7px', color: '#4ade80', fontSize: '0.78rem' }}>[ok] {success}</div>}
+          {error   && <div style={{ marginTop: '12px', padding: '9px 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', color: 'var(--red)', fontSize: '0.78rem' }}>✗ {error}</div>}
+          {success && <div style={{ marginTop: '12px', padding: '9px 12px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '7px', color: '#4ade80', fontSize: '0.78rem' }}>✓ {success}</div>}
         </div>
 
         {/* Footer */}
@@ -848,7 +848,7 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                 opacity: saving ? 0.7 : 1, transition: 'opacity 0.15s',
               }}
             >
-              {avatarUploading ? 'Uploading...' : saving ? 'Saving...' : 'Save Changes'}
+              {avatarUploading ? 'Uploading…' : saving ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
         )}

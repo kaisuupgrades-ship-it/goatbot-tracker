@@ -11,14 +11,14 @@ function toLocalDateStr(d) {
 }
 
 const SPORT_LABELS = {
-  mlb:   { label: 'MLB',   emoji: '[MLB]' },
-  nfl:   { label: 'NFL',   emoji: '[NFL]' },
-  nba:   { label: 'NBA',   emoji: '[NBA]' },
-  nhl:   { label: 'NHL',   emoji: '[NHL]' },
-  ncaaf: { label: 'NCAAF', emoji: '[NFL]' },
-  ncaab: { label: 'NCAAB', emoji: '[NBA]' },
-  mls:   { label: 'MLS',   emoji: '[MLS]' },
-  wnba:  { label: 'WNBA',  emoji: '[NBA]' },
+  mlb:   { label: 'MLB',   emoji: '⚾' },
+  nfl:   { label: 'NFL',   emoji: '🏈' },
+  nba:   { label: 'NBA',   emoji: '🏀' },
+  nhl:   { label: 'NHL',   emoji: '🏒' },
+  ncaaf: { label: 'NCAAF', emoji: '🏈' },
+  ncaab: { label: 'NCAAB', emoji: '🏀' },
+  mls:   { label: 'MLS',   emoji: '⚽' },
+  wnba:  { label: 'WNBA',  emoji: '🏀' },
 };
 
 // ── Extract competitors from ESPN event ───────────────────────────────────────
@@ -111,11 +111,11 @@ function calcBetStatus(pick, event) {
     const current = awayScore + homeScore;
     if (lineNum == null) return { status: null, detail: null };
     if (current > lineNum) return { status: 'winning', detail: `${current} scored (over ${lineNum})` };
-    // MLB pace projection: current runs / inning x 9
+    // MLB pace projection: current runs ÷ inning × 9
     if (sportKey === 'mlb' && period > 0) {
       const pace = ((current / period) * 9).toFixed(1);
       const paceN = parseFloat(pace);
-      const detail = `${current} runs . pace ${pace}/9`;
+      const detail = `${current} runs · pace ${pace}/9`;
       if (paceN >= lineNum - 0.5) return { status: 'push', detail };
       return { status: 'losing', detail };
     }
@@ -132,7 +132,7 @@ function calcBetStatus(pick, event) {
     if (sportKey === 'mlb' && period > 0) {
       const pace = ((current / period) * 9).toFixed(1);
       const paceN = parseFloat(pace);
-      const detail = `${current} runs . pace ${pace}/9`;
+      const detail = `${current} runs · pace ${pace}/9`;
       if (paceN <= lineNum + 0.5) return { status: 'winning', detail };
       return { status: 'push', detail };
     }
@@ -145,9 +145,9 @@ function calcBetStatus(pick, event) {
 
 // ── Status badge styles ────────────────────────────────────────────────────────
 const STATUS_STYLES = {
-  winning: { bg: 'rgba(0,212,139,0.12)', border: 'rgba(0,212,139,0.35)', color: '#00d48b', icon: '[ok]', label: 'WINNING' },
-  push:    { bg: 'rgba(255,184,0,0.10)', border: 'rgba(255,184,0,0.35)',  color: '#FFB800', icon: '[sharp]', label: 'ON EDGE' },
-  losing:  { bg: 'rgba(255,69,96,0.10)', border: 'rgba(255,69,96,0.30)',  color: '#FF4560', icon: '[X]', label: 'LOSING'  },
+  winning: { bg: 'rgba(0,212,139,0.12)', border: 'rgba(0,212,139,0.35)', color: '#00d48b', icon: '✅', label: 'WINNING' },
+  push:    { bg: 'rgba(255,184,0,0.10)', border: 'rgba(255,184,0,0.35)',  color: '#FFB800', icon: '⚡', label: 'ON EDGE' },
+  losing:  { bg: 'rgba(255,69,96,0.10)', border: 'rgba(255,69,96,0.30)',  color: '#FF4560', icon: '❌', label: 'LOSING'  },
 };
 
 // ── SCORE BUG ─────────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ function ScoreBug({ event, sport, isStarred = false, onUnstar, expanded = false,
             onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; e.currentTarget.style.transform = 'scale(1.2)'; }}
             onMouseLeave={e => { e.currentTarget.style.color = isStarred ? '#FFB800' : 'rgba(255,255,255,0.3)'; e.currentTarget.style.transform = ''; }}
           >
-            {isStarred ? '*' : '*'}
+            {isStarred ? '★' : '☆'}
           </button>
         </div>
       </div>
@@ -266,7 +266,7 @@ function ScoreBug({ event, sport, isStarred = false, onUnstar, expanded = false,
             textShadow: awayLeading ? '0 0 24px rgba(255,255,255,0.15)' : 'none',
             letterSpacing: '-0.04em',
           }}>
-            {awayScore ?? '-'}
+            {awayScore ?? '–'}
           </span>
           <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>AWAY</span>
         </div>
@@ -278,7 +278,7 @@ function ScoreBug({ event, sport, isStarred = false, onUnstar, expanded = false,
           paddingBottom: '14px',  /* align with score numbers visually */
           userSelect: 'none',
         }}>
-          .
+          ·
         </div>
 
         {/* Home team */}
@@ -305,7 +305,7 @@ function ScoreBug({ event, sport, isStarred = false, onUnstar, expanded = false,
             textShadow: homeLeading ? '0 0 24px rgba(255,255,255,0.15)' : 'none',
             letterSpacing: '-0.04em',
           }}>
-            {homeScore ?? '-'}
+            {homeScore ?? '–'}
           </span>
           <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>HOME</span>
         </div>
@@ -326,7 +326,7 @@ function ScoreBug({ event, sport, isStarred = false, onUnstar, expanded = false,
         onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}
         onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.28)'; }}
       >
-        {expanded ? '^ HIDE DETAILS' : 'v DETAILS'}
+        {expanded ? '▲ HIDE DETAILS' : '▼ DETAILS'}
       </div>
     </div>
   );
@@ -360,7 +360,7 @@ function PicksPanel({ picks, event }) {
         <span style={{
           fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.07em', color: 'var(--gold)',
         }}>
-          [list] YOUR BETS
+          📋 YOUR BETS
         </span>
         <span style={{
           fontSize: '0.58rem', padding: '0px 5px', borderRadius: '3px',
@@ -481,10 +481,10 @@ function EmptyStars() {
       background: 'var(--bg-surface)', border: '1px solid var(--border)',
       borderRadius: '12px',
     }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem', filter: 'grayscale(1)', opacity: 0.3 }}>*</div>
+      <div style={{ fontSize: '3rem', marginBottom: '1rem', filter: 'grayscale(1)', opacity: 0.3 }}>★</div>
       <div style={{ fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>No featured games yet</div>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', maxWidth: '300px', lineHeight: 1.6 }}>
-        Head to the <strong style={{ color: 'var(--gold)' }}>Scoreboard</strong> and tap * on any game to pin it here. You'll get a live view of just those games.
+        Head to the <strong style={{ color: 'var(--gold)' }}>Scoreboard</strong> and tap ☆ on any game to pin it here. You'll get a live view of just those games.
       </div>
     </div>
   );
@@ -639,11 +639,11 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
             letterSpacing: '-0.02em', margin: 0,
             display: 'flex', alignItems: 'center', gap: '8px',
           }}>
-            * Featured Games
+            ★ Featured Games
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '3px 0 0' }}>
             {starredList.length > 0
-              ? `${starredList.length} starred game${starredList.length !== 1 ? 's' : ''} . live scores + bet tracking`
+              ? `${starredList.length} starred game${starredList.length !== 1 ? 's' : ''} · live scores + bet tracking`
               : 'Star games from the Scoreboard to track them here'}
           </p>
         </div>
@@ -659,7 +659,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                 color: 'var(--text-muted)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem',
               }}
               title="Previous day"
-            >{'<'}</button>
+            >‹</button>
             <span style={{
               fontSize: '0.73rem', fontWeight: 700, color: isToday ? 'var(--gold)' : 'var(--text-secondary)',
               padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px',
@@ -674,7 +674,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                 color: 'var(--text-muted)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem',
               }}
               title="Next day"
-            >{'>'}</button>
+            >›</button>
             {!isToday && (
               <button
                 onClick={() => { setLiveData({}); setViewDate(new Date()); }}
@@ -690,8 +690,8 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
           {starredList.length > 0 && (
             <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
               {hasLive
-                ? <span style={{ color: '#4ade80' }}>* LIVE . {countdown}s</span>
-                : `[refresh] ${countdown}s`
+                ? <span style={{ color: '#4ade80' }}>● LIVE · {countdown}s</span>
+                : `↻ ${countdown}s`
               }
             </span>
           )}
@@ -705,7 +705,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                 fontSize: '0.75rem', fontFamily: 'inherit', opacity: loading ? 0.5 : 1,
               }}
             >
-              {loading ? '...' : '[refresh]'}
+              {loading ? '…' : '↻'}
             </button>
           )}
           {starredList.length > 0 && (
@@ -726,7 +726,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
       {Object.keys(starredGolfers).length > 0 && (() => {
         const golferList = Object.values(starredGolfers);
         function fmtScore(v) {
-          if (!v || v === '-') return '-';
+          if (!v || v === '—') return '—';
           if (v === 'E' || v === 'Even') return 'E';
           const n = parseInt(v);
           if (isNaN(n)) return v;
@@ -755,21 +755,21 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
               background: 'rgba(255,184,0,0.04)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                <span style={{ fontSize: '0.9rem' }}>[golf]</span>
+                <span style={{ fontSize: '0.9rem' }}>⛳</span>
                 <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--gold)' }}>My Golfers</span>
                 <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>{golferList.length} tracked</span>
               </div>
               <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                Updated from Golf tab . * to manage
+                Updated from Golf tab · ★ to manage
               </span>
             </div>
             {/* Golfer rows */}
             <div>
               {golferList.map((g, i) => {
-                const toPar = g.toPar || '-';
-                const today = g.today || '-';
-                const pos   = g.position || '-';
-                const thru  = g.thru || '-';
+                const toPar = g.toPar || '—';
+                const today = g.today || '—';
+                const pos   = g.position || '—';
+                const thru  = g.thru || '—';
                 return (
                   <div key={g.id || i} style={{
                     display: 'grid',
@@ -796,11 +796,11 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                     </div>
                     {/* To Par */}
                     <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.88rem', color: scoreColor(toPar) }}>
-                      {toPar !== '-' ? fmtScore(toPar) : '-'}
+                      {toPar !== '—' ? fmtScore(toPar) : '—'}
                     </div>
                     {/* Today */}
                     <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: scoreColor(today) }}>
-                      {today !== '-' ? fmtScore(today) : '-'}
+                      {today !== '—' ? fmtScore(today) : '—'}
                     </div>
                     {/* Thru */}
                     <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
@@ -818,7 +818,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.25)', fontSize: '0.75rem', padding: '2px', lineHeight: 1 }}
                       onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
                       onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
-                    >x</button>
+                    >✕</button>
                   </div>
                 );
               })}
@@ -857,7 +857,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
           padding: '2rem', textAlign: 'center',
           background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
         }}>
-          <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>[date]</div>
+          <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>📅</div>
           <div style={{ color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px' }}>
             No live data for your starred games today
           </div>
@@ -883,7 +883,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                   }}
                   onMouseEnter={e => e.currentTarget.style.color = '#FF4560'}
                   onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
-                >x</button>
+                >×</button>
               </span>
             ))}
           </div>
@@ -916,7 +916,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                       expanded={isExpanded}
                       onToggleExpand={() => toggleExpand(event.id)}
                     />
-                    {/* GameCard with header suppressed - only shows expandable details */}
+                    {/* GameCard with header suppressed — only shows expandable details */}
                     <GameCard
                       event={event}
                       sport={event._sport}

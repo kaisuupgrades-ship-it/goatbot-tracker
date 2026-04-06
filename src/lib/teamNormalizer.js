@@ -153,11 +153,11 @@ const TEAM_MAP = {
  * Given a raw team name and sport, return the normalized full official name.
  *
  * Examples:
- *   normalizeTeam("detroit", "MLB")  -> "Detroit Tigers"
- *   normalizeTeam("Cubs", "MLB")     -> "Chicago Cubs"
- *   normalizeTeam("GS", "NBA")       -> "Golden State Warriors"
- *   normalizeTeam("Padres", "MLB")   -> "San Diego Padres"
- *   normalizeTeam("Liverpool FC", "Soccer") -> "Liverpool FC" (no change)
+ *   normalizeTeam("detroit", "MLB")  → "Detroit Tigers"
+ *   normalizeTeam("Cubs", "MLB")     → "Chicago Cubs"
+ *   normalizeTeam("GS", "NBA")       → "Golden State Warriors"
+ *   normalizeTeam("Padres", "MLB")   → "San Diego Padres"
+ *   normalizeTeam("Liverpool FC", "Soccer") → "Liverpool FC" (no change)
  *
  * Returns the original string unchanged if no match is found.
  */
