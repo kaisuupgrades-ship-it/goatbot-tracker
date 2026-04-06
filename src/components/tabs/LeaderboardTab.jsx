@@ -777,6 +777,13 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
   // Re-load when a contest pick is graded (cascade from HistoryTab via Dashboard)
   useEffect(() => { if (refreshKey > 0) load(); }, [refreshKey]); // eslint-disable-line
 
+  // Auto-refresh leaderboard every 60 seconds so rankings stay current
+  useEffect(() => {
+    if (isDemo) return;
+    const interval = setInterval(() => { load(); }, 60_000);
+    return () => clearInterval(interval);
+  }, [load, isDemo]); // eslint-disable-line
+
   // Load own profile
   useEffect(() => {
     if (!userId || isDemo) return;

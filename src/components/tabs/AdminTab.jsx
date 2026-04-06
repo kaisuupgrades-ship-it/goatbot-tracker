@@ -1726,10 +1726,19 @@ function SystemPanel({ userEmail }) {
     if (targetDate) base.date = targetDate;
 
     let totalGenerated = 0, totalSkipped = 0, totalErrors = 0;
+    const startTime = Date.now();
 
-    for (const sport of SPORTS) {
-      // Show which sport is running in the live log
-      setPregenLiveLog(prev => [...prev, { sport, status: 'running', count: null, ts: Date.now() }]);
+    for (let i = 0; i < SPORTS.length; i++) {
+      const sport = SPORTS[i];
+      // Show which sport is running in the live log with progress info
+      setPregenLiveLog(prev => [...prev, {
+        sport,
+        status: 'running',
+        count: null,
+        sportIndex: i + 1,
+        totalSports: SPORTS.length,
+        ts: Date.now(),
+      }]);
 
       try {
         const res = await fetch('/api/cron/pregenerate-analysis', {
@@ -1742,20 +1751,27 @@ function SystemPanel({ userEmail }) {
         totalSkipped   += data.skipped   || 0;
         totalErrors    += data.errors    || 0;
 
-        // Mark this sport done in the live log
+        // Mark this sport done in the live log with game details
         setPregenLiveLog(prev => prev.map(e =>
           e.sport === sport
-            ? { ...e, status: 'done', count: data.generated || 0 }
+            ? { ...e, status: data.generated > 0 ? 'done' : (data.skipped > 0 ? 'skipped' : 'done'), count: data.generated || 0, skipped: data.skipped || 0, games: data.games || [], error_list: data.error_list || [] }
             : e
         ));
-      } catch {
+
+        // Auto-refresh the cached analyses list after each sport completes
+        // so the user can see new entries populating in real-time
+        if (data.generated > 0) {
+          loadGeneratedAnalyses();
+        }
+      } catch (err) {
         setPregenLiveLog(prev => prev.map(e =>
-          e.sport === sport ? { ...e, status: 'error' } : e
+          e.sport === sport ? { ...e, status: 'error', error: err.message || 'Request failed' } : e
         ));
       }
     }
 
-    setPregenResult({ generated: totalGenerated, skipped: totalSkipped, errors: totalErrors });
+    const duration = Date.now() - startTime;
+    setPregenResult({ generated: totalGenerated, skipped: totalSkipped, errors: totalErrors, duration_ms: duration });
     setPregenRunning(false);
     loadPregenLog();
     loadGeneratedAnalyses();
@@ -1894,26 +1910,52 @@ function SystemPanel({ userEmail }) {
         )}
 
         {/* Live sport-by-sport progress during run */}
-        {pregenLiveLog.length > 0 && (
-          <div style={{ marginBottom: '0.85rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', padding: '0.7rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            {pregenLiveLog.map(({ sport, status, count, skipped: sk, games, error }) => (
-              <div key={sport} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
-                <span style={{ width: '44px', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: '#888', fontSize: '0.65rem' }}>{sport.toUpperCase()}</span>
-                {status === 'running' && <span style={{ color: '#60a5fa' }}>⟳ Processing…</span>}
-                {status === 'done' && count > 0 && (
-                  <span style={{ color: '#4ade80' }}>✓ {count} generated{sk > 0 ? `, ${sk} skipped` : ''}{games?.length ? ` · ${games.slice(0,3).map(g => g.split('@')[0].trim().split(' ').pop()).join(', ')}${games.length > 3 ? ` +${games.length-3}` : ''}` : ''}</span>
-                )}
-                {status === 'skipped' && <span style={{ color: '#555' }}>— No pre-game games</span>}
-                {status === 'error' && <span style={{ color: '#f87171' }}>✗ {error?.slice(0, 80)}</span>}
+        {pregenLiveLog.length > 0 && (() => {
+          const doneSports = pregenLiveLog.filter(e => e.status !== 'running').length;
+          const totalSports = pregenLiveLog[0]?.totalSports || 5;
+          const runningSport = pregenLiveLog.find(e => e.status === 'running');
+          const pct = Math.round(((doneSports + (runningSport ? 0.5 : 0)) / totalSports) * 100);
+          const totalGen = pregenLiveLog.reduce((s, e) => s + (e.count || 0), 0);
+          return (
+          <div style={{ marginBottom: '0.85rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', padding: '0.7rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {/* Overall progress bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
+              <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${pct}%`, height: '100%',
+                  background: pct >= 100 ? '#4ade80' : 'linear-gradient(90deg, #60a5fa, #818cf8)',
+                  borderRadius: '3px',
+                  transition: 'width 0.8s ease',
+                }} />
               </div>
-            ))}
+              <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.68rem', color: pct >= 100 ? '#4ade80' : '#60a5fa', minWidth: '42px', textAlign: 'right', fontWeight: 700 }}>
+                {pct}%
+              </span>
+            </div>
             {pregenRunning && (
-              <div style={{ marginTop: '4px', fontSize: '0.65rem', color: '#444' }}>
-                Sport {pregenLiveLog.length}/6 · Next sports queued…
+              <div style={{ fontSize: '0.65rem', color: '#888', display: 'flex', gap: '12px' }}>
+                <span>Sport {doneSports + (runningSport ? 1 : 0)}/{totalSports}</span>
+                {totalGen > 0 && <span style={{ color: '#4ade80' }}>{totalGen} cached so far</span>}
+                {runningSport && <span style={{ color: '#60a5fa' }}>Processing {runningSport.sport.toUpperCase()}…</span>}
               </div>
             )}
+            {/* Per-sport breakdown */}
+            {pregenLiveLog.map(({ sport, status, count, skipped: sk, games, error, error_list }) => (
+              <div key={sport} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
+                <span style={{ width: '44px', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: status === 'running' ? '#60a5fa' : '#888', fontSize: '0.65rem' }}>{sport.toUpperCase()}</span>
+                {status === 'running' && <span style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #60a5fa', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} /> Generating analyses…</span>}
+                {status === 'done' && count > 0 && (
+                  <span style={{ color: '#4ade80' }}>✓ {count} generated{sk > 0 ? `, ${sk} skipped` : ''}{games?.length ? ` · ${games.slice(0,3).map(g => g.split('(')[0].trim()).join(', ')}${games.length > 3 ? ` +${games.length-3}` : ''}` : ''}</span>
+                )}
+                {status === 'done' && count === 0 && <span style={{ color: '#555' }}>— No games found</span>}
+                {status === 'skipped' && <span style={{ color: '#555' }}>— {sk > 0 ? `${sk} already cached` : 'No pre-game games'}</span>}
+                {status === 'error' && <span style={{ color: '#f87171' }}>✗ {error?.slice(0, 80) || 'Failed'}</span>}
+                {error_list?.length > 0 && <span style={{ color: '#f87171', fontSize: '0.6rem' }}> ({error_list.length} timeouts)</span>}
+              </div>
+            ))}
           </div>
-        )}
+          );
+        })()}
 
         {/* Final result after run */}
         {pregenResult && !pregenRunning && (
