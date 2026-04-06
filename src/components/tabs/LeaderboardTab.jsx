@@ -176,7 +176,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
             {!isMobile && <VerifiedBadge count={verified_picks} />}
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {isMobile ? `${wins}–${losses} · ${winPct(wins, total)}` : `@${username}`}
+            {isMobile ? `${wins}-${losses} · ${winPct(wins, total)}` : `@${username}`}
           </div>
         </div>
       </div>
@@ -187,7 +187,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
           fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
           color: wins > losses ? 'var(--green)' : losses > wins ? 'var(--red)' : 'var(--text-secondary)',
         }}>
-          {wins}–{losses}
+          {wins}-{losses}
         </span>
       )}
 
@@ -575,7 +575,7 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
           {eligible && entry.rank <= 3 && <span style={{ marginLeft: '5px', fontSize: '0.58rem', color: '#4ade80', fontWeight: 700 }}>✓ ELIGIBLE</span>}
         </div>
         <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
-          {entry.wins}W–{entry.losses}L{entry.pushes > 0 ? `–${entry.pushes}P` : ''}
+          {entry.wins}W-{entry.losses}L{entry.pushes > 0 ? `-${entry.pushes}P` : ''}
           {!isMobile && entry.pending > 0 && <span style={{ color: '#60a5fa', marginLeft: '4px' }}>+{entry.pending} live</span>}
           {!eligible && <span style={{ color: 'rgba(255,255,255,0.3)', marginLeft: '4px' }}>· needs {picksNeeded} more</span>}
         </div>
@@ -958,7 +958,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               You're ranked #{data.userRank} of {data.total}
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              {data.userEntry.wins}–{data.userEntry.losses} · {fmt(data.userEntry.units)}u · Sharp Score {parseFloat(data.userEntry.sharp_score || 0).toFixed(1)}
+              {data.userEntry.wins}-{data.userEntry.losses} · {fmt(data.userEntry.units)}u · Sharp Score {parseFloat(data.userEntry.sharp_score || 0).toFixed(1)}
             </div>
           </div>
         </div>
