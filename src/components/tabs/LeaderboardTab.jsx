@@ -85,9 +85,9 @@ function winPct(wins, total) {
   return ((wins / total) * 100).toFixed(1) + '%';
 }
 
-// ── Rank Badge ────────────────────────────────────────────────────────────────
+// ── Medal Badge (leaderboard position) ────────────────────────────────────────
 
-function RankBadge({ rank }) {
+function MedalBadge({ rank }) {
   if (rank === 1) return <span style={{ fontSize: '1.3rem' }}>🥇</span>;
   if (rank === 2) return <span style={{ fontSize: '1.3rem' }}>🥈</span>;
   if (rank === 3) return <span style={{ fontSize: '1.3rem' }}>🥉</span>;
@@ -160,7 +160,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
     >
       {/* Rank */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <RankBadge rank={rank} />
+        <MedalBadge rank={rank} />
       </div>
 
       {/* Name */}
