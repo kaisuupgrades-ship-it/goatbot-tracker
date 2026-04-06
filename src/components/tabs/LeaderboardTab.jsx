@@ -737,7 +737,7 @@ function ContestStandings({ userId, isDemo, refreshKey, onViewProfile, isMobile 
 
 export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSubTab = 'contest', onOpenInbox }) {
   const [subTab, setSubTab]           = useState(defaultSubTab); // 'contest' | 'sharp'
-  const [sharpFilter, setSharpFilter] = useState('verified');     // locked to verified only
+  const [sharpFilter, setSharpFilter] = useState('all');           // default to all users — verified badges still highlight pre-game picks
   const [verifiedInfoOpen, setVerifiedInfoOpen] = useState(false);
   const [data, setData]               = useState(null);
   const [loading, setLoading]         = useState(true);
@@ -868,18 +868,29 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', letterSpacing: '-0.02em', margin: 0 }}>
                 📊 Leaderboard
               </h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                Ranked by Sharp Score — ROI × verified pick volume
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                Ranked by Sharp Score — ROI × pick volume
                 <button
-                  onClick={() => setVerifiedInfoOpen(true)}
+                  onClick={() => { const next = sharpFilter === 'all' ? 'verified' : 'all'; setSharpFilter(next); load(next); }}
                   style={{
-                    background: 'rgba(74,222,128,0.12)', color: '#4ade80',
-                    border: '1px solid rgba(74,222,128,0.3)',
+                    background: sharpFilter === 'verified' ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.06)',
+                    color: sharpFilter === 'verified' ? '#4ade80' : 'var(--text-muted)',
+                    border: `1px solid ${sharpFilter === 'verified' ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
                     borderRadius: '4px', padding: '1px 7px', fontSize: '0.65rem', fontWeight: 700,
                     cursor: 'pointer', lineHeight: 1.4,
                   }}
                 >
-                  ✓ Verified Only
+                  {sharpFilter === 'verified' ? '✓ Verified Only' : '○ All Picks'}
+                </button>
+                <button
+                  onClick={() => setVerifiedInfoOpen(true)}
+                  style={{
+                    background: 'none', border: 'none', padding: 0,
+                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.65rem',
+                    textDecoration: 'underline', opacity: 0.7,
+                  }}
+                >
+                  What's verified?
                 </button>
               </p>
             </div>
@@ -1072,9 +1083,9 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
         padding: '1rem', background: 'var(--bg-surface)', border: '1px solid var(--border)',
         borderRadius: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
       }}>
-        <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(verified picks) ÷ 10. High ROI alone isn't enough — you need volume and consistency.{' '}
-        Only <button onClick={() => setVerifiedInfoOpen(true)} style={{ background: 'none', border: 'none', padding: 0, color: '#4ade80', fontWeight: 700, cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline' }}>✓ Verified picks</button> count on this leaderboard.{' '}
-        Any user with at least <strong style={{ color: 'var(--gold)' }}>1 verified pick</strong> appears here. Mark picks Public in Pick History to show up.
+        <strong style={{ color: 'var(--text-secondary)' }}>Sharp Score</strong> = ROI × √(picks) ÷ 10. High ROI alone isn't enough — you need volume and consistency.{' '}
+        Picks submitted before game start earn <button onClick={() => setVerifiedInfoOpen(true)} style={{ background: 'none', border: 'none', padding: 0, color: '#4ade80', fontWeight: 700, cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline' }}>✓ Verified</button> status.{' '}
+        Any user with at least <strong style={{ color: 'var(--gold)' }}>1 graded pick</strong> appears here. Toggle "Verified Only" above to filter to pre-game picks only.
       </div>
         </>
       )}{/* end sharp tab */}
