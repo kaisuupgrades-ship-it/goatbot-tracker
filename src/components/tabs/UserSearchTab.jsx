@@ -162,7 +162,7 @@ function UserCard({ entry, rank, currentUserId, onViewProfile }) {
           {/* Record text + W/L strip */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-              {entry.wins}W–{entry.losses}L{(entry.pushes ?? 0) > 0 ? `–${entry.pushes}P` : ''} · {entry.total} picks
+              {entry.wins}W-{entry.losses}L{(entry.pushes ?? 0) > 0 ? `-${entry.pushes}P` : ''} · {entry.total} picks
             </span>
             <ResultStrip results={entry.recent_results || []} />
           </div>
