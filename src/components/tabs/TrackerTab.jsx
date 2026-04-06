@@ -544,7 +544,7 @@ function MomentumStrip({ picks }) {
 
       {/* Pick strip */}
       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginRight: '2px' }}><- older</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginRight: '2px' }}>{'<- older'}</span>
         {last.map((p, i) => (
           <div
             key={i}
@@ -563,7 +563,7 @@ function MomentumStrip({ picks }) {
             {p.result === 'WIN' ? 'W' : p.result === 'LOSS' ? 'L' : 'P'}
           </div>
         ))}
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginLeft: '2px' }}>recent -></span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', alignSelf: 'center', marginLeft: '2px' }}>{'recent ->'}</span>
       </div>
     </div>
   );
@@ -772,7 +772,7 @@ function DateRangeSelector({ range, onChange }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '4px' }}>
           <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', padding: '3px 8px', fontSize: '0.75rem' }} />
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>-></span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{'->'}</span>
           <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', padding: '3px 8px', fontSize: '0.75rem' }} />
           <button onClick={applyCustom} style={{
@@ -784,7 +784,7 @@ function DateRangeSelector({ range, onChange }) {
 
       {(range.start || range.end) && (
         <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-          {range.start || '...'} -> {range.end || 'today'}
+          {range.start || '...'} {'->'} {range.end || 'today'}
         </span>
       )}
     </div>
@@ -950,22 +950,4 @@ export default function TrackerTab({ picks, user }) {
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{p.sport} . {p.bet_type}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.88rem', fontFamily: 'IBM Plex Mono' }}>
-                    {parseInt(p.odds) > 0 ? '+' : ''}{p.odds}
-                  </span>
-                  <span className={`badge-${p.result?.toLowerCase() || 'pending'}`} style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
-                    {p.result || 'PENDING'}
-                  </span>
-                  <span style={{ color: parseFloat(p.profit) >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600, fontSize: '0.82rem', fontFamily: 'IBM Plex Mono', minWidth: '50px', textAlign: 'right' }}>
-                    {p.profit != null && p.profit !== '' ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '-'}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
+                  <span style={{ color: pa

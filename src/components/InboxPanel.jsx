@@ -468,4 +468,21 @@ export default function InboxPanel({ user, isOpen, onClose, initialRecipient = n
             <MessageThread
               userId={userId}
               partner={activePartner}
-              messages={
+              messages={messages}
+              loading={loadingThread}
+              sending={sending}
+              onSend={sendMessage}
+              onBack={() => { setView('list'); loadInbox(); }}
+            />
+          ) : (
+            <ComposeView
+              userId={userId}
+              onSent={(recipient) => openThread({ id: recipient.user_id, ...recipient })}
+              onCancel={() => setView('list')}
+            />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

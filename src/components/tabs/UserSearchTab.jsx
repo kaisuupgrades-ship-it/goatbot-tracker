@@ -322,7 +322,7 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
               onChange={e => setDateFrom(e.target.value)}
               style={{ padding: '3px 8px', fontSize: '0.75rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
             />
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>-></span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{'->'}</span>
             <input
               type="date"
               value={dateTo}
@@ -396,20 +396,4 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
         </div>
       )}
 
-      <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-        Only bettors with settled picks are shown. Click any row to view profile.
-        {isDemo && ' (Demo data)'}
-      </div>
-
-      {/* Profile modal */}
-      {viewProfile && (
-        <PublicProfileModal
-          entry={viewProfile}
-          onClose={() => setViewProfile(null)}
-          onOpenInbox={onOpenInbox}
-          currentUser={user}
-        />
-      )}
-    </div>
-  );
-}
+      <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted

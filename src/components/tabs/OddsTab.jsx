@@ -572,7 +572,7 @@ function SetupScreen() {
       <div className="card" style={{ padding: '1.5rem', textAlign: 'left', marginBottom: '1rem' }}>
         <p style={{ color: '#FFB800', fontWeight: 700, marginBottom: '0.8rem', fontSize: '0.85rem' }}>[sharp] Quick Setup (2 min)</p>
         <ol style={{ color: '#777', fontSize: '0.84rem', lineHeight: 2.1, paddingLeft: '1.2rem' }}>
-          <li>Go to <a href="https://odds-api.io" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>odds-api.io</a> -> Sign up free</li>
+          <li>Go to <a href="https://odds-api.io" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>odds-api.io</a>{' -> Sign up free'}</li>
           <li>Copy your API key from the dashboard</li>
           <li>Open <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#ddd', fontSize: '0.8rem' }}>goatbot-app/.env.local</code></li>
           <li>Add: <code style={{ background: '#1a1a1a', padding: '1px 6px', borderRadius: '3px', color: '#4ade80', fontSize: '0.8rem' }}>ODDS_API_KEY=your-key-here</code></li>

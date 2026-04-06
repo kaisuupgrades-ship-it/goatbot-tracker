@@ -696,7 +696,7 @@ Return ONLY the JSON array, no other text.`;
                 transition: 'all 0.12s', whiteSpace: 'nowrap',
               }}
             >
-              <- Back to BetOS AI
+              {'<- Back to BetOS AI'}
             </button>
           )}
         </div>
@@ -807,21 +807,4 @@ Return ONLY the JSON array, no other text.`;
 
       {/* No edges found after scan */}
       {!loading && scanned && !error && filtered.length === 0 && edges.length > 0 && (
-        <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-          No {sport !== 'all' ? sport.toUpperCase() : ''} edges found - try "All Today" or refresh for a different sport.
-        </div>
-      )}
-
-      {/* Ask the Analyst - always visible */}
-      <AskAnalyst user={user} />
-
-      {/* Footer info */}
-      <div style={{ padding: '0.7rem 1rem', background: '#080808', border: '1px solid #1a1a1a', borderRadius: '8px', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.68rem', color: '#444' }}>
-        <span>[live] Live odds from ESPN</span>
-        <span>[AI] AI-powered edge detection with live data</span>
-        <span>[sharp] Situational edges: rest, matchups, line value, public fade spots</span>
-        <span>[chat] 5 free analyst queries/day per user</span>
-      </div>
-    </div>
-  );
-}
+        <div style={{ padding: '1.5rem', textAlign: 'ce

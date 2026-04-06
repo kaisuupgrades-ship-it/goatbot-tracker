@@ -748,7 +748,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                   {selectedBet ? `Why is this ${selectedBet.bet_type?.toLowerCase()} line set here?` : 'Have a question about these lines?'}
                 </div>
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                  Ask GoatBot - opens Analyzer with this game pre-loaded ->
+                  {'Ask GoatBot - opens Analyzer with this game pre-loaded ->'}
                 </div>
               </div>
             </div>

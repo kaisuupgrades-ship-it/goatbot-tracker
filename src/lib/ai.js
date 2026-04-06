@@ -109,7 +109,7 @@ async function callClaude({ system, user, maxTokens = 1500, temperature = 0.7, s
  *
  * @param {object} opts
  * @param {string}  opts.system        - system prompt
- * @param {string}  opts.user          — user message / prompt
+ * @param {string}  opts.user          - user message / prompt
  * @param {number}  [opts.maxTokens]   — max response tokens
  * @param {number}  [opts.temperature] — 0-1 creativity
  * @param {boolean} [opts.webSearch]   — enable xAI web search (no effect on Claude)

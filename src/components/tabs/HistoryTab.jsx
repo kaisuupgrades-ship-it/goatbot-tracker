@@ -411,7 +411,7 @@ function SlipImport({ onFilled }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                 <span style={{ color: 'var(--gold)', fontWeight: 700, fontSize: '0.85rem' }}>[ok] Parsed Successfully</span>
                 <button className="btn btn-primary" onClick={handleUse} style={{ fontSize: '0.78rem', padding: '4px 12px' }}>
-                  Fill Form ->
+                  {'Fill Form ->'}
                 </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', fontSize: '0.8rem' }}>
