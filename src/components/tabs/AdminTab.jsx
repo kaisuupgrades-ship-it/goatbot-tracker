@@ -3061,6 +3061,11 @@ const ADMIN_TABS = [
 
 export default function AdminTab({ user }) {
   const [active, setActive] = useState('overview');
+  // Track which panels have been visited — lazy-mount then keep alive.
+  // A panel is mounted on first visit and never unmounted again, so any
+  // in-flight API call (pre-gen, grading, etc.) continues even if the
+  // admin clicks to a different panel mid-run.
+  const [everMounted, setEverMounted] = React.useState(() => new Set(['overview']));
 
   const isAdmin = ADMIN_EMAILS.length > 0
     ? ADMIN_EMAILS.includes(user?.email?.toLowerCase())
@@ -3075,6 +3080,16 @@ export default function AdminTab({ user }) {
       </div>
     );
   }
+
+  // Mark panel as ever-mounted whenever the user navigates to it
+  React.useEffect(() => {
+    setEverMounted(prev => {
+      if (prev.has(active)) return prev;
+      const next = new Set(prev);
+      next.add(active);
+      return next;
+    });
+  }, [active]);
 
   const desc = ADMIN_TABS.find(t => t.id === active)?.desc;
 
@@ -3111,15 +3126,18 @@ export default function AdminTab({ user }) {
       </div>
       <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '-0.5rem 0 0' }}>{desc}</p>
 
-      {/* Panel content */}
-      {active === 'overview' && <OverviewPanel         userEmail={user.email} />}
-      {active === 'users'    && <UsersMegaPanel        userEmail={user.email} />}
-      {active === 'picks'    && <PicksAuditPanel       userEmail={user.email} />}
-      {active === 'contests' && <ContestsPanel         userEmail={user.email} />}
-      {active === 'chat'     && <ChatRoomAdminPanel    userEmail={user.email} />}
-      {active === 'flags'    && <FlagsPanel            userEmail={user.email} />}
-      {active === 'aitools'  && <AIToolsPanel          userEmail={user.email} />}
-      {active === 'system'   && <SystemMegaPanel       userEmail={user.email} />}
+      {/* Panel content — lazy-mount (first visit) then stay mounted forever.
+          display:none hides the inactive panel without unmounting it, so any
+          in-flight operations (pre-gen, batch grade, AI runs, etc.) continue
+          uninterrupted even when the admin switches panels mid-run. */}
+      {everMounted.has('overview') && <div style={{ display: active === 'overview' ? 'block' : 'none' }}><OverviewPanel      userEmail={user.email} /></div>}
+      {everMounted.has('users')    && <div style={{ display: active === 'users'    ? 'block' : 'none' }}><UsersMegaPanel     userEmail={user.email} /></div>}
+      {everMounted.has('picks')    && <div style={{ display: active === 'picks'    ? 'block' : 'none' }}><PicksAuditPanel    userEmail={user.email} /></div>}
+      {everMounted.has('contests') && <div style={{ display: active === 'contests' ? 'block' : 'none' }}><ContestsPanel      userEmail={user.email} /></div>}
+      {everMounted.has('chat')     && <div style={{ display: active === 'chat'     ? 'block' : 'none' }}><ChatRoomAdminPanel userEmail={user.email} /></div>}
+      {everMounted.has('flags')    && <div style={{ display: active === 'flags'    ? 'block' : 'none' }}><FlagsPanel         userEmail={user.email} /></div>}
+      {everMounted.has('aitools')  && <div style={{ display: active === 'aitools'  ? 'block' : 'none' }}><AIToolsPanel       userEmail={user.email} /></div>}
+      {everMounted.has('system')   && <div style={{ display: active === 'system'   ? 'block' : 'none' }}><SystemMegaPanel    userEmail={user.email} /></div>}
     </div>
   );
 }

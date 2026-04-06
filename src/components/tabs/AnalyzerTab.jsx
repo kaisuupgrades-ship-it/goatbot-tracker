@@ -2589,8 +2589,14 @@ export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPro
         {SECTIONS.find(s => s.id === active)?.desc}
       </p>
 
-      {/* Section content — BetOSLive stays mounted to preserve results */}
-      {active === 'insights'  && <BettingInsights picks={picks} />}
+      {/* All three sections stay mounted at all times (display:none when inactive).
+          This means switching away mid-analysis NEVER cancels an in-flight request —
+          the fetch continues, state updates land, and the result is waiting when
+          the user comes back. Using conditional && rendering would unmount the
+          component and silently discard the result. */}
+      <div style={{ display: active === 'insights' ? 'block' : 'none' }}>
+        <BettingInsights picks={picks} />
+      </div>
       <div style={{ display: active === 'betos' ? 'block' : 'none' }}>
         <BetOSLive
           injectedPrompt={goatPrompt}
@@ -2601,7 +2607,9 @@ export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPro
           isDemo={isDemo}
         />
       </div>
-      {active === 'filter'   && <FilterAnalysis picks={picks} />}
+      <div style={{ display: active === 'filter' ? 'block' : 'none' }}>
+        <FilterAnalysis picks={picks} />
+      </div>
     </div>
   );
 }

@@ -618,22 +618,23 @@ export default function BacktestPanel({ userEmail }) {
         ))}
       </div>
 
-      {/* Panel body */}
-      {tab === 'run' && (
+      {/* Panel body — all three stay mounted so switching tabs mid-backtest
+          doesn't cancel an in-flight run. display:none keeps them alive. */}
+      <div style={{ display: tab === 'run' ? 'block' : 'none' }}>
         <Section title="Filter Builder & Results">
           <RunBacktest userEmail={userEmail} key={importCount} />
         </Section>
-      )}
-      {tab === 'edges' && (
+      </div>
+      <div style={{ display: tab === 'edges' ? 'block' : 'none' }}>
         <Section title="Your Sharp Edges">
           <ActiveEdges userEmail={userEmail} />
         </Section>
-      )}
-      {tab === 'import' && (
+      </div>
+      <div style={{ display: tab === 'import' ? 'block' : 'none' }}>
         <Section title="CSV Import">
           <ImportPanel userEmail={userEmail} onImported={() => { setImportCount(c => c + 1); setTab('run'); }} />
         </Section>
-      )}
+      </div>
     </div>
   );
 }
