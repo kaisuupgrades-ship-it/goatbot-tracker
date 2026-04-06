@@ -86,9 +86,9 @@ function calcBetStatus(pick, event) {
     const oppScore    = pickIsAway ? homeScore : awayScore;
     const pickedAbbr  = pickIsAway ? awayAbbr  : homeAbbr;
     const oppAbbr     = pickIsAway ? homeAbbr  : awayAbbr;
-    if (pickedScore > oppScore)  return { status: 'winning', detail: `${pickedAbbr} leads ${pickedScore}–${oppScore}` };
-    if (pickedScore === oppScore) return { status: 'push',   detail: `Tied ${pickedScore}–${oppScore}` };
-    return { status: 'losing', detail: `${pickedAbbr} trails ${pickedScore}–${oppScore}` };
+    if (pickedScore > oppScore)  return { status: 'winning', detail: `${pickedAbbr} leads ${pickedScore}-${oppScore}` };
+    if (pickedScore === oppScore) return { status: 'push',   detail: `Tied ${pickedScore}-${oppScore}` };
+    return { status: 'losing', detail: `${pickedAbbr} trails ${pickedScore}-${oppScore}` };
   }
 
   // ── Spread / Run Line / Puck Line ─────────────────────────────────────────
@@ -101,7 +101,7 @@ function calcBetStatus(pick, event) {
     // Heuristic: need >1.5 lead to be clearly covering a typical spread
     if (diff >= 2)   return { status: 'winning', detail: `${pickedAbbr} leads by ${diff}` };
     if (diff === 1)  return { status: 'push',   detail: `${pickedAbbr} +1 (on the line)` };
-    if (diff === 0)  return { status: 'push',   detail: `Tied ${pickedScore}–${oppScore}` };
+    if (diff === 0)  return { status: 'push',   detail: `Tied ${pickedScore}-${oppScore}` };
     return { status: 'losing', detail: `${pickedAbbr} trails by ${Math.abs(diff)}` };
   }
 
