@@ -1721,8 +1721,16 @@ function SystemPanel({ userEmail }) {
     setPregenResult(null);
     setPregenLiveLog([]);
 
+    // Sync the analyses viewer to the target date immediately
+    if (targetDate) {
+      setAnalysesDate(targetDate);
+      loadGeneratedAnalyses(targetDate);
+    }
+
     const SPORTS = ['mlb', 'nba', 'nhl', 'nfl', 'mls'];
-    const base   = { userEmail, force: true };
+    // force: false = skip games that already have a fresh analysis (< 3.5h old)
+    // This prevents re-running the same matchup twice — only missing games get generated
+    const base = { userEmail, force: false };
     if (targetDate) base.date = targetDate;
 
     let totalGenerated = 0, totalSkipped = 0, totalErrors = 0;
@@ -1975,44 +1983,48 @@ function SystemPanel({ userEmail }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            className="btn-gold"
-            onClick={() => {
-              // Use ET date so "today" is correct even after midnight UTC
-              const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-              const yyyy = etNow.getFullYear();
-              const mm = String(etNow.getMonth() + 1).padStart(2, '0');
-              const dd = String(etNow.getDate()).padStart(2, '0');
-              runPregenAnalysis(`${yyyy}-${mm}-${dd}`);
-            }}
-            disabled={pregenRunning}
-            style={{ opacity: pregenRunning ? 0.6 : 1 }}
-          >
-            {pregenRunning ? '⟳ Running on server… (safe to switch tabs)' : '⚡ Generate Today'}
-          </button>
-          <button
-            onClick={() => {
-              // Use ET (America/New_York) so "tomorrow" is correct even after midnight UTC
-              const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-              etNow.setDate(etNow.getDate() + 1);
-              const yyyy = etNow.getFullYear();
-              const mm = String(etNow.getMonth() + 1).padStart(2, '0');
-              const dd = String(etNow.getDate()).padStart(2, '0');
-              runPregenAnalysis(`${yyyy}-${mm}-${dd}`);
-            }}
-            disabled={pregenRunning}
-            style={{
-              opacity: pregenRunning ? 0.6 : 1,
-              padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.82rem',
-              border: '1px solid rgba(148,163,184,0.3)', background: 'rgba(148,163,184,0.06)',
-              color: 'var(--text-secondary)', cursor: pregenRunning ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit', transition: 'all 0.12s',
-            }}
-          >
-            📅 Generate Tomorrow
-          </button>
-        </div>
+        {(() => {
+          // Compute ET today and tomorrow once for display and action
+          const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          const etFmt = (d) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+          };
+          const todayET = etFmt(etNow);
+          const etTom = new Date(etNow); etTom.setDate(etTom.getDate() + 1);
+          const tomorrowET = etFmt(etTom);
+          const labelFmt = (dateStr) => {
+            const [y, m, d] = dateStr.split('-');
+            return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          };
+          return (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              className="btn-gold"
+              onClick={() => { setAnalysesDate(todayET); loadGeneratedAnalyses(todayET); runPregenAnalysis(todayET); }}
+              disabled={pregenRunning}
+              style={{ opacity: pregenRunning ? 0.6 : 1 }}
+            >
+              {pregenRunning ? '⟳ Running… (safe to switch tabs)' : `⚡ Generate Today — ${labelFmt(todayET)}`}
+            </button>
+            <button
+              onClick={() => { setAnalysesDate(tomorrowET); loadGeneratedAnalyses(tomorrowET); runPregenAnalysis(tomorrowET); }}
+              disabled={pregenRunning}
+              style={{
+                opacity: pregenRunning ? 0.6 : 1,
+                padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.82rem',
+                border: '1px solid rgba(148,163,184,0.3)', background: 'rgba(148,163,184,0.06)',
+                color: 'var(--text-secondary)', cursor: pregenRunning ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', transition: 'all 0.12s',
+              }}
+            >
+              📅 Generate Tomorrow — {labelFmt(tomorrowET)}
+            </button>
+          </div>
+          );
+        })()}
       </div>
 
       {/* ── Generated Analyses Log ── */}
@@ -2026,16 +2038,51 @@ function SystemPanel({ userEmail }) {
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <input
-              type="date"
-              value={analysesDate}
-              onChange={e => { setAnalysesDate(e.target.value); loadGeneratedAnalyses(e.target.value); }}
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-primary)', padding: '2px 6px', fontSize: '0.68rem', cursor: 'pointer' }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {/* Prev day */}
+            <button
+              onClick={() => {
+                const d = new Date(analysesDate + 'T12:00:00');
+                d.setDate(d.getDate() - 1);
+                const s = d.toISOString().split('T')[0];
+                setAnalysesDate(s); loadGeneratedAnalyses(s);
+              }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem', lineHeight: 1 }}
+            >‹</button>
+            {/* Date label — clicking opens the date input */}
+            <label style={{ position: 'relative', cursor: 'pointer' }}>
+              <span style={{
+                display: 'inline-block', padding: '3px 10px', borderRadius: '5px',
+                background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
+                color: 'var(--text-primary)', fontSize: '0.72rem', fontWeight: 600,
+                fontFamily: 'IBM Plex Mono, monospace', userSelect: 'none',
+              }}>
+                {(() => {
+                  const [y, m, d] = analysesDate.split('-');
+                  return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                })()}
+              </span>
+              <input
+                type="date"
+                value={analysesDate}
+                onChange={e => { setAnalysesDate(e.target.value); loadGeneratedAnalyses(e.target.value); }}
+                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}
+              />
+            </label>
+            {/* Next day */}
+            <button
+              onClick={() => {
+                const d = new Date(analysesDate + 'T12:00:00');
+                d.setDate(d.getDate() + 1);
+                const s = d.toISOString().split('T')[0];
+                setAnalysesDate(s); loadGeneratedAnalyses(s);
+              }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem', lineHeight: 1 }}
+            >›</button>
+            {/* Refresh */}
             <button
               onClick={() => loadGeneratedAnalyses()}
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 8px', fontSize: '0.68rem' }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem' }}
             >↻</button>
           </div>
         </div>
