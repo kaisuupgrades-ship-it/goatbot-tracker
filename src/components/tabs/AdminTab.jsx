@@ -2115,7 +2115,7 @@ function SystemPanel({ userEmail }) {
           <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.12)', borderRadius: '7px', fontSize: '0.72rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ color: '#60a5fa' }}>[time] Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
             <span style={{ color: '#4ade80' }}>[ok] {pregenLog.generated} generated</span>
-            <span style={{ color: 'var(--text-muted)' }}>>> {pregenLog.skipped} skipped</span>
+            <span style={{ color: 'var(--text-muted)' }}>{'>>'} {pregenLog.skipped} skipped</span>
             {pregenLog.errors > 0 && <span style={{ color: '#f87171' }}>[!] {pregenLog.errors} errors</span>}
             <span style={{ color: 'var(--text-muted)' }}>[wait] {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
           </div>
@@ -2254,7 +2254,7 @@ function SystemPanel({ userEmail }) {
                 setAnalysesDate(s); loadGeneratedAnalyses(s);
               }}
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem', lineHeight: 1 }}
-            ><</button>
+            >{'<'}</button>
             {/* Date label - clicking opens the date input */}
             <label style={{ position: 'relative', cursor: 'pointer' }}>
               <span style={{
@@ -2284,7 +2284,7 @@ function SystemPanel({ userEmail }) {
                 setAnalysesDate(s); loadGeneratedAnalyses(s);
               }}
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem', lineHeight: 1 }}
-            >></button>
+            >{'>'}</button>
             {/* Refresh */}
             <button
               onClick={() => loadGeneratedAnalyses()}

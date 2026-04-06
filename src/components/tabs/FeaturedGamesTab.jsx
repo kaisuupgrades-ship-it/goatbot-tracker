@@ -659,7 +659,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                 color: 'var(--text-muted)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem',
               }}
               title="Previous day"
-            ><</button>
+            >{'<'}</button>
             <span style={{
               fontSize: '0.73rem', fontWeight: 700, color: isToday ? 'var(--gold)' : 'var(--text-secondary)',
               padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px',
@@ -674,7 +674,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                 color: 'var(--text-muted)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem',
               }}
               title="Next day"
-            >></button>
+            >{'>'}</button>
             {!isToday && (
               <button
                 onClick={() => { setLiveData({}); setViewDate(new Date()); }}
@@ -984,30 +984,4 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
               }
             }
           }
-          odds = {
-            homeOdds, awayOdds,
-            spread:          rawOdds.details || null,
-            total:           rawOdds.overUnder ?? null,
-            homeSpreadOdds:  rawOdds._homeSpreadOdds ?? rawOdds.homeTeamOdds?.spreadLine ?? null,
-            awaySpreadOdds:  rawOdds._awaySpreadOdds ?? rawOdds.awayTeamOdds?.spreadLine ?? null,
-            overOdds:        rawOdds._overOdds  ?? rawOdds.overOdds  ?? null,
-            underOdds:       rawOdds._underOdds ?? rawOdds.underOdds ?? null,
-            provider:        rawOdds._source    ?? rawOdds.provider?.name ?? '',
-          };
-        }
-        return (
-          <BetSlipModal
-            game={{ away, home, odds, date: ev?.date }}
-            sport={betSlipGame.sport}
-            user={user}
-            picks={picks}
-            setPicks={setPicks}
-            isDemo={isDemo}
-            onAnalyze={onAnalyze}
-            onClose={() => setBetSlipGame(null)}
-          />
-        );
-      })()}
-    </div>
-  );
-}
+          odd

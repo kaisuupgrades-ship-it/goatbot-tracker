@@ -2321,7 +2321,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               setSelectedDate(toLocalDateStr(d));
             }}
             style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-          ><</button>
+          >{'<'}</button>
 
           {/* Quick presets: Yesterday + Today + next 6 days */}
           <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px', flexShrink: 1 }}>
@@ -2378,7 +2378,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               setSelectedDate(toLocalDateStr(d));
             }}
             style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-          >></button>
+          >{'>'}</button>
         </div>
 
         {/* Filter pills */}
@@ -2777,63 +2777,4 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                               onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
                             >
                               {article.team && (
-                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                  {article.team}
-                                </div>
-                              )}
-                              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35, marginBottom: '2px' }}>
-                                {article.headline}
-                              </div>
-                              {article.description && (
-                                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                  {article.description}
-                                </div>
-                              )}
-                              {dateStr && (
-                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '3px', opacity: 0.65 }}>
-                                  {ageHours < 6 ? '[rec] ' : ageHours < 24 ? '[?] ' : ''}{dateStr}
-                                </div>
-                              )}
-                            </div>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {injuryPlayers.length === 0 && injuryArticles.length === 0 && !injuryLoading && (
-                  <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>[injury]</div>
-                    <div style={{ fontSize: '0.75rem' }}>No injury data found</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-
-    {/* ── Bet Slip Modal ─────────────────────────────────────────────────── */}
-    {betSlipGame && (() => {
-      // Events are pre-enriched via enrichedGames - single source of truth, no separate merge needed
-      const { away, home } = getCompetitors(betSlipGame.event);
-      const odds = getOdds(betSlipGame.event);
-      return (
-        <BetSlipModal
-          game={{ away, home, odds, date: betSlipGame.event?.date }}
-          sport={betSlipGame.sport}
-          user={user}
-          picks={picks}
-          setPicks={setPicks}
-          isDemo={isDemo}
-          onAnalyze={onAnalyze}
-          onClose={() => setBetSlipGame(null)}
-        />
-      );
-    })()}
-    </>
-  );
-}
+        
