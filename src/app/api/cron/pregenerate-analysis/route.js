@@ -370,6 +370,15 @@ export async function GET(req) {
     const events = await fetchTodaysGames(sport, espnDate);
     if (!events.length) continue;
 
+    // Determine trigger source for audit logging
+    const triggerSource = sportFilter
+      ? 'admin_per_sport'
+      : params.get('force') === 'true'
+        ? 'admin_manual'
+        : new Date().getUTCHours() < 14 ? 'cron_8am' : 'cron_4pm';
+
+    // Build list of games that need analysis
+    const gamesToProcess = [];
     for (const event of events) {
       const comps   = event.competitions?.[0]?.competitors || [];
       const homeComp = comps.find(c => c.homeAway === 'home');
@@ -411,83 +420,113 @@ export async function GET(req) {
         ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
         : '';
 
-      console.log(`[pregenerate] Generating: ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) ${gameTime}`);
+      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime });
+    }
 
-      // Determine trigger source for audit logging
-      const triggerSource = sportFilter
-        ? 'admin_per_sport'
-        : params.get('force') === 'true'
-          ? 'admin_manual'
-          : new Date().getUTCHours() < 14 ? 'cron_8am' : 'cron_4pm';
+    if (!gamesToProcess.length) continue;
 
-      try {
-        const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport]);
-        if (!result) { errors.push(`${awayTeam}@${homeTeam}: no AI response`); continue; }
+    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (parallel batches of 3)`);
 
-        // Parse pick/conf/edge from the response for immediate storage
-        const pickM = result.text.match(/THE PICK[:\s]+([^\n]{5,120})/i);
-        const confM = result.text.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
-        const edgeM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+)/i);
+    // ── Process games in PARALLEL batches of 3 ──────────────────────────────
+    // Each AI call takes 60-90s. Sequential = timeout after 3-4 games.
+    // Parallel batches of 3: 15 games = 5 batches × 90s = ~7.5 min worst case.
+    // With per-sport cron (max ~8 games/sport), 3 batches × 90s = ~4.5 min.
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
+      const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
 
-        // Upsert into game_analyses table (now with audit columns)
-        const { data: upserted } = await supabase.from('game_analyses').upsert(
-          [{
-            sport,
-            game_date:      todayStr,
-            home_team:      homeTeam,
-            away_team:      awayTeam,
-            analysis:       result.text,
-            model:          result.model,
-            provider:       result.provider,
-            was_fallback:   result.was_fallback,
-            latency_ms:     result.latency_ms,
-            tokens_in:      result.tokens_in,
-            tokens_out:     result.tokens_out,
-            prompt_version: result.prompt_version,
-            trigger_source: triggerSource,
-            run_id:         runId,
-            prediction_pick: pickM?.[1]?.trim() || null,
-            prediction_conf: confM?.[1]?.trim() || null,
-            generated_at:   new Date().toISOString(),
-            updated_at:     new Date().toISOString(),
-          }],
-          { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
-        ).select('id').maybeSingle();
-
-        // Write to the detailed audit log
-        await supabase.from('analysis_audit_logs').insert([{
-          analysis_id:     upserted?.id || null,
-          sport,
-          game_date:       todayStr,
-          home_team:       homeTeam,
-          away_team:       awayTeam,
-          model_requested: 'grok-4',
-          model_used:      result.model_used,
-          provider:        result.provider,
-          was_fallback:    result.was_fallback,
-          prompt_version:  result.prompt_version,
-          system_prompt:   result.system_prompt,
-          user_prompt:     result.user_prompt,
-          odds_context:    oddsContext || null,
-          espn_game_state: 'pre',
-          game_time:       gameTime || null,
-          raw_response:    result.text,
-          tokens_in:       result.tokens_in,
-          tokens_out:      result.tokens_out,
-          latency_ms:      result.latency_ms,
-          parsed_pick:     pickM?.[1]?.trim() || null,
-          parsed_conf:     confM?.[1]?.trim() || null,
-          parsed_edge:     edgeM?.[1]?.trim() || null,
-          trigger_source:  triggerSource,
-          run_id:          runId,
-        }]).catch(e => console.warn('[pregenerate] Audit log insert failed:', e.message));
-
-        generated.push(`${awayTeam}@${homeTeam} (${sport.toUpperCase()})`);
-        // Small delay between games to avoid rate limiting
-        await new Promise(r => setTimeout(r, 1000));
-      } catch (e) {
-        errors.push(`${awayTeam}@${homeTeam}: ${e.message}`);
+      // Check if we're approaching the 5-min Vercel timeout (leave 30s buffer)
+      const elapsed = Date.now() - started;
+      if (elapsed > 270_000) { // 4.5 min
+        console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
+        for (const g of gamesToProcess.slice(i)) {
+          errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
+        }
+        break;
       }
+
+      const batchResults = await Promise.allSettled(
+        batch.map(async ({ homeTeam, awayTeam, oddsContext, gameTime }) => {
+          console.log(`[pregenerate] Generating: ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) ${gameTime}`);
+
+          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport]);
+          if (!result) throw new Error('no AI response');
+
+          // Parse pick/conf/edge from the response
+          const pickM = result.text.match(/THE PICK[:\s]+([^\n]{5,120})/i);
+          const confM = result.text.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
+          const edgeM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+)/i);
+
+          // Upsert into game_analyses table
+          const { data: upserted } = await supabase.from('game_analyses').upsert(
+            [{
+              sport,
+              game_date:      todayStr,
+              home_team:      homeTeam,
+              away_team:      awayTeam,
+              analysis:       result.text,
+              model:          result.model,
+              provider:       result.provider,
+              was_fallback:   result.was_fallback,
+              latency_ms:     result.latency_ms,
+              tokens_in:      result.tokens_in,
+              tokens_out:     result.tokens_out,
+              prompt_version: result.prompt_version,
+              trigger_source: triggerSource,
+              run_id:         runId,
+              prediction_pick: pickM?.[1]?.trim() || null,
+              prediction_conf: confM?.[1]?.trim() || null,
+              generated_at:   new Date().toISOString(),
+              updated_at:     new Date().toISOString(),
+            }],
+            { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
+          ).select('id').maybeSingle();
+
+          // Write to the detailed audit log
+          await supabase.from('analysis_audit_logs').insert([{
+            analysis_id:     upserted?.id || null,
+            sport,
+            game_date:       todayStr,
+            home_team:       homeTeam,
+            away_team:       awayTeam,
+            model_requested: 'grok-4',
+            model_used:      result.model_used,
+            provider:        result.provider,
+            was_fallback:    result.was_fallback,
+            prompt_version:  result.prompt_version,
+            system_prompt:   result.system_prompt,
+            user_prompt:     result.user_prompt,
+            odds_context:    oddsContext || null,
+            espn_game_state: 'pre',
+            game_time:       gameTime || null,
+            raw_response:    result.text,
+            tokens_in:       result.tokens_in,
+            tokens_out:      result.tokens_out,
+            latency_ms:      result.latency_ms,
+            parsed_pick:     pickM?.[1]?.trim() || null,
+            parsed_conf:     confM?.[1]?.trim() || null,
+            parsed_edge:     edgeM?.[1]?.trim() || null,
+            trigger_source:  triggerSource,
+            run_id:          runId,
+          }]).catch(e => console.warn('[pregenerate] Audit log insert failed:', e.message));
+
+          return `${awayTeam}@${homeTeam} (${sport.toUpperCase()})`;
+        })
+      );
+
+      // Collect results from the parallel batch
+      for (let j = 0; j < batchResults.length; j++) {
+        const r = batchResults[j];
+        const g = batch[j];
+        if (r.status === 'fulfilled') {
+          generated.push(r.value);
+        } else {
+          errors.push(`${g.awayTeam}@${g.homeTeam}: ${r.reason?.message || 'unknown error'}`);
+        }
+      }
+
+      // Update progress after each batch
+      await writeProgress(sport, 'running');
     }
   }
 
