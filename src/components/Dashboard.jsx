@@ -353,6 +353,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
               onHighlightConsumed={() => setScoreboardGame(null)}
               activeSport={activeSport}
               onSportChange={setActiveSport}
+              isActive={activeTab === 'scoreboard'}
             />
           </div>
           <div style={{ display: activeTab === 'odds'       ? 'block' : 'none' }}>
@@ -363,7 +364,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
             />
           </div>
           <div style={{ display: activeTab === 'history'    ? 'block' : 'none' }}>
-            <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} onLeaderboardRefresh={() => setLeaderboardRefreshKey(k => k + 1)} />
+            <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} onLeaderboardRefresh={() => setLeaderboardRefreshKey(k => k + 1)} isActive={activeTab === 'history'} />
           </div>
           <div style={{ display: activeTab === 'analyzer'   ? 'block' : 'none' }}>
             <AnalyzerTab
@@ -374,11 +375,11 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           </div>
           {/* Contest — standalone, always mounts Contest sub-tab */}
           <div style={{ display: activeTab === 'leaderboard' ? 'block' : 'none' }}>
-            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="contest" onOpenInbox={openInbox} />
+            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="contest" onOpenInbox={openInbox} isActive={activeTab === 'leaderboard'} />
           </div>
           {/* Sharp Board — standalone sharp rankings */}
           <div style={{ display: activeTab === 'sharpboard' ? 'block' : 'none' }}>
-            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="sharp" onOpenInbox={openInbox} />
+            <LeaderboardTab user={user} isDemo={isDemo} refreshKey={leaderboardRefreshKey} defaultSubTab="sharp" onOpenInbox={openInbox} isActive={activeTab === 'sharpboard'} />
           </div>
           <div style={{ display: activeTab === 'usersearch' ? 'block' : 'none' }}>
             <UserSearchTab user={user} isDemo={isDemo} onOpenInbox={openInbox} />

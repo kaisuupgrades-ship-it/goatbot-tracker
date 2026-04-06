@@ -766,7 +766,7 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
   );
 }
 
-export default function HistoryTab({ picks, setPicks, user, contest, setContest, isDemo, onViewGame, onLeaderboardRefresh }) {
+export default function HistoryTab({ picks, setPicks, user, contest, setContest, isDemo, onViewGame, onLeaderboardRefresh, isActive }) {
   const [addMode, setAddMode]   = useState(null); // null | 'choose' | 'import' | 'manual'
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });

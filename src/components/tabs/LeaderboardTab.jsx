@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchProfile, upsertProfile } from '@/lib/supabase';
 import PublicProfileModal from '../PublicProfileModal';
 import { RankBadge } from './ChatRoomTab';
@@ -735,7 +735,7 @@ function ContestStandings({ userId, isDemo, refreshKey, onViewProfile, isMobile 
   );
 }
 
-export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSubTab = 'contest', onOpenInbox }) {
+export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSubTab = 'contest', onOpenInbox, isActive }) {
   const [subTab, setSubTab]           = useState(defaultSubTab); // 'contest' | 'sharp'
   const [sharpFilter, setSharpFilter] = useState('all');           // default to all users — verified badges still highlight pre-game picks
   const [verifiedInfoOpen, setVerifiedInfoOpen] = useState(false);
@@ -783,6 +783,15 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
     const interval = setInterval(() => { load(); }, 60_000);
     return () => clearInterval(interval);
   }, [load, isDemo]); // eslint-disable-line
+
+  // Refresh immediately when user switches to this tab
+  const prevActiveRef = useRef(isActive);
+  useEffect(() => {
+    if (isActive && !prevActiveRef.current) {
+      load(); // Tab just became visible — refresh now
+    }
+    prevActiveRef.current = isActive;
+  }, [isActive, load]);
 
   // Load own profile
   useEffect(() => {

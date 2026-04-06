@@ -1798,7 +1798,7 @@ function dateLabel(dateStr) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo, highlightGame, onHighlightConsumed, activeSport, onSportChange }) {
+export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo, highlightGame, onHighlightConsumed, activeSport, onSportChange, isActive }) {
   const todayStr = toLocalDateStr(new Date());
   const userPrefs = useMemo(() => getUserPrefs(user), [user]);
 
@@ -2038,6 +2038,17 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
     return () => clearInterval(interval);
   }, [sport, selectedDate, loadGames, loadNews, loadInjuries, loadRealOdds, todayStr]);
+
+  // Refresh scores immediately when user switches to this tab
+  const prevActiveRef = useRef(isActive);
+  useEffect(() => {
+    if (isActive && !prevActiveRef.current) {
+      // Tab just became visible — refresh scores and odds immediately
+      loadGames(sport, selectedDate);
+      loadRealOdds(sport);
+    }
+    prevActiveRef.current = isActive;
+  }, [isActive, sport, selectedDate, loadGames, loadRealOdds]);
 
   // Separate effect: tighten polling to 20s when live games are detected
   useEffect(() => {
