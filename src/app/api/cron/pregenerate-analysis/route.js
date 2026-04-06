@@ -35,45 +35,69 @@ const SPORT_PATHS = {
 
 // ── Prompt versioning ─────────────────────────────────────────────────────────
 // Bump this when you change the system prompt so we can A/B test performance
-const PROMPT_VERSION = 'v1.1';
+const PROMPT_VERSION = 'v2.0';
 
-const ANALYSIS_SYSTEM = `You are BetOS — a sharp AI sports analyst. Produce a concise but complete pre-game analysis report for the given matchup. Use live web search to gather:
-- Starting pitcher/goalie/lineup news confirmed for this specific date
-- Current moneyline, spread, and total odds from major books
-- Line movement since open (direction and key movers)
-- Injury/availability reports from beat reporters
-- Situational angles: rest, travel, weather (outdoor), motivation
+const ANALYSIS_SYSTEM = `You are BetOS — an elite sharp sports betting analyst. This analysis will be cached and served to thousands of users, so it must be comprehensive, data-rich, and genuinely sharp. Treat every matchup as if a professional bettor with a $50K bankroll is relying on your output.
+
+Use live web search aggressively to gather ALL of the following before writing a single word:
+
+REQUIRED RESEARCH (use web search for each item):
+1. Confirmed starters/lineups for this specific date (starting pitcher, goalie, confirmed batting order changes, key INEs)
+2. Current moneyline, spread, total from at least 3 major books (DraftKings, FanDuel, BetMGM, Caesars, DraftKings)
+3. Opening line vs current line — direction and magnitude of movement
+4. Injury/availability reports confirmed by beat reporters or official team sources
+5. Recent form — last 5–10 games for each team (record, run/goal differential, any slumps)
+6. Head-to-head record this season AND historically (last 3 years at minimum)
+7. Home/away splits for each team (road record, home record, relevant stat differences)
+8. Situational edges: rest advantage, travel fatigue, back-to-back, schedule spot
+9. Weather (outdoor sports): wind speed/direction, temperature, precipitation impact on O/U
+10. Public betting percentage and sharp money signals if available (any steam moves, CLV signals)
+11. ATS record (against the spread) for both teams — season-long and recent
+12. Over/Under record for both teams — season-long and in this specific matchup type
+13. Pitcher ERA/WHIP/K-rate at home vs away; bullpen ERA last 7 days (MLB specific)
+14. Goalie save %, goals against average, last 3 starts (NHL specific)
+15. Pace of play, offensive/defensive efficiency ratings (NBA specific)
 
 ---
 ODDS INTEGRITY — non-negotiable:
-- A "Known odds context" block may be provided below. If it is, those numbers come from a verified live feed — use them exactly. Do NOT override them with web-searched numbers.
-- If no odds context is provided, search for current odds. ONLY use a specific number you actually found from a named source (DraftKings, FanDuel, BetMGM, etc.). If your search returns no clear current line, write "line not confirmed" in the pick — never guess or interpolate.
-- Sanity-check every odds figure before writing it. Examples of numbers that should raise red flags: a heavy favorite priced at +EV odds (e.g. world #1 golfer at -110 for a top-10 when the market is closer to -250), a spread that seems too large or small relative to the matchup. If something looks off, say "verify before betting" in the pick.
-- Label all web-searched odds as "(per web search — verify before betting)".
-- THE PICK line MUST use only verified numbers. If odds are unconfirmed, write: "[Team/Player] — [Bet Type] — odds not confirmed, verify on your sportsbook"
+- If a "Known odds context" block is provided below, those numbers come from a VERIFIED live feed — use them as the authoritative line. Do NOT override them.
+- If searching for odds, ONLY cite specific numbers from named sources. Never guess or interpolate.
+- Sanity-check every number: a heavy favorite at +EV odds is a red flag (e.g. -300 team priced at -110). Flag anything suspicious with "verify before betting."
+- Label all web-searched odds as "(web search — verify on your book)".
+- If odds are unconfirmed, write: "[Team] — [Bet Type] — odds not confirmed, verify before betting."
 
-Output format — follow exactly:
+---
+Output format — follow EXACTLY (no markdown asterisks, no bullet points replaced by dashes inside sections):
 
-THE PICK: [Team + Bet Type + Odds (source) + Book] — your sharpest recommended play
+THE PICK: [Team + Bet Type + Odds (source) + Book] — one sharp decisive recommendation
 
-EDGE BREAKDOWN: [2–3 sentences. What the market implies, what you found that shifts it. Specific numbers only.]
+ALTERNATE ANGLES: [1–2 secondary bets worth considering with odds — e.g. a same-game parlay leg, a total, or a first-half play]
+
+EDGE BREAKDOWN: [3–4 sentences. What the market is pricing in, what you found that the market may be under/over-weighting. Cite specific stats and numbers found in your research.]
 
 KEY FACTORS:
-1. [Best verified finding with specific numbers]
-2. [Matchup or starter angle with real context]
-3. [Situational factor — weather/rest/travel/motivation]
+1. [Starter/lineup confirmed finding with specific stats]
+2. [Recent form or H2H angle with concrete numbers]
+3. [Situational or contextual edge — rest, travel, weather, motivation]
+4. [Betting market signal — line movement, public %, steam, CLV opportunity]
+
+LINE MOVEMENT: [Opening line → current line. Direction: sharp-driven or public-driven? Any steam?]
+
+ATS/OU TRENDS: [ATS record for each team this season and recently. O/U trend relevant to this game.]
+
+INJURY REPORT: [Any confirmed absences or questionable statuses affecting the pick, or "None reported as of search time."]
 
 CONFIDENCE: [LOW / MEDIUM / HIGH / ELITE]
 
 EDGE SCORE: [X/10]
 
-BetOS PROBABILITY ESTIMATE: [Market implied: X%. Adjusted to Y–Z% based on: brief reasoning.]
+BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y–Z%. Based on: specific reasoning from your research.]
 
-RECORD IMPACT: [One sentence on unit sizing.]
+UNIT SIZING: [Recommended unit size 0.5u–3u and brief justification tied to confidence level.]
 
 ⚠️ ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets.
 
-Rules: No markdown asterisks. No invented numbers. If you cannot verify a stat or odds figure, say so explicitly. Be decisive.`;
+Rules: Be decisive. Cite specific numbers from your web searches. If you cannot verify something, say so — never fabricate. This analysis will be displayed to users as BetOS's official pre-game breakdown.`;
 
 // includeAll=true: return every game on that date regardless of state (used for
 // admin manual runs where the admin picks an explicit date — games may already be
@@ -190,17 +214,23 @@ async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext
 
   const prompt = isRefresh
     ? `Quick freshness check — ${sport.toUpperCase()} on ${gameDate}: ${awayTeam} @ ${homeTeam}${oddsContext ? `\nCurrent odds reference: ${oddsContext.split('\n')[0]}` : ''}\n\nAny lineup changes, significant line movement, or major news in the last 4 hours?`
-    : `Analyze this ${sport.toUpperCase()} matchup for ${gameDate}:
+    : `Generate a comprehensive BetOS sharp analysis for this ${sport.toUpperCase()} matchup on ${gameDate}:
 
-${awayTeam} @ ${homeTeam}
-${oddsContext ? `\nKnown odds context:\n${oddsContext}` : ''}
-${performanceContext || ''}
+MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
+DATE: ${gameDate}
+${oddsContext ? `\nKNOWN ODDS (verified live feed — use these exact numbers, do NOT override):\n${oddsContext}` : ''}
+${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE CONTEXT (use to calibrate confidence):\n${performanceContext}` : ''}
 
-Provide a full BetOS sharp analysis report. Search for confirmed lineups/starters, current odds and line movement, injury reports, and any situational edges. Pick the sharpest play.`;
+TASK: Perform a thorough sharp analysis. Use web search to research ALL required items in your instructions before writing your output. This analysis will be cached and shown to users as BetOS's official pre-game breakdown — make it comprehensive and data-rich.
+
+Cover all output sections: THE PICK, ALTERNATE ANGLES, EDGE BREAKDOWN, KEY FACTORS (all 4), LINE MOVEMENT, ATS/OU TRENDS, INJURY REPORT, CONFIDENCE, EDGE SCORE, BetOS WIN PROBABILITY, UNIT SIZING, and the disclaimer.`;
 
   const systemToUse   = isRefresh ? QUICK_REFRESH_SYSTEM : ANALYSIS_SYSTEM;
-  const maxTokens     = isRefresh ? 400 : 1600;   // refresh = tiny; full = capped lower than before
-  const grokTimeout   = isRefresh ? 30_000 : 55_000; // fail fast — no waiting 90s
+  // Full: rich comprehensive analysis — 3500 tokens gives ~700–900 words which covers all
+  // required sections. This is "expensive AI once, serve many users from cache."
+  // Refresh: lightweight freshness check only (400 tokens, 30s).
+  const maxTokens     = isRefresh ? 400 : 3500;
+  const grokTimeout   = isRefresh ? 30_000 : 90_000; // full gets 90s for deep web search + rich output
   // NO Claude fallback during bulk runs. One timeout = skip, not retry-with-Claude.
   // Claude is reserved for live user queries (goatbot route) where the UX demands a result.
 
@@ -453,22 +483,23 @@ export async function GET(req) {
       gamesToProcess.splice(MAX_GAMES_PER_SPORT);
     }
 
-    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 6, 55s timeout each, no Claude fallback)`);
+    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 4, 90s timeout each, 3500 tokens, no Claude fallback)`);
 
-    // ── Process games in PARALLEL batches of 6 ──────────────────────────────
-    // Key timeout fixes vs old code:
-    //   • Grok timeout: 90s → 55s  (fail faster)
-    //   • No Claude fallback        (saves 80s per failed game)
-    //   • Batch size: 3 → 6        (more parallelism, fewer batch boundaries)
-    //   • Max 10 games/sport        (hard cap on heavy slates)
-    // Expected: 10 games / 6 per batch = 2 batches × 55s = ~110s ≈ 1.8 min per sport
-    const BATCH_SIZE = 6;
+    // ── Process games in PARALLEL batches of 4 ──────────────────────────────
+    // Upgraded for "expensive AI once, serve many" model:
+    //   • Grok timeout: 55s → 90s   (deep web search + 3500 tokens needs more time)
+    //   • max_output_tokens: 1600 → 3500 (comprehensive multi-section analysis)
+    //   • Batch size: 6 → 4         (fewer in parallel to avoid xAI rate limits at high tokens)
+    //   • No Claude fallback         (skip on timeout, re-runs on next cron cycle)
+    // Expected: 10 games / 4 per batch = 3 batches × 90s = ~270s ≈ 4.5 min per sport
+    // With 4-min safety cutoff: processes ~2.6 batches = 10 games safely
+    const BATCH_SIZE = 4;
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
       const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
 
-      // Safety cutoff: stop 60s before Vercel's hard limit
+      // Safety cutoff: stop with 60s buffer before Vercel's hard 5-min limit
       const elapsed = Date.now() - started;
-      if (elapsed > 240_000) { // 4 min (was 4.5 min — extra safety margin)
+      if (elapsed > 240_000) { // 4 min
         console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
         for (const g of gamesToProcess.slice(i)) {
           errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
@@ -484,10 +515,14 @@ export async function GET(req) {
           const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], gameMode);
           if (!result) throw new Error('no AI response');
 
-          // Parse pick/conf/edge from the response
-          const pickM = result.text.match(/THE PICK[:\s]+([^\n]{5,120})/i);
-          const confM = result.text.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
-          const edgeM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+)/i);
+          // Parse structured sections from the richer v2.0 analysis output
+          const pickM   = result.text.match(/THE PICK[:\s]+([^\n]{5,200})/i);
+          const confM   = result.text.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
+          const edgeM   = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
+          const altM    = result.text.match(/ALTERNATE ANGLES[:\s]+([^\n]{5,300})/i);
+          const lineM   = result.text.match(/LINE MOVEMENT[:\s]+([^\n]{5,300})/i);
+          const unitM   = result.text.match(/UNIT SIZING[:\s]+([^\n]{5,200})/i);
+          const probM   = result.text.match(/BetOS WIN PROBABILITY[:\s]+([^\n]{5,300})/i);
 
           // Upsert into game_analyses table
           const { data: upserted } = await supabase.from('game_analyses').upsert(
@@ -508,6 +543,11 @@ export async function GET(req) {
               run_id:         runId,
               prediction_pick: pickM?.[1]?.trim() || null,
               prediction_conf: confM?.[1]?.trim() || null,
+              prediction_edge: edgeM?.[1]?.trim() || null,
+              alternate_angles: altM?.[1]?.trim() || null,
+              line_movement:   lineM?.[1]?.trim() || null,
+              unit_sizing:     unitM?.[1]?.trim() || null,
+              win_probability: probM?.[1]?.trim() || null,
               generated_at:   new Date().toISOString(),
               updated_at:     new Date().toISOString(),
             }],
