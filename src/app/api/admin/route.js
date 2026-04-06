@@ -430,6 +430,56 @@ export async function POST(req) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === 'add_pick') {
+      // Admin manually creates a pick for any user
+      const { userId, date, sport, team, odds, bet_type, matchup, units, result, notes, contest_entry, is_public, book, line, side, home_team, away_team } = body;
+      if (!userId)  return NextResponse.json({ error: 'userId is required' },  { status: 400 });
+      if (!date)    return NextResponse.json({ error: 'date is required' },    { status: 400 });
+      if (!sport)   return NextResponse.json({ error: 'sport is required' },   { status: 400 });
+      if (!team)    return NextResponse.json({ error: 'team is required' },    { status: 400 });
+      if (odds == null) return NextResponse.json({ error: 'odds is required' }, { status: 400 });
+
+      // Auto-compute profit if a settled result is provided
+      let profit = null;
+      const unitVal = parseFloat(units) || 1;
+      const oddsInt = parseInt(odds);
+      if (result === 'WIN') {
+        profit = oddsInt > 0 ? parseFloat((unitVal * oddsInt / 100).toFixed(2)) : parseFloat((unitVal * 100 / Math.abs(oddsInt)).toFixed(2));
+      } else if (result === 'LOSS') {
+        profit = -unitVal;
+      } else if (result === 'PUSH') {
+        profit = 0;
+      }
+
+      const { data: newPick, error } = await supabaseAdmin.from('picks').insert([{
+        user_id:       userId,
+        date,
+        sport,
+        team,
+        odds:          oddsInt,
+        bet_type:      bet_type      || 'Moneyline',
+        matchup:       matchup       || null,
+        units:         unitVal,
+        result:        result        || null,
+        profit:        profit        !== null ? profit : null,
+        notes:         notes         || null,
+        contest_entry: contest_entry ?? false,
+        is_public:     is_public     ?? true,
+        book:          book          || null,
+        line:          line          || null,
+        side:          side          || null,
+        home_team:     home_team     || null,
+        away_team:     away_team     || null,
+        admin_edited_at: new Date().toISOString(),
+        admin_edited_by: adminEmail,
+        created_at:    new Date().toISOString(),
+        updated_at:    new Date().toISOString(),
+      }]).select().single();
+
+      if (error) throw error;
+      return NextResponse.json({ ok: true, pick: newPick });
+    }
+
     if (action === 'edit_pick') {
       // Admin can correct: team, sport, bet_type, odds, units, result, notes, is_public, contest_entry
       const allowed = ['team', 'sport', 'bet_type', 'odds', 'units', 'result', 'notes', 'is_public', 'contest_entry', 'profit', 'date'];

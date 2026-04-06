@@ -664,6 +664,7 @@ function PicksAuditPanel({ userEmail }) {
   const [sport, setSport]       = useState('');
   const [actionMsg, setActionMsg] = useState('');
   const [editPick, setEditPick] = useState(null);
+  const [showAddPick, setShowAddPick] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -710,6 +711,12 @@ function PicksAuditPanel({ userEmail }) {
     setTimeout(() => setActionMsg(''), 3000);
   }
 
+  function handleAdded(newPick) {
+    if (newPick) setPicks(prev => [newPick, ...prev]);
+    setActionMsg('✓ Pick added successfully');
+    setTimeout(() => setActionMsg(''), 3000);
+  }
+
   const resultColor = r => r === 'WIN' ? '#4ade80' : r === 'LOSS' ? '#f87171' : r === 'PUSH' ? '#94a3b8' : 'var(--text-muted)';
 
   if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading picks…</div>;
@@ -717,6 +724,7 @@ function PicksAuditPanel({ userEmail }) {
   return (
     <div>
       {editPick && <EditPickModal pick={editPick} userEmail={userEmail} onClose={() => setEditPick(null)} onSaved={handleSaved} />}
+      {showAddPick && <AddPickModal userEmail={userEmail} onClose={() => setShowAddPick(false)} onAdded={handleAdded} />}
       {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
       {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
 
@@ -727,7 +735,11 @@ function PicksAuditPanel({ userEmail }) {
             {s || 'All'}
           </button>
         ))}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button onClick={() => setShowAddPick(true)}
+            style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(74,222,128,0.4)', background: 'rgba(74,222,128,0.08)', color: '#4ade80', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700 }}>
+            ➕ Add Pick
+          </button>
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
             style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: page === 0 ? 'not-allowed' : 'pointer', fontSize: '0.75rem' }}>← Prev</button>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', alignSelf: 'center' }}>Page {page + 1}</span>
@@ -804,6 +816,198 @@ function PicksAuditPanel({ userEmail }) {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Add Pick Modal ────────────────────────────────────────────────────────────
+function AddPickModal({ userEmail, onClose, onAdded }) {
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
+  const [form, setForm] = React.useState({
+    userId:        '',
+    userSearch:    '',
+    date:          today,
+    sport:         'MLB',
+    team:          '',
+    bet_type:      'Moneyline',
+    odds:          '',
+    units:         '1',
+    matchup:       '',
+    result:        '',
+    notes:         '',
+    contest_entry: false,
+    is_public:     true,
+    book:          '',
+  });
+  const [userResults, setUserResults] = React.useState([]);
+  const [selectedUser, setSelectedUser] = React.useState(null);
+  const [searching, setSearching] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const searchTimer = React.useRef(null);
+
+  const field = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Debounced user search
+  React.useEffect(() => {
+    if (!form.userSearch || form.userSearch.length < 2) { setUserResults([]); return; }
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await adminFetch(`/api/admin?action=users`);
+        const d = await res.json();
+        const q = form.userSearch.toLowerCase();
+        const filtered = (d.users || []).filter(u =>
+          (u.username || '').toLowerCase().includes(q) ||
+          (u.email    || '').toLowerCase().includes(q)
+        ).slice(0, 8);
+        setUserResults(filtered);
+      } catch { /* ignore */ }
+      setSearching(false);
+    }, 350);
+    return () => clearTimeout(searchTimer.current);
+  }, [form.userSearch]);
+
+  function pickUser(u) {
+    setSelectedUser(u);
+    setUserResults([]);
+    field('userId', u.id);
+    field('userSearch', u.username || u.email || u.id);
+  }
+
+  async function save() {
+    if (!form.userId) { setError('Select a user first'); return; }
+    if (!form.team.trim()) { setError('Team / pick name is required'); return; }
+    if (!form.odds) { setError('Odds are required'); return; }
+    setSaving(true); setError('');
+    const payload = {
+      action:        'add_pick',
+      userId:        form.userId,
+      date:          form.date,
+      sport:         form.sport,
+      team:          form.team.trim(),
+      bet_type:      form.bet_type,
+      odds:          parseInt(form.odds),
+      units:         parseFloat(form.units) || 1,
+      matchup:       form.matchup.trim() || null,
+      result:        form.result || null,
+      notes:         form.notes.trim() || null,
+      contest_entry: form.contest_entry,
+      is_public:     form.is_public,
+      book:          form.book.trim() || null,
+    };
+    const res = await adminFetch('/api/admin', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const d = await res.json();
+    if (d.error) { setError(d.error); setSaving(false); return; }
+    onAdded(d.pick);
+    onClose();
+  }
+
+  const row = (label, children) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700 }}>{label}</label>
+      {children}
+    </div>
+  );
+  const inp = (k, opts = {}) => (
+    <input className="input" value={form[k]} onChange={e => field(k, e.target.value)}
+      style={{ fontSize: '0.82rem', padding: '5px 8px' }} {...opts} />
+  );
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '14px', width: '100%', maxWidth: '560px', padding: '1.5rem', boxShadow: '0 24px 64px rgba(0,0,0,0.7)', maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4ade80' }}>➕ Add Pick for User</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+        </div>
+
+        {error && <div style={{ color: '#f87171', fontSize: '0.78rem', marginBottom: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(248,113,113,0.07)', borderRadius: '6px' }}>{error}</div>}
+
+        {/* User search */}
+        <div style={{ position: 'relative', marginBottom: '1rem' }}>
+          {row('User (search by username or email)', (
+            <input className="input" value={form.userSearch} onChange={e => { field('userSearch', e.target.value); if (selectedUser) setSelectedUser(null); field('userId', ''); }}
+              placeholder="Type username or email…" style={{ fontSize: '0.82rem', padding: '5px 8px' }} />
+          ))}
+          {selectedUser && (
+            <div style={{ fontSize: '0.68rem', color: '#4ade80', marginTop: '3px' }}>
+              ✓ {selectedUser.username || selectedUser.email} <span style={{ color: 'var(--text-muted)' }}>({selectedUser.id?.slice(0, 8)}…)</span>
+            </div>
+          )}
+          {(userResults.length > 0 || searching) && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', zIndex: 50, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '2px', overflow: 'hidden' }}>
+              {searching && <div style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>Searching…</div>}
+              {userResults.map(u => (
+                <div key={u.id} onClick={() => pickUser(u)}
+                  style={{ padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: '8px', alignItems: 'center' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.82rem' }}>{u.username || '—'}</span>
+                  {u.email && <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>{u.email}</span>}
+                  <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.62rem' }}>{u.pick_count || 0} picks</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          {row('Date', inp('date', { type: 'date' }))}
+          {row('Sport', (
+            <select className="input" value={form.sport} onChange={e => field('sport', e.target.value)} style={{ fontSize: '0.82rem', padding: '5px 8px' }}>
+              {['MLB','NFL','NBA','NHL','NCAAF','NCAAB','MLS','Soccer','Other'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          ))}
+          {row('Team / Pick', inp('team', { placeholder: 'e.g. Chicago Cubs' }))}
+          {row('Matchup', inp('matchup', { placeholder: 'e.g. Cubs vs Cardinals' }))}
+          {row('Bet Type', (
+            <select className="input" value={form.bet_type} onChange={e => field('bet_type', e.target.value)} style={{ fontSize: '0.82rem', padding: '5px 8px' }}>
+              {['Moneyline','Spread','Over','Under','Total (Over)','Total (Under)','Run Line','Puck Line','Other'].map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          ))}
+          {row('Odds (American)', inp('odds', { placeholder: '-110 or +250', type: 'number' }))}
+          {row('Units', inp('units', { placeholder: '1', type: 'number', step: '0.5', min: '0.1' }))}
+          {row('Result', (
+            <select className="input" value={form.result} onChange={e => field('result', e.target.value)} style={{ fontSize: '0.82rem', padding: '5px 8px' }}>
+              <option value="">PENDING</option>
+              <option value="WIN">WIN</option>
+              <option value="LOSS">LOSS</option>
+              <option value="PUSH">PUSH</option>
+            </select>
+          ))}
+          {row('Book', inp('book', { placeholder: 'DraftKings, FanDuel…' }))}
+        </div>
+
+        {row('Notes / Line Info', (
+          <textarea className="input" value={form.notes} onChange={e => field('notes', e.target.value)}
+            rows={2} style={{ fontSize: '0.82rem', padding: '5px 8px', resize: 'vertical' }} placeholder="e.g. -1.5 run line, over 8.5" />
+        ))}
+
+        <div style={{ display: 'flex', gap: '16px', marginTop: '12px', marginBottom: '1.25rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.contest_entry} onChange={e => field('contest_entry', e.target.checked)} />
+            🏆 Contest Entry
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.is_public} onChange={e => field('is_public', e.target.checked)} />
+            👁 Public Pick
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ flex: 2, padding: '9px', borderRadius: '8px', border: 'none', background: saving ? 'rgba(74,222,128,0.1)' : 'rgba(74,222,128,0.15)', color: '#4ade80', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.82rem' }}>
+            {saving ? 'Adding…' : '➕ Add Pick'}
+          </button>
+        </div>
       </div>
     </div>
   );
