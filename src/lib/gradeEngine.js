@@ -266,7 +266,8 @@ export async function fetchESPNScoreboard(sport, dateStr) {
   const path = SPORT_PATHS[sportKey];
 
   // Generic "soccer" — try all leagues and merge events
-  if (!path && (sportKey === 'soccer' || sportKey === 'other')) {
+  // NOTE: "other" does NOT fall into soccer — it's handled separately per pick type
+  if (!path && sportKey === 'soccer') {
     return fetchESPNSoccerFallback(espnDate);
   }
   if (!path) return null;

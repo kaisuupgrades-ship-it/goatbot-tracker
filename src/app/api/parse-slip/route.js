@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { normalizeParsedPick } from '@/lib/teamNormalizer';
 
 export const maxDuration = 60;
 
@@ -9,22 +10,51 @@ const EXTRACT_PROMPT = `You are parsing a sports betting slip or verbal bet inpu
 
 Return this exact structure:
 {
-  "team": "team name or player being bet on (e.g. 'New York Yankees', 'LeBron James')",
+  "team": "FULL official team name or full player name (see rules below)",
   "sport": "MLB|NBA|NFL|NHL|NCAAF|NCAAB|Soccer|UFC|Other",
   "bet_type": "Moneyline|Spread|Run Line|Puck Line|Total (Over)|Total (Under)|Prop|Parlay|Other",
   "odds": <American odds as integer, e.g. -110 or 105. REQUIRED.>,
   "units": <wager size as decimal number. Parse '2u', '2 units', '2 unit', 'two units' as 2. Parse '0.5u', 'half unit' as 0.5. If not mentioned use null.>,
   "book": "sportsbook name or null",
-  "matchup": "Away Team at Home Team or null",
+  "matchup": "Away Team vs Home Team or null",
   "date": "YYYY-MM-DD or null",
-  "notes": "brief one-line description of the bet"
+  "notes": "brief one-line description of the bet including key details like spread/total line"
 }
 
-Rules:
-- bet_type: 'money line', 'ML', 'moneyline' → 'Moneyline'. 'over' → 'Total (Over)'. 'under' → 'Total (Under)'. 'RL' → 'Run Line'. 'PL' → 'Puck Line'.
-- units: ALWAYS parse unit expressions — '2u', '2 units', '2unit' all mean 2. '1.5u' means 1.5.
-- odds: must be an integer. '-125' stays -125. '+110' stays 110.
-- If you cannot determine a value with confidence, use null. American odds only — convert decimal/fractional if needed.`;
+TEAM NAME RULES (most important):
+- ALWAYS use the full official team name. Never use city-only or nickname-only.
+  - "Detroit" (MLB) → "Detroit Tigers"
+  - "Chicago" (NBA) → "Chicago Bulls"
+  - "New England" (NFL) → "New England Patriots"
+  - "Pats" → "New England Patriots"
+  - "Cubs" → "Chicago Cubs"
+  - "GS" or "Golden State" (NBA) → "Golden State Warriors"
+  - "Cards" (NFL) → "Arizona Cardinals"  OR  "Cards" (MLB) → "St. Louis Cardinals" (use sport context)
+  - "LA" (NBA context) → "Los Angeles Lakers" or "Los Angeles Clippers" (use matchup context)
+- For individual sport bets (golf, tennis, boxing, MMA non-UFC): use the full player name (e.g. "Ludvig Aberg", "Scottie Scheffler")
+- For UFC: use the full fighter name (e.g. "Jon Jones", "Conor McGregor")
+- For parlays: put the full parlay description in "team" field (e.g. "5 Pick Parlay (Detroit Tigers ML, Cubs ML, ...)")
+
+BET TYPE RULES:
+- 'money line', 'ML', 'moneyline' → 'Moneyline'
+- 'over' / 'o' → 'Total (Over)', 'under' / 'u' (when referring to total) → 'Total (Under)'
+- 'RL' or 'run line' → 'Run Line' (MLB only)
+- 'PL' or 'puck line' → 'Puck Line' (NHL only)
+- 'spread' or 'ATS' → 'Spread'
+
+SPORT RULES:
+- Golf, tennis, boxing (non-UFC), horse racing → 'Other'
+- UFC/MMA → 'UFC'
+
+UNITS RULES:
+- ALWAYS parse unit expressions: '2u', '2 units', '2unit' all mean 2. '1.5u' means 1.5.
+- Dollar amounts like '$50' or '50 dollars' → use null for units (we track in units not dollars)
+
+ODDS RULES:
+- Must be an integer. '-125' stays -125. '+110' stays 110. American odds only.
+- Convert decimal: 2.10 → +110. Convert fractional: 5/2 → +250.
+
+- If you cannot determine a value with confidence, use null.`;
 
 // ── Vision: try xAI grok-2-vision, then Claude claude-sonnet-4-5 (both support images) ──
 async function parseImage(imageBase64, mimeType) {
@@ -225,6 +255,9 @@ export async function POST(req) {
 
     try {
       const parsed = JSON.parse(cleaned);
+      // Deterministic post-processing: normalize team name to full official name
+      // e.g. "Detroit" (MLB) → "Detroit Tigers", "Cubs" → "Chicago Cubs"
+      normalizeParsedPick(parsed);
       return NextResponse.json({ parsed });
     } catch {
       return NextResponse.json({ error: 'Could not parse bet slip. Try pasting the text manually.', raw }, { status: 422 });

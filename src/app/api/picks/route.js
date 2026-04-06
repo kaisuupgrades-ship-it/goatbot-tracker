@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { normalizeTeam } from '@/lib/teamNormalizer';
 
 export const maxDuration = 20;
 
@@ -222,6 +223,12 @@ export async function POST(req) {
   const safePayload = { ...pick, user_id: userId };
   delete safePayload.commence_time;   // strip — set below from ESPN
   delete safePayload.submitted_at;    // strip — set by DB trigger
+
+  // Normalize team name deterministically (no AI call needed)
+  // e.g. "Detroit" (MLB) → "Detroit Tigers", "Cubs" → "Chicago Cubs"
+  if (safePayload.team && safePayload.sport) {
+    safePayload.team = normalizeTeam(safePayload.team, safePayload.sport);
+  }
   delete safePayload.id;              // strip — never trust client-supplied id
 
   // ── 4. Contest server-side validation + 1-unit normalization ────────────

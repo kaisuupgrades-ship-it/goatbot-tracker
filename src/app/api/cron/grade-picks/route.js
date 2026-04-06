@@ -27,6 +27,60 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// ── Golf / PGA Tour grading helpers ───────────────────────────────────────────
+/**
+ * Fetch the current PGA Tour leaderboard from ESPN.
+ * Returns an array of { name, position, status } objects if a completed
+ * or in-progress tournament is found, otherwise null.
+ */
+async function fetchPGALeaderboard() {
+  try {
+    const res = await fetch(
+      'https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard',
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    // ESPN golf returns events[] each with a competitors/leaderboard array
+    const events = data?.events || [];
+    if (!events.length) return null;
+    // Use the most recently completed or active event
+    const event = events.find(e => e.status?.type?.completed) || events[0];
+    if (!event) return null;
+    const competitors = event.competitions?.[0]?.competitors || [];
+    return {
+      eventName: event.name || 'PGA Event',
+      completed: !!event.status?.type?.completed,
+      players: competitors.map(c => ({
+        name:     c.athlete?.displayName || c.athlete?.fullName || '',
+        position: c.status?.position?.id ? parseInt(c.status.position.id) : 999,
+        tied:     c.status?.position?.displayName?.startsWith('T') || false,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Grade a golf moneyline pick against the PGA leaderboard.
+ * Returns 'WIN' if player won, 'LOSS' if tournament is complete and they didn't,
+ * or null if the tournament is still in progress (can't grade yet).
+ */
+function gradeGolfPick(playerName, betType, leaderboard) {
+  if (!leaderboard?.players?.length) return null;
+  // Only grade if tournament is complete
+  if (!leaderboard.completed) return null;
+
+  const nameNorm = (playerName || '').toLowerCase().replace(/[^a-z]/g, '');
+  const match = leaderboard.players.find(p =>
+    (p.name || '').toLowerCase().replace(/[^a-z]/g, '').includes(nameNorm) ||
+    nameNorm.includes((p.name || '').toLowerCase().replace(/[^a-z]/g, ''))
+  );
+  if (!match) return 'LOSS'; // Player not in event = loss
+  return match.position === 1 ? 'WIN' : 'LOSS';
+}
+
 // ── AI Analysis pick parsing & grading (for pre-generated game analyses) ──────
 function parseAnalysisPick(analysis) {
   const pickMatch = analysis?.match(/THE PICK[:\s]+([^\n]{5,150})/i);
@@ -180,12 +234,15 @@ export async function GET(req) {
     return NextResponse.json(summary);
   }
 
-  // Group by sport + date to batch ESPN calls
+  // Separate out "other" sport picks for golf grading; everything else goes through ESPN
+  const otherPicks = picks.filter(p => (p.sport || '').toLowerCase() === 'other');
+  const regularPicks = picks.filter(p => (p.sport || '').toLowerCase() !== 'other');
+
+  // Group regular picks by sport + date to batch ESPN calls
   const groups = {};
-  for (const pick of picks) {
+  for (const pick of regularPicks) {
     const sport = (pick.sport || '').toLowerCase();
-    // Allow known paths + generic soccer/other (fetchESPNScoreboard handles fallback)
-    const supported = SPORT_PATHS[sport] || sport === 'soccer' || sport === 'other';
+    const supported = SPORT_PATHS[sport] || sport === 'soccer';
     if (!supported) continue;
     const key = `${sport}|${pick.date}`;
     if (!groups[key]) groups[key] = [];
@@ -210,7 +267,7 @@ export async function GET(req) {
     skippedCount += groupPicks.length - graded.length;
 
     for (const g of graded) {
-      // Idempotency: only grade picks that are still PENDING
+      // Idempotency: only update if still ungraded (null OR 'PENDING' string)
       const { error: updateErr } = await supabase
         .from('picks')
         .update({
@@ -221,12 +278,57 @@ export async function GET(req) {
           graded_away_score: g.away_score,
         })
         .eq('id', g.id)
-        .is('result', null);
+        .or('result.is.null,result.eq.PENDING');
 
       if (!updateErr) {
         gradedCount++;
         affectedUsers.add(g.user_id);
       }
+    }
+  }
+
+  // ── Phase 1b: Grade "Other" sport picks — Golf (PGA Tour) ──────────────────
+  // Uses the ESPN Golf PGA leaderboard. A moneyline pick on a golfer's name grades
+  // WIN if they're in 1st place in a Final-status tournament, LOSS otherwise.
+  if (otherPicks.length > 0) {
+    try {
+      const golfLeaderboard = await fetchPGALeaderboard();
+      if (golfLeaderboard) {
+        for (const pick of otherPicks) {
+          const playerName = (pick.team || '').trim();
+          if (!playerName) { skippedCount++; continue; }
+
+          const gradeResult = gradeGolfPick(playerName, pick.bet_type, golfLeaderboard);
+          if (!gradeResult) { skippedCount++; continue; }
+
+          const units = parseFloat(pick.units) || 1;
+          const odds  = pick.odds || 0;
+          const profit = gradeResult === 'WIN'
+            ? (odds > 0 ? units * (odds / 100) : units * (100 / Math.abs(odds)))
+            : -units;
+
+          const { error: golfUpdateErr } = await supabase
+            .from('picks')
+            .update({
+              result:    gradeResult,
+              profit:    parseFloat(profit.toFixed(3)),
+              graded_at: new Date().toISOString(),
+            })
+            .eq('id', pick.id)
+            .or('result.is.null,result.eq.PENDING');
+
+          if (!golfUpdateErr) {
+            gradedCount++;
+            affectedUsers.add(pick.user_id);
+          }
+        }
+      } else {
+        // Can't reach ESPN golf — leave Other picks as PENDING for manual review
+        skippedCount += otherPicks.length;
+      }
+    } catch (golfErr) {
+      console.error('[cron/grade-picks] Golf grading error:', golfErr.message);
+      skippedCount += otherPicks.length;
     }
   }
 
