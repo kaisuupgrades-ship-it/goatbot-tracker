@@ -1261,7 +1261,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {series && (
             <div style={{ marginBottom: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--gold-subtle)', borderRadius: '6px', border: '1px solid rgba(255,184,0,0.2)' }}>
               <span style={{ color: 'var(--gold)', fontSize: '0.75rem', fontWeight: 700 }}>
-                🏆 {series.title || 'Playoff Series'} — {series.summary || `${series.awayWins || 0}–${series.homeWins || 0}`}
+                🏆 {series.title || 'Playoff Series'} — {series.summary || `${series.awayWins || 0}-${series.homeWins || 0}`}
               </span>
             </div>
           )}
@@ -1533,7 +1533,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     {/* Big record line */}
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '7px' }}>
                       <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        {abbrHome} {record.wins}–{record.losses}
+                        {abbrHome} {record.wins}-{record.losses}
                       </span>
                       <span style={{ color: 'var(--violet)', fontSize: '0.72rem', fontWeight: 700 }}>
                         {abbrAway}
@@ -1548,7 +1548,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     {/* Dot history (newest → oldest, left to right) */}
                     <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                       {games.slice(0, 20).map((g, i) => (
-                        <div key={i} title={`${g.date} · ${abbrHome} ${g.score1}–${g.score2} ${abbrAway}`}
+                        <div key={i} title={`${g.date} · ${abbrHome} ${g.score1}-${g.score2} ${abbrAway}`}
                           style={{
                             width: '10px', height: '10px', borderRadius: '2px',
                             background: g.t1Won ? 'var(--green)' : 'var(--red)',
