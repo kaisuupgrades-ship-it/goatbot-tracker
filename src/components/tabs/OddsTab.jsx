@@ -784,6 +784,15 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
             ? 'No games match your search.'
             : dateOffset !== 0
             ? `No odds data for ${getDateLabel(dateOffset)}. Odds are only available for today's games.`
+            : gameFilter === 'upcoming' && games.length > 0
+            ? <span>All {sport.toUpperCase()} games today have started or ended.{' '}
+                <button onClick={() => setGameFilter('all')} style={{ color: '#FFB800', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 'inherit', padding: 0 }}>
+                  View all
+                </button>
+                {' '}or switch to Live.
+              </span>
+            : games.length === 0
+            ? 'No odds available for this sport today. The API may not have lines posted yet, or the season is off.'
             : 'No lines posted yet for this sport. Try refreshing or check back closer to game time.'
           }
         </div>

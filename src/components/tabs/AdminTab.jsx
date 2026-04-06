@@ -1076,8 +1076,20 @@ function ContestsPanel({ userEmail }) {
 
           // Build flag reasons for display
           const flags = [];
-          if (p.audit_reason) flags.push(p.audit_reason);
-          if (!p.audit_status && !p.audit_override) flags.push('Pending AI audit — not yet verified');
+          if (p.audit_reason) {
+            let reason = p.audit_reason;
+            let hint = null;
+            // Detect known AI false-positives and add admin context
+            if (/future.*202[0-9]|202[0-9].*future/i.test(reason)) {
+              hint = '💡 Likely false positive — AI flagged the year 2026 as "future" from old training data. If the pick looks valid, click ✓ Admit.';
+            } else if (/timing/i.test(reason) && !/submitted.*after/i.test(reason)) {
+              hint = '💡 AI had a timing concern. Check if the pick was placed before game start.';
+            } else if (/pinnacle/i.test(reason)) {
+              hint = '💡 Odds were flagged vs Pinnacle sharp line. Could be an outlier book — verify the line was real.';
+            }
+            flags.push({ text: reason, hint });
+          }
+          if (!p.audit_status && !p.audit_override) flags.push({ text: 'Pending AI audit — not yet verified', hint: null });
 
           return (
             <div key={p.id} style={{
@@ -1108,13 +1120,24 @@ function ContestsPanel({ userEmail }) {
 
                   {/* Flag reasons — shown prominently */}
                   {flags.length > 0 && (
-                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      {flags.map((f, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', padding: '4px 8px', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '5px', fontSize: '0.68rem' }}>
-                          <span style={{ color: '#fbbf24', flexShrink: 0 }}>⚠</span>
-                          <span style={{ color: '#e2c97e', lineHeight: 1.4 }}>{f}</span>
-                        </div>
-                      ))}
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {flags.map((f, i) => {
+                        const flagText = typeof f === 'string' ? f : f.text;
+                        const flagHint = typeof f === 'object' ? f.hint : null;
+                        return (
+                          <div key={i}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', padding: '4px 8px', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: flagHint ? '5px 5px 0 0' : '5px', fontSize: '0.68rem' }}>
+                              <span style={{ color: '#fbbf24', flexShrink: 0 }}>⚠</span>
+                              <span style={{ color: '#e2c97e', lineHeight: 1.4 }}>{flagText}</span>
+                            </div>
+                            {flagHint && (
+                              <div style={{ padding: '4px 8px', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.18)', borderTop: 'none', borderRadius: '0 0 5px 5px', fontSize: '0.65rem', color: '#93c5fd', lineHeight: 1.4 }}>
+                                {flagHint}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1693,16 +1716,19 @@ function SystemPanel({ userEmail }) {
   // Fire-and-forget: sends ONE request for all sports. The server processes
   // them sequentially and writes progress to the settings table. We poll that
   // table so the UI stays alive even if the user switches tabs or refreshes.
-  async function runPregenAnalysis() {
+  async function runPregenAnalysis(targetDate = null) {
     setPregenRunning(true);
     setPregenResult(null);
     setPregenLiveLog([]);
+
+    const body = { userEmail, force: true };
+    if (targetDate) body.date = targetDate;
 
     // Fire the request — don't await it (it can take 2-5 min on Vercel)
     fetch('/api/cron/pregenerate-analysis', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userEmail, force: true }),
+      body: JSON.stringify(body),
     }).then(async res => {
       // When the full request completes, show the final result
       try {
@@ -1893,14 +1919,33 @@ function SystemPanel({ userEmail }) {
           </div>
         )}
 
-        <button
-          className="btn-gold"
-          onClick={runPregenAnalysis}
-          disabled={pregenRunning}
-          style={{ opacity: pregenRunning ? 0.6 : 1 }}
-        >
-          {pregenRunning ? '⟳ Running on server… (safe to switch tabs)' : '⚡ Pre-Generate Now'}
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            className="btn-gold"
+            onClick={() => runPregenAnalysis(null)}
+            disabled={pregenRunning}
+            style={{ opacity: pregenRunning ? 0.6 : 1 }}
+          >
+            {pregenRunning ? '⟳ Running on server… (safe to switch tabs)' : '⚡ Generate Today'}
+          </button>
+          <button
+            onClick={() => {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              runPregenAnalysis(tomorrow.toISOString().split('T')[0]);
+            }}
+            disabled={pregenRunning}
+            style={{
+              opacity: pregenRunning ? 0.6 : 1,
+              padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.82rem',
+              border: '1px solid rgba(148,163,184,0.3)', background: 'rgba(148,163,184,0.06)',
+              color: 'var(--text-secondary)', cursor: pregenRunning ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', transition: 'all 0.12s',
+            }}
+          >
+            📅 Generate Tomorrow
+          </button>
+        </div>
       </div>
 
       {/* ── Generated Analyses Log ── */}

@@ -1883,12 +1883,14 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     }
   }, [sidebarTab, sport]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch latest news/tweets for a specific injured player via Grok web search
+  // Toggle player row expand — no auto Grok search on click
+  const togglePlayerOpen = useCallback((playerName) => {
+    setPlayerNewsOpen(prev => prev === playerName ? null : playerName);
+  }, []);
+
+  // Explicitly fetch latest X/Twitter news for a specific player via Grok (user-initiated only)
   const loadPlayerNews = useCallback(async (playerName, teamAbbr) => {
     const key = playerName;
-    // Toggle off if already open
-    if (playerNewsOpen === key) { setPlayerNewsOpen(null); return; }
-    setPlayerNewsOpen(key);
     // Skip refetch if we already have data less than 5 min old
     if (playerNewsData[key] && (Date.now() - (playerNewsData[key]._ts || 0)) < 300000) return;
     setPlayerNewsLoading(key);
@@ -1903,7 +1905,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     } finally {
       setPlayerNewsLoading('');
     }
-  }, [playerNewsOpen, playerNewsData, injurySport, sport]);
+  }, [playerNewsData, injurySport, sport]);
 
   const loadGames = useCallback(async (s, dateStr) => {
     // Golf / Tennis / Soccer have their own components — nothing to fetch here
@@ -2574,7 +2576,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                           <div key={i}>
                             {/* Player row */}
                             <div
-                              onClick={() => loadPlayerNews(p.name, p.team)}
+                              onClick={() => togglePlayerOpen(p.name)}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: '6px',
                                 background: isExpanded ? 'var(--bg-overlay)' : 'var(--bg-elevated)',
@@ -2612,7 +2614,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                               </span>
                             </div>
 
-                            {/* Expanded player news panel */}
+                            {/* Expanded player panel — shows ESPN data immediately */}
                             {isExpanded && (
                               <div style={{
                                 background: 'var(--bg-overlay)', borderRadius: '0 0 5px 5px',
@@ -2620,14 +2622,30 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                 padding: '8px 8px 10px',
                                 borderTop: '1px solid var(--border)',
                               }}>
+                                {/* ESPN injury details — always available instantly */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.62rem', fontWeight: 700, color: statusColor, padding: '2px 7px', background: `${statusColor}15`, borderRadius: '4px', border: `1px solid ${statusColor}30` }}>{p.status}</span>
+                                    {p.team && <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontWeight: 600 }}>{p.team}</span>}
+                                  </div>
+                                  {(p.detail || p.side) && (
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                                      {p.side ? `${p.side} ` : ''}{p.detail}
+                                    </div>
+                                  )}
+                                  <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', opacity: 0.7 }}>📋 Source: ESPN official injury report</div>
+                                </div>
+
+                                {/* X/Twitter check section */}
                                 {isLoadingThis ? (
-                                  <div style={{ textAlign: 'center', padding: '10px 0', color: 'var(--text-muted)', fontSize: '0.68rem' }}>
+                                  <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.65rem' }}>
                                     <div style={{ marginBottom: '4px' }}>🔍</div>
-                                    Scanning X/Twitter and news for {p.name}…
+                                    Scanning X/Twitter for {p.name}…
                                   </div>
                                 ) : newsData?.error ? (
-                                  <div style={{ fontSize: '0.68rem', color: '#f87171' }}>
+                                  <div style={{ fontSize: '0.65rem', color: '#f87171', marginTop: '4px' }}>
                                     ⚠️ {newsData.error}
+                                    <button onClick={() => loadPlayerNews(p.name, p.team)} style={{ marginLeft: '6px', fontSize: '0.6rem', background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
                                   </div>
                                 ) : newsData ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2691,9 +2709,19 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                     </div>
                                   </div>
                                 ) : (
-                                  <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.68rem' }}>
-                                    Tap to load latest news
-                                  </div>
+                                  /* No Twitter data yet — show the button to trigger search */
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); loadPlayerNews(p.name, p.team); }}
+                                    style={{
+                                      width: '100%', padding: '6px 10px', borderRadius: '6px',
+                                      border: '1px solid rgba(99,102,241,0.3)',
+                                      background: 'rgba(99,102,241,0.07)',
+                                      color: '#a5b4fc', fontSize: '0.65rem', fontWeight: 700,
+                                      cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                                    }}
+                                  >
+                                    𝕏 Check X / Twitter for latest rumors
+                                  </button>
                                 )}
                               </div>
                             )}

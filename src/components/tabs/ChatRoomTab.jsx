@@ -408,11 +408,17 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    const markSeen = userId ? `&markSeen=${userId}` : '';
-    const res  = await fetch(`/api/chat?limit=60${markSeen}`);
-    const json = await res.json();
-    setMessages((json.messages || []).reverse());
-    if (!silent) setLoading(false);
+    try {
+      const markSeen = userId ? `&markSeen=${userId}` : '';
+      const res  = await fetch(`/api/chat?limit=60${markSeen}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setMessages((json.messages || []).reverse());
+    } catch (e) {
+      console.error('[ChatRoom] load failed:', e);
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, [userId]);
 
   // Load user's own chat status (muted/banned) + mod status

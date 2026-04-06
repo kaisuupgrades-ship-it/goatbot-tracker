@@ -267,9 +267,11 @@ export async function GET(req) {
   const force    = params.get('force') === 'true';
   // Optional: filter to a single sport (used by admin per-sport calls to stay within timeout)
   const sportFilter = params.get('sport') || null;
+  // Optional: override date (YYYY-MM-DD). Used by admin "Generate for Tomorrow" button.
+  const dateOverride = params.get('date') || null;
 
   const started = Date.now();
-  const today = new Date();
+  const today = dateOverride ? new Date(dateOverride + 'T12:00:00Z') : new Date();
   const todayStr = today.toISOString().split('T')[0];
   const espnDate = todayStr.replace(/-/g, '');
   // Unique run ID groups all analyses from this single cron/admin invocation
@@ -513,14 +515,15 @@ export async function POST(req) {
   const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
   try {
     const body = await req.json();
-    const { userEmail, force = true, sport = null } = body;
+    const { userEmail, force = true, sport = null, date = null } = body;
     if (!ADMIN_EMAILS.includes(userEmail?.toLowerCase())) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 });
     }
     // Reuse the same GET logic by constructing a fake request with the cron secret
     const fakeUrl = new URL('http://localhost/api/cron/pregenerate-analysis');
     if (force) fakeUrl.searchParams.set('force', 'true');
-    if (sport)  fakeUrl.searchParams.set('sport', sport);
+    if (sport) fakeUrl.searchParams.set('sport', sport);
+    if (date)  fakeUrl.searchParams.set('date', date);
     const fakeReq = new Request(fakeUrl.toString(), {
       headers: { authorization: `Bearer ${process.env.CRON_SECRET || ''}` },
     });
