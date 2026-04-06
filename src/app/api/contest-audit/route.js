@@ -78,7 +78,7 @@ async function checkOddsAgainstPinnacle(pick) {
     const markets  = await marketsRes.json();
     if (!Array.isArray(matchups) || !Array.isArray(markets)) return null;
 
-    // Build matchup map (id → home/away names)
+    // Build matchup map (id -> home/away names)
     const matchupMap = {};
     for (const m of matchups) {
       if (m.special) continue;
@@ -115,7 +115,7 @@ async function checkOddsAgainstPinnacle(pick) {
       // Flag if the submitted line is >20 pts off Pinnacle's sharp number
       suspicious:   diff > 20,
       reason:       diff > 20
-        ? `Submitted ${submittedOdds > 0 ? '+' : ''}${submittedOdds} but Pinnacle shows ${pinOdds > 0 ? '+' : ''}${pinOdds} (${diff} pts off) — line may not be real`
+        ? `Submitted ${submittedOdds > 0 ? '+' : ''}${submittedOdds} but Pinnacle shows ${pinOdds > 0 ? '+' : ''}${pinOdds} (${diff} pts off) - line may not be real`
         : null,
     };
   } catch (err) {
@@ -173,7 +173,7 @@ async function aiAuditPick(pick) {
   // Step 3: AI smell-test — only runs if Pinnacle couldn't find the game or confirmed odds are real
   // Include Pinnacle context in the prompt so the AI has real market data
   const pinContext = pinCheck?.found && pinCheck?.pinnacleOdds != null
-    ? `\nPinnacle (sharp book) has this team at ${pinCheck.pinnacleOdds > 0 ? '+' : ''}${pinCheck.pinnacleOdds} — submitted line is ${pinCheck.diff} pts off, which is within acceptable range.`
+    ? `\nPinnacle (sharp book) has this team at ${pinCheck.pinnacleOdds > 0 ? '+' : ''}${pinCheck.pinnacleOdds} - submitted line is ${pinCheck.diff} pts off, which is within acceptable range.`
     : pinCheck?.found === false
     ? '\nGame not found on Pinnacle (may be early line or niche market).'
     : '\nPinnacle check unavailable.';

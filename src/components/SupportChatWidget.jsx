@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-const WELCOME = "Hey! I'm the BetOS support bot 🤖 I can help you troubleshoot issues, explain features, or give betting advice. What's up?";
+const WELCOME = "Hey! I'm the BetOS support bot [AI] I can help you troubleshoot issues, explain features, or give betting advice. What's up?";
 
 const QUICK_ACTIONS = [
   'How do I enter the contest?',
@@ -75,7 +75,7 @@ export default function SupportChatWidget({ user }) {
       // If widget is closed, show unread badge
       if (!open) setUnread(u => u + 1);
     } catch {
-      setMessages(h => [...h, { role: 'assistant', content: "Connection error — please try again in a moment." }]);
+      setMessages(h => [...h, { role: 'assistant', content: "Connection error - please try again in a moment." }]);
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export default function SupportChatWidget({ user }) {
             borderBottom: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', gap: '8px',
           }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>🤖</div>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>[AI]</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>BetOS Support</div>
               <div style={{ fontSize: '0.62rem', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -120,8 +120,8 @@ export default function SupportChatWidget({ user }) {
                 Online
               </div>
             </div>
-            <button onClick={clearChat} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem', padding: '2px 6px' }} title="Clear chat">↺</button>
-            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px' }}>✕</button>
+            <button onClick={clearChat} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem', padding: '2px 6px' }} title="Clear chat">[refresh]</button>
+            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px' }}>x</button>
           </div>
 
           {/* Messages */}
@@ -157,14 +157,14 @@ export default function SupportChatWidget({ user }) {
 
             {concernLogged && (
               <div style={{ fontSize: '0.68rem', color: '#fbbf24', textAlign: 'center', padding: '4px', background: 'rgba(251,191,36,0.05)', borderRadius: '6px', border: '1px solid rgba(251,191,36,0.15)' }}>
-                ⚠ Your concern has been flagged for admin review.
+                [!] Your concern has been flagged for admin review.
               </div>
             )}
 
             <div ref={bottomRef} />
           </div>
 
-          {/* Quick actions — only on first message */}
+          {/* Quick actions - only on first message */}
           {messages.length === 1 && !loading && (
             <div style={{ padding: '0 12px 8px', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
               {QUICK_ACTIONS.map((q, i) => (
@@ -195,7 +195,7 @@ export default function SupportChatWidget({ user }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Ask anything…"
+              placeholder="Ask anything..."
               rows={1}
               maxLength={500}
               style={{
@@ -218,7 +218,7 @@ export default function SupportChatWidget({ user }) {
                 transition: 'all 0.12s', flexShrink: 0,
               }}
             >
-              {loading ? '…' : '↑'}
+              {loading ? '...' : '^'}
             </button>
           </div>
         </div>
@@ -238,7 +238,7 @@ export default function SupportChatWidget({ user }) {
         }}
         title="BetOS Support Chat"
       >
-        {open ? '✕' : '💬'}
+        {open ? 'x' : '[chat]'}
         {!open && unread > 0 && (
           <div style={{
             position: 'absolute', top: '-4px', right: '-4px',

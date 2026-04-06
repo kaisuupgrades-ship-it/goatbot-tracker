@@ -57,7 +57,7 @@ function generateFallbackAnalysis(odds, team, betType) {
     }
   }
 
-  return `${team} ${betType} at ${odds} — Implied probability: ${impliedProb.toFixed(1)}%. ${comment} Confidence: ${confidence}.`;
+  return `${team} ${betType} at ${odds} - Implied probability: ${impliedProb.toFixed(1)}%. ${comment} Confidence: ${confidence}.`;
 }
 
 /**
@@ -68,7 +68,7 @@ function buildAnalysisPrompt(team, betType, odds, date, sport, notes) {
   if (notes?.trim()) {
     prompt += ` ${notes}`;
   }
-  prompt += ` Give a 2-3 sentence sharp take — is this a good bet? Key angle and confidence level (LOW/MEDIUM/HIGH).`;
+  prompt += ` Give a 2-3 sentence sharp take - is this a good bet? Key angle and confidence level (LOW/MEDIUM/HIGH).`;
   return prompt;
 }
 

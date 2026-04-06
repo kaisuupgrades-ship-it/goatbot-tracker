@@ -43,10 +43,10 @@ function syncStarredGolferStats(players, tournamentName) {
     starred[id] = {
       ...starred[id],
       tournament: tournamentName || starred[id].tournament,
-      position:  p.status?.position?.displayName || '—',
-      toPar:     stats[0]?.displayValue ?? p.score?.displayValue ?? '—',
-      thru:      p.status?.thru ?? stats[1]?.displayValue ?? '—',
-      today:     stats[2]?.displayValue ?? '—',
+      position:  p.status?.position?.displayName || '-',
+      toPar:     stats[0]?.displayValue ?? p.score?.displayValue ?? '-',
+      thru:      p.status?.thru ?? stats[1]?.displayValue ?? '-',
+      today:     stats[2]?.displayValue ?? '-',
       updatedAt: new Date().toISOString(),
     };
     changed = true;
@@ -74,11 +74,11 @@ function useIsMobile(breakpoint = 640) {
 // players, which shifts all subsequent stats. Detect and handle this gracefully.
 function parseGolfStats(statistics) {
   const stats = statistics || [];
-  const toPar  = stats[0]?.displayValue ?? '—';
-  const thru   = stats[1]?.displayValue ?? '—';
+  const toPar  = stats[0]?.displayValue ?? '-';
+  const thru   = stats[1]?.displayValue ?? '-';
 
-  let today    = '—';
-  let total    = '—';
+  let today    = '-';
+  let total    = '-';
   let winOdds  = null;
 
   // stats[2] is normally "today" but ESPN sometimes puts odds there
@@ -90,11 +90,11 @@ function parseGolfStats(statistics) {
     if (!isNaN(n2) && n2 > 30) {
       // This is a win-odds value — store it and look for the real today at [3]
       winOdds = n2 > 0 ? `+${n2}` : `${n2}`;
-      today   = stats[3]?.displayValue ?? '—';
-      total   = stats[4]?.displayValue ?? stats[3]?.displayValue ?? '—';
+      today   = stats[3]?.displayValue ?? '-';
+      total   = stats[4]?.displayValue ?? stats[3]?.displayValue ?? '-';
     } else {
       today = raw2;
-      total = stats[3]?.displayValue ?? '—';
+      total = stats[3]?.displayValue ?? '-';
     }
   }
 
@@ -111,7 +111,7 @@ function scoreColor(val) {
 }
 
 function fmtScore(val) {
-  if (val === null || val === undefined || val === '') return '—';
+  if (val === null || val === undefined || val === '') return '-';
   if (val === 'E' || val === 'Even') return 'E';
   const n = typeof val === 'string' ? parseInt(val) : val;
   if (isNaN(n)) return val;
@@ -160,7 +160,7 @@ function getHotCold(player) {
   const parsed_   = parseGolfStats(player.statistics);
   const todayStr  = parsed_.today;
   const thruVal   = player.status?.thru ?? parsed_.thru;
-  if (todayStr === '—' || !thruVal || thruVal === 'F') return null;
+  if (todayStr === '-' || !thruVal || thruVal === 'F') return null;
   const today = todayStr === 'E' ? 0 : parseInt(todayStr);
   const thru  = parseInt(thruVal);
   if (isNaN(today) || isNaN(thru) || thru < 4) return null;
@@ -178,11 +178,11 @@ function getLastHole(player) {
   return withType[withType.length - 1];
 }
 
-// ── Score cell — colored circle matching Flashscore style ────────────────────
+// ── Score cell - colored circle matching Flashscore style ────────────────────
 function ScoreCell({ hole }) {
   const meta  = scoreTypeMeta(hole?.scoreType?.name);
   const score = hole?.displayValue ?? (hole?.score != null ? String(hole.score) : null);
-  if (score == null) return <span style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.68rem' }}>–</span>;
+  if (score == null) return <span style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.68rem' }}>-</span>;
 
   // Eagle/albatross: double circle (two nested squares visually done with outline + fill)
   // Birdie: single filled circle
@@ -245,8 +245,8 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
   const athleteId = player.id || player.athlete?.id;
   const name      = player.athlete?.displayName || player.athlete?.fullName || 'Player';
   const stats     = player.statistics || [];
-  const toPar     = stats[0]?.displayValue ?? '—';
-  const thru      = player.status?.thru ?? stats[1]?.displayValue ?? '—';
+  const toPar     = stats[0]?.displayValue ?? '-';
+  const thru      = player.status?.thru ?? stats[1]?.displayValue ?? '-';
 
   // Normalize a raw hole/linescore entry — ESPN uses 'period' + 'value', some
   // endpoints use 'number' + 'score'. Accept both and produce a consistent shape.
@@ -376,11 +376,11 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
           {isHeader ? 'Hole' : isPar ? 'Par' : isScore ? 'Score' : ''}
         </div>
         {holeSet.map((h, i) => {
-          const val = isHeader ? h.number : isPar ? (h.par ?? '—') : isScore ? null : null;
+          const val = isHeader ? h.number : isPar ? (h.par ?? '-') : isScore ? null : null;
           return (
             <div key={i} style={{ ...cellBase, color: isPar ? '#94a3b8' : 'var(--text-primary)', fontWeight: isHeader ? 700 : 500 }}>
               {isHeader && <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{h.number}</span>}
-              {isPar && <span>{h.par ?? '—'}</span>}
+              {isPar && <span>{h.par ?? '-'}</span>}
               {isScore && <ScoreCell hole={h} />}
             </div>
           );
@@ -391,7 +391,7 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
             ...subtotalCell,
             color: isHeader ? 'var(--text-muted)' : isPar ? '#94a3b8' : scoreColor(subtotalPar != null && subtotal != null ? subtotal - subtotalPar : 0),
           }}>
-            {isHeader ? (holeSet[0]?.number <= 9 ? 'OUT' : 'IN') : (subtotal || '—')}
+            {isHeader ? (holeSet[0]?.number <= 9 ? 'OUT' : 'IN') : (subtotal || '-')}
           </div>
         )}
       </div>
@@ -415,7 +415,7 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
           <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.82rem', color: scoreColor(toPar === 'E' ? 0 : parseInt(toPar)) }}>
             {fmtScore(toPar)}
           </span>
-          {thru && thru !== '—' && (
+          {thru && thru !== '-' && (
             <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Thru {thru}</span>
           )}
         </div>
@@ -444,7 +444,7 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px' }}
           >
-            ▲ collapse
+            ^ collapse
           </button>
         </div>
       </div>
@@ -452,11 +452,11 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
       {/* Scorecard body */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-          ⛳ Loading scorecard…
+          [golf] Loading scorecard...
         </div>
       ) : error && !displayRounds.length ? (
         <div style={{ padding: '0.75rem', color: '#f87171', fontSize: '0.75rem', background: 'rgba(248,113,113,0.06)', borderRadius: '6px' }}>
-          ⚠️ Scorecard not available yet — check back during or after the round.
+          [!] Scorecard not available yet - check back during or after the round.
         </div>
       ) : !displayRounds.length ? (
         <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
@@ -511,7 +511,7 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
                           }} onClick={() => setActiveRound(i)}>
                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>R{r.number}</span>
                             <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                              {r.total ?? '—'}
+                              {r.total ?? '-'}
                             </span>
                             {toPar != null && (
                               <span style={{
@@ -550,8 +550,8 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
                     {hasPar && (
                       <div style={rowStyle(false)}>
                         <div style={labelCell}>Par</div>
-                        {front9.map(h => <div key={h.number} style={{ ...cellBase, color: '#94a3b8' }}>{h.par ?? '—'}</div>)}
-                        <div style={{ ...subtotalCell, color: '#94a3b8' }}>{front9Par || '—'}</div>
+                        {front9.map(h => <div key={h.number} style={{ ...cellBase, color: '#94a3b8' }}>{h.par ?? '-'}</div>)}
+                        <div style={{ ...subtotalCell, color: '#94a3b8' }}>{front9Par || '-'}</div>
                       </div>
                     )}
                     {/* Score row */}
@@ -563,7 +563,7 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
                         fontWeight: 800,
                         color: hasPar && front9Par ? scoreColor(front9Score - front9Par) : 'var(--text-primary)',
                       }}>
-                        {front9.some(h => h.score != null) ? front9Score : '—'}
+                        {front9.some(h => h.score != null) ? front9Score : '-'}
                       </div>
                     </div>
                   </div>
@@ -580,8 +580,8 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
                     {hasPar && (
                       <div style={rowStyle(false)}>
                         <div style={labelCell}>Par</div>
-                        {back9.map(h => <div key={h.number} style={{ ...cellBase, color: '#94a3b8' }}>{h.par ?? '—'}</div>)}
-                        <div style={{ ...subtotalCell, color: '#94a3b8' }}>{back9Par || '—'}</div>
+                        {back9.map(h => <div key={h.number} style={{ ...cellBase, color: '#94a3b8' }}>{h.par ?? '-'}</div>)}
+                        <div style={{ ...subtotalCell, color: '#94a3b8' }}>{back9Par || '-'}</div>
                       </div>
                     )}
                     <div style={{ ...rowStyle(false), background: 'rgba(255,255,255,0.015)' }}>
@@ -592,7 +592,7 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
                         fontWeight: 800,
                         color: hasPar && back9Par ? scoreColor(back9Score - back9Par) : 'var(--text-primary)',
                       }}>
-                        {back9.some(h => h.score != null) ? back9Score : '—'}
+                        {back9.some(h => h.score != null) ? back9Score : '-'}
                       </div>
                     </div>
                   </div>
@@ -635,16 +635,16 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
 // ── Player row ────────────────────────────────────────────────────────────────
 function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
   const parsed     = parseGolfStats(player.statistics);
-  const toPar      = parsed.toPar !== '—' ? parsed.toPar : (player.score?.displayValue ?? '—');
+  const toPar      = parsed.toPar !== '-' ? parsed.toPar : (player.score?.displayValue ?? '-');
   const thru       = player.status?.thru ?? parsed.thru;
   const todayScore = parsed.today;
-  const totalScore = parsed.total !== '—' ? parsed.total : (player.score?.value ?? '—');
+  const totalScore = parsed.total !== '-' ? parsed.total : (player.score?.value ?? '-');
   const winOdds    = parsed.winOdds;
   const toParNum   = toPar === 'E' ? 0 : parseInt(toPar);
   const todayNum   = todayScore === 'E' ? 0 : parseInt(todayScore);
   const isLead     = player.status?.position?.displayName === '1' || player._isLead;
   const isCut      = player.status?.type === 'cut';
-  const pos        = player.status?.position?.displayName || '—';
+  const pos        = player.status?.position?.displayName || '-';
 
   const hotCold    = getHotCold(player);
   const lastHole   = getLastHole(player);
@@ -683,12 +683,12 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
         <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: isLead ? 800 : 500, color: isLead ? '#FFB800' : 'var(--text-muted)' }}>
           {pos}
         </div>
-        {/* Flag — desktop only */}
+        {/* Flag - desktop only */}
         {!isMobile && (
           <div style={{ textAlign: 'center' }}>
             {player.athlete?.flag?.href
               ? <img src={player.athlete.flag.href} alt="" style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '1px' }} />
-              : <span style={{ fontSize: '0.8rem', opacity: 0.4 }}>🏌️</span>}
+              : <span style={{ fontSize: '0.8rem', opacity: 0.4 }}>[golf]</span>}
           </div>
         )}
         {/* Name + hot/cold + last hole badge */}
@@ -709,11 +709,11 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
               onMouseEnter={e => { e.currentTarget.style.color = '#60a5fa'; e.currentTarget.style.textDecorationColor = '#60a5fa'; }}
               onMouseLeave={e => { e.currentTarget.style.color = showScorecard ? '#60a5fa' : 'var(--text-primary)'; e.currentTarget.style.textDecorationColor = showScorecard ? '#60a5fa' : 'rgba(255,255,255,0.15)'; }}
             >
-              {player.athlete?.displayName || player.athlete?.fullName || '—'}
+              {player.athlete?.displayName || player.athlete?.fullName || '-'}
             </button>
             {/* Hot/cold emoji */}
-            {hotCold === 'hot' && <span title="Hot round" style={{ fontSize: '0.75rem', flexShrink: 0 }}>🔥</span>}
-            {hotCold === 'cold' && <span title="Cold round" style={{ fontSize: '0.75rem', flexShrink: 0 }}>❄️</span>}
+            {hotCold === 'hot' && <span title="Hot round" style={{ fontSize: '0.75rem', flexShrink: 0 }}>[fire]</span>}
+            {hotCold === 'cold' && <span title="Cold round" style={{ fontSize: '0.75rem', flexShrink: 0 }}>❄</span>}
           </div>
           {/* Last hole badge + CUT */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', flexWrap: 'wrap' }}>
@@ -735,19 +735,19 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
         </div>
         {/* Today */}
         <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: scoreColor(todayNum) }}>
-          {todayScore !== '—' ? fmtScore(todayScore) : '—'}
+          {todayScore !== '-' ? fmtScore(todayScore) : '-'}
         </div>
         {/* Thru */}
         <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
           {thru}
         </div>
-        {/* Total — desktop only */}
+        {/* Total - desktop only */}
         {!isMobile && (
           <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            {totalScore !== '—' ? totalScore : '—'}
+            {totalScore !== '-' ? totalScore : '-'}
           </div>
         )}
-        {/* Win Odds — desktop only */}
+        {/* Win Odds - desktop only */}
         {!isMobile && (
           <div style={{ textAlign: 'center' }}>
             {winOdds ? (
@@ -758,7 +758,7 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
               }}>
                 {winOdds}
               </span>
-            ) : <span style={{ color: 'rgba(255,255,255,0.12)', fontSize: '0.68rem' }}>—</span>}
+            ) : <span style={{ color: 'rgba(255,255,255,0.12)', fontSize: '0.68rem' }}>-</span>}
           </div>
         )}
         {/* Star button */}
@@ -776,12 +776,12 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
             onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; e.currentTarget.style.transform = 'scale(1.2)'; }}
             onMouseLeave={e => { e.currentTarget.style.color = starred ? '#FFB800' : 'rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'scale(1)'; }}
           >
-            {starred ? '★' : '☆'}
+            {starred ? '*' : '*'}
           </button>
         </div>
       </div>
 
-      {/* Inline scorecard — spans full width below this row */}
+      {/* Inline scorecard - spans full width below this row */}
       {showScorecard && (
         <InlineScorecardPanel
           player={player}
@@ -819,9 +819,9 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
   // Players — competitors array inside competitions[0]
   const rawPlayers = comp.competitors || event.competitors || event.leaderboard || [];
 
-  // Sort by numeric position (handles ties like "T2" → 2, "CUT" → 999)
+  // Sort by numeric position (handles ties like "T2" -> 2, "CUT" -> 999)
   function parsePos(pos) {
-    if (!pos || pos === '—' || pos === 'CUT') return 9999;
+    if (!pos || pos === '-' || pos === 'CUT') return 9999;
     const n = parseInt(String(pos).replace(/[^0-9]/g, ''));
     return isNaN(n) ? 9999 : n;
   }
@@ -833,7 +833,7 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
     ? players.filter(p => (p.athlete?.displayName || p.athlete?.fullName || '').toLowerCase().includes(search.toLowerCase()))
     : players;
 
-  // Leader preview — first player after sort = position 1
+  // Leader preview - first player after sort = position 1
   const leader      = players[0];
   const leaderName  = leader?.athlete?.displayName?.split(' ').slice(-1)[0] || '';
   const leaderScore = leader?.statistics?.[0]?.displayValue || leader?.score?.displayValue || '';
@@ -847,7 +847,7 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
       boxShadow: isLive ? '0 2px 14px rgba(74,222,128,0.08)' : 'none',
       transition: 'border-color 0.15s',
     }}>
-      {/* ── Header row — always visible, click to expand ── */}
+      {/* ── Header row - always visible, click to expand ── */}
       <div
         onClick={() => setOpen(v => !v)}
         style={{
@@ -865,8 +865,8 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
           {isLive
             ? <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80', display: 'inline-block', animation: 'live-pulse 2s infinite' }} />
             : isComplete
-            ? <span style={{ fontSize: '0.75rem' }}>✅</span>
-            : <span style={{ fontSize: '0.75rem' }}>⏰</span>}
+            ? <span style={{ fontSize: '0.75rem' }}>[ok]</span>
+            : <span style={{ fontSize: '0.75rem' }}>[time]</span>}
         </div>
 
         {/* Tournament info */}
@@ -882,7 +882,7 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
-            {venue && <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>📍 {venue}{city ? `, ${city}` : ''}{stateAbbr && city ? ` ${stateAbbr}` : ''}</span>}
+            {venue && <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>[pin] {venue}{city ? `, ${city}` : ''}{stateAbbr && city ? ` ${stateAbbr}` : ''}</span>}
           </div>
         </div>
 
@@ -912,7 +912,7 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
             </div>
           )}
           {/* Expand chevron */}
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', transition: 'transform 0.2s', display: 'inline-block', transform: open ? 'rotate(180deg)' : 'none' }}>▼</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', transition: 'transform 0.2s', display: 'inline-block', transform: open ? 'rotate(180deg)' : 'none' }}>v</span>
         </div>
       </div>
 
@@ -925,7 +925,7 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
               {roundLabel}
             </span>
             {purseLabel && (
-              <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: '#FFB800', fontWeight: 700 }}>💰 {purseLabel}</span>
+              <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: '#FFB800', fontWeight: 700 }}>[$] {purseLabel}</span>
             )}
             <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
               {players.length} players
@@ -934,7 +934,7 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
 
           {players.length === 0 ? (
             <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-              No leaderboard data yet — check back when the round starts.
+              No leaderboard data yet - check back when the round starts.
             </div>
           ) : (
             <>
@@ -991,9 +991,9 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 const ALL_LEAGUES = [
-  { id: 'pga',  label: 'PGA Tour', emoji: '🇺🇸' },
-  { id: 'lpga', label: 'LPGA',     emoji: '👩' },
-  { id: 'euro', label: 'DP World', emoji: '🇪🇺' },
+  { id: 'pga',  label: 'PGA Tour', emoji: '' },
+  { id: 'lpga', label: 'LPGA',     emoji: '[?]' },
+  { id: 'euro', label: 'DP World', emoji: '' },
 ];
 
 export default function GolfLeaderboard() {
@@ -1093,14 +1093,14 @@ export default function GolfLeaderboard() {
         <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto', alignItems: 'center' }}>
           <input
             type="text"
-            placeholder="Search player…"
+            placeholder="Search player..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="input"
             style={{ width: '140px', padding: '4px 10px', fontSize: '0.78rem' }}
           />
           <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px', fontSize: '0.75rem' }}>
-            ↻
+            [refresh]
           </button>
         </div>
       </div>
@@ -1117,21 +1117,21 @@ export default function GolfLeaderboard() {
 
       {loading && !data ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⛳</div>
-          <p style={{ fontSize: '0.85rem' }}>Loading golf tournaments…</p>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[golf]</div>
+          <p style={{ fontSize: '0.85rem' }}>Loading golf tournaments...</p>
         </div>
       ) : error ? (
         <div style={{ padding: '1.5rem', background: '#2b0d0d', border: '1px solid #991b1b', borderRadius: '8px', color: '#f87171', fontSize: '0.85rem' }}>
-          ⚠️ {error}
+          [!] {error}
           <button onClick={load} style={{ marginLeft: '12px', background: 'none', border: '1px solid #f87171', borderRadius: '4px', color: '#f87171', cursor: 'pointer', padding: '2px 8px', fontSize: '0.75rem' }}>
             Retry
           </button>
         </div>
       ) : sorted.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⛳</div>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[golf]</div>
           <p>No tournaments available right now.</p>
-          <p style={{ fontSize: '0.78rem', marginTop: '4px' }}>Check back during tournament rounds (Thu–Sun).</p>
+          <p style={{ fontSize: '0.78rem', marginTop: '4px' }}>Check back during tournament rounds (Thu-Sun).</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

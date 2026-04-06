@@ -42,7 +42,7 @@ function Spinner({ status }) {
 function ExchangeInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [status, setStatus] = useState('Signing you in…');
+  const [status, setStatus] = useState('Signing you in...');
 
   useEffect(() => {
     async function handleAuth() {
@@ -69,7 +69,7 @@ function ExchangeInner() {
         }
 
         console.error('[auth/exchange] No session. hash:', window.location.hash.slice(0, 80));
-        setStatus('Sign-in failed. Redirecting…');
+        setStatus('Sign-in failed. Redirecting...');
         router.replace('/?error=auth');
       } catch (err) {
         console.error('[auth/exchange] unexpected:', err);
@@ -85,7 +85,7 @@ function ExchangeInner() {
 
 export default function AuthExchange() {
   return (
-    <Suspense fallback={<Spinner status="Signing you in…" />}>
+    <Suspense fallback={<Spinner status="Signing you in..." />}>
       <ExchangeInner />
     </Suspense>
   );

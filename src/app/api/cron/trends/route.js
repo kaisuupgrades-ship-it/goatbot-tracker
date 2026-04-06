@@ -7,7 +7,7 @@
  * Uses Grok 4 with live web search for maximum quality.
  * Falls back to Claude if Grok 4 is unavailable.
  *
- * Can also be triggered manually from Admin Panel → System → "Regenerate Now".
+ * Can also be triggered manually from Admin Panel -> System -> "Regenerate Now".
  *
  * Security: Vercel automatically sends Authorization: Bearer {CRON_SECRET}
  * We also accept the admin email header for manual triggers.
@@ -30,13 +30,13 @@ const supabase = createClient(
 
 // ── Sport config ──────────────────────────────────────────────────────────────
 const SPORT_MAP = {
-  mlb: { sport: 'baseball',   league: 'mlb', emoji: '⚾' },
-  nba: { sport: 'basketball', league: 'nba', emoji: '🏀' },
-  nhl: { sport: 'hockey',     league: 'nhl', emoji: '🏒' },
-  nfl: { sport: 'football',   league: 'nfl', emoji: '🏈' },
+  mlb: { sport: 'baseball',   league: 'mlb', emoji: '[MLB]' },
+  nba: { sport: 'basketball', league: 'nba', emoji: '[NBA]' },
+  nhl: { sport: 'hockey',     league: 'nhl', emoji: '[NHL]' },
+  nfl: { sport: 'football',   league: 'nfl', emoji: '[NFL]' },
 };
 
-// ── Fetch today's games (Odds API → ESPN fallback) ────────────────────────────
+// ── Fetch today's games (Odds API -> ESPN fallback) ────────────────────────────
 async function fetchTodaysGames() {
   const today    = new Date().toISOString().split('T')[0].replace(/-/g, '');
   const gameList = [];
@@ -49,7 +49,7 @@ async function fetchTodaysGames() {
       for (const g of games.slice(0, 14)) {
         gameList.push({
           sport:    sp.toUpperCase(),
-          emoji:    g.emoji || SPORT_MAP[sp]?.emoji || '🏆',
+          emoji:    g.emoji || SPORT_MAP[sp]?.emoji || '[trophy]',
           matchup:  g.matchup,
           home:     g.home,
           away:     g.away,
@@ -116,7 +116,7 @@ function buildPrompt(gameList, dateStr) {
       (g.underOdds != null ? ` / U ${g.underOdds > 0 ? '+' : ''}${g.underOdds})` : (g.overOdds != null ? ')' : '')) : '')
   ).join('\n');
 
-  return `You are BetOS — a sharp sports betting analyst with access to live injury reports, line movement data, and historical situational trends. Today is ${dateStr}.
+  return `You are BetOS - a sharp sports betting analyst with access to live injury reports, line movement data, and historical situational trends. Today is ${dateStr}.
 
 Here are today's games with current bookmaker odds:
 ${gameLines}
@@ -139,13 +139,13 @@ Return ONLY a valid JSON array. Each object must have ALL these exact fields:
 {
   "matchup": "AWAY @ HOME (short form)",
   "sport": "MLB|NBA|NHL|NFL",
-  "sport_emoji": "⚾|🏀|🏒|🏈",
+  "sport_emoji": "[MLB]|[NBA]|[NHL]|[NFL]",
   "pick": "Team name or Over/Under X",
   "bet_type": "Moneyline|Spread|Total (Over)|Total (Under)",
   "odds": <integer American odds or null>,
   "confidence": "HIGH|MEDIUM|LOW",
   "sharp": true|false,
-  "reason": "One sentence — the specific edge with live context",
+  "reason": "One sentence - the specific edge with live context",
   "analysis": "2-4 sentences of detailed analysis including any live injury/weather/line movement context",
   "trend_record": "e.g. 58-42 (58%) ATS last 3 seasons or null",
   "trend_roi": "e.g. +4.2% ROI or null",

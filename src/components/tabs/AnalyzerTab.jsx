@@ -70,8 +70,8 @@ function renderRichLines(text) {
       );
     }
     // Dash bullets
-    if (/^[-â¢]\s/.test(line)) {
-      const body = stripMarkdown(line.replace(/^[-â¢]\s*/, ''));
+    if (/^[-âc]\s/.test(line)) {
+      const body = stripMarkdown(line.replace(/^[-âc]\s*/, ''));
       return (
         <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '3px' }}>
           <span style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: '2px' }}>âº</span>
@@ -169,8 +169,8 @@ function parseReport(text) {
     const clean = stripMarkdown(line).trim();
     if (/^(key factors?|key reasons?|why this pick|edge factors?|analysis)[:\s]*$/i.test(clean)) { inFactors = true; continue; }
     if (inFactors) {
-      const bM = clean.match(/^[\d\-â¢âº*]\s+(.+)/) || (clean.match(/^[A-Z]/) && !clean.match(/^[A-Z]{4,}/));
-      const m  = clean.match(/^(?:[\dâ¢\-âº*]+\.?\s+)(.{10,})/);
+      const bM = clean.match(/^[\d\-âcâº*]\s+(.+)/) || (clean.match(/^[A-Z]/) && !clean.match(/^[A-Z]{4,}/));
+      const m  = clean.match(/^(?:[\dâc\-âº*]+\.?\s+)(.{10,})/);
       if (m) { factors.push(m[1].trim()); if (factors.length >= 5) break; }
       else if (clean && !/^[A-Z\s:]{5,}$/.test(clean) && factors.length > 0 && clean.length < 5) break;
     }
@@ -179,7 +179,7 @@ function parseReport(text) {
   if (factors.length === 0) {
     for (const line of lines) {
       const clean = stripMarkdown(line).trim();
-      const m = clean.match(/^(?:[\dâ¢\-âº]+\.?\s+)(.{15,})/);
+      const m = clean.match(/^(?:[\dâc\-âº]+\.?\s+)(.{15,})/);
       if (m) { factors.push(m[1].trim()); if (factors.length >= 5) break; }
     }
   }
@@ -241,7 +241,7 @@ function factorIcon(text) {
   if (/rest|fatigue|travel|back.to.back/i.test(t)) return 'ð´';
   if (/pitcher|starter|bullpen|goalie/i.test(t)) return 'â¾';
   if (/trend|ats|over|under|total/i.test(t)) return 'ð';
-  if (/value|price|odds|number/i.test(t)) return 'ð°';
+  if (/value|price|odds|number/i.test(t)) return 'ðdeg';
   if (/home|away|field|court/i.test(t)) return 'ðï¸';
   if (/streak|hot|cold|form/i.test(t)) return 'ð¥';
   return 'â¡';
@@ -294,8 +294,8 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
 <body>
   <div class="header">
     <div>
-      <div class="brand">ð¯ BetOSâ¢</div>
-      <div class="subtitle">AI-Powered Sports Betting OS Â· Pick Report</div>
+      <div class="brand">ð¯ BetOSâc</div>
+      <div class="subtitle">AI-Powered Sports Betting OS Â. Pick Report</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:12px;color:#888;">${ts}</div>
@@ -339,8 +339,8 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
   </div>
 
   <div class="footer">
-    <span class="footer-ts">Generated ${ts} Â· BetOS Intelligence</span>
-    <span class="footer-brand">BetOSâ¢</span>
+    <span class="footer-ts">Generated ${ts} Â. BetOS Intelligence</span>
+    <span class="footer-brand">BetOSâc</span>
   </div>
 
   <button class="print-btn no-print" onclick="window.print()">ð¨ Save as PDF</button>
@@ -658,8 +658,8 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                 BetOS PICK REPORT
               </div>
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.62rem', marginTop: '1px', letterSpacing: '0.04em' }}>
-                Live Intel Â· {ts}{runTime ? ` Â· ${runTime}s runtime` : ''}
-                {sport && <span style={{ marginLeft: '6px', color: 'rgba(255,184,0,0.5)', fontWeight: 700 }}>Â· {sport}</span>}
+                Live Intel Â. {ts}{runTime ? ` Â. ${runTime}s runtime` : ''}
+                {sport && <span style={{ marginLeft: '6px', color: 'rgba(255,184,0,0.5)', fontWeight: 700 }}>Â. {sport}</span>}
               </div>
             </div>
           </div>
@@ -1074,7 +1074,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
           background: 'linear-gradient(90deg, #FFD700, #FF9500)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
           flexShrink: 0,
-        }}>BetOSâ¢</span>
+        }}>BetOSâc</span>
       </div>
     </div>
   );
@@ -1403,7 +1403,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Engine</div>
               <div style={{ color: 'rgba(255,184,0,0.7)', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', marginTop: '1px' }}>
-                GROK-4 Â· LIVE SEARCH
+                GROK-4 Â. LIVE SEARCH
               </div>
             </div>
             <div style={{
@@ -1535,7 +1535,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                   runBetOS();
                 }
               }}
-              placeholder={`"Find the sharpest edge on tonight's MLB slate"  Â·  "Analyze Dodgers vs Padres, I like the under"  Â·  "Best dog on the board right now"`}
+              placeholder={`"Find the sharpest edge on tonight's MLB slate"  Â.  "Analyze Dodgers vs Padres, I like the under"  Â.  "Best dog on the board right now"`}
               rows={3}
               style={{
                 flex: 1,
@@ -1576,7 +1576,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                 onMouseEnter={e => { if (canFire) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(255,149,0,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = canFire ? '0 4px 20px rgba(255,149,0,0.4)' : 'none'; }}
               >
-                {loading ? 'Â· Â· Â·' : 'â¶ FIRE'}
+                {loading ? 'Â. Â. Â.' : 'â¶ FIRE'}
               </button>
             </div>
           </div>
@@ -1676,7 +1676,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           <div>
             <div style={{ color: '#f87171', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>Analysis Failed</div>
             <div style={{ color: 'rgba(248,113,113,0.85)', fontSize: '0.8rem' }}>{error}</div>
-            {(error?.includes('providers')||error?.includes('503')) && <div style={{ color: 'rgba(248,113,113,0.55)', fontSize: '0.72rem', marginTop: '6px' }}>All AI providers failed — check API keys in Vercel env vars.</div>}{(error?.includes('Load failed')||error?.includes('Failed to fetch')) && <div style={{ color: 'rgba(248,113,113,0.55)', fontSize: '0.72rem', marginTop: '6px' }}>Network interrupted — retry will use server cache.</div>}
+            {(error?.includes('providers')||error?.includes('503')) && <div style={{ color: 'rgba(248,113,113,0.55)', fontSize: '0.72rem', marginTop: '6px' }}>All AI providers failed - check API keys in Vercel env vars.</div>}{(error?.includes('Load failed')||error?.includes('Failed to fetch')) && <div style={{ color: 'rgba(248,113,113,0.55)', fontSize: '0.72rem', marginTop: '6px' }}>Network interrupted - retry will use server cache.</div>}
           </div>
         </div>
       )}
@@ -1820,7 +1820,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                           {pickLine ? `â ${pickLine}` : `â ${cleanPromptDisplay(entry.prompt, 68)}`}
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.63rem', marginTop: '1px' }}>
-                          {timeLabel}{entry.runTime ? ` Â· ${entry.runTime}s` : ''}
+                          {timeLabel}{entry.runTime ? ` Â. ${entry.runTime}s` : ''}
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -2194,7 +2194,7 @@ function KellyCalculator() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.8rem' }}>
         {[
           { label: 'Edge', value: `${result.edge}%`, color: parseFloat(result.edge) > 0 ? '#4ade80' : '#f87171' },
-          { label: 'Expected Value', value: `+${result.ev}Â¢ per $1`, color: parseFloat(result.ev) > 0 ? '#4ade80' : '#f87171' },
+          { label: 'Expected Value', value: `+${result.ev}Âc per $1`, color: parseFloat(result.ev) > 0 ? '#4ade80' : '#f87171' },
           { label: 'Full Kelly', value: `${result.kelly}%`, color: '#FFB800' },
           { label: `${(fraction * 100).toFixed(0)}% Kelly Wager`, value: `$${result.wager}`, color: result.isPositive ? '#FFB800' : '#f87171' },
         ].map(({ label, value, color }) => (
@@ -2450,7 +2450,7 @@ function BettingInsights({ picks }) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
-                  Overall Assessment Â· {analyzed} picks analyzed
+                  Overall Assessment Â. {analyzed} picks analyzed
                 </div>
                 <p style={{ color: 'var(--text-primary)', fontSize: '0.92rem', lineHeight: 1.6 }}>{insights.summary}</p>
               </div>
@@ -2484,7 +2484,7 @@ function BettingInsights({ picks }) {
             {insights.edges?.length > 0 && (
               <div className="surface" style={{ padding: '1.25rem' }}>
                 <h3 style={{ fontWeight: 700, color: 'var(--green)', fontSize: '0.9rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  ð¢ Your Edges
+                  ðc Your Edges
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                   {insights.edges.map((edge, i) => (

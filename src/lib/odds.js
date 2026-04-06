@@ -9,7 +9,7 @@
 const THE_ODDS_API_KEY  = process.env.THE_ODDS_API_KEY;
 const THE_ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
 
-// Map our internal sport keys → The Odds API sport keys
+// Map our internal sport keys -> The Odds API sport keys
 const SPORT_KEYS = {
   mlb: 'baseball_mlb',
   nba: 'basketball_nba',
@@ -22,8 +22,8 @@ const SPORT_KEYS = {
 };
 
 const SPORT_EMOJI = {
-  mlb: '⚾', nba: '🏀', nhl: '🏒', nfl: '🏈',
-  ncaaf: '🏈', ncaab: '🏀', mls: '⚽', ufc: '🥊',
+  mlb: '[MLB]', nba: '[NBA]', nhl: '[NHL]', nfl: '[NFL]',
+  ncaaf: '[NFL]', ncaab: '[NBA]', mls: '[MLS]', ufc: '[fight]',
 };
 
 /**
@@ -90,7 +90,7 @@ export async function fetchOddsForSports(sportKeys = ['mlb', 'nba', 'nhl', 'nfl'
 /**
  * buildOddsLookup(oddsMap)
  *
- * Builds a team-name → odds object for fast lookup during game list merging.
+ * Builds a team-name -> odds object for fast lookup during game list merging.
  * Keys are normalized team names (lowercase, spaces replaced with _).
  *
  * @param {Object} oddsMap - result of fetchOddsForSports()
@@ -206,7 +206,7 @@ function extractOdds(ev, sportKey) {
   return {
     id:      ev.id,
     sport:   sportKey.toUpperCase(),
-    emoji:   SPORT_EMOJI[sportKey] || '🏆',
+    emoji:   SPORT_EMOJI[sportKey] || '[trophy]',
     home:    ev.home_team,
     away:    ev.away_team,
     matchup: `${awayAbbr} @ ${homeAbbr}`,

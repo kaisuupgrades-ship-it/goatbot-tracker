@@ -318,7 +318,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <button className="hamburger-btn" onClick={() => setMobileNavOpen(o => !o)} title="Menu">
-              â°
+              âdeg
             </button>
             <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>{meta.label}</span>
             <span className="header-sub" style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginLeft: '10px' }}>{meta.sub}</span>

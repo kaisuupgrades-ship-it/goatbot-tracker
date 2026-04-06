@@ -15,13 +15,13 @@ function useIsMobile(breakpoint = 640) {
 
 // ── League options ────────────────────────────────────────────────────────────
 const LEAGUES = [
-  { id: 'all',            label: 'All Soccer',    short: 'ALL', flag: '🌍' },
-  { id: 'usa.1',          label: 'MLS',           short: 'MLS', flag: '🇺🇸' },
-  { id: 'eng.1',          label: 'Premier League',short: 'EPL', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
-  { id: 'esp.1',          label: 'La Liga',       short: 'ESP', flag: '🇪🇸' },
-  { id: 'ger.1',          label: 'Bundesliga',    short: 'GER', flag: '🇩🇪' },
-  { id: 'ita.1',          label: 'Serie A',       short: 'ITA', flag: '🇮🇹' },
-  { id: 'fra.1',          label: 'Ligue 1',       short: 'FRA', flag: '🇫🇷' },
+  { id: 'all',            label: 'All Soccer',    short: 'ALL', flag: '[?]' },
+  { id: 'usa.1',          label: 'MLS',           short: 'MLS', flag: '' },
+  { id: 'eng.1',          label: 'Premier League',short: 'EPL', flag: '[?][?][?][?][?][?][?]' },
+  { id: 'esp.1',          label: 'La Liga',       short: 'ESP', flag: '' },
+  { id: 'ger.1',          label: 'Bundesliga',    short: 'GER', flag: '[?]' },
+  { id: 'ita.1',          label: 'Serie A',       short: 'ITA', flag: '[?][?]' },
+  { id: 'fra.1',          label: 'Ligue 1',       short: 'FRA', flag: '[?][?]' },
   { id: 'uefa.champions', label: 'Champions Lg',  short: 'UCL', flag: '⭐' },
 ];
 
@@ -170,7 +170,7 @@ function MatchCard({ match, leagueId }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {/* League badge — only shown in All Soccer mode */}
+          {/* League badge - only shown in All Soccer mode */}
           {leagueInfo && leagueInfo.id !== 'all' && leagueId !== match._leagueSingle && (
             <span style={{
               fontSize: '0.58rem', color: '#06d6a0', fontWeight: 700,
@@ -187,13 +187,13 @@ function MatchCard({ match, leagueId }) {
           )}
           {!isPre && city ? (
             <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              📍 {city}
+              [pin] {city}
             </span>
           ) : null}
         </div>
       </div>
 
-      {/* ── Match rows — click to expand ── */}
+      {/* ── Match rows - click to expand ── */}
       <div
         style={{ padding: '8px 10px', cursor: 'pointer', userSelect: 'none' }}
         onClick={() => setOpen(v => !v)}
@@ -219,7 +219,7 @@ function MatchCard({ match, leagueId }) {
                 <img src={side.logo} alt="" style={{ width: '22px', height: '22px', objectFit: 'contain' }}
                   onError={e => { e.target.style.display = 'none'; }} />
               ) : (
-                <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>⚽</span>
+                <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>[MLS]</span>
               )}
             </div>
             <div style={{
@@ -235,7 +235,7 @@ function MatchCard({ match, leagueId }) {
               fontWeight: 800, fontSize: '1rem', minWidth: '20px', textAlign: 'right',
               color: isLive ? '#4ade80' : side.won ? '#4ade80' : isDraw ? '#FFB800' : (isFinal ? 'var(--text-secondary)' : 'var(--text-muted)'),
             }}>
-              {(isLive || isFinal) && side.score != null ? side.score : '—'}
+              {(isLive || isFinal) && side.score != null ? side.score : '-'}
             </div>
           </div>
         ))}
@@ -248,7 +248,7 @@ function MatchCard({ match, leagueId }) {
               background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.18)',
               borderRadius: '20px', padding: '2px 10px', display: 'inline-block',
             }}>
-              {kickDay}{kickTime ? ` · ${kickTime}` : ''}
+              {kickDay}{kickTime ? ` . ${kickTime}` : ''}
             </span>
           </div>
         )}
@@ -263,7 +263,7 @@ function MatchCard({ match, leagueId }) {
               {odds.homeML && <span>{home.team?.abbreviation} {odds.homeML}</span>}
             </div>
           ) : <span />}
-          <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)', display: 'inline-block', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>▼</span>
+          <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)', display: 'inline-block', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>v</span>
         </div>
       </div>
 
@@ -275,12 +275,12 @@ function MatchCard({ match, leagueId }) {
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
             {venue && (
               <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>
-                📍 {venue}{city ? `, ${city}` : ''}
+                [pin] {venue}{city ? `, ${city}` : ''}
               </span>
             )}
             {compNote && (
               <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>
-                🏆 {compNote}
+                [trophy] {compNote}
               </span>
             )}
           </div>
@@ -314,11 +314,11 @@ function MatchCard({ match, leagueId }) {
                       </td>
                       {Array.from({ length: maxPeriods }, (_, i) => (
                         <td key={i} style={{ textAlign: 'center', padding: '3px 8px', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                          {side.periods[i]?.value ?? '—'}
+                          {side.periods[i]?.value ?? '-'}
                         </td>
                       ))}
                       <td style={{ textAlign: 'center', padding: '3px 8px', fontWeight: 800, color: side.win ? '#4ade80' : isDraw ? '#FFB800' : 'var(--text-secondary)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
-                        {(isLive || isFinal) && side.total != null ? side.total : '—'}
+                        {(isLive || isFinal) && side.total != null ? side.total : '-'}
                       </td>
                     </tr>
                   ))}
@@ -341,7 +341,7 @@ function MatchCard({ match, leagueId }) {
                   const isGoal = type.toLowerCase().includes('goal') || type.toLowerCase().includes('own');
                   const isCard = type.toLowerCase().includes('card');
                   const isAway = d.team?.id === away.team?.id;
-                  const icon   = isGoal ? '⚽' : type.toLowerCase().includes('yellow') ? '🟨' : type.toLowerCase().includes('red') ? '🟥' : '•';
+                  const icon   = isGoal ? '[MLS]' : type.toLowerCase().includes('yellow') ? '[~]' : type.toLowerCase().includes('red') ? '[X]' : '-';
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', minWidth: '26px', flexShrink: 0 }}>
@@ -383,13 +383,13 @@ function MatchCard({ match, leagueId }) {
                 { label: 'Fouls',       away: awayFouls,   home: homeFouls },
                 { label: 'Saves',       away: awaySaves,   home: homeSaves },
                 { label: 'Offsides',    away: awayOffsides, home: homeOffsides },
-                { label: 'Yellow',      away: awayYellow != null ? `🟨 ${awayYellow}` : null, home: homeYellow != null ? `🟨 ${homeYellow}` : null },
-                { label: 'Red',         away: awayRed    != null ? `🟥 ${awayRed}`    : null, home: homeRed    != null ? `🟥 ${homeRed}`    : null },
+                { label: 'Yellow',      away: awayYellow != null ? `[~] ${awayYellow}` : null, home: homeYellow != null ? `[~] ${homeYellow}` : null },
+                { label: 'Red',         away: awayRed    != null ? `[X] ${awayRed}`    : null, home: homeRed    != null ? `[X] ${homeRed}`    : null },
               ].filter(r => r.away != null || r.home != null).map((row, i) => (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '4px', alignItems: 'center', marginBottom: '4px' }}>
                   {row.isBar ? (
                     <>
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'left' }}>{row.away ?? '—'}</span>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'left' }}>{row.away ?? '-'}</span>
                       <div style={{ width: '80px', height: '5px', borderRadius: '3px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden', display: 'flex' }}>
                         {!isNaN(row.awayNum) && (
                           <>
@@ -398,13 +398,13 @@ function MatchCard({ match, leagueId }) {
                           </>
                         )}
                       </div>
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }}>{row.home ?? '—'}</span>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }}>{row.home ?? '-'}</span>
                     </>
                   ) : (
                     <>
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'left' }}>{row.away ?? '—'}</span>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'left' }}>{row.away ?? '-'}</span>
                       <span style={{ fontSize: '0.56rem', color: 'var(--text-muted)', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{row.label}</span>
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }}>{row.home ?? '—'}</span>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right' }}>{row.home ?? '-'}</span>
                     </>
                   )}
                 </div>
@@ -415,7 +415,7 @@ function MatchCard({ match, leagueId }) {
           {/* Possession ball indicator (live only) */}
           {isLive && possession && (
             <div style={{ marginBottom: '8px', fontSize: '0.63rem', color: '#4ade80' }}>
-              ⚽ {possession === 'away' ? awayName : homeName} in possession
+              [MLS] {possession === 'away' ? awayName : homeName} in possession
             </div>
           )}
 
@@ -593,12 +593,12 @@ export default function SoccerScoreboard() {
         <button
           onClick={load}
           style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px', fontSize: '0.75rem' }}
-        >↻</button>
+        >[refresh]</button>
       </div>
 
       {/* ── Status filter pills ── */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-        {[['all', 'All'], ['live', '● Live'], ['final', 'Final'], ['upcoming', 'Upcoming']].map(([id, label]) => (
+        {[['all', 'All'], ['live', '* Live'], ['final', 'Final'], ['upcoming', 'Upcoming']].map(([id, label]) => (
           <button key={id} onClick={() => setFilter(id)} style={{
             padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer',
             border: `1px solid ${filter === id ? '#06d6a0' : 'var(--border)'}`,
@@ -624,15 +624,15 @@ export default function SoccerScoreboard() {
       {/* ── Content ── */}
       {loading && !hasData ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚽</div>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[MLS]</div>
           <p style={{ fontSize: '0.85rem' }}>
-            {league === 'all' ? 'Loading all leagues…' : `Loading ${currentLg?.label || 'soccer'} scores…`}
+            {league === 'all' ? 'Loading all leagues...' : `Loading ${currentLg?.label || 'soccer'} scores...`}
           </p>
         </div>
 
       ) : error ? (
         <div style={{ padding: '1.5rem', background: '#2b0d0d', border: '1px solid #991b1b', borderRadius: '8px', color: '#f87171', fontSize: '0.85rem' }}>
-          <div style={{ marginBottom: '8px' }}>⚠️ Couldn't load soccer data — ESPN may be temporarily unavailable.</div>
+          <div style={{ marginBottom: '8px' }}>[!] Couldn't load soccer data - ESPN may be temporarily unavailable.</div>
           <div style={{ fontSize: '0.75rem', color: 'rgba(248,113,113,0.7)', marginBottom: '10px' }}>{error}</div>
           <button onClick={load} style={{ background: 'none', border: '1px solid #f87171', borderRadius: '4px', color: '#f87171', cursor: 'pointer', padding: '3px 10px', fontSize: '0.75rem' }}>
             Retry
@@ -641,14 +641,14 @@ export default function SoccerScoreboard() {
 
       ) : isEmpty ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚽</div>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[MLS]</div>
           <p style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
             No {filter === 'all' ? '' : filter + ' '}matches today
           </p>
           <p style={{ fontSize: '0.78rem' }}>
             {filter !== 'all'
               ? `Try switching to "All" to see upcoming fixtures.`
-              : `Check back later — midweek fixtures are typically Tue/Wed.`}
+              : `Check back later - midweek fixtures are typically Tue/Wed.`}
           </p>
         </div>
 

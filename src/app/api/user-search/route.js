@@ -8,11 +8,11 @@ const CONFIGURED = !!SUPABASE_URL && !!SUPABASE_KEY && !SUPABASE_URL.includes('p
 
 // ── Demo data ────────────────────────────────────────────────────────────────
 const DEMO_DATA = [
-  { user_id:'d1', username:'SharpMike',   display_name:'SharpMike',  avatar_emoji:'🔥', wins:31, losses:14, pushes:2, total:47, units:18.4, roi:39.1, current_streak:3,  sport_focus:'NFL', recent_results:['WIN','WIN','WIN','LOSS','WIN','WIN','LOSS','WIN','WIN','LOSS'] },
-  { user_id:'d2', username:'CLVQueen',    display_name:'CLV Queen',   avatar_emoji:'👑', wins:28, losses:17, pushes:1, total:46, units:14.2, roi:30.9, current_streak:2,  sport_focus:'NBA', recent_results:['WIN','WIN','LOSS','WIN','LOSS','WIN','WIN','LOSS','WIN','WIN'] },
-  { user_id:'d3', username:'LineMover99', display_name:'LineMover99', avatar_emoji:'📈', wins:22, losses:15, pushes:3, total:40, units:10.7, roi:26.8, current_streak:-1, sport_focus:'MLB', recent_results:['LOSS','WIN','WIN','LOSS','WIN','WIN','PUSH','WIN','LOSS','WIN'] },
-  { user_id:'d4', username:'GoatPunter',  display_name:'Goat Punter', avatar_emoji:'🐐', wins:19, losses:14, pushes:0, total:33, units:9.1,  roi:27.6, current_streak:1,  sport_focus:'NHL', recent_results:['WIN','LOSS','WIN','WIN','LOSS','WIN','LOSS','WIN','WIN','LOSS'] },
-  { user_id:'d5', username:'DogHunter',   display_name:'Dog Hunter',  avatar_emoji:'🦅', wins:14, losses:12, pushes:0, total:26, units:6.8,  roi:26.2, current_streak:-2, sport_focus:'UFC', recent_results:['LOSS','LOSS','WIN','WIN','WIN','LOSS','WIN','LOSS','WIN','WIN'] },
+  { user_id:'d1', username:'SharpMike',   display_name:'SharpMike',  avatar_emoji:'[fire]', wins:31, losses:14, pushes:2, total:47, units:18.4, roi:39.1, current_streak:3,  sport_focus:'NFL', recent_results:['WIN','WIN','WIN','LOSS','WIN','WIN','LOSS','WIN','WIN','LOSS'] },
+  { user_id:'d2', username:'CLVQueen',    display_name:'CLV Queen',   avatar_emoji:'[crown]', wins:28, losses:17, pushes:1, total:46, units:14.2, roi:30.9, current_streak:2,  sport_focus:'NBA', recent_results:['WIN','WIN','LOSS','WIN','LOSS','WIN','WIN','LOSS','WIN','WIN'] },
+  { user_id:'d3', username:'LineMover99', display_name:'LineMover99', avatar_emoji:'[up]', wins:22, losses:15, pushes:3, total:40, units:10.7, roi:26.8, current_streak:-1, sport_focus:'MLB', recent_results:['LOSS','WIN','WIN','LOSS','WIN','WIN','PUSH','WIN','LOSS','WIN'] },
+  { user_id:'d4', username:'GoatPunter',  display_name:'Goat Punter', avatar_emoji:'[GOAT]', wins:19, losses:14, pushes:0, total:33, units:9.1,  roi:27.6, current_streak:1,  sport_focus:'NHL', recent_results:['WIN','LOSS','WIN','WIN','LOSS','WIN','LOSS','WIN','WIN','LOSS'] },
+  { user_id:'d5', username:'DogHunter',   display_name:'Dog Hunter',  avatar_emoji:'[?]', wins:14, losses:12, pushes:0, total:26, units:6.8,  roi:26.2, current_streak:-2, sport_focus:'UFC', recent_results:['LOSS','LOSS','WIN','WIN','WIN','LOSS','WIN','LOSS','WIN','WIN'] },
 ];
 
 // ── Profit from American odds ────────────────────────────────────────────────

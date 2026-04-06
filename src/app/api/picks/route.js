@@ -109,11 +109,11 @@ function normalizeSport(sport) {
 function cleanTeamForLookup(team) {
   if (!team) return '';
   return team
-    .replace(/\s+(ML|ml|Ml)\b/g, '')                     // "Cubs ML" → "Cubs"
-    .replace(/\s+[+-]?\d+\.?\d*\s*$/g, '')                // "Tigers -1.5" → "Tigers"
-    .replace(/\s+\([+-]?\d+\)/g, '')                       // "Cubs (+110)" → "Cubs"
-    .replace(/\s+(over|under|o|u)\s+[\d.]+/gi, '')         // "Cubs over 8.5" → "Cubs"
-    .replace(/\s+(spread|run line|puck line)/gi, '')        // "Cubs spread" → "Cubs"
+    .replace(/\s+(ML|ml|Ml)\b/g, '')                     // "Cubs ML" -> "Cubs"
+    .replace(/\s+[+-]?\d+\.?\d*\s*$/g, '')                // "Tigers -1.5" -> "Tigers"
+    .replace(/\s+\([+-]?\d+\)/g, '')                       // "Cubs (+110)" -> "Cubs"
+    .replace(/\s+(over|under|o|u)\s+[\d.]+/gi, '')         // "Cubs over 8.5" -> "Cubs"
+    .replace(/\s+(spread|run line|puck line)/gi, '')        // "Cubs spread" -> "Cubs"
     .trim();
 }
 
@@ -225,7 +225,7 @@ export async function POST(req) {
   delete safePayload.submitted_at;    // strip — set by DB trigger
 
   // Normalize team name deterministically (no AI call needed)
-  // e.g. "Detroit" (MLB) → "Detroit Tigers", "Cubs" → "Chicago Cubs"
+  // e.g. "Detroit" (MLB) -> "Detroit Tigers", "Cubs" -> "Chicago Cubs"
   if (safePayload.team && safePayload.sport) {
     safePayload.team = normalizeTeam(safePayload.team, safePayload.sport);
   }
@@ -251,7 +251,7 @@ export async function POST(req) {
       if ((existing?.length || 0) >= CONTEST_RULES.maxPicksPerDay) {
         return NextResponse.json({
           error: 'Daily contest limit reached',
-          errors: [`You already have a contest pick for ${safePayload.date}. One play per day — no exceptions.`],
+          errors: [`You already have a contest pick for ${safePayload.date}. One play per day - no exceptions.`],
         }, { status: 422 });
       }
     }
@@ -289,7 +289,7 @@ export async function POST(req) {
       return NextResponse.json({
         error: 'Game already started',
         errors: [
-          `This game started ${startedAgo} minute${startedAgo !== 1 ? 's' : ''} ago — contest picks must be submitted before game time.`,
+          `This game started ${startedAgo} minute${startedAgo !== 1 ? 's' : ''} ago - contest picks must be submitted before game time.`,
           'You can still log it as a personal pick (uncheck "Contest Entry").',
         ],
         commence_time,
@@ -381,7 +381,7 @@ export async function PATCH(req) {
   }
   if (gameStarted) {
     return NextResponse.json({
-      error: 'This game has already started — edits are locked to protect your verified record.',
+      error: 'This game has already started - edits are locked to protect your verified record.',
     }, { status: 403 });
   }
 

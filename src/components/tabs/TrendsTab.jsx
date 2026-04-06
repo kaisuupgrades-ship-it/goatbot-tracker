@@ -4,14 +4,14 @@ import { playTick, playAnalysisReady } from '@/lib/sounds';
 
 // ── Scan steps for the fake-but-real animated progress bar ───────────────────
 const SCAN_STEPS = [
-  { pct: 8,  label: 'Connecting to live data feeds…',      emoji: '🔌' },
-  { pct: 22, label: 'Fetching today\'s full game slate…',  emoji: '📅' },
-  { pct: 38, label: 'Pulling injury & lineup reports…',    emoji: '🏥' },
-  { pct: 52, label: 'Scanning opening vs. current lines…', emoji: '📈' },
-  { pct: 65, label: 'Detecting sharp money signals…',      emoji: '⚡' },
-  { pct: 78, label: 'Analyzing situational matchups…',     emoji: '🔬' },
-  { pct: 90, label: 'Compiling edges & confidence ranks…', emoji: '🧠' },
-  { pct: 98, label: 'Finalizing report…',                  emoji: '✅' },
+  { pct: 8,  label: 'Connecting to live data feeds...',      emoji: '[plug]' },
+  { pct: 22, label: 'Fetching today\'s full game slate...',  emoji: '[date]' },
+  { pct: 38, label: 'Pulling injury & lineup reports...',    emoji: '[injury]' },
+  { pct: 52, label: 'Scanning opening vs. current lines...', emoji: '[up]' },
+  { pct: 65, label: 'Detecting sharp money signals...',      emoji: '[sharp]' },
+  { pct: 78, label: 'Analyzing situational matchups...',     emoji: '[?]' },
+  { pct: 90, label: 'Compiling edges & confidence ranks...', emoji: '[AI]' },
+  { pct: 98, label: 'Finalizing report...',                  emoji: '[ok]' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ function EdgeCard({ edge, onLog }) {
             <span style={{ fontWeight: 800, color: '#f0f0f0', fontSize: '0.95rem' }}>{edge.matchup}</span>
             <ConfBadge level={edge.confidence} />
             {edge.sharp && (
-              <span style={{ fontSize: '0.65rem', color: '#FFB800', fontWeight: 700 }}>⚡ SHARP SPOT</span>
+              <span style={{ fontSize: '0.65rem', color: '#FFB800', fontWeight: 700 }}>[sharp] SHARP SPOT</span>
             )}
           </div>
 
@@ -92,7 +92,7 @@ function EdgeCard({ edge, onLog }) {
         </div>
 
         <span style={{ color: expanded ? '#FFB800' : '#444', fontSize: '0.75rem', flexShrink: 0, paddingTop: '3px' }}>
-          {expanded ? '▲' : '▼'}
+          {expanded ? '^' : 'v'}
         </span>
       </div>
 
@@ -161,7 +161,7 @@ function AskAnalyst({ user }) {
       const d = await res.json();
       if (d.error && res.status !== 200) { setError(d.error); }
       else { setAnswer(d.answer); setRemaining(d.remaining ?? null); }
-    } catch { setError('Network error — try again.'); }
+    } catch { setError('Network error - try again.'); }
     setAsking(false);
   }
 
@@ -176,7 +176,7 @@ function AskAnalyst({ user }) {
     <div className="card" style={{ padding: '1.2rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', gap: '0.5rem', flexWrap: 'wrap' }}>
         <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '7px' }}>
-          💬 Ask the Analyst
+          [chat] Ask the Analyst
           <span style={{ fontSize: '0.62rem', color: '#60a5fa', fontWeight: 600, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', padding: '2px 7px', borderRadius: '4px' }}>
             AI-powered
           </span>
@@ -195,7 +195,7 @@ function AskAnalyst({ user }) {
       </div>
 
       <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', marginBottom: '0.75rem', lineHeight: 1.5 }}>
-        Ask anything — situational edges, matchup angles, line movement, weather impacts, pitching matchups. 5 free queries/day.
+        Ask anything - situational edges, matchup angles, line movement, weather impacts, pitching matchups. 5 free queries/day.
       </p>
 
       {/* Quick pills */}
@@ -228,7 +228,7 @@ function AskAnalyst({ user }) {
           className="btn-gold"
           style={{ padding: '0 1.2rem', opacity: (!question.trim() || !userId || remaining === 0) ? 0.4 : 1 }}
         >
-          {asking ? '…' : 'Ask'}
+          {asking ? '...' : 'Ask'}
         </button>
       </div>
 
@@ -241,7 +241,7 @@ function AskAnalyst({ user }) {
       {answer && (
         <div style={{ marginTop: '0.75rem', padding: '1rem', background: 'linear-gradient(135deg, #0a0e18, #080808)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '9px' }}>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span>🤖</span>
+            <span>[AI]</span>
             <span style={{ color: '#FFB800', fontWeight: 700, fontSize: '0.78rem' }}>BetOS Analyst</span>
           </div>
           <p style={{ color: '#e0e0e0', fontSize: '0.83rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{answer}</p>
@@ -331,10 +331,10 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
 
   const SPORTS = [
     { key: 'all', label: 'All Today' },
-    { key: 'mlb', label: '⚾ MLB' },
-    { key: 'nba', label: '🏀 NBA' },
-    { key: 'nhl', label: '🏒 NHL' },
-    { key: 'nfl', label: '🏈 NFL' },
+    { key: 'mlb', label: '[MLB] MLB' },
+    { key: 'nba', label: '[NBA] NBA' },
+    { key: 'nhl', label: '[NHL] NHL' },
+    { key: 'nfl', label: '[NFL] NFL' },
   ];
 
   const scan = useCallback(async (sportKey = sport, forceRefresh = false) => {
@@ -359,7 +359,7 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
 
       // Fetch real odds from The Odds API + ESPN schedule in parallel
-      const SPORT_EMOJI = { mlb: '⚾', nba: '🏀', nhl: '🏒', nfl: '🏈' };
+      const SPORT_EMOJI = { mlb: '[MLB]', nba: '[NBA]', nhl: '[NHL]', nfl: '[NFL]' };
 
       const [oddsResults, espnResults] = await Promise.all([
         // Real bookmaker odds via our /api/odds route (already caches 3 min)
@@ -449,7 +449,7 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
 
           gameList.push({
             sport:    sp.toUpperCase(),
-            emoji:    SPORT_EMOJI[sp] || '🏆',
+            emoji:    SPORT_EMOJI[sp] || '[trophy]',
             matchup:  `${away.team?.abbreviation} @ ${home.team?.abbreviation}`,
             home:     homeName,
             away:     awayName,
@@ -500,13 +500,13 @@ Return ONLY a valid JSON array. Each object must have these exact fields:
 {
   "matchup": "AWAY @ HOME (short form)",
   "sport": "MLB|NBA|NHL|NFL",
-  "sport_emoji": "⚾|🏀|🏒|🏈",
+  "sport_emoji": "[MLB]|[NBA]|[NHL]|[NFL]",
   "pick": "Team name or Over/Under X",
   "bet_type": "Moneyline|Spread|Total (Over)|Total (Under)",
   "odds": <integer American odds or null>,
   "confidence": "HIGH|MEDIUM|LOW",
   "sharp": true|false,
-  "reason": "One sentence — the specific edge",
+  "reason": "One sentence - the specific edge",
   "analysis": "2-3 sentences of detailed analysis with the why",
   "trend_record": "e.g. 58-42 (58%) ATS last 3 seasons or null",
   "trend_roi": "e.g. +4.2% ROI or null",
@@ -567,7 +567,7 @@ Return ONLY the JSON array, no other text.`;
       setScanned(true);
       setUserScanned(true); // mark that this is user's own scan (not admin cache)
     } catch (err) {
-      setError(`Scan failed — network or server error. Try again in a moment.`);
+      setError(`Scan failed - network or server error. Try again in a moment.`);
       setScanned(true);
     }
     finishScan();
@@ -594,7 +594,7 @@ Return ONLY the JSON array, no other text.`;
           borderRadius: '10px', color: '#FFB800', fontWeight: 700, fontSize: '0.85rem',
           boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
         }}>
-          ✓ Opening My Picks — log: "{logged.substring(0, 35)}{logged.length > 35 ? '…' : ''}"
+          [ok] Opening My Picks — log: "{logged.substring(0, 35)}{logged.length > 35 ? '...' : ''}"
         </div>
       )}
 
@@ -607,12 +607,12 @@ Return ONLY the JSON array, no other text.`;
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '1.1rem' }}>⚡</span>
+            <span style={{ fontSize: '1.1rem' }}>[sharp]</span>
             <span style={{ fontWeight: 800, color: '#FFB800', fontSize: '1rem' }}>Today's Edges</span>
             <span style={{ fontSize: '0.62rem', color: '#555', background: '#111', border: '1px solid #222', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
               {todayStr()}
             </span>
-            {/* Server-generated badge — shown when BetOS pre-loaded today's analysis */}
+            {/* Server-generated badge - shown when BetOS pre-loaded today's analysis */}
             {globalEdges && !userScanned && (
               <span style={{
                 fontSize: '0.6rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px',
@@ -620,7 +620,7 @@ Return ONLY the JSON array, no other text.`;
                 letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: '4px',
               }}>
                 <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', animation: 'pulse 2s infinite' }} />
-                LIVE · BetOS AI
+                LIVE . BetOS AI
               </span>
             )}
             {userScanned && (
@@ -636,7 +636,7 @@ Return ONLY the JSON array, no other text.`;
           <p style={{ color: 'var(--text-muted)', fontSize: '0.77rem', lineHeight: 1.5, margin: 0, maxWidth: '520px' }}>
             {globalEdges && !userScanned
               ? 'BetOS AI pre-analyzed today\'s slate automatically with live web search. Updated twice daily. Use "Ask the Analyst" below for custom queries.'
-              : 'BetOS scans today\'s slate and surfaces situational betting edges — home dogs, rest spots, fade opportunities, and line value — with real current odds.'}
+              : 'BetOS scans today\'s slate and surfaces situational betting edges - home dogs, rest spots, fade opportunities, and line value - with real current odds.'}
           </p>
           {/* Show last generated timestamp */}
           {globalEdges?.pushed_at && !userScanned && (
@@ -651,7 +651,7 @@ Return ONLY the JSON array, no other text.`;
           {globalLoading && (
             <span style={{ fontSize: '0.7rem', color: '#555', display: 'flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #FFB800', borderTopColor: 'transparent', animation: 'spin-border 0.8s linear infinite' }} />
-              Loading analysis…
+              Loading analysis...
             </span>
           )}
 
@@ -669,7 +669,7 @@ Return ONLY the JSON array, no other text.`;
               onMouseOver={e => { e.currentTarget.style.borderColor = '#555'; e.currentTarget.style.color = '#999'; }}
               onMouseOut={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#666'; }}
             >
-              {loading ? '🔍 Scanning…' : '🔍 Run My Own Scan'}
+              {loading ? '[search] Scanning...' : '[search] Run My Own Scan'}
             </button>
           )}
 
@@ -681,7 +681,7 @@ Return ONLY the JSON array, no other text.`;
               className="btn-gold"
               style={{ opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
             >
-              {loading ? '🔍 Scanning…' : scanned ? '🔄 Refresh' : '🔍 Scan Today\'s Slate'}
+              {loading ? '[search] Scanning...' : scanned ? '[refresh] Refresh' : '[search] Scan Today\'s Slate'}
             </button>
           )}
 
@@ -696,7 +696,7 @@ Return ONLY the JSON array, no other text.`;
                 transition: 'all 0.12s', whiteSpace: 'nowrap',
               }}
             >
-              ← Back to BetOS AI
+              <- Back to BetOS AI
             </button>
           )}
         </div>
@@ -730,13 +730,13 @@ Return ONLY the JSON array, no other text.`;
           {/* Step label */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '11px', marginBottom: '18px' }}>
             <span style={{ fontSize: '1.25rem', lineHeight: 1, flexShrink: 0 }}>
-              {SCAN_STEPS[scanStepIdx]?.emoji || '🔍'}
+              {SCAN_STEPS[scanStepIdx]?.emoji || '[search]'}
             </span>
             <span style={{
               color: '#d8d0b8', fontSize: '0.87rem', fontWeight: 500, lineHeight: 1.4,
               transition: 'all 0.35s ease',
             }}>
-              {SCAN_STEPS[scanStepIdx]?.label || 'Initializing scan…'}
+              {SCAN_STEPS[scanStepIdx]?.label || 'Initializing scan...'}
             </span>
           </div>
 
@@ -754,7 +754,7 @@ Return ONLY the JSON array, no other text.`;
 
           {/* Footer */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem', color: '#3a3a3a' }}>
-            <span style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>BetOS Intelligence · Live Scan</span>
+            <span style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>BetOS Intelligence . Live Scan</span>
             <span style={{
               fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700,
               color: scanPct >= 98 ? '#FFB800' : '#3a3a3a',
@@ -776,15 +776,15 @@ Return ONLY the JSON array, no other text.`;
       {/* Empty state (pre-scan) */}
       {!loading && !scanned && !error && (
         <div style={{ textAlign: 'center', padding: '3rem 2rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem', opacity: 0.4 }}>⚡</div>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem', opacity: 0.4 }}>[sharp]</div>
           <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
             No scan yet
           </div>
           <div style={{ fontSize: '0.78rem', marginBottom: '1.25rem', lineHeight: 1.6 }}>
-            Hit <strong style={{ color: '#FFB800' }}>Scan Today's Slate</strong> to pull live games and surface today's best situational edges — home dogs, rest advantages, fade spots, and more.
+            Hit <strong style={{ color: '#FFB800' }}>Scan Today's Slate</strong> to pull live games and surface today's best situational edges - home dogs, rest advantages, fade spots, and more.
           </div>
           <button onClick={() => scan(sport)} className="btn-gold">
-            🔍 Scan Today's Slate
+            [search] Scan Today's Slate
           </button>
         </div>
       )}
@@ -794,9 +794,9 @@ Return ONLY the JSON array, no other text.`;
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span>{filtered.length} edge{filtered.length !== 1 ? 's' : ''} identified</span>
-            <span style={{ color: '#2a2a2a' }}>·</span>
-            <span>⚡ = sharp spot with meaningful historical edge</span>
-            <span style={{ color: '#2a2a2a' }}>·</span>
+            <span style={{ color: '#2a2a2a' }}>.</span>
+            <span>[sharp] = sharp spot with meaningful historical edge</span>
+            <span style={{ color: '#2a2a2a' }}>.</span>
             <span>Click any card to expand analysis + log the pick</span>
           </div>
           {filtered.map((edge, i) => (
@@ -808,19 +808,19 @@ Return ONLY the JSON array, no other text.`;
       {/* No edges found after scan */}
       {!loading && scanned && !error && filtered.length === 0 && edges.length > 0 && (
         <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-          No {sport !== 'all' ? sport.toUpperCase() : ''} edges found — try "All Today" or refresh for a different sport.
+          No {sport !== 'all' ? sport.toUpperCase() : ''} edges found - try "All Today" or refresh for a different sport.
         </div>
       )}
 
-      {/* Ask the Analyst — always visible */}
+      {/* Ask the Analyst - always visible */}
       <AskAnalyst user={user} />
 
       {/* Footer info */}
       <div style={{ padding: '0.7rem 1rem', background: '#080808', border: '1px solid #1a1a1a', borderRadius: '8px', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.68rem', color: '#444' }}>
-        <span>📡 Live odds from ESPN</span>
-        <span>🤖 AI-powered edge detection with live data</span>
-        <span>⚡ Situational edges: rest, matchups, line value, public fade spots</span>
-        <span>💬 5 free analyst queries/day per user</span>
+        <span>[live] Live odds from ESPN</span>
+        <span>[AI] AI-powered edge detection with live data</span>
+        <span>[sharp] Situational edges: rest, matchups, line value, public fade spots</span>
+        <span>[chat] 5 free analyst queries/day per user</span>
       </div>
     </div>
   );

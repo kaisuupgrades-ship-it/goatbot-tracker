@@ -10,7 +10,7 @@
  *  1. teamMatches() guards empty strings (no false positives)
  *  2. parseLineFromNotes() extracts spread/total when pick.line is null
  *  3. extractTeamFromMatchup() handles "ILL vs UCONN" style team fields
- *  4. 4-tier home/away detection (side → team name → home/away fields → matchup parse)
+ *  4. 4-tier home/away detection (side -> team name -> home/away fields -> matchup parse)
  *  5. Totals grade correctly even without a stored line column
  */
 
@@ -31,7 +31,7 @@ export function teamMatches(a, b) {
   return n1 === n2 || n1.includes(n2) || n2.includes(n1);
 }
 
-/** "BOS @ TB" or "PHI vs COL" or "Tulsa at Auburn" → { away, home } normalized strings */
+/** "BOS @ TB" or "PHI vs COL" or "Tulsa at Auburn" -> { away, home } normalized strings */
 export function parseMatchupStr(matchup) {
   if (!matchup) return null;
   const lower = matchup.toLowerCase();
@@ -61,10 +61,10 @@ export function isMatchupString(str) {
 
 /**
  * Try to extract the spread/total line from the notes field.
- * "Under 139.5 total points" → 139.5
- * "LAD -1.5 run line"       → -1.5
- * "Over 7.5"                → 7.5
- * "Auburn -1.5 live spread" → -1.5  (number BEFORE keyword)
+ * "Under 139.5 total points" -> 139.5
+ * "LAD -1.5 run line"       -> -1.5
+ * "Over 7.5"                -> 7.5
+ * "Auburn -1.5 live spread" -> -1.5  (number BEFORE keyword)
  */
 export function parseLineFromNotes(notes) {
   if (!notes) return null;
@@ -166,7 +166,7 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
   const betType = (pick.bet_type || 'Moneyline').toLowerCase();
   const pickSide = (pick.side || '').toLowerCase(); // explicit side field
 
-  // Resolve line: stored column → parse from notes → 0
+  // Resolve line: stored column -> parse from notes -> 0
   const line = parseFloat(pick.line ?? parseLineFromNotes(pick.notes) ?? 0);
 
   const total = homeScore + awayScore;
@@ -207,14 +207,14 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
       else if (total < line) result = isUnder ? 'WIN' : isOver  ? 'LOSS' : null;
       else                   result = 'PUSH';
     }
-    // No line → can't grade; return null
+    // No line -> can't grade; return null
   }
 
   if (!result) return null;
 
   // Calculate profit using the actual units the user risked.
   // Contest 1-unit normalization happens at the leaderboard display layer
-  // (contest-leaderboard/route.js → contestProfit), NOT here.
+  // (contest-leaderboard/route.js -> contestProfit), NOT here.
   // This keeps "My Picks" showing real units (e.g. hodgins 5u = +4.545u)
   // while the contest leaderboard shows 1u scoring for everyone.
   const odds  = parseInt(pick.odds || 0);

@@ -5,7 +5,7 @@
  * Grades ALL users' PENDING/null picks for that game and returns the graded list.
  *
  * POST { sport, homeTeam, awayTeam, homeScore, awayScore, gameDate }
- * → { graded: [{ id, user_id, result, profit, home_score, away_score, contest_entry }], count }
+ * -> { graded: [{ id, user_id, result, profit, home_score, away_score, contest_entry }], count }
  */
 import { NextResponse } from 'next/server';
 import { createClient }  from '@supabase/supabase-js';

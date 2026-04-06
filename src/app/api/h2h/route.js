@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 30;
 
-// Sport → ESPN path
+// Sport -> ESPN path
 const SPORT_MAP = {
   mlb:   'baseball/mlb',
   nfl:   'football/nfl',

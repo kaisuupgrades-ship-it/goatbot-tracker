@@ -62,8 +62,8 @@ export async function PATCH(req) {
 
     // ── Sync to profiles table ────────────────────────────────────────────────
     // The profiles table is the single source of truth for:
-    //   username     → @handle used in leaderboard, picks, mentions
-    //   display_name → friendly name shown in chat, profile cards
+    //   username     -> @handle used in leaderboard, picks, mentions
+    //   display_name -> friendly name shown in chat, profile cards
     // Both must stay in sync with user_metadata so every surface shows the same name.
     const profileUpdate = {};
     if (username     !== undefined && username)     profileUpdate.username     = username.trim();

@@ -19,7 +19,7 @@
  *    - Patterns to avoid and seek
  *    - Confidence calibration data
  *
- * Together these form a feedback loop: analyze → grade → post-mortem → learn → analyze better.
+ * Together these form a feedback loop: analyze -> grade -> post-mortem -> learn -> analyze better.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -57,8 +57,8 @@ Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 
 Rules for confidence_delta:
 - 0 = confidence was appropriate for the outcome
-- Positive = overconfident (said HIGH but lost → +1, said ELITE but lost → +2)
-- Negative = underconfident (said LOW but won → -1, said MEDIUM but won decisively → -1)
+- Positive = overconfident (said HIGH but lost -> +1, said ELITE but lost -> +2)
+- Negative = underconfident (said LOW but won -> -1, said MEDIUM but won decisively -> -1)
 
 For was_overconfident: true if confidence was HIGH/ELITE and result was LOSS
 For was_underconfident: true if confidence was LOW/MEDIUM and result was WIN`;
@@ -431,7 +431,7 @@ Overall: ${overall.wins}W-${overall.losses}L (${overall.pct}% win rate) on ${ove
           const total = r.wins + r.losses;
           if (total >= 3 && r.wins / total < 0.4) {
             const label = bt === 'ml' ? 'moneyline' : bt;
-            betBlock += `\n⚠ You're struggling with ${sportUpper} ${label} bets. Consider other bet types or be extra rigorous here.`;
+            betBlock += `\n[!] You're struggling with ${sportUpper} ${label} bets. Consider other bet types or be extra rigorous here.`;
           }
         }
 

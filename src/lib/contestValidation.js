@@ -60,10 +60,10 @@ export function validateContestEntry(pick, rules = {}) {
   }
   if (!isNaN(odds) && pick.odds) {
     if (rules.min_odds != null && odds < rules.min_odds) {
-      errors.push(`Odds too short — contest minimum is ${rules.min_odds > 0 ? '+' : ''}${rules.min_odds}.`);
+      errors.push(`Odds too short - contest minimum is ${rules.min_odds > 0 ? '+' : ''}${rules.min_odds}.`);
     }
     if (rules.max_odds != null && odds > rules.max_odds) {
-      errors.push(`Odds too high — contest maximum is ${rules.max_odds > 0 ? '+' : ''}${rules.max_odds}.`);
+      errors.push(`Odds too high - contest maximum is ${rules.max_odds > 0 ? '+' : ''}${rules.max_odds}.`);
     }
   }
 
@@ -80,7 +80,7 @@ export function validateContestEntry(pick, rules = {}) {
   // ── Daily pick limit ────────────────────────────────────────────────────────
   if (rules.max_picks_per_day != null && rules.picks_today != null) {
     if (rules.picks_today >= rules.max_picks_per_day) {
-      errors.push(`Daily limit reached — max ${rules.max_picks_per_day} contest pick${rules.max_picks_per_day !== 1 ? 's' : ''} per day.`);
+      errors.push(`Daily limit reached - max ${rules.max_picks_per_day} contest pick${rules.max_picks_per_day !== 1 ? 's' : ''} per day.`);
     } else if (rules.picks_today >= rules.max_picks_per_day - 1) {
       warnings.push(`This is your last contest pick for today (limit: ${rules.max_picks_per_day}/day).`);
     }
@@ -102,10 +102,10 @@ export function validateContestEntry(pick, rules = {}) {
 
   // ── Soft warnings (never block) ─────────────────────────────────────────────
   if (!pick.team?.trim()) {
-    warnings.push('Team name is empty — grading may not work correctly.');
+    warnings.push('Team name is empty - grading may not work correctly.');
   }
   if (!pick.odds || isNaN(parseInt(pick.odds))) {
-    warnings.push('No odds entered — profit/loss calculations will be unavailable.');
+    warnings.push('No odds entered - profit/loss calculations will be unavailable.');
   }
 
   return {

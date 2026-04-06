@@ -15,11 +15,11 @@ const SUPABASE_CONFIGURED =
 
 // Demo data for when Supabase isn't configured
 const DEMO_DATA = [
-  { user_id: 'demo-1', username: 'SharpMike',   display_name: 'SharpMike',   avatar_emoji: '🔥', wins: 18, losses: 7,  pushes: 1, pending: 1, total_settled: 26, units: 11.4, roi: 43.8, streak: 3,  streak_type: 'W' },
-  { user_id: 'demo-2', username: 'CLVQueen',     display_name: 'CLV Queen',   avatar_emoji: '👑', wins: 14, losses: 9,  pushes: 2, pending: 0, total_settled: 25, units:  7.2, roi: 28.8, streak: 1,  streak_type: 'W' },
-  { user_id: 'demo-3', username: 'LineMover99',  display_name: 'LineMover99', avatar_emoji: '📈', wins: 12, losses: 10, pushes: 1, pending: 2, total_settled: 23, units:  4.1, roi: 17.8, streak: 2,  streak_type: 'L' },
-  { user_id: 'demo-4', username: 'GoatPunter',   display_name: 'Goat Punter', avatar_emoji: '🐐', wins: 10, losses: 8,  pushes: 0, pending: 1, total_settled: 18, units:  3.8, roi: 21.1, streak: 1,  streak_type: 'W' },
-  { user_id: 'demo-5', username: 'DogHunter',    display_name: 'Dog Hunter',  avatar_emoji: '🦅', wins:  8, losses: 9,  pushes: 1, pending: 0, total_settled: 18, units: -1.2, roi: -6.7,  streak: 2,  streak_type: 'L' },
+  { user_id: 'demo-1', username: 'SharpMike',   display_name: 'SharpMike',   avatar_emoji: '[fire]', wins: 18, losses: 7,  pushes: 1, pending: 1, total_settled: 26, units: 11.4, roi: 43.8, streak: 3,  streak_type: 'W' },
+  { user_id: 'demo-2', username: 'CLVQueen',     display_name: 'CLV Queen',   avatar_emoji: '[crown]', wins: 14, losses: 9,  pushes: 2, pending: 0, total_settled: 25, units:  7.2, roi: 28.8, streak: 1,  streak_type: 'W' },
+  { user_id: 'demo-3', username: 'LineMover99',  display_name: 'LineMover99', avatar_emoji: '[up]', wins: 12, losses: 10, pushes: 1, pending: 2, total_settled: 23, units:  4.1, roi: 17.8, streak: 2,  streak_type: 'L' },
+  { user_id: 'demo-4', username: 'GoatPunter',   display_name: 'Goat Punter', avatar_emoji: '[GOAT]', wins: 10, losses: 8,  pushes: 0, pending: 1, total_settled: 18, units:  3.8, roi: 21.1, streak: 1,  streak_type: 'W' },
+  { user_id: 'demo-5', username: 'DogHunter',    display_name: 'Dog Hunter',  avatar_emoji: '[?]', wins:  8, losses: 9,  pushes: 1, pending: 0, total_settled: 18, units: -1.2, roi: -6.7,  streak: 2,  streak_type: 'L' },
 ];
 
 // Contest scoring: all picks normalized to 1-unit risk regardless of actual bet size.
@@ -35,7 +35,7 @@ function contestProfit(result, odds) {
 function buildContestRows(picks, profiles) {
   const nameMap = {};
   (profiles || []).forEach(p => {
-    nameMap[p.id] = { username: p.username, display_name: p.display_name || p.username, avatar_emoji: p.avatar_emoji || '🎯', avatar_url: p.avatar_url || null };
+    nameMap[p.id] = { username: p.username, display_name: p.display_name || p.username, avatar_emoji: p.avatar_emoji || '[target]', avatar_url: p.avatar_url || null };
   });
 
   const userMap = {};
@@ -47,7 +47,7 @@ function buildContestRows(picks, profiles) {
         user_id:      pick.user_id,
         username:     prof.username     || 'Unknown',
         display_name: prof.display_name || 'Unknown',
-        avatar_emoji: prof.avatar_emoji || '🎯',
+        avatar_emoji: prof.avatar_emoji || '[target]',
         avatar_url:   prof.avatar_url   || null,
         wins: 0, losses: 0, pushes: 0, pending: 0,
         total_settled: 0, units: 0,
@@ -154,7 +154,7 @@ export async function GET(req) {
     // (ESPN lookup failed) are given benefit of the doubt until audited manually.
     const GRACE_MS = 2 * 60 * 1000;
     const cleanPicks = (picks || []).filter(p => {
-      if (!p.commence_time || !p.created_at) return true; // can't determine — keep
+      if (!p.commence_time || !p.created_at) return true; // can't determine - keep
       const submitted = new Date(p.created_at).getTime();
       const gameStart = new Date(p.commence_time).getTime();
       return submitted <= gameStart + GRACE_MS; // keep if submitted before game + grace

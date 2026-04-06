@@ -10,13 +10,13 @@ export const maxDuration = 15;
 
 // ── Demo leaderboard data ─────────────────────────────────────────────────────
 const DUMMY_DATA = [
-  { user_id: 'demo-1', username: 'SharpMike',     display_name: 'SharpMike',      avatar_emoji: '🔥', wins: 31, losses: 14, pushes: 2, total: 47, units: 18.4, roi: 39.1, verified_picks: 28, sharp_score: 62.3 },
-  { user_id: 'demo-2', username: 'CLVQueen',      display_name: 'CLV Queen',       avatar_emoji: '👑', wins: 28, losses: 17, pushes: 1, total: 46, units: 14.2, roi: 30.9, verified_picks: 33, sharp_score: 51.8 },
-  { user_id: 'demo-3', username: 'LineMover99',   display_name: 'LineMover99',     avatar_emoji: '📈', wins: 22, losses: 15, pushes: 3, total: 40, units: 10.7, roi: 26.8, verified_picks: 25, sharp_score: 38.9 },
-  { user_id: 'demo-4', username: 'GoatPunter',    display_name: 'Goat Punter',     avatar_emoji: '🐐', wins: 19, losses: 14, pushes: 0, total: 33, units:  9.1, roi: 27.6, verified_picks: 18, sharp_score: 34.1 },
-  { user_id: 'demo-5', username: 'TheEdgeFinder', display_name: 'Edge Finder',     avatar_emoji: '⚡', wins: 17, losses: 16, pushes: 1, total: 34, units:  5.3, roi: 15.6, verified_picks: 21, sharp_score: 20.8 },
-  { user_id: 'demo-6', username: 'DogHunter',     display_name: 'Dog Hunter',      avatar_emoji: '🦅', wins: 14, losses: 12, pushes: 0, total: 26, units:  6.8, roi: 26.2, verified_picks: 14, sharp_score: 18.5 },
-  { user_id: 'demo-7', username: 'Fades4Days',    display_name: 'Fades4Days',      avatar_emoji: '💎', wins: 12, losses: 11, pushes: 2, total: 25, units:  3.2, roi: 12.8, verified_picks: 11, sharp_score:  9.7 },
+  { user_id: 'demo-1', username: 'SharpMike',     display_name: 'SharpMike',      avatar_emoji: '[fire]', wins: 31, losses: 14, pushes: 2, total: 47, units: 18.4, roi: 39.1, verified_picks: 28, sharp_score: 62.3 },
+  { user_id: 'demo-2', username: 'CLVQueen',      display_name: 'CLV Queen',       avatar_emoji: '[crown]', wins: 28, losses: 17, pushes: 1, total: 46, units: 14.2, roi: 30.9, verified_picks: 33, sharp_score: 51.8 },
+  { user_id: 'demo-3', username: 'LineMover99',   display_name: 'LineMover99',     avatar_emoji: '[up]', wins: 22, losses: 15, pushes: 3, total: 40, units: 10.7, roi: 26.8, verified_picks: 25, sharp_score: 38.9 },
+  { user_id: 'demo-4', username: 'GoatPunter',    display_name: 'Goat Punter',     avatar_emoji: '[GOAT]', wins: 19, losses: 14, pushes: 0, total: 33, units:  9.1, roi: 27.6, verified_picks: 18, sharp_score: 34.1 },
+  { user_id: 'demo-5', username: 'TheEdgeFinder', display_name: 'Edge Finder',     avatar_emoji: '[sharp]', wins: 17, losses: 16, pushes: 1, total: 34, units:  5.3, roi: 15.6, verified_picks: 21, sharp_score: 20.8 },
+  { user_id: 'demo-6', username: 'DogHunter',     display_name: 'Dog Hunter',      avatar_emoji: '[?]', wins: 14, losses: 12, pushes: 0, total: 26, units:  6.8, roi: 26.2, verified_picks: 14, sharp_score: 18.5 },
+  { user_id: 'demo-7', username: 'Fades4Days',    display_name: 'Fades4Days',      avatar_emoji: '[gem]', wins: 12, losses: 11, pushes: 2, total: 25, units:  3.2, roi: 12.8, verified_picks: 11, sharp_score:  9.7 },
 ].map((r, i) => ({ ...r, rank: i + 1 }));
 
 // ── Check if Supabase is actually configured ──────────────────────────────────
@@ -36,7 +36,7 @@ export async function GET(req) {
   // 'all'      = all public settled picks (default)
   const filter   = searchParams.get('filter') === 'verified' ? 'verified' : 'all';
 
-  // ── Demo mode or no Supabase → serve demo data ────────────────────────────
+  // ── Demo mode or no Supabase -> serve demo data ────────────────────────────
   if (isDemo || !SUPABASE_CONFIGURED) {
     return NextResponse.json(withUserRank(applyFilter(DUMMY_DATA, filter), null, true, filter));
   }

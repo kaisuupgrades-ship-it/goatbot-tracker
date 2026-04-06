@@ -17,9 +17,9 @@ async function getAuthUser(req) {
   } catch { return null; }
 }
 
-// ── GET /api/messages?userId=X                → list all conversations (inbox)
-// ── GET /api/messages?userId=X&withUser=Y    → get thread with a specific user
-// ── GET /api/messages?userId=X&unreadCount=1 → just return unread count
+// ── GET /api/messages?userId=X                -> list all conversations (inbox)
+// ── GET /api/messages?userId=X&withUser=Y    -> get thread with a specific user
+// ── GET /api/messages?userId=X&unreadCount=1 -> just return unread count
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const userId     = searchParams.get('userId');
@@ -128,7 +128,7 @@ export async function POST(req) {
   return NextResponse.json({ message: data });
 }
 
-// ── PATCH /api/messages  body: { userId, partnerId }  → mark thread as read
+// ── PATCH /api/messages  body: { userId, partnerId }  -> mark thread as read
 export async function PATCH(req) {
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

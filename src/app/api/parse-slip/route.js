@@ -23,36 +23,36 @@ Return this exact structure:
 
 TEAM NAME RULES (most important):
 - ALWAYS use the full official team name. Never use city-only or nickname-only.
-  - "Detroit" (MLB) → "Detroit Tigers"
-  - "Chicago" (NBA) → "Chicago Bulls"
-  - "New England" (NFL) → "New England Patriots"
-  - "Pats" → "New England Patriots"
-  - "Cubs" → "Chicago Cubs"
-  - "GS" or "Golden State" (NBA) → "Golden State Warriors"
-  - "Cards" (NFL) → "Arizona Cardinals"  OR  "Cards" (MLB) → "St. Louis Cardinals" (use sport context)
-  - "LA" (NBA context) → "Los Angeles Lakers" or "Los Angeles Clippers" (use matchup context)
+  - "Detroit" (MLB) -> "Detroit Tigers"
+  - "Chicago" (NBA) -> "Chicago Bulls"
+  - "New England" (NFL) -> "New England Patriots"
+  - "Pats" -> "New England Patriots"
+  - "Cubs" -> "Chicago Cubs"
+  - "GS" or "Golden State" (NBA) -> "Golden State Warriors"
+  - "Cards" (NFL) -> "Arizona Cardinals"  OR  "Cards" (MLB) -> "St. Louis Cardinals" (use sport context)
+  - "LA" (NBA context) -> "Los Angeles Lakers" or "Los Angeles Clippers" (use matchup context)
 - For individual sport bets (golf, tennis, boxing, MMA non-UFC): use the full player name (e.g. "Ludvig Aberg", "Scottie Scheffler")
 - For UFC: use the full fighter name (e.g. "Jon Jones", "Conor McGregor")
 - For parlays: put the full parlay description in "team" field (e.g. "5 Pick Parlay (Detroit Tigers ML, Cubs ML, ...)")
 
 BET TYPE RULES:
-- 'money line', 'ML', 'moneyline' → 'Moneyline'
-- 'over' / 'o' → 'Total (Over)', 'under' / 'u' (when referring to total) → 'Total (Under)'
-- 'RL' or 'run line' → 'Run Line' (MLB only)
-- 'PL' or 'puck line' → 'Puck Line' (NHL only)
-- 'spread' or 'ATS' → 'Spread'
+- 'money line', 'ML', 'moneyline' -> 'Moneyline'
+- 'over' / 'o' -> 'Total (Over)', 'under' / 'u' (when referring to total) -> 'Total (Under)'
+- 'RL' or 'run line' -> 'Run Line' (MLB only)
+- 'PL' or 'puck line' -> 'Puck Line' (NHL only)
+- 'spread' or 'ATS' -> 'Spread'
 
 SPORT RULES:
-- Golf, tennis, boxing (non-UFC), horse racing → 'Other'
-- UFC/MMA → 'UFC'
+- Golf, tennis, boxing (non-UFC), horse racing -> 'Other'
+- UFC/MMA -> 'UFC'
 
 UNITS RULES:
 - ALWAYS parse unit expressions: '2u', '2 units', '2unit' all mean 2. '1.5u' means 1.5.
-- Dollar amounts like '$50' or '50 dollars' → use null for units (we track in units not dollars)
+- Dollar amounts like '$50' or '50 dollars' -> use null for units (we track in units not dollars)
 
 ODDS RULES:
 - Must be an integer. '-125' stays -125. '+110' stays 110. American odds only.
-- Convert decimal: 2.10 → +110. Convert fractional: 5/2 → +250.
+- Convert decimal: 2.10 -> +110. Convert fractional: 5/2 -> +250.
 
 - If you cannot determine a value with confidence, use null.`;
 
@@ -119,7 +119,7 @@ async function parseImage(imageBase64, mimeType) {
     throw new Error(`Claude vision error ${res.status}: ${err.error?.message || 'Unknown'}`);
   }
 
-  throw new Error('No vision API available — configure XAI_API_KEY or ANTHROPIC_API_KEY');
+  throw new Error('No vision API available - configure XAI_API_KEY or ANTHROPIC_API_KEY');
 }
 
 // ── SSRF Protection: validate URLs before fetching ────────────────────────────
@@ -139,7 +139,7 @@ function isSafeUrl(urlStr) {
   } catch { return false; }
 }
 
-// ── Text: use shared AI utility (xAI → Claude) ────────────────────────────────
+// ── Text: use shared AI utility (xAI -> Claude) ────────────────────────────────
 async function parseText(text) {
   const xaiKey     = process.env.XAI_API_KEY;
   const claudeKey  = process.env.ANTHROPIC_API_KEY;
@@ -195,7 +195,7 @@ async function parseText(text) {
     }
   }
 
-  throw new Error('No AI API available — configure XAI_API_KEY or ANTHROPIC_API_KEY');
+  throw new Error('No AI API available - configure XAI_API_KEY or ANTHROPIC_API_KEY');
 }
 
 export async function POST(req) {
@@ -256,7 +256,7 @@ export async function POST(req) {
     try {
       const parsed = JSON.parse(cleaned);
       // Deterministic post-processing: normalize team name to full official name
-      // e.g. "Detroit" (MLB) → "Detroit Tigers", "Cubs" → "Chicago Cubs"
+      // e.g. "Detroit" (MLB) -> "Detroit Tigers", "Cubs" -> "Chicago Cubs"
       normalizeParsedPick(parsed);
       return NextResponse.json({ parsed });
     } catch {

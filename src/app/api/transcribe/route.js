@@ -28,7 +28,7 @@ export async function POST(req) {
     }
 
     if (audioBlob.size < 100) {
-      return NextResponse.json({ error: 'Audio file too small — nothing recorded' }, { status: 400 });
+      return NextResponse.json({ error: 'Audio file too small - nothing recorded' }, { status: 400 });
     }
 
     // Build a multipart form for Groq

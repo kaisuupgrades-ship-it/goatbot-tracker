@@ -105,7 +105,7 @@ async function callClaude({ system, user, maxTokens = 1500, temperature = 0.7, s
 }
 
 /**
- * Main entry point — tries xAI first, falls back to Claude
+ * Main entry point - tries xAI first, falls back to Claude
  *
  * @param {object} opts
  * @param {string}  opts.system        — system prompt
@@ -133,7 +133,7 @@ export async function callAI({ system, user, maxTokens = 1500, temperature = 0.7
   try {
     // If this was a web-search request, prepend a note so Claude knows it doesn't have live data
     const claudeUser = requireSearch
-      ? `[NOTE: Live web search unavailable — use your knowledge up to your training cutoff and flag any information that may be outdated]\n\n${user}`
+      ? `[NOTE: Live web search unavailable - use your knowledge up to your training cutoff and flag any information that may be outdated]\n\n${user}`
       : user;
 
     const result = await callClaude({ system, user: claudeUser, maxTokens, temperature, signal });

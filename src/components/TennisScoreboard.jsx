@@ -55,7 +55,7 @@ function MatchCard({ match }) {
   const p1Won   = isFinal && p1SetsWon > p2SetsWon;
   const p2Won   = isFinal && p2SetsWon > p1SetsWon;
 
-  // Round label — extract from series name or competition note
+  // Round label - extract from series name or competition note
   const round   = comp.series?.name || comp.notes?.[0]?.headline || match.name?.split(' - ').slice(-1)[0] || '';
 
   // Scheduled time — format nicely like Flashscore
@@ -128,9 +128,9 @@ function MatchCard({ match }) {
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {side.name}
-              {side.won && <span style={{ marginLeft: '5px', fontSize: '0.65rem', color: '#4ade80' }}>✓</span>}
+              {side.won && <span style={{ marginLeft: '5px', fontSize: '0.65rem', color: '#4ade80' }}>[ok]</span>}
             </div>
-            {/* Score area — set-by-set, total sets, or empty for upcoming */}
+            {/* Score area - set-by-set, total sets, or empty for upcoming */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1px', flexShrink: 0 }}>
               {hasLinescores
                 ? side.sets.map((set, si) => {
@@ -155,7 +155,7 @@ function MatchCard({ match }) {
               background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)',
               borderRadius: '20px', padding: '3px 12px', display: 'inline-block',
             }}>
-              {startDay}{startTime ? ` · ${startTime}` : ''}
+              {startDay}{startTime ? ` . ${startTime}` : ''}
             </span>
           </div>
         )}
@@ -168,7 +168,7 @@ function MatchCard({ match }) {
           style={{ padding: '4px 12px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textDecoration: 'underline dotted' }}>
-            {expanded ? 'Less ▲' : 'Details ▼'}
+            {expanded ? 'Less ^' : 'Details v'}
           </span>
         </div>
       )}
@@ -243,7 +243,7 @@ function TournamentSection({ name, matches, defaultOpen }) {
       boxShadow: liveCount > 0 ? '0 2px 12px rgba(74,222,128,0.07)' : 'none',
       transition: 'border-color 0.15s',
     }}>
-      {/* ── Section header — clickable ── */}
+      {/* ── Section header - clickable ── */}
       <div
         onClick={() => setOpen(v => !v)}
         style={{
@@ -264,7 +264,7 @@ function TournamentSection({ name, matches, defaultOpen }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
             <h3 style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              🎾 {name}
+              [tennis] {name}
             </h3>
             {liveCount > 0 && (
               <span style={{ fontSize: '0.6rem', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '10px', padding: '1px 7px', fontWeight: 800, flexShrink: 0 }}>
@@ -277,8 +277,8 @@ function TournamentSection({ name, matches, defaultOpen }) {
             <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>
               {matches.length} match{matches.length !== 1 ? 'es' : ''}
             </span>
-            {finalCount > 0 && <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>· {finalCount} final</span>}
-            {pendingCount > 0 && <span style={{ fontSize: '0.67rem', color: '#60a5fa' }}>· {pendingCount} upcoming</span>}
+            {finalCount > 0 && <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>. {finalCount} final</span>}
+            {pendingCount > 0 && <span style={{ fontSize: '0.67rem', color: '#60a5fa' }}>. {pendingCount} upcoming</span>}
           </div>
           {/* Matchup previews — only shown when collapsed */}
           {!open && previewMatchups.length > 0 && (
@@ -291,7 +291,7 @@ function TournamentSection({ name, matches, defaultOpen }) {
                   color: m.isLive ? '#4ade80' : 'var(--text-secondary)',
                   whiteSpace: 'nowrap',
                 }}>
-                  {m.isLive && <span style={{ marginRight: '3px' }}>●</span>}{m.label}
+                  {m.isLive && <span style={{ marginRight: '3px' }}>*</span>}{m.label}
                 </span>
               ))}
               {moreCount > 0 && (
@@ -305,7 +305,7 @@ function TournamentSection({ name, matches, defaultOpen }) {
 
         {/* Expand chevron */}
         <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', transition: 'transform 0.2s', display: 'inline-block', transform: open ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>
-          ▼
+          v
         </span>
       </div>
 
@@ -330,8 +330,8 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
   const [filter, setFilter] = useState('all'); // all | live | final | upcoming
 
   const tours = [
-    { id: 'atp',       label: 'ATP (Men)',   emoji: '🎾' },
-    { id: 'tenniswta', label: 'WTA (Women)', emoji: '🎾' },
+    { id: 'atp',       label: 'ATP (Men)',   emoji: '[tennis]' },
+    { id: 'tenniswta', label: 'WTA (Women)', emoji: '[tennis]' },
   ];
 
   const [lookAheadDays, setLookAheadDays] = useState(0); // 0 = today, >0 = peeking ahead
@@ -359,7 +359,7 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
         return;
       }
 
-      // No matches today — look ahead up to 7 days to find upcoming tournament draws
+      // No matches today - look ahead up to 7 days to find upcoming tournament draws
       for (let d = 1; d <= 7; d++) {
         const future = new Date();
         future.setDate(future.getDate() + d);
@@ -438,7 +438,7 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
 
         {/* State filter pills */}
         <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
-          {[['all', 'All'], ['live', '● Live'], ['final', 'Final'], ['upcoming', 'Upcoming']].map(([id, label]) => (
+          {[['all', 'All'], ['live', '* Live'], ['final', 'Final'], ['upcoming', 'Upcoming']].map(([id, label]) => (
             <button key={id} onClick={() => setFilter(id)} style={{
               padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer',
               border: `1px solid ${filter === id ? 'var(--gold)' : 'var(--border)'}`,
@@ -452,7 +452,7 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
         </div>
 
         <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px', fontSize: '0.75rem' }}>
-          ↻
+          [refresh]
         </button>
       </div>
 
@@ -463,7 +463,7 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
           background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)',
           fontSize: '0.78rem', color: '#93c5fd',
         }}>
-          📅 No matches today — showing upcoming matches starting in {lookAheadDays === 1 ? 'tomorrow' : `${lookAheadDays} days`}.
+          [date] No matches today - showing upcoming matches starting in {lookAheadDays === 1 ? 'tomorrow' : `${lookAheadDays} days`}.
         </div>
       )}
 
@@ -479,25 +479,25 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
 
       {loading && !data ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎾</div>
-          <p style={{ fontSize: '0.85rem' }}>Loading tennis scores…</p>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[tennis]</div>
+          <p style={{ fontSize: '0.85rem' }}>Loading tennis scores...</p>
         </div>
       ) : error ? (
         <div style={{ padding: '1.5rem', background: '#2b0d0d', border: '1px solid #991b1b', borderRadius: '8px', color: '#f87171', fontSize: '0.85rem' }}>
-          ⚠️ {error}
+          [!] {error}
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎾</div>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>[tennis]</div>
           {filter !== 'all' ? (
-            <p style={{ fontSize: '0.85rem' }}>No {filter} matches — try switching to All.</p>
+            <p style={{ fontSize: '0.85rem' }}>No {filter} matches - try switching to All.</p>
           ) : allMatches.length === 0 ? (
             <div>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                 No {tour === 'atp' ? 'ATP' : 'WTA'} matches scheduled right now.
               </p>
               <p style={{ fontSize: '0.78rem' }}>
-                The tour may be between events — check back soon or try the other tour.
+                The tour may be between events - check back soon or try the other tour.
               </p>
               <button
                 onClick={load}

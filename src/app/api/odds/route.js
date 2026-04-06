@@ -29,7 +29,7 @@ const supabase = createClient(
 // L2: Supabase TTL — 15 min during off-peak, 5 min during likely game windows
 function getOddsCacheTTL() {
   const hour = new Date().getUTCHours(); // UTC
-  // US game windows: ~17:00–04:00 UTC (noon–midnight ET)
+  // US game windows: ~17:00-04:00 UTC (noon-midnight ET)
   const isGameWindow = hour >= 17 || hour <= 4;
   return isGameWindow ? 5 * 60 * 1000 : 15 * 60 * 1000;
 }
@@ -131,15 +131,15 @@ const PIN_HEADERS = {
 };
 
 // Pinnacle's guest API returns prices in DECIMAL (European) format.
-// American odds are ≥ +100 or ≤ -100. Any price between -99 and +99
-// that isn't 0 is almost certainly decimal — convert it.
+// American odds are >= +100 or <= -100. Any price between -99 and +99
+// that isn't 0 is almost certainly decimal - convert it.
 function pinPriceToAmerican(price) {
   if (price == null) return null;
-  // Already American format (≤ -100 or ≥ +100)
+  // Already American format (<= -100 or >= +100)
   if (price <= -100 || price >= 100) return price;
   // Decimal odds: favorite < 2.0, underdog >= 2.0
-  if (price >= 2.0) return Math.round((price - 1) * 100);   // e.g. 2.94 → +194
-  if (price > 1.0)  return Math.round(-100 / (price - 1));   // e.g. 1.34 → -294
+  if (price >= 2.0) return Math.round((price - 1) * 100);   // e.g. 2.94 -> +194
+  if (price > 1.0)  return Math.round(-100 / (price - 1));   // e.g. 1.34 -> -294
   return null; // invalid
 }
 
@@ -183,7 +183,7 @@ async function fetchPinnacleLines(sportKey) {
     const markets  = await marketsRes.json();
     if (!Array.isArray(matchups) || !Array.isArray(markets)) return null;
 
-    // Build matchupId → teams
+    // Build matchupId -> teams
     const matchupMap = {};
     for (const m of matchups) {
       if (m.special) continue;
@@ -192,7 +192,7 @@ async function fetchPinnacleLines(sportKey) {
       if (home && away) matchupMap[m.id] = { home, away };
     }
 
-    // Build matchupId → odds
+    // Build matchupId -> odds
     const oddsMap = {};
     for (const mkt of markets) {
       const mid = mkt.matchupId;
@@ -273,7 +273,7 @@ function enrichWithPinnacle(events, pinnacleGames) {
     // Build Pinnacle as a bookmaker entry so UI can display it
     const pinBook = {
       key: 'pinnacle',
-      title: 'Pinnacle ⚡',
+      title: 'Pinnacle [sharp]',
       last_update: new Date().toISOString(),
       markets: [],
     };
@@ -345,7 +345,7 @@ async function fetchFromTheOddsAPI(sportKey) {
     throw new Error(err?.message || `The Odds API HTTP ${res.status}`);
   }
 
-  // The Odds API returns data already in our expected shape — no transform needed
+  // The Odds API returns data already in our expected shape - no transform needed
   const events = await res.json();
   if (!Array.isArray(events)) throw new Error('Unexpected response shape');
 

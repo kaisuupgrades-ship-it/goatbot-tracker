@@ -242,7 +242,7 @@ export async function POST(req) {
   const espnCallCount = Object.keys(eventsCache).length;
 
   return NextResponse.json({
-    message: dryRun ? 'Dry run complete — no changes made' : 'Backfill complete',
+    message: dryRun ? 'Dry run complete - no changes made' : 'Backfill complete',
     ...results,
     espnCalls: espnCallCount,
     adminEmail: admin.email,

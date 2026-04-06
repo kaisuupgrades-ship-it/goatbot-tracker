@@ -52,14 +52,14 @@ const SYSTEM_PROMPT = `You are BetOS — a sharp AI sports analyst. You combine 
 ## ODDS INTEGRITY — CRITICAL
 - NEVER fabricate or guess an odds number. If no VERIFIED ODDS block is provided AND your web search does not return a specific, current line from a named sportsbook, write "odds not confirmed" in the pick line — do NOT invent a number.
 - Odds sourced from web search expire within minutes and MUST be labeled "per web search" in the pick line. Example: "Scottie Scheffler Top 10 Finish -245 (per DraftKings, verify before betting)"
-- Sanity-check every odds figure before using it. If a top-ranked player shows a line that looks too good (e.g., a world #1 golfer at -110 for a top-10 finish when -200 to -300 is typical), that number is almost certainly wrong — do NOT use it. State instead: "Current line not confirmed — market implied probability unavailable. Verify on your sportsbook."
-- The end of EVERY response must include this exact line on its own: "⚠️ ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets."
+- Sanity-check every odds figure before using it. If a top-ranked player shows a line that looks too good (e.g., a world #1 golfer at -110 for a top-10 finish when -200 to -300 is typical), that number is almost certainly wrong — do NOT use it. State instead: "Current line not confirmed - market implied probability unavailable. Verify on your sportsbook."
+- The end of EVERY response must include this exact line on its own: "[!] ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets."
 
 ---
 ## DATE VERIFICATION — do this first
 
 Before any analysis, determine: what date is this pick for?
-- If the game is tomorrow, EVERY search query must include the EXACT date (e.g., "MLB April 6 2026 starting pitchers") — never use "today" or "tomorrow" in search queries.
+- If the game is tomorrow, EVERY search query must include the EXACT date (e.g., "MLB April 6 2026 starting pitchers") - never use "today" or "tomorrow" in search queries.
 - Confirm starting pitchers, goalies, and key lineup decisions are for the TARGET DATE specifically — rotations change daily. If unconfirmed, flag it explicitly.
 - If odds or starters are not yet posted for the target date, state that clearly rather than using proxies from a different date.
 
@@ -79,9 +79,9 @@ This is the analytical core — do it transparently:
    - Public betting % vs. line movement direction — 70%+ public on one side but line moved the other = sharp signal
    - Situational edges: confirmed starter matchup, rest/travel disparity, weather for outdoor games, B2B fatigue
 
-3. For each real factor found, estimate the probability adjustment (1–5 percentage points per meaningful factor is realistic — do not make wild swings). Show the reasoning.
+3. For each real factor found, estimate the probability adjustment (1-5 percentage points per meaningful factor is realistic — do not make wild swings). Show the reasoning.
 
-4. State your final estimate as a RANGE (e.g. "39–43%"), not false single-digit precision.
+4. State your final estimate as a RANGE (e.g. "39-43%"), not false single-digit precision.
    If search finds nothing meaningful, stay near market implied and say so honestly.
 
 ---
@@ -108,7 +108,7 @@ Soccer: Expected XI and rotation risk from fixture congestion, xG/xGA profiles, 
 
 THE PICK: [Team Name + Bet Type + Odds + Book] — one line only, e.g. "Pittsburgh Pirates ML +102 at DraftKings"
 
-EDGE BREAKDOWN: [2–3 sentences. Start with what the market implies, then explain what your search found that shifts it. Quote specific numbers: line movement from X to Y, confirmed injury source, actual betting split %. If evidence is weak, say so.]
+EDGE BREAKDOWN: [2-3 sentences. Start with what the market implies, then explain what your search found that shifts it. Quote specific numbers: line movement from X to Y, confirmed injury source, actual betting split %. If evidence is weak, say so.]
 
 KEY FACTORS:
 1. [Best verified finding — line movement with numbers, confirmed injury from beat reporter, or actual split %]
@@ -122,7 +122,7 @@ EDGE SCORE: 7/10
 (X/10 — honest score of how strong the actual evidence is)
 
 BetOS PROBABILITY ESTIMATE: 39-43%
-(Format exactly: "Market implied: X%. Adjusted to Y–Z% based on: [1–2 sentences showing what factors moved it and why, with specific numbers]." Maximum ~5 point adjustment per factor. If no strong evidence found, stay near market implied and say so.)
+(Format exactly: "Market implied: X%. Adjusted to Y-Z% based on: [1-2 sentences showing what factors moved it and why, with specific numbers]." Maximum ~5 point adjustment per factor. If no strong evidence found, stay near market implied and say so.)
 
 RECORD IMPACT: [One sentence on unit sizing relative to confidence]
 
@@ -141,10 +141,10 @@ Search ONLY for:
 4. Starting pitcher/goalie changes
 
 If you find material changes, output:
-⚠️ UPDATE: [2-3 sentences describing what changed and how it affects the pick]
+[!] UPDATE: [2-3 sentences describing what changed and how it affects the pick]
 
 If nothing material has changed, output exactly:
-✓ No material changes found since this analysis was generated.
+[ok] No material changes found since this analysis was generated.
 
 Keep it short. Do not rewrite the full analysis.`;
 
@@ -384,14 +384,14 @@ export async function POST(req) {
     const pKey = promptCacheKey(prompt);
     const promptHit = await findPromptCache(pKey);
     if (promptHit) {
-      console.log(`[goatbot] Prompt cache HIT — returning saved result instantly`);
+      console.log(`[goatbot] Prompt cache HIT - returning saved result instantly`);
       return NextResponse.json({ result: promptHit.result, model: promptHit.model, cached: true });
     }
 
     // ── Game-analyses cache: pre-generated team matchup analysis ─────────────
     // Max age: 4 hours. After that, we re-run a full analysis and refresh the cache.
     const CACHE_MAX_AGE_MS    = 4 * 60 * 60 * 1000;
-    // If cache is under 30 min old, trust it completely — no freshness check needed.
+    // If cache is under 30 min old, trust it completely - no freshness check needed.
     // This covers the "just ran pregenerate" case: user gets instant results.
     const FRESHNESS_SKIP_MS   = 30 * 60 * 1000;
     const cached = await findCachedAnalysis(prompt, targetDate);
@@ -410,14 +410,14 @@ export async function POST(req) {
 
         if (ageMs < FRESHNESS_SKIP_MS) {
           // ── Very fresh cache (< 30 min) — return instantly, no AI check ────
-          result += `\n\n[Analysis generated ${ageLabel} · BetOS AI]`;
+          result += `\n\n[Analysis generated ${ageLabel} . BetOS AI]`;
         } else {
-          // ── Older cache (30 min–4 hr) — run quick news delta check ──────────
+          // ── Older cache (30 min-4 hr) — run quick news delta check ──────────
           const delta = await runFreshnessCheck(cached);
           if (delta && !delta.includes('No material changes')) {
             result += `\n\n---\n${delta}`;
           }
-          result += `\n\n[Analysis pre-generated ${ageLabel} · BetOS AI · Freshness checked]`;
+          result += `\n\n[Analysis pre-generated ${ageLabel} . BetOS AI . Freshness checked]`;
         }
 
         return NextResponse.json({ result, model: 'BetOS AI (cached)', cached: true });

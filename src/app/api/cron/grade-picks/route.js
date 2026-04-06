@@ -2,8 +2,8 @@
 // Vercel Cron: grades PENDING picks for ALL users during game hours.
 //
 // Schedule (vercel.json):
-//   every 5 min, 17-23 UTC  →  noon-midnight ET (main evening window)
-//   every 5 min, 0-8 UTC    →  midnight-4am ET  (late west coast games)
+//   every 5 min, 17-23 UTC  ->  noon-midnight ET (main evening window)
+//   every 5 min, 0-8 UTC    ->  midnight-4am ET  (late west coast games)
 //
 // Key fixes:
 //  - Catches result=null picks as well as result='PENDING'

@@ -70,14 +70,14 @@ function windDirection(degrees) {
 function mlbWindEffect(speedMph, dirDeg) {
   if (speedMph < 5) return 'calm (negligible effect)';
   const dir = windDirection(dirDeg);
-  // "Out" = toward CF (roughly) → favor overs; "In" = from CF → favor unders
+  // "Out" = toward CF (roughly) -> favor overs; "In" = from CF -> favor unders
   const outDirs = ['S', 'SSW', 'SW', 'SSE', 'SE'];
   const inDirs  = ['N', 'NNW', 'NW', 'NNE', 'NE'];
   const isOut   = outDirs.includes(dir);
   const isIn    = inDirs.includes(dir);
   const strength = speedMph >= 15 ? 'STRONG' : speedMph >= 10 ? 'moderate' : 'light';
-  if (isOut)  return `${strength} blowing OUT (${speedMph}mph ${dir}) — favors OVER`;
-  if (isIn)   return `${strength} blowing IN  (${speedMph}mph ${dir}) — favors UNDER`;
+  if (isOut)  return `${strength} blowing OUT (${speedMph}mph ${dir}) - favors OVER`;
+  if (isIn)   return `${strength} blowing IN  (${speedMph}mph ${dir}) - favors UNDER`;
   return `${strength} crosswind (${speedMph}mph ${dir})`;
 }
 
@@ -140,7 +140,7 @@ export async function fetchWeatherForGames(games) {
         const windDir = cur.wind_direction_10m ?? 0;
         const precip  = cur.precipitation ?? 0;
 
-        let desc = `${tempF}°F`;
+        let desc = `${tempF}degF`;
         if (sport === 'MLB') {
           desc += `, ${mlbWindEffect(windMph, windDir)}`;
         } else {

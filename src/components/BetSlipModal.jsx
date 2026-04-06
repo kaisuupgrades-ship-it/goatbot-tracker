@@ -7,7 +7,7 @@ import { useVoiceInput } from '@/components/VoiceInput';
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BOOKS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'ESPN Bet', 'Hard Rock', 'PointsBet', 'Bet365', 'Pinnacle', 'Other'];
 const SPORT_LABELS = { mlb: 'MLB', nfl: 'NFL', nba: 'NBA', nhl: 'NHL', ncaaf: 'NCAAF', ncaab: 'NCAAB', mls: 'MLS', wnba: 'WNBA' };
-const SPORT_EMOJI  = { mlb: '⚾', nfl: '🏈', nba: '🏀', nhl: '🏒', ncaaf: '🏈', ncaab: '🏀', mls: '⚽', wnba: '🏀' };
+const SPORT_EMOJI  = { mlb: '[MLB]', nfl: '[NFL]', nba: '[NBA]', nhl: '[NHL]', ncaaf: '[NFL]', ncaab: '[NBA]', mls: '[MLS]', wnba: '[NBA]' };
 
 const SPORT_BET_TYPES = {
   mlb:   ['Moneyline', 'Run Line', 'Total (Over)', 'Total (Under)', 'F5 Moneyline', 'F5 Total (Over)', 'F5 Total (Under)', 'Prop', 'Parlay'],
@@ -32,7 +32,7 @@ function toLocalDateStr(d) {
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 }
 
-// Parse spread string like "DET -1.5" → { awayLine, homeLine }
+// Parse spread string like "DET -1.5" -> { awayLine, homeLine }
 function parseSpread(spreadStr, awayAbbr, homeAbbr) {
   if (!spreadStr) return null;
   // ESPN odds.details is usually like "DET -1.5" (the favored team with negative line)
@@ -96,7 +96,7 @@ function QuickBetBtn({ label, sublabel, odds, selected, onClick }) {
           background: 'var(--gold)', color: '#000',
           fontSize: '0.6rem', fontWeight: 900,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>✓</span>
+        }}>[ok]</span>
       )}
       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: selected ? 'var(--gold)' : 'var(--text-secondary)', marginBottom: '2px', lineHeight: 1.2 }}>
         {label}
@@ -114,7 +114,7 @@ function QuickBetBtn({ label, sublabel, odds, selected, onClick }) {
         </div>
       ) : (
         <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-          {selected ? 'Enter odds ↓' : 'Set odds →'}
+          {selected ? 'Enter odds v' : 'Set odds ->'}
         </div>
       )}
     </button>
@@ -173,17 +173,17 @@ function ContestBadge({ result }) {
       fontSize: '0.75rem',
     }}>
       <div style={{ fontWeight: 700, color: ok ? '#4ade80' : '#ff4560', marginBottom: result.issues?.length || result.warnings?.length ? '4px' : 0 }}>
-        {ok ? '✅ Contest eligible' : '❌ Not contest eligible'}
+        {ok ? '[ok] Contest eligible' : '[X] Not contest eligible'}
       </div>
       {result.issues?.map((i, idx) => (
-        <div key={idx} style={{ color: '#ff6b7a', marginTop: '2px' }}>⚠ {i}</div>
+        <div key={idx} style={{ color: '#ff6b7a', marginTop: '2px' }}>[!] {i}</div>
       ))}
       {result.warnings?.map((w, idx) => (
-        <div key={idx} style={{ color: '#FFB800', marginTop: '2px' }}>⚡ {w}</div>
+        <div key={idx} style={{ color: '#FFB800', marginTop: '2px' }}>[sharp] {w}</div>
       ))}
       {ok && (
         <div style={{ color: 'rgba(74,222,128,0.7)', marginTop: '2px', fontSize: '0.68rem' }}>
-          This pick will be locked once saved — no edits or deletes allowed.
+          This pick will be locked once saved - no edits or deletes allowed.
         </div>
       )}
     </div>
@@ -211,17 +211,17 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const spreadSection = sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread';
   const spreadBetType = sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread';
 
-  // For MLB/NHL the spread string encodes the ML, not a ±1.5 number.
-  // In those sports the run/puck line is always ±1.5 — show that if spread looks like an ML (≥100).
+  // For MLB/NHL the spread string encodes the ML, not a +/-1.5 number.
+  // In those sports the run/puck line is always +/-1.5 — show that if spread looks like an ML (>=100).
   const spreadIsML = spreadData && Math.abs(spreadData.awayLine) >= 100;
 
   // When spread string was actually an ML price, use it for the ML buttons if they're missing
   const mlFromSpread = spreadIsML ? spreadData : null;
-  // Resolved ML odds — must be declared before effectiveSpreadData (used in homeFavored)
+  // Resolved ML odds - must be declared before effectiveSpreadData (used in homeFavored)
   const resolvedAwayOdds = odds?.awayOdds ?? (mlFromSpread?.awayLine ? mlFromSpread.awayLine : null);
   const resolvedHomeOdds = odds?.homeOdds ?? (mlFromSpread?.homeLine ? mlFromSpread.homeLine : null);
 
-  // For NHL and MLB the line is ALWAYS ±1.5 — show puck/run line even when odds data is missing
+  // For NHL and MLB the line is ALWAYS +/-1.5 — show puck/run line even when odds data is missing
   const alwaysHasFixedLine = ['nhl', 'mlb'].includes(sport);
   // Infer which team is favored from ML odds to assign -1.5 correctly
   const homeFavored = resolvedHomeOdds != null && resolvedAwayOdds != null
@@ -234,8 +234,8 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       ? spreadData
       : alwaysHasFixedLine
         ? (homeFavored
-            ? { awayLine: 1.5,  homeLine: -1.5 }   // home favored → away +1.5 / home -1.5
-            : { awayLine: -1.5, homeLine: 1.5  })   // away favored → away -1.5 / home +1.5
+            ? { awayLine: 1.5,  homeLine: -1.5 }   // home favored -> away +1.5 / home -1.5
+            : { awayLine: -1.5, homeLine: 1.5  })   // away favored -> away -1.5 / home +1.5
         : null;
 
   const quickBets = [
@@ -334,7 +334,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const selectedBet = quickBets.flatMap(s => s.bets).find(b => b.id === selectedId) || null;
   const isCustomActive = showCustom && !selectedId;
 
-  // ── When a quick bet is selected → pre-fill odds ───────────────────────────
+  // ── When a quick bet is selected -> pre-fill odds ───────────────────────────
   function selectQuickBet(bet) {
     if (selectedId === bet.id) {
       // Deselect
@@ -351,7 +351,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     setSaveError('');
   }
 
-  // ── When contest toggle changes → run eligibility check ────────────────────
+  // ── When contest toggle changes -> run eligibility check ────────────────────
   async function handleContestToggle() {
     const next = !isContest;
     setIsContest(next);
@@ -377,7 +377,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       const data = await res.json();
       setContestResult(data);
     } catch {
-      setContestResult({ eligible: false, issues: ['Could not verify — check connection.'] });
+      setContestResult({ eligible: false, issues: ['Could not verify - check connection.'] });
     }
     setVerifying(false);
   }
@@ -480,7 +480,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   }, []);
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  // ── Contest save flow: validate → confirm → AI check → save ────────────────
+  // ── Contest save flow: validate -> confirm -> AI check -> save ────────────────
   const handleSave = useCallback(async () => {
     // Determine values from either quick-select or custom
     let teamValue, betTypeValue, oddsValue;
@@ -504,7 +504,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       return;
     }
 
-    // Not contest, or ineligible → save directly as personal pick
+    // Not contest, or ineligible -> save directly as personal pick
     await executeSave(teamValue, betTypeValue, oddsNum);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBet, oddsVal, customTeam, customBetType, customOdds, isContest, contestResult, showConfirm, units, notes, book, user?.id, gameDate, sport, isDemo, picks, setPicks, onClose, awayAbbr, homeAbbr]);
@@ -580,7 +580,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
       if (aiCheckResult && !aiCheckResult.ok) {
         // Show rejection message briefly before closing
-        setSaveError(`Contest pick rejected by AI: "${aiCheckResult.reason}" — saved as personal pick. You may resubmit a new contest pick.`);
+        setSaveError(`Contest pick rejected by AI: "${aiCheckResult.reason}" - saved as personal pick. You may resubmit a new contest pick.`);
         setSaving(false);
         setTimeout(onClose, 4000);
       } else {
@@ -669,7 +669,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem', lineHeight: 1, padding: '4px', flexShrink: 0, transition: 'color 0.12s' }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-          >✕</button>
+          >x</button>
         </div>
 
         {/* ── Quick-Select Grid ───────────────────────────────────────────── */}
@@ -701,11 +701,11 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
           {/* No odds available message */}
           {quickBets.length === 0 && (
             <div style={{ padding: '0.75rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.65rem' }}>
-              No lines available — use Custom Bet below
+              No lines available - use Custom Bet below
             </div>
           )}
 
-          {/* ── Have a question about this line? → GoatBot ───────────── */}
+          {/* ── Have a question about this line? -> GoatBot ───────────── */}
           {onAnalyze && (
             <div
               role="button"
@@ -721,11 +721,11 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                   prompt = `The total for ${awayName} @ ${homeName} is set at ${totalFmt}. The ${selectedBet.label} is priced at ${fmtOdds(parseInt(oddsVal)) || fmtOdds(selectedBet.odds)}. Why is this total set here? Is the ${selectedBet.label} the right side? Analyze pace, defense, pitching/goaltending matchup, weather if outdoor, and recent scoring trends.`;
                 } else if (selectedBet?.bet_type === 'Moneyline') {
                   const underdogSide = parseInt(oddsVal) > 0 ? selectedBet.label : (selectedBet.label === awayAbbr ? homeAbbr : awayAbbr);
-                  prompt = `${awayName} @ ${homeName} — ${awayAbbr} is ${awayFmt ?? 'N/A'} ML and ${homeAbbr} is ${homeFmt ?? 'N/A'}. I'm looking at ${selectedBet.label} at ${fmtOdds(parseInt(oddsVal)) || fmtOdds(selectedBet.odds)}. Is there value here? Analyze recent form, head-to-head, injuries, and any sharp-money signals.`;
+                  prompt = `${awayName} @ ${homeName} - ${awayAbbr} is ${awayFmt ?? 'N/A'} ML and ${homeAbbr} is ${homeFmt ?? 'N/A'}. I'm looking at ${selectedBet.label} at ${fmtOdds(parseInt(oddsVal)) || fmtOdds(selectedBet.odds)}. Is there value here? Analyze recent form, head-to-head, injuries, and any sharp-money signals.`;
                 } else if (selectedBet) {
-                  prompt = `${awayName} @ ${homeName} — Analyze the ${selectedBet.bet_type} bet on ${selectedBet.label} at ${selectedBet.sublabel} (${fmtOdds(selectedBet.odds)}). Is there value taking this side? Check ATS trends, injuries, and any relevant matchup angles.`;
+                  prompt = `${awayName} @ ${homeName} - Analyze the ${selectedBet.bet_type} bet on ${selectedBet.label} at ${selectedBet.sublabel} (${fmtOdds(selectedBet.odds)}). Is there value taking this side? Check ATS trends, injuries, and any relevant matchup angles.`;
                 } else {
-                  prompt = `Break down the betting lines for ${awayName} @ ${homeName}${sport ? ` (${SPORT_LABELS[sport] || sport.toUpperCase()})` : ''}: ML ${awayAbbr} ${awayFmt ?? '?'} / ${homeAbbr} ${homeFmt ?? '?'}${effectiveSpreadData ? `, ${lineName} ±${Math.abs(effectiveSpreadData.awayLine)}` : ''}${totalFmt ? `, Total ${totalFmt}` : ''}. Which market has the best value tonight and why?`;
+                  prompt = `Break down the betting lines for ${awayName} @ ${homeName}${sport ? ` (${SPORT_LABELS[sport] || sport.toUpperCase()})` : ''}: ML ${awayAbbr} ${awayFmt ?? '?'} / ${homeAbbr} ${homeFmt ?? '?'}${effectiveSpreadData ? `, ${lineName} +/-${Math.abs(effectiveSpreadData.awayLine)}` : ''}${totalFmt ? `, Total ${totalFmt}` : ''}. Which market has the best value tonight and why?`;
                 }
                 onAnalyze(prompt);
                 onClose();
@@ -742,13 +742,13 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.09)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.35)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.15)'; }}
             >
-              <span style={{ fontSize: '1rem', flexShrink: 0 }}>🤔</span>
+              <span style={{ fontSize: '1rem', flexShrink: 0 }}>[?]</span>
               <div>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--gold)' }}>
                   {selectedBet ? `Why is this ${selectedBet.bet_type?.toLowerCase()} line set here?` : 'Have a question about these lines?'}
                 </div>
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                  Ask GoatBot — opens Analyzer with this game pre-loaded →
+                  Ask GoatBot - opens Analyzer with this game pre-loaded ->
                 </div>
               </div>
             </div>
@@ -774,7 +774,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
             {/* Odds (editable) */}
             <div>
-              <label style={labelStyle}>Odds (American) — edit if different</label>
+              <label style={labelStyle}>Odds (American) - edit if different</label>
               <input
                 value={oddsVal}
                 onChange={e => setOddsVal(e.target.value)}
@@ -816,7 +816,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Sharp money, weather, injury angle…"
+                placeholder="Sharp money, weather, injury angle..."
                 rows={2}
                 style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
                 onFocus={e => e.target.style.borderColor = 'var(--gold)'}
@@ -843,14 +843,14 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'all 0.15s',
               }}>
-                {isContest && <span style={{ color: '#000', fontSize: '0.65rem', fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                {isContest && <span style={{ color: '#000', fontSize: '0.65rem', fontWeight: 900, lineHeight: 1 }}>[ok]</span>}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.78rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>
-                  🏆 Enter as Contest Pick
+                  [trophy] Enter as Contest Pick
                 </div>
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                  {isContest ? 'Will be locked & audited — no edits allowed' : 'Personal pick only (no contest audit)'}
+                  {isContest ? 'Will be locked & audited - no edits allowed' : 'Personal pick only (no contest audit)'}
                 </div>
               </div>
               {verifying && <PulsingDots />}
@@ -866,7 +866,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 padding: '0.5rem 0.75rem', borderRadius: '7px',
                 background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
               }}>
-                <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>ℹ️</span>
+                <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>[i]</span>
                 <span style={{ fontSize: '0.72rem', color: '#93c5fd', lineHeight: 1.5 }}>
                   Contest picks are always scored as <strong style={{ color: '#60a5fa' }}>1 unit</strong> regardless of your bet size.
                   Your pick log will show <strong style={{ color: '#60a5fa' }}>{units}u</strong>, but the contest leaderboard will count it as 1u.
@@ -890,8 +890,8 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s',
             }}
           >
-            <span>✏️ Custom Bet — props, parlays, F5s & more</span>
-            <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', display: 'inline-block', transform: showCustom ? 'rotate(180deg)' : 'none' }}>▼</span>
+            <span>[edit] Custom Bet - props, parlays, F5s & more</span>
+            <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', display: 'inline-block', transform: showCustom ? 'rotate(180deg)' : 'none' }}>v</span>
           </button>
         </div>
 
@@ -912,10 +912,10 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                   color: voiceState === 'parsing' ? '#4E9BF5' : voiceState === 'done' ? '#00D48B' : voiceState === 'error' ? '#FF4560' : '#FF4560',
                   fontWeight: 700,
                 }}>
-                  {voiceState === 'parsing' && <><PulsingDots color="#4E9BF5" /> Parsing…</>}
-                  {voiceState === 'done' && '✓ Bet loaded — review below'}
-                  {voiceState === 'error' && `⚠ ${voiceError || 'Parse failed'}`}
-                  {voiceState === 'listening' && '🔴 Listening…'}
+                  {voiceState === 'parsing' && <><PulsingDots color="#4E9BF5" /> Parsing...</>}
+                  {voiceState === 'done' && '[ok] Bet loaded - review below'}
+                  {voiceState === 'error' && `[!] ${voiceError || 'Parse failed'}`}
+                  {voiceState === 'listening' && '[rec] Listening...'}
                   {voiceTranscript && (voiceState === 'parsing' || voiceState === 'done') && (
                     <span style={{ fontSize: '0.65rem', fontStyle: 'italic', color: 'var(--text-muted)', marginLeft: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
                       "{voiceTranscript}"
@@ -929,13 +929,13 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                   value={textInput}
                   onChange={e => setTextInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && textInput.trim() && voiceState === 'idle') parseWithAI(textInput); }}
-                  placeholder='"Yankees ML -150 2u DK" or tap mic…'
+                  placeholder='"Yankees ML -150 2u DK" or tap mic...'
                   disabled={voiceState === 'parsing' || voiceState === 'listening'}
                   style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '0.8rem', fontFamily: 'inherit', padding: '0.2rem 0.3rem', opacity: voiceState !== 'idle' ? 0.5 : 1 }}
                 />
                 {textInput.trim() && voiceState === 'idle' && (
                   <button onClick={() => parseWithAI(textInput)} style={{ padding: '3px 9px', borderRadius: '5px', border: 'none', background: 'rgba(255,184,0,0.15)', color: '#FFB800', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>
-                    Parse ↵
+                    Parse 
                   </button>
                 )}
                 {supported && (
@@ -952,7 +952,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                       animation: voiceState === 'listening' ? 'live-pulse 1.2s infinite' : 'none',
                     }}
                   >
-                    {voiceState === 'listening' ? '⏹' : '🎤'}
+                    {voiceState === 'listening' ? '[stop]' : '[mic]'}
                   </button>
                 )}
               </div>
@@ -1005,7 +1005,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             </div>
             <div>
               <label style={labelStyle}>Notes <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Edge, reasoning, context…" rows={2}
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Edge, reasoning, context..." rows={2}
                 style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
                 onFocus={e => e.target.style.borderColor = 'var(--gold)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
@@ -1029,12 +1029,12 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 background: isContest ? 'var(--gold)' : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
               }}>
-                {isContest && <span style={{ color: '#000', fontSize: '0.65rem', fontWeight: 900 }}>✓</span>}
+                {isContest && <span style={{ color: '#000', fontSize: '0.65rem', fontWeight: 900 }}>[ok]</span>}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>🏆 Enter as Contest Pick</div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>[trophy] Enter as Contest Pick</div>
                 <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                  {isContest ? 'AI will audit this — locked once saved' : 'Personal tracking only'}
+                  {isContest ? 'AI will audit this - locked once saved' : 'Personal tracking only'}
                 </div>
               </div>
               {verifying && <PulsingDots />}
@@ -1050,7 +1050,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 padding: '0.5rem 0.75rem', borderRadius: '7px',
                 background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)',
               }}>
-                <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>ℹ️</span>
+                <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>[i]</span>
                 <span style={{ fontSize: '0.72rem', color: '#93c5fd', lineHeight: 1.5 }}>
                   Contest picks are always scored as <strong style={{ color: '#60a5fa' }}>1 unit</strong> regardless of your bet size.
                   Your pick log will show <strong style={{ color: '#60a5fa' }}>{units}u</strong>, but the contest leaderboard will count it as 1u.
@@ -1070,16 +1070,16 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             borderRadius: '10px',
           }}>
             <div style={{ fontWeight: 800, color: '#FFB800', fontSize: '0.88rem', marginBottom: '6px' }}>
-              🏆 Lock in your contest pick?
+              [trophy] Lock in your contest pick?
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '12px' }}>
-              Once submitted, this pick is <strong style={{ color: '#FFB800' }}>permanent — no edits or deletes</strong>.
+              Once submitted, this pick is <strong style={{ color: '#FFB800' }}>permanent - no edits or deletes</strong>.
               It will be audited by AI and reviewed by the admin. If it gets flagged or rejected,
               you'll be free to resubmit a new pick for today.
             </div>
             {parseFloat(units) > 1 && (
               <div style={{ fontSize: '0.72rem', color: '#93c5fd', marginBottom: '12px', padding: '6px 10px', borderRadius: '6px', background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.18)' }}>
-                ℹ️ You're entering <strong>{units}u</strong> — this will be logged in your pick history as {units}u, but the <strong>contest leaderboard scores it as 1u</strong>.
+                [i] You're entering <strong>{units}u</strong> - this will be logged in your pick history as {units}u, but the <strong>contest leaderboard scores it as 1u</strong>.
               </div>
             )}
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -1108,7 +1108,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                ✅ Yes, Lock It In
+                [ok] Yes, Lock It In
               </button>
             </div>
           </div>
@@ -1125,7 +1125,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             fontSize: '0.75rem', color: '#60a5fa',
             display: 'flex', alignItems: 'center', gap: '8px',
           }}>
-            <PulsingDots /> AI is verifying your pick before locking it in…
+            <PulsingDots /> AI is verifying your pick before locking it in...
           </div>
         )}
 
@@ -1147,11 +1147,11 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flex: 1 }}>
             {saveError && (
-              <div style={{ fontSize: '0.68rem', color: '#FF4560', textAlign: 'right' }}>⚠ {saveError}</div>
+              <div style={{ fontSize: '0.68rem', color: '#FF4560', textAlign: 'right' }}>[!] {saveError}</div>
             )}
             {saved ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--green)', fontWeight: 700, fontSize: '0.88rem' }}>
-                <span>✅</span> Saved!
+                <span>[ok]</span> Saved!
               </div>
             ) : (
               <button
@@ -1173,10 +1173,10 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 }}
               >
                 {saving || aiChecking
-                  ? '⟳ Saving…'
+                  ? '[refresh] Saving...'
                   : isContest && contestResult?.eligible
-                    ? '🏆 Save Contest Pick'
-                    : '💾 Save Bet'}
+                    ? '[trophy] Save Contest Pick'
+                    : '[save] Save Bet'}
               </button>
             )}
           </div>

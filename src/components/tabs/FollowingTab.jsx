@@ -66,7 +66,7 @@ function FollowedUserCard({ entry, onUnfollow, userId, onViewProfile }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            {entry.wins ?? 0}W-{entry.losses ?? 0}L · {entry.total ?? 0} picks
+            {entry.wins ?? 0}W-{entry.losses ?? 0}L . {entry.total ?? 0} picks
           </span>
           <ResultStrip results={entry.recent_results || []} />
         </div>
@@ -179,7 +179,7 @@ export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
   if (isDemo || !userId) {
     return (
       <div style={{ padding: '3rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>👥</div>
+        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>[users]</div>
         <div style={{ fontWeight: 700, marginBottom: '4px' }}>Sign in to follow cappers</div>
         <div style={{ fontSize: '0.78rem' }}>Use User Search to find and follow the sharpest bettors.</div>
       </div>
@@ -189,9 +189,9 @@ export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div>
-        <h2 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f0f0f0', marginBottom: '2px' }}>👥 Following</h2>
+        <h2 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f0f0f0', marginBottom: '2px' }}>[users] Following</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', margin: 0 }}>
-          Cappers you follow — all-time stats.
+          Cappers you follow - all-time stats.
         </p>
       </div>
 
@@ -203,7 +203,7 @@ export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
         </div>
       ) : following.length === 0 ? (
         <div style={{ padding: '3rem 2rem', textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '8px' }}>👥</div>
+          <div style={{ fontSize: '2rem', marginBottom: '8px' }}>[users]</div>
           <div style={{ fontWeight: 700, marginBottom: '4px' }}>No one followed yet</div>
           <div style={{ fontSize: '0.78rem' }}>Head to User Search and click a capper's row to view their profile and follow them.</div>
         </div>

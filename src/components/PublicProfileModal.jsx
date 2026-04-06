@@ -155,7 +155,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
       .catch(() => setLoadingPeople(false));
   }, [activeSection, peopleSubTab, userId]);
 
-  const winRate  = displayTotal > 0 ? ((displayWins / displayTotal) * 100).toFixed(1) : '—';
+  const winRate  = displayTotal > 0 ? ((displayWins / displayTotal) * 100).toFixed(1) : '-';
   const streak   = stats?.current_streak ?? 0;
   const streakAbs  = Math.abs(streak);
   const streakType = streak > 0 ? 'WIN' : streak < 0 ? 'LOSS' : null;
@@ -174,7 +174,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
         }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Top accent bar — contest gets animated gold, standard gets a static subtle border */}
+        {/* Top accent bar - contest gets animated gold, standard gets a static subtle border */}
         {contestOnly && (
           <div style={{
             height: '3px', flexShrink: 0,
@@ -193,7 +193,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
           {contestOnly && (
             <div style={{ marginBottom: '10px' }}>
               <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#FFB800', background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.3)', borderRadius: '6px', padding: '2px 10px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                🏆 Contest Profile
+                [trophy] Contest Profile
               </span>
             </div>
           )}
@@ -224,7 +224,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                     <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{followerCount}</span>
                     <span>follower{followerCount !== 1 ? 's' : ''}</span>
                   </button>
-                  <span style={{ color: 'var(--border)', fontSize: '0.72rem' }}>·</span>
+                  <span style={{ color: 'var(--border)', fontSize: '0.72rem' }}>.</span>
                   <button
                     onClick={() => { setActiveSection('people'); setPeopleSubTab('following'); }}
                     style={{
@@ -245,7 +245,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                   )}
                   {displayVerified > 0 && (
                     <span style={{ fontSize: '0.68rem', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: '5px', padding: '2px 8px', fontWeight: 800 }}>
-                      ✓ {displayVerified} Verified
+                      [ok] {displayVerified} Verified
                     </span>
                   )}
                   {streakAbs >= 3 && streakType && (
@@ -256,7 +256,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                       border: `1px solid ${streakType === 'WIN' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
                       borderRadius: '5px', padding: '2px 8px', fontWeight: 800,
                     }}>
-                      {streakType === 'WIN' ? '🔥' : '🧊'} {streakAbs}-{streakType === 'WIN' ? 'W' : 'L'} streak
+                      {streakType === 'WIN' ? '[fire]' : '[ice]'} {streakAbs}-{streakType === 'WIN' ? 'W' : 'L'} streak
                     </span>
                   )}
                 </div>
@@ -273,7 +273,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                   border: `1px solid ${following ? 'rgba(74,222,128,0.4)' : 'rgba(255,184,0,0.4)'}`,
                   color: following ? '#4ade80' : 'var(--gold)', transition: 'all 0.15s',
                 }}>
-                  {following ? '✓ Following' : '+ Follow'}
+                  {following ? '[ok] Following' : '+ Follow'}
                 </button>
               )}
               {!isMe && currentUserId && onOpenInbox && (
@@ -285,10 +285,10 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                     color: '#60a5fa', cursor: 'pointer', transition: 'all 0.15s',
                   }}
                 >
-                  💬 Message
+                  [chat] Message
                 </button>
               )}
-              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', padding: '4px', lineHeight: 1 }}>✕</button>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', padding: '4px', lineHeight: 1 }}>x</button>
             </div>
           </div>
 
@@ -298,7 +298,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
               { label: 'Record',     value: `${displayWins}-${displayLosses}`,
                 color: displayWins > displayLosses ? 'var(--green)' : displayWins < displayLosses ? 'var(--red)' : 'var(--text-primary)',
                 sub: `${displayTotal} picks` },
-              { label: 'Win %',      value: winRate === '—' ? '—' : `${winRate}%`,
+              { label: 'Win %',      value: winRate === '-' ? '-' : `${winRate}%`,
                 color: parseFloat(winRate) >= 55 ? 'var(--green)' : 'var(--text-primary)' },
               { label: 'Units',      value: `${displayUnits >= 0 ? '+' : ''}${displayUnits.toFixed(1)}u`,
                 color: displayUnits >= 0 ? 'var(--green)' : 'var(--red)' },
@@ -319,9 +319,9 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
         {/* Section tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           {[
-            { id: 'picks',  label: contestOnly ? '🏆 Contest Picks' : '📋 Pick History' },
-            { id: 'stats',  label: '📊 Breakdown' },
-            { id: 'people', label: `👥 People${followerCount + followingCount > 0 ? ` (${followerCount + followingCount})` : ''}` },
+            { id: 'picks',  label: contestOnly ? '[trophy] Contest Picks' : '[list] Pick History' },
+            { id: 'stats',  label: '[stats] Breakdown' },
+            { id: 'people', label: `[users] People${followerCount + followingCount > 0 ? ` (${followerCount + followingCount})` : ''}` },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveSection(tab.id)} style={{
               flex: 1, padding: '0.65rem', border: 'none', cursor: 'pointer',
@@ -354,10 +354,10 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
               {!loadingPicks && pendingCount > 0 && (
                 <div style={{ marginBottom: '4px' }}>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>⏳ Active ({pendingCount})</span>
+                    <span>[wait] Active ({pendingCount})</span>
                     {!isMe && (
                       <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px', padding: '1px 6px' }}>
-                        🔒 Hidden until settled
+                        [lock] Hidden until settled
                       </span>
                     )}
                   </div>
@@ -391,7 +391,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '0.63rem', color: 'var(--text-muted)', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0 4px', fontWeight: 700 }}>{p.sport}</span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {p.team} — {p.bet_type || 'Moneyline'}
+                              {p.team} - {p.bet_type || 'Moneyline'}
                             </span>
                           </div>
                           {p.notes && isMe && (
@@ -404,7 +404,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                           </div>
                         </div>
                         <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.73rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-                          {!isNaN(oddsNum) ? (oddsNum > 0 ? `+${oddsNum}` : oddsNum) : '—'}
+                          {!isNaN(oddsNum) ? (oddsNum > 0 ? `+${oddsNum}` : oddsNum) : '-'}
                         </span>
                         <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0, color: '#94a3b8', minWidth: '46px', textAlign: 'right' }}>
                           {(p.units || 1).toFixed(1)}u
@@ -444,9 +444,9 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '0.63rem', color: 'var(--text-muted)', background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0 4px', fontWeight: 700 }}>{p.sport}</span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {p.team} — {p.bet_type || 'Moneyline'}
+                              {p.team} - {p.bet_type || 'Moneyline'}
                             </span>
-                            {p.verified && <span style={{ fontSize: '0.58rem', color: '#4ade80', fontWeight: 700 }}>✓</span>}
+                            {p.verified && <span style={{ fontSize: '0.58rem', color: '#4ade80', fontWeight: 700 }}>[ok]</span>}
                           </div>
                           {p.notes && (
                             <div style={{ fontSize: '0.63rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
@@ -458,7 +458,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                           </div>
                         </div>
                         <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.73rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-                          {!isNaN(oddsNum) ? (oddsNum > 0 ? `+${oddsNum}` : oddsNum) : '—'}
+                          {!isNaN(oddsNum) ? (oddsNum > 0 ? `+${oddsNum}` : oddsNum) : '-'}
                         </span>
                         {p.profit !== null && (
                           <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0, color: p.profit >= 0 ? 'var(--green)' : 'var(--red)', minWidth: '46px', textAlign: 'right' }}>
@@ -470,7 +470,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                   })}
                   {settledPicks.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                      {contestOnly ? 'No settled contest picks yet.' : pendingCount > 0 ? 'No settled picks yet — picks in progress above.' : 'No picks posted yet.'}
+                      {contestOnly ? 'No settled contest picks yet.' : pendingCount > 0 ? 'No settled picks yet - picks in progress above.' : 'No picks posted yet.'}
                     </div>
                   )}
                 </>
@@ -500,7 +500,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                     }} />
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                    ROI × √(verified picks) ÷ 10 — rewards consistency under pressure
+                    ROI x [ok](verified picks) / 10 - rewards consistency under pressure
                   </div>
                 </div>
               )}
@@ -523,7 +523,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                         {p.result === 'WIN' ? 'W' : p.result === 'PUSH' ? 'P' : 'L'}
                       </div>
                     ))}
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', paddingLeft: '4px' }}>← most recent</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', paddingLeft: '4px' }}><- most recent</span>
                   </div>
                 </div>
               )}
@@ -555,7 +555,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
               )}
 
               {loadingPicks && (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>Loading stats…</div>
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>Loading stats...</div>
               )}
               {!loadingPicks && settledPicks.length === 0 && (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>No public pick data yet.</div>
@@ -614,7 +614,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                     </div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>@{person.username}</div>
                   </div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>→</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>-></span>
                 </div>
               ))}
             </div>
@@ -623,7 +623,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
 
         {/* Footer */}
         <div style={{ padding: '0.65rem 1.5rem', borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
-          <span style={{ fontSize: '0.7rem' }}>🔒</span>
+          <span style={{ fontSize: '0.7rem' }}>[lock]</span>
           <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
             {contestOnly ? 'Showing contest picks only.' : isMe ? 'Your pending picks are visible only to you.' : 'Pending picks are blurred until settled.'} Only public picks are shown.
           </span>
@@ -634,13 +634,13 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
               borderRadius: '6px', color: '#60a5fa', fontSize: '0.7rem', fontWeight: 600,
               padding: '3px 10px', cursor: 'pointer',
             }}>
-              💬 Open Inbox
+              [chat] Open Inbox
             </button>
           )}
         </div>
       </div>
 
-      {/* Nested profile drill-in — when clicking a follower/following */}
+      {/* Nested profile drill-in - when clicking a follower/following */}
       {viewingEntry && (
         <PublicProfileModal
           entry={viewingEntry}

@@ -26,7 +26,7 @@ function Avatar({ userId, avatarUrl, emoji, size = 36 }) {
     }}>
       {hasPhoto
         ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setErr(true)} />
-        : <span>{emoji || '👤'}</span>}
+        : <span>{emoji || '[user]'}</span>}
     </div>
   );
 }
@@ -52,7 +52,7 @@ function ConvList({ userId, conversations, loading, activePartnerId, onSelect, o
       {/* Header */}
       <div style={{ padding: '1rem 1rem 0.75rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>💬 Messages</span>
+          <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>[chat] Messages</span>
           {totalUnread > 0 && (
             <span style={{ fontSize: '0.65rem', fontWeight: 800, background: '#f87171', color: '#fff', borderRadius: '10px', padding: '1px 7px', minWidth: '20px', textAlign: 'center' }}>
               {totalUnread}
@@ -64,7 +64,7 @@ function ConvList({ userId, conversations, loading, activePartnerId, onSelect, o
           title="New message"
           style={{ background: 'rgba(255,184,0,0.12)', border: '1px solid rgba(255,184,0,0.35)', borderRadius: '7px', padding: '4px 10px', cursor: 'pointer', color: 'var(--gold)', fontSize: '0.78rem', fontWeight: 700 }}
         >
-          ✏ New
+          [edit] New
         </button>
       </div>
 
@@ -79,7 +79,7 @@ function ConvList({ userId, conversations, loading, activePartnerId, onSelect, o
         )}
         {!loading && conversations.length === 0 && (
           <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>💬</div>
+            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>[chat]</div>
             No messages yet. Find a capper and hit Message to start a conversation.
           </div>
         )}
@@ -119,7 +119,7 @@ function ConvList({ userId, conversations, loading, activePartnerId, onSelect, o
                   </span>
                 </div>
                 <div style={{ fontSize: '0.72rem', color: conv.unread > 0 ? 'var(--text-secondary)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: conv.unread > 0 ? 600 : 400 }}>
-                  {isMeSender ? 'You: ' : ''}{preview.length > 60 ? preview.slice(0, 60) + '…' : preview}
+                  {isMeSender ? 'You: ' : ''}{preview.length > 60 ? preview.slice(0, 60) + '...' : preview}
                 </div>
               </div>
             </button>
@@ -154,7 +154,7 @@ function MessageThread({ userId, partner, messages, loading, sending, onSend, on
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Thread header */}
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px', flexShrink: 0 }}>←</button>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px', flexShrink: 0 }}><-</button>
         <Avatar userId={partner?.id} emoji={partner?.avatar_emoji} size={32} />
         <div>
           <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{partner?.display_name || partner?.username}</div>
@@ -164,7 +164,7 @@ function MessageThread({ userId, partner, messages, loading, sending, onSend, on
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {loading && <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.78rem', padding: '1rem' }}>Loading…</div>}
+        {loading && <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.78rem', padding: '1rem' }}>Loading...</div>}
         {!loading && messages.length === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.78rem', padding: '2rem 1rem' }}>
             Start the conversation with {partner?.display_name || partner?.username}
@@ -199,7 +199,7 @@ function MessageThread({ userId, partner, messages, loading, sending, onSend, on
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Type a message… (Enter to send)"
+          placeholder="Type a message... (Enter to send)"
           rows={2}
           style={{
             flex: 1, resize: 'none', padding: '8px 12px', fontSize: '0.82rem',
@@ -220,7 +220,7 @@ function MessageThread({ userId, partner, messages, loading, sending, onSend, on
             transition: 'all 0.15s', flexShrink: 0, alignSelf: 'flex-end',
           }}
         >
-          Send ↑
+          Send ^
         </button>
       </div>
     </div>
@@ -270,7 +270,7 @@ function ComposeView({ userId, onSent, onCancel }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px' }}>←</button>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px' }}><-</button>
         <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>New Message</span>
       </div>
 
@@ -281,13 +281,13 @@ function ComposeView({ userId, onSent, onCancel }) {
           {picked ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.3)', borderRadius: '8px' }}>
               <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 700, color: 'var(--gold)' }}>{picked.display_name || picked.username}</span>
-              <button onClick={() => { setPicked(null); setTo(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem' }}>×</button>
+              <button onClick={() => { setPicked(null); setTo(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem' }}>x</button>
             </div>
           ) : (
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
-                placeholder="Search username…"
+                placeholder="Search username..."
                 value={to}
                 onChange={e => setTo(e.target.value)}
                 style={{ width: '100%', padding: '7px 10px', fontSize: '0.82rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }}
@@ -299,7 +299,7 @@ function ComposeView({ userId, onSent, onCancel }) {
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'none'}
                     >
-                      <span style={{ fontSize: '1rem' }}>{r.avatar_emoji || '👤'}</span>
+                      <span style={{ fontSize: '1rem' }}>{r.avatar_emoji || '[user]'}</span>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)' }}>{r.display_name || r.username}</div>
                         <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>@{r.username}</div>
@@ -318,7 +318,7 @@ function ComposeView({ userId, onSent, onCancel }) {
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder="Write your message…"
+            placeholder="Write your message..."
             style={{ flex: 1, resize: 'none', padding: '10px 12px', fontSize: '0.82rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-primary)', outline: 'none', fontFamily: 'inherit', lineHeight: 1.4, minHeight: '120px' }}
           />
         </div>
@@ -336,7 +336,7 @@ function ComposeView({ userId, onSent, onCancel }) {
             cursor: picked && content.trim() && !sending ? 'pointer' : 'default',
           }}
         >
-          {sending ? 'Sending…' : 'Send Message ↑'}
+          {sending ? 'Sending...' : 'Send Message ^'}
         </button>
       </div>
     </div>
@@ -445,14 +445,14 @@ export default function InboxPanel({ user, isOpen, onClose, initialRecipient = n
           onClick={onClose}
           style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 10, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem', padding: '4px' }}
         >
-          ✕
+          x
         </button>
 
         {/* Content */}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {!userId ? (
             <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '8px' }}>💬</div>
+              <div style={{ fontSize: '2rem', marginBottom: '8px' }}>[chat]</div>
               Sign in to send and receive messages.
             </div>
           ) : view === 'list' ? (

@@ -18,18 +18,18 @@ async function getAuthUser(req) {
 }
 
 // ── Rank system ───────────────────────────────────────────────────────────────
-// Betting-themed rank tiers, ordered lowest → highest
+// Betting-themed rank tiers, ordered lowest -> highest
 export const RANKS = [
-  { title: 'Degenerate',       minXp: 0,     emoji: '🎰', color: '#888' },
-  { title: 'Square',           minXp: 100,   emoji: '🎯', color: '#a78bfa' },
-  { title: 'Handicapper',      minXp: 300,   emoji: '📊', color: '#60a5fa' },
-  { title: 'Sharp',            minXp: 700,   emoji: '⚡', color: '#34d399' },
-  { title: 'Steam Chaser',     minXp: 1500,  emoji: '🔥', color: '#fb923c' },
-  { title: 'Wiseguy',          minXp: 3000,  emoji: '🕶️', color: '#f472b6' },
-  { title: 'Line Mover',       minXp: 6000,  emoji: '📈', color: '#facc15' },
-  { title: 'Syndicate',        minXp: 10000, emoji: '💎', color: '#38bdf8' },
-  { title: 'Whale',            minXp: 20000, emoji: '🐳', color: '#c084fc' },
-  { title: 'Legend',           minXp: 40000, emoji: '👑', color: '#FFB800' },
+  { title: 'Degenerate',       minXp: 0,     emoji: '[bet]', color: '#888' },
+  { title: 'Square',           minXp: 100,   emoji: '[target]', color: '#a78bfa' },
+  { title: 'Handicapper',      minXp: 300,   emoji: '[stats]', color: '#60a5fa' },
+  { title: 'Sharp',            minXp: 700,   emoji: '[sharp]', color: '#34d399' },
+  { title: 'Steam Chaser',     minXp: 1500,  emoji: '[fire]', color: '#fb923c' },
+  { title: 'Wiseguy',          minXp: 3000,  emoji: '[vibe]', color: '#f472b6' },
+  { title: 'Line Mover',       minXp: 6000,  emoji: '[up]', color: '#facc15' },
+  { title: 'Syndicate',        minXp: 10000, emoji: '[gem]', color: '#38bdf8' },
+  { title: 'Whale',            minXp: 20000, emoji: '[whale]', color: '#c084fc' },
+  { title: 'Legend',           minXp: 40000, emoji: '[crown]', color: '#FFB800' },
 ];
 
 export function getRankForXp(xp) {
@@ -60,10 +60,10 @@ async function awardXp(userId, amount) {
   } catch { /* non-critical */ }
 }
 
-// GET /api/chat?limit=60               → fetch messages
-// GET /api/chat?unreadCount=1&userId=  → unread count
-// GET /api/chat?settings=1             → chat settings (public)
-// GET /api/chat?chatStatus=1&userId=   → muted/banned status
+// GET /api/chat?limit=60               -> fetch messages
+// GET /api/chat?unreadCount=1&userId=  -> unread count
+// GET /api/chat?settings=1             -> chat settings (public)
+// GET /api/chat?chatStatus=1&userId=   -> muted/banned status
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
 
@@ -312,7 +312,7 @@ export async function PATCH(req) {
 
   try {
     if (action === 'mute') {
-      const mins = Math.min(Math.max(parseInt(durationMinutes || 30), 1), 10080); // 1 min – 1 week
+      const mins = Math.min(Math.max(parseInt(durationMinutes || 30), 1), 10080); // 1 min - 1 week
       const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
       // Remove any existing mute first
       await supabase.from('chat_mutes').delete().eq('user_id', targetUserId);

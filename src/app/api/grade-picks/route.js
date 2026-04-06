@@ -3,8 +3,8 @@
  * User-triggered grading: checks ESPN for final scores on a user's PENDING picks.
  *
  * POST { userId, force? }
- *  → normal: grades result=PENDING or result=null picks from last 7 days
- *  → force:  re-checks all picks from last 14 days (re-grades anything whose result is wrong)
+ *  -> normal: grades result=PENDING or result=null picks from last 7 days
+ *  -> force:  re-checks all picks from last 14 days (re-grades anything whose result is wrong)
  *
  * Returns { graded: [...], count }
  */

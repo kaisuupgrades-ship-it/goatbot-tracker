@@ -256,19 +256,19 @@ function OverviewView({ data }) {
             <div>
               <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Avg Latency</div>
               <div style={{ fontSize: '1.1rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-primary)' }}>
-                {performance.avgLatency ? `${(performance.avgLatency / 1000).toFixed(1)}s` : '—'}
+                {performance.avgLatency ? `${(performance.avgLatency / 1000).toFixed(1)}s` : '-'}
               </div>
             </div>
             <div>
               <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Avg Tokens In</div>
               <div style={{ fontSize: '1.1rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-primary)' }}>
-                {performance.avgTokensIn ? performance.avgTokensIn.toLocaleString() : '—'}
+                {performance.avgTokensIn ? performance.avgTokensIn.toLocaleString() : '-'}
               </div>
             </div>
             <div>
               <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Avg Tokens Out</div>
               <div style={{ fontSize: '1.1rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-primary)' }}>
-                {performance.avgTokensOut ? performance.avgTokensOut.toLocaleString() : '—'}
+                {performance.avgTokensOut ? performance.avgTokensOut.toLocaleString() : '-'}
               </div>
             </div>
           </div>
@@ -309,7 +309,7 @@ function LogsView({ data, page, onPageChange, expanded, onToggle, loading }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-        {data.total} audit log entries — Page {page} of {totalPages}
+        {data.total} audit log entries - Page {page} of {totalPages}
       </div>
 
       {logs.map(log => (
@@ -338,9 +338,9 @@ function LogsView({ data, page, onPageChange, expanded, onToggle, loading }) {
                 background: log.parsed_conf === 'ELITE' ? 'rgba(168,85,247,0.1)' : log.parsed_conf === 'HIGH' ? 'rgba(74,222,128,0.1)' : 'rgba(250,204,21,0.1)',
               }}>{log.parsed_conf}</span>
             )}
-            <span style={{ fontSize: '0.58rem', color: '#60a5fa' }}>{log.model_used || '—'}</span>
+            <span style={{ fontSize: '0.58rem', color: '#60a5fa' }}>{log.model_used || '-'}</span>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: expanded === log.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
-              ▾
+              v
             </span>
           </div>
 
@@ -354,9 +354,9 @@ function LogsView({ data, page, onPageChange, expanded, onToggle, loading }) {
                 <MetaItem label="Provider" value={log.provider} />
                 <MetaItem label="Fallback?" value={log.was_fallback ? 'Yes' : 'No'} />
                 <MetaItem label="Prompt Version" value={log.prompt_version} />
-                <MetaItem label="Latency" value={log.latency_ms ? `${(log.latency_ms / 1000).toFixed(1)}s` : '—'} />
-                <MetaItem label="Tokens In" value={log.tokens_in?.toLocaleString() || '—'} />
-                <MetaItem label="Tokens Out" value={log.tokens_out?.toLocaleString() || '—'} />
+                <MetaItem label="Latency" value={log.latency_ms ? `${(log.latency_ms / 1000).toFixed(1)}s` : '-'} />
+                <MetaItem label="Tokens In" value={log.tokens_in?.toLocaleString() || '-'} />
+                <MetaItem label="Tokens Out" value={log.tokens_out?.toLocaleString() || '-'} />
                 <MetaItem label="Trigger" value={log.trigger_source} />
                 <MetaItem label="Pick" value={log.parsed_pick} />
                 <MetaItem label="Edge Score" value={log.parsed_edge} />
@@ -404,8 +404,8 @@ function LogsView({ data, page, onPageChange, expanded, onToggle, loading }) {
               )}
 
               <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', display: 'flex', gap: '10px' }}>
-                <span>Run: {log.run_id || '—'}</span>
-                <span>Created: {log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</span>
+                <span>Run: {log.run_id || '-'}</span>
+                <span>Created: {log.created_at ? new Date(log.created_at).toLocaleString() : '-'}</span>
               </div>
             </div>
           )}
@@ -436,7 +436,7 @@ function MetaItem({ label, value }) {
   return (
     <div>
       <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)', fontWeight: 500, wordBreak: 'break-all' }}>{value || '—'}</div>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)', fontWeight: 500, wordBreak: 'break-all' }}>{value || '-'}</div>
     </div>
   );
 }

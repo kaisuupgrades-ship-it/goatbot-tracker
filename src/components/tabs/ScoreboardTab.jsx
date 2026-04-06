@@ -47,30 +47,30 @@ export function useStarredGames() {
 
 // ── Sport Config ──────────────────────────────────────────────────────────────
 const SPORTS_BASE = [
-  { key: 'all',    label: 'All',    emoji: '🏆', color: '#FFB800' },
-  { key: 'mlb',    label: 'MLB',    emoji: '⚾', color: '#e63946' },
-  { key: 'nfl',    label: 'NFL',    emoji: '🏈', color: '#2a9d8f' },
-  { key: 'nba',    label: 'NBA',    emoji: '🏀', color: '#e76f51' },
-  { key: 'nhl',    label: 'NHL',    emoji: '🏒', color: '#457b9d' },
-  { key: 'ncaaf',  label: 'NCAAF',  emoji: '🏈', color: '#8338ec' },
-  { key: 'ncaab',  label: 'NCAAB',  emoji: '🏀', color: '#fb8500' },
-  { key: 'soccer', label: 'Soccer', emoji: '⚽', color: '#06d6a0' },
-  { key: 'wnba',   label: 'WNBA',   emoji: '🏀', color: '#ff6b9d' },
-  { key: 'tennis', label: 'Tennis', emoji: '🎾', color: '#84cc16' },
-  { key: 'golf',   label: 'Golf',   emoji: '⛳', color: '#22c55e' },
+  { key: 'all',    label: 'All',    emoji: '[trophy]', color: '#FFB800' },
+  { key: 'mlb',    label: 'MLB',    emoji: '[MLB]', color: '#e63946' },
+  { key: 'nfl',    label: 'NFL',    emoji: '[NFL]', color: '#2a9d8f' },
+  { key: 'nba',    label: 'NBA',    emoji: '[NBA]', color: '#e76f51' },
+  { key: 'nhl',    label: 'NHL',    emoji: '[NHL]', color: '#457b9d' },
+  { key: 'ncaaf',  label: 'NCAAF',  emoji: '[NFL]', color: '#8338ec' },
+  { key: 'ncaab',  label: 'NCAAB',  emoji: '[NBA]', color: '#fb8500' },
+  { key: 'soccer', label: 'Soccer', emoji: '[MLS]', color: '#06d6a0' },
+  { key: 'wnba',   label: 'WNBA',   emoji: '[NBA]', color: '#ff6b9d' },
+  { key: 'tennis', label: 'Tennis', emoji: '[tennis]', color: '#84cc16' },
+  { key: 'golf',   label: 'Golf',   emoji: '[golf]', color: '#22c55e' },
 ];
 
 // Season ranges [startMonth, endMonth] (0-indexed). null = year-round.
-// Wrapping ranges (e.g. NFL Sept–Feb) handled by start > end check.
+// Wrapping ranges (e.g. NFL Sept-Feb) handled by start > end check.
 const SPORT_SEASONS = {
-  mlb:    [2, 10], // Mar–Oct
-  nfl:    [8, 1],  // Sept–Feb  (wraps)
-  nba:    [9, 5],  // Oct–Jun   (wraps)
-  nhl:    [9, 5],  // Oct–Jun   (wraps)
-  ncaaf:  [7, 0],  // Aug–Jan   (wraps)
-  ncaab:  [10, 3], // Nov–Mar   (wraps; March Madness)
-  soccer: [2, 10], // Mar–Oct
-  wnba:   [4, 9],  // May–Oct
+  mlb:    [2, 10], // Mar-Oct
+  nfl:    [8, 1],  // Sept-Feb  (wraps)
+  nba:    [9, 5],  // Oct-Jun   (wraps)
+  nhl:    [9, 5],  // Oct-Jun   (wraps)
+  ncaaf:  [7, 0],  // Aug-Jan   (wraps)
+  ncaab:  [10, 3], // Nov-Mar   (wraps; March Madness)
+  soccer: [2, 10], // Mar-Oct
+  wnba:   [4, 9],  // May-Oct
   tennis: null,
   golf:   null,
   all:    null,
@@ -137,7 +137,7 @@ function mergeGames(prevGames, newGames) {
   });
 }
 
-// Sort a mixed-sport event list: live → upcoming (chrono) → final (newest first)
+// Sort a mixed-sport event list: live -> upcoming (chrono) -> final (newest first)
 export function sortAllSportsEvents(events) {
   const live     = events.filter(e => getGameState(e).state === 'live');
   const upcoming = events.filter(e => getGameState(e).state === 'pre');
@@ -232,7 +232,7 @@ function getOdds(event) {
 
 function getBroadcast(event) {
   const broadcasts = event?.competitions?.[0]?.broadcasts || [];
-  return broadcasts.map(b => b.names?.join(', ')).filter(Boolean).join(' • ') || null;
+  return broadcasts.map(b => b.names?.join(', ')).filter(Boolean).join(' - ') || null;
 }
 
 function getVenue(event) {
@@ -301,8 +301,8 @@ function getSeries(event) {
   return event?.competitions?.[0]?.series || null;
 }
 
-// ── Stadium database: team abbr → { lat, lon, orientation, dome, retractable } ─
-// orientation = compass bearing from home plate → center field (degrees)
+// ── Stadium database: team abbr -> { lat, lon, orientation, dome, retractable } ─
+// orientation = compass bearing from home plate -> center field (degrees)
 const MLB_STADIUMS = {
   ARI: { lat: 33.445, lon: -112.067, name: 'Chase Field',           retractable: true },
   ATL: { lat: 33.890, lon: -84.468,  name: 'Truist Park',           orientation: 58  },
@@ -417,10 +417,10 @@ function WeatherWidget({ stadium, gameDate, sport }) {
   if (stadium?.dome) {
     return (
       <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '1.4rem' }}>🏟️</span>
+        <span style={{ fontSize: '1.4rem' }}>[arena]</span>
         <div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 700 }}>{stadium.name}</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>Domed stadium — weather not a factor</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>Domed stadium - weather not a factor</div>
         </div>
       </div>
     );
@@ -429,10 +429,10 @@ function WeatherWidget({ stadium, gameDate, sport }) {
   if (stadium?.retractable && !wx) {
     return (
       <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '1.4rem' }}>🏟️</span>
+        <span style={{ fontSize: '1.4rem' }}>[arena]</span>
         <div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 700 }}>{stadium.name}</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>Retractable roof — check game-day status</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>Retractable roof - check game-day status</div>
         </div>
       </div>
     );
@@ -441,7 +441,7 @@ function WeatherWidget({ stadium, gameDate, sport }) {
   if (loading) {
     return (
       <div style={{ padding: '0.65rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-        Loading game-time forecast…
+        Loading game-time forecast...
       </div>
     );
   }
@@ -460,11 +460,11 @@ function WeatherWidget({ stadium, gameDate, sport }) {
         padding: '0.75rem 0.85rem', background: 'rgba(255,255,255,0.025)', borderRadius: '10px',
         border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '10px',
       }}>
-        <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>🌐</span>
+        <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>[web]</span>
         <div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700 }}>{stadium?.name || 'Outdoor Stadium'}</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '2px' }}>
-            Weather data temporarily unavailable — check back closer to game time
+            Weather data temporarily unavailable - check back closer to game time
           </div>
         </div>
       </div>
@@ -486,10 +486,10 @@ function WeatherWidget({ stadium, gameDate, sport }) {
   const relAngle = ((arrowDeg - fieldAngle) + 360) % 360;
   let windContext = '';
   if (wx.windspeed >= 8) {
-    if (relAngle < 30 || relAngle > 330)         windContext = '→ Blowing out to CF';
-    else if (relAngle > 150 && relAngle < 210)   windContext = '← Blowing in from CF';
-    else if (relAngle >= 30 && relAngle <= 150)  windContext = '↗ Cross wind (LF side)';
-    else                                          windContext = '↖ Cross wind (RF side)';
+    if (relAngle < 30 || relAngle > 330)         windContext = '-> Blowing out to CF';
+    else if (relAngle > 150 && relAngle < 210)   windContext = '<- Blowing in from CF';
+    else if (relAngle >= 30 && relAngle <= 150)  windContext = '^ Cross wind (LF side)';
+    else                                          windContext = '<^ Cross wind (RF side)';
   }
 
   const windColor  = windHigh ? '#fbbf24' : '#93c5fd';
@@ -517,7 +517,7 @@ function WeatherWidget({ stadium, gameDate, sport }) {
           )}
         </div>
         <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-          {wx.historical ? '✓ Actual conditions' : 'Game-time forecast'}
+          {wx.historical ? '[ok] Actual conditions' : 'Game-time forecast'}
         </span>
       </div>
 
@@ -539,10 +539,10 @@ function WeatherWidget({ stadium, gameDate, sport }) {
             </defs>
 
             {sport === 'mlb' ? (<>
-              {/* Outfield — filled arc */}
+              {/* Outfield - filled arc */}
               <path d="M 50 82 L 8 82 A 59 59 0 0 1 92 82 Z"
                 fill="url(#grassGrad)" stroke="rgba(74,222,128,0.3)" strokeWidth="1" />
-              {/* Warning track — thin brownish band */}
+              {/* Warning track - thin brownish band */}
               <path d="M 50 82 L 11 82 A 56 56 0 0 1 89 82 Z"
                 fill="none" stroke="rgba(180,120,60,0.35)" strokeWidth="4" />
               {/* Foul lines */}
@@ -561,7 +561,7 @@ function WeatherWidget({ stadium, gameDate, sport }) {
                 fill="rgba(200,150,80,0.5)" stroke="rgba(220,180,100,0.5)" strokeWidth="1" />
               {/* Bases */}
               {[[50,41],[66,62],[50,80],[34,62]].map(([x,y], i) =>
-                i === 3 /* home plate — pentagon shape */
+                i === 3 /* home plate - pentagon shape */
                   ? <polygon key={i} points={`${x},${y-3.5} ${x+3},${y-1} ${x+3},${y+2.5} ${x-3},${y+2.5} ${x-3},${y-1}`}
                       fill="rgba(255,248,220,0.9)" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5" />
                   : <rect key={i} x={x-2.5} y={y-2.5} width="5" height="5" rx="0.8"
@@ -621,7 +621,7 @@ function WeatherWidget({ stadium, gameDate, sport }) {
           {/* Top row: TEMP + PRECIP */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
             {[
-              { label: 'TEMP',   val: `${wx.temp_f}°F`, color: tempColor,   alert: isCold || isHot },
+              { label: 'TEMP',   val: `${wx.temp_f}degF`, color: tempColor,   alert: isCold || isHot },
               { label: 'PRECIP', val: `${wx.precip_pct}%`, color: precipColor, alert: wx.precip_pct >= 40 },
             ].map(({ label, val, color, alert }) => (
               <div key={label} style={{
@@ -630,13 +630,13 @@ function WeatherWidget({ stadium, gameDate, sport }) {
               }}>
                 <div style={{ fontSize: '0.54rem', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '2px' }}>{label}</div>
                 <div style={{ fontSize: '0.85rem', fontWeight: 800, fontFamily: 'IBM Plex Mono, monospace', color, lineHeight: 1 }}>
-                  {alert && <span style={{ fontSize: '0.6rem', marginRight: '2px' }}>⚠</span>}{val}
+                  {alert && <span style={{ fontSize: '0.6rem', marginRight: '2px' }}>[!]</span>}{val}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Wind row — full width so compass never wraps */}
+          {/* Wind row - full width so compass never wraps */}
           <div style={{
             background: windHigh ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.03)',
             border: `1px solid ${windHigh ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.05)'}`,
@@ -647,7 +647,7 @@ function WeatherWidget({ stadium, gameDate, sport }) {
               <div style={{ fontSize: '0.54rem', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '2px' }}>WIND</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 800, fontFamily: 'IBM Plex Mono, monospace', color: windColor, lineHeight: 1 }}>
-                  {windHigh && <span style={{ fontSize: '0.6rem', marginRight: '2px' }}>⚠</span>}
+                  {windHigh && <span style={{ fontSize: '0.6rem', marginRight: '2px' }}>[!]</span>}
                   {wx.windspeed > 0 ? `${wx.windspeed} mph` : 'Calm'}
                 </span>
                 {wx.windspeed > 0 && (
@@ -657,7 +657,7 @@ function WeatherWidget({ stadium, gameDate, sport }) {
             </div>
             {windContext && (
               <div style={{ fontSize: '0.62rem', color: windHigh ? '#fbbf24' : '#93c5fd', textAlign: 'right', lineHeight: 1.4, maxWidth: '90px' }}>
-                {windContext.replace(/^[↗←→↖]\s*/, '')}
+                {windContext.replace(/^[^<--><^]\s*/, '')}
                 {windHigh && sport === 'mlb' && <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem' }}>affects fly balls</div>}
               </div>
             )}
@@ -698,7 +698,7 @@ function getH2H(event) {
 }
 
 function formatOdds(n, oddsFormat = 'american') {
-  if (n == null) return '—';
+  if (n == null) return '-';
   if (oddsFormat === 'decimal') {
     const d = n > 0 ? (n / 100 + 1) : (100 / Math.abs(n) + 1);
     return d.toFixed(2);
@@ -708,7 +708,7 @@ function formatOdds(n, oddsFormat = 'american') {
 
 function truncBroadcast(str, max = 40) {
   if (!str || str.length <= max) return str;
-  return str.slice(0, max) + '…';
+  return str.slice(0, max) + '...';
 }
 
 function getWinProb(event) {
@@ -744,7 +744,7 @@ function WinProbBar({ homeTeam, awayTeam, homeProb, awayProb, homeOdds, awayOdds
     <div style={{ marginBottom: '0.75rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          📊 ESPN Win Probability
+          [stats] ESPN Win Probability
         </span>
         <span style={{ fontSize: '0.6rem', color: '#555' }}>via ESPN Analytics</span>
       </div>
@@ -788,7 +788,7 @@ function WinProbBar({ homeTeam, awayTeam, homeProb, awayProb, homeOdds, awayOdds
           border: `1px solid ${Math.abs(edgeTeam.edge) >= 8 ? 'rgba(0,212,139,0.25)' : 'rgba(255,184,0,0.2)'}`,
           display: 'flex', alignItems: 'center', gap: '8px',
         }}>
-          <span style={{ fontSize: '0.75rem' }}>{Math.abs(edgeTeam.edge) >= 8 ? '🔥' : '⚡'}</span>
+          <span style={{ fontSize: '0.75rem' }}>{Math.abs(edgeTeam.edge) >= 8 ? '[fire]' : '[sharp]'}</span>
           <span style={{ fontSize: '0.72rem', color: Math.abs(edgeTeam.edge) >= 8 ? 'var(--green)' : 'var(--gold)', fontWeight: 700 }}>
             AI EDGE: {edgeTeam.name} {edgeTeam.edge > 0 ? '+' : ''}{edgeTeam.edge.toFixed(1)}% vs market
           </span>
@@ -814,14 +814,14 @@ function getLinescoreData(event, sport) {
     away: {
       abbr:   away.team?.abbreviation || 'Away',
       scores: awayLS.map(ls => ls.value != null ? ls.value : null),
-      total:  away.score != null ? away.score : '—',
+      total:  away.score != null ? away.score : '-',
       hits:   away.hits   ?? null,
       errors: away.errors ?? null,
     },
     home: {
       abbr:   home.team?.abbreviation || 'Home',
       scores: homeLS.map(ls => ls.value != null ? ls.value : null),
-      total:  home.score != null ? home.score : '—',
+      total:  home.score != null ? home.score : '-',
       hits:   home.hits   ?? null,
       errors: home.errors ?? null,
     },
@@ -885,8 +885,8 @@ function LinescoreTable({ data }) {
       })}
       <td style={totalCell}>{team.total}</td>
       {showRHE && <>
-        <td style={rheCell}>{team.hits   != null ? team.hits   : '—'}</td>
-        <td style={rheCell}>{team.errors != null ? team.errors : '—'}</td>
+        <td style={rheCell}>{team.hits   != null ? team.hits   : '-'}</td>
+        <td style={rheCell}>{team.errors != null ? team.errors : '-'}</td>
       </>}
     </tr>
   );
@@ -1038,7 +1038,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 {truncBroadcast(broadcast, 36)}
               </span>
             )}
-            {/* ＋ Bet button */}
+            {/* + Bet button */}
             <button
               onClick={e => { e.stopPropagation(); onAddBet?.(event, sport); }}
               title="Add a bet on this game"
@@ -1052,7 +1052,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.2)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.5)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.10)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.25)'; }}
             >
-              ＋ Bet
+              + Bet
             </button>
 
             {/* Star button */}
@@ -1069,7 +1069,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
               onMouseEnter={e => { e.currentTarget.style.color = '#FFB800'; e.currentTarget.style.transform = 'scale(1.2)'; }}
               onMouseLeave={e => { e.currentTarget.style.color = isStarred ? '#FFB800' : 'var(--text-muted)'; e.currentTarget.style.transform = ''; }}
             >
-              {isStarred ? '★' : '☆'}
+              {isStarred ? '*' : '*'}
             </button>
           </div>
         </div>
@@ -1106,20 +1106,20 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   {/* Inline pitcher (MLB) */}
                   {pitcher && (
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1 }}>
-                      · {pitcher.name}
+                      . {pitcher.name}
                       {pitcher.era ? <span style={{ color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}> {pitcher.era}</span> : null}
                     </span>
                   )}
                   {/* Inline goalie (NHL) */}
                   {goalie && (
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1 }}>
-                      · {goalie.name}
+                      . {goalie.name}
                     </span>
                   )}
                 </div>
                 {/* Right side: score (live/final) + moneyline (pre/live) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                  {/* Moneyline — show for pre AND live */}
+                  {/* Moneyline - show for pre AND live */}
                   {(gameState.state === 'pre' || gameState.state === 'live') && ml != null && (
                     <span style={{
                       fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.78rem', fontWeight: 700,
@@ -1130,7 +1130,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                       {formatOdds(ml, oddsFormat)}
                     </span>
                   )}
-                  {/* Score — show for live/final */}
+                  {/* Score - show for live/final */}
                   {score != null && (
                     <span style={{
                       fontWeight: win ? 800 : 400, fontSize: '1.05rem',
@@ -1150,7 +1150,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           })}
         </div>
 
-        {/* Odds strip — pre-game, live, and closing line */}
+        {/* Odds strip - pre-game, live, and closing line */}
         {odds && (gameState.state !== 'final' || event._closingLine) && (odds.awayOdds || odds.homeOdds || odds.spread || odds.total != null) && (
           <div style={{ display: 'flex', gap: '8px', marginTop: '0.6rem', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)', alignItems: 'center', flexWrap: 'wrap', opacity: gameState.state === 'live' ? 0.8 : 1 }}>
             {/* Source badge */}
@@ -1167,11 +1167,11 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 : gameState.state === 'live' ? 'rgba(255,69,96,0.22)' : 'rgba(0,177,79,0.22)'}`,
               letterSpacing: '0.04em', flexShrink: 0, fontFamily: 'IBM Plex Mono, monospace',
             }}
-              title={event._closingLine ? 'Closing line — odds at game start' : undefined}
+              title={event._closingLine ? 'Closing line - odds at game start' : undefined}
             >
               {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
             </span>
-            {/* Moneyline: both sides — only show when we have the full pair */}
+            {/* Moneyline: both sides - only show when we have the full pair */}
             {odds.awayOdds != null && odds.homeOdds != null && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                 {away.team?.abbreviation || 'AWY'}{' '}
@@ -1191,7 +1191,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 </strong>
               </span>
             )}
-            {/* Spread / details string — show when full ML pair not available */}
+            {/* Spread / details string - show when full ML pair not available */}
             {odds.spread && !(odds.awayOdds != null && odds.homeOdds != null) && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                 ML <strong style={{ color: 'var(--gold)', fontFamily: 'IBM Plex Mono, monospace' }}>{odds.spread}</strong>
@@ -1239,7 +1239,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {/* Venue */}
           {venue && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.75rem' }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>📍</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>[pin]</span>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem' }}>{venue}</span>
               {event.competitions?.[0]?.neutralSite && (
                 <span style={{ padding: '1px 6px', background: 'var(--gold-subtle)', border: '1px solid rgba(255,184,0,0.3)', borderRadius: '4px', color: 'var(--gold)', fontSize: '0.65rem', fontWeight: 700 }}>
@@ -1249,10 +1249,10 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             </div>
           )}
 
-          {/* Broadcast — full text in expanded */}
+          {/* Broadcast - full text in expanded */}
           {broadcast && (
             <div style={{ marginBottom: '0.75rem' }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>📺 Watch on  </span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>[TV] Watch on  </span>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{broadcast}</span>
             </div>
           )}
@@ -1261,7 +1261,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {series && (
             <div style={{ marginBottom: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--gold-subtle)', borderRadius: '6px', border: '1px solid rgba(255,184,0,0.2)' }}>
               <span style={{ color: 'var(--gold)', fontSize: '0.75rem', fontWeight: 700 }}>
-                🏆 {series.title || 'Playoff Series'} — {series.summary || `${series.awayWins || 0}-${series.homeWins || 0}`}
+                [trophy] {series.title || 'Playoff Series'} - {series.summary || `${series.awayWins || 0}-${series.homeWins || 0}`}
               </span>
             </div>
           )}
@@ -1273,7 +1273,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 {situation.balls != null && situation.strikes != null && (
                   <span style={{ color: '#4ade80', fontSize: '0.72rem', fontFamily: 'IBM Plex Mono, monospace' }}>
                     {situation.balls}-{situation.strikes} count
-                    {situation.outs != null ? ` · ${situation.outs} out` : ''}
+                    {situation.outs != null ? ` . ${situation.outs} out` : ''}
                   </span>
                 )}
                 {situation.shortDownDistanceText && (
@@ -1314,7 +1314,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {isIndoorSport ? (
             <div style={{ marginBottom: '0.75rem' }}>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
-                {sport === 'nba' ? '🏀 Matchup Factors' : sport === 'nhl' ? '🏒 Game Factors' : sport === 'ncaab' ? '🏀 Game Factors' : '🏟️ Arena'}
+                {sport === 'nba' ? '[NBA] Matchup Factors' : sport === 'nhl' ? '[NHL] Game Factors' : sport === 'ncaab' ? '[NBA] Game Factors' : '[arena] Arena'}
               </div>
               {(() => {
                 const venueName = venue?.split(',')[0] || 'Arena';
@@ -1342,17 +1342,17 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.6rem 0.8rem', display: 'flex', flexDirection: 'column' }}>
                     {/* Arena */}
                     <div style={{ ...rowStyle }}>
-                      <span style={{ ...labelStyle }}>🏟️ Arena</span>
+                      <span style={{ ...labelStyle }}>[arena] Arena</span>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                         {venueName}
-                        {isDenver && <span style={{ color: '#a0c4ff', fontSize: '0.65rem', marginLeft: '5px' }}>⛰️ 5,280 ft</span>}
+                        {isDenver && <span style={{ color: '#a0c4ff', fontSize: '0.65rem', marginLeft: '5px' }}>[mtn] 5,280 ft</span>}
                       </span>
                     </div>
 
                     {/* Back-to-back warning */}
                     {anyB2B && (
                       <div style={{ ...rowStyle }}>
-                        <span style={{ ...labelStyle }}>⚠️ B2B</span>
+                        <span style={{ ...labelStyle }}>[!] B2B</span>
                         <span style={{ fontSize: '0.72rem', color: '#facc15', fontWeight: 600 }}>
                           {anyB2B.text || anyB2B.headline || 'Back-to-back game'}
                         </span>
@@ -1362,7 +1362,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     {/* Away road record */}
                     {awayRec.away && (
                       <div style={{ ...rowStyle }}>
-                        <span style={{ ...labelStyle }}>✈️ {away.team?.abbreviation} road</span>
+                        <span style={{ ...labelStyle }}>✈ {away.team?.abbreviation} road</span>
                         <span style={{ ...valStyle, color: awayRoadPct != null ? (awayRoadPct >= 50 ? 'var(--green)' : 'var(--red)') : 'var(--text-secondary)' }}>
                           {awayRec.away}
                         </span>
@@ -1375,7 +1375,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     {/* Home court record */}
                     {homeRec.home && (
                       <div style={{ ...rowStyle, borderBottom: sport === 'nhl' && goalies ? '1px solid var(--border-subtle)' : 'none' }}>
-                        <span style={{ ...labelStyle }}>🏠 {home.team?.abbreviation} home</span>
+                        <span style={{ ...labelStyle }}>[?] {home.team?.abbreviation} home</span>
                         <span style={{ ...valStyle, color: homeCourtPct != null ? (homeCourtPct >= 55 ? 'var(--green)' : homeCourtPct <= 40 ? 'var(--red)' : 'var(--text-secondary)') : 'var(--text-secondary)' }}>
                           {homeRec.home}
                         </span>
@@ -1393,7 +1393,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                         <>
                           {awayG?.name && (
                             <div style={{ ...rowStyle }}>
-                              <span style={{ ...labelStyle }}>🥅 {away.team?.abbreviation} G</span>
+                              <span style={{ ...labelStyle }}>[goal] {away.team?.abbreviation} G</span>
                               <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{awayG.name}</span>
                               {awayG.savePct && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginLeft: '4px' }}>.{awayG.savePct?.replace('.', '')} SV%</span>}
                               {awayG.gaa && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginLeft: '4px' }}>{awayG.gaa} GAA</span>}
@@ -1401,7 +1401,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                           )}
                           {homeG?.name && (
                             <div style={{ ...rowStyle, borderBottom: 'none' }}>
-                              <span style={{ ...labelStyle }}>🥅 {home.team?.abbreviation} G</span>
+                              <span style={{ ...labelStyle }}>[goal] {home.team?.abbreviation} G</span>
                               <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{homeG.name}</span>
                               {homeG.savePct && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginLeft: '4px' }}>.{homeG.savePct?.replace('.', '')} SV%</span>}
                               {homeG.gaa && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginLeft: '4px' }}>{homeG.gaa} GAA</span>}
@@ -1414,7 +1414,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     {/* NBA altitude note */}
                     {sport === 'nba' && isDenver && (
                       <div style={{ marginTop: '6px', padding: '4px 8px', background: 'rgba(160,196,255,0.08)', borderRadius: '5px', fontSize: '0.65rem', color: '#a0c4ff' }}>
-                        ⛰️ Mile High effect: visiting teams avg ~3 fewer pts in 4th quarter at Ball Arena
+                        [mtn] Mile High effect: visiting teams avg ~3 fewer pts in 4th quarter at Ball Arena
                       </div>
                     )}
                   </div>
@@ -1424,7 +1424,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           ) : stadium ? (
             <div style={{ marginBottom: '0.75rem' }}>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
-                🌤 Game-Time Weather
+                [?] Game-Time Weather
               </div>
               <WeatherWidget stadium={stadium} gameDate={event.date} sport={sport} />
             </div>
@@ -1434,7 +1434,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {goalies && (
             <div style={{ marginBottom: '0.75rem' }}>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
-                🥅 Starting Goalies
+                [goal] Starting Goalies
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 {['away', 'home'].map(side => {
@@ -1458,7 +1458,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                         <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</div>
                         {(g.savePct || g.gaa) && (
                           <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginTop: '1px' }}>
-                            {[g.savePct ? `SV% ${g.savePct}` : null, g.gaa ? `GAA ${g.gaa}` : null].filter(Boolean).join(' · ')}
+                            {[g.savePct ? `SV% ${g.savePct}` : null, g.gaa ? `GAA ${g.gaa}` : null].filter(Boolean).join(' . ')}
                           </div>
                         )}
                       </div>
@@ -1474,7 +1474,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             <div style={{ marginBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  🚑 Key Injuries
+                  [EMS] Key Injuries
                 </div>
                 {injuriesChecked && (
                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
@@ -1500,7 +1500,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                           {inj.status === 'Questionable' ? 'Q' : inj.status === 'Doubtful' ? 'D' : 'OUT'}
                         </span>
                         <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 500 }}>{inj.name}</span>
-                        {inj.type && <span style={{ color: 'var(--text-muted)', fontSize: '0.63rem' }}>· {inj.type}</span>}
+                        {inj.type && <span style={{ color: 'var(--text-muted)', fontSize: '0.63rem' }}>. {inj.type}</span>}
                       </div>
                     ))}
                   </div>
@@ -1512,7 +1512,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {/* ── Head-to-Head ───────────────────────────────────────────── */}
           <div style={{ marginBottom: '0.75rem' }}>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
-              🔄 Head-to-Head
+              [refresh] Head-to-Head
             </div>
             <div style={{ padding: '0.6rem 0.8rem', background: 'rgba(155,109,255,0.05)', border: '1px solid rgba(155,109,255,0.18)', borderRadius: '8px' }}>
               {/* Season series note (from ESPN) */}
@@ -1523,7 +1523,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
               )}
               {/* Last-20 record */}
               {h2hLoad && (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Loading history…</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Loading history...</div>
               )}
               {h2hData && !h2hLoad && (() => {
                 const { record, games, abbrHome, abbrAway } = h2hData;
@@ -1545,10 +1545,10 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                         {homeWinPct}% {abbrHome}
                       </span>
                     </div>
-                    {/* Dot history (newest → oldest, left to right) */}
+                    {/* Dot history (newest -> oldest, left to right) */}
                     <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
                       {games.slice(0, 20).map((g, i) => (
-                        <div key={i} title={`${g.date} · ${abbrHome} ${g.score1}-${g.score2} ${abbrAway}`}
+                        <div key={i} title={`${g.date} . ${abbrHome} ${g.score1}-${g.score2} ${abbrAway}`}
                           style={{
                             width: '10px', height: '10px', borderRadius: '2px',
                             background: g.t1Won ? 'var(--green)' : 'var(--red)',
@@ -1559,7 +1559,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                       ))}
                     </div>
                     <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      ◀ most recent &nbsp;·&nbsp; {games[0]?.season && games[games.length-1]?.season ? `${games[games.length-1].season}–${games[0].season}` : ''} &nbsp;·&nbsp; hover dot for score
+                      < most recent &nbsp;.&nbsp; {games[0]?.season && games[games.length-1]?.season ? `${games[games.length-1].season}-${games[0].season}` : ''} &nbsp;.&nbsp; hover dot for score
                     </div>
                   </div>
                 );
@@ -1574,7 +1574,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {(awayRec.total || homeRec.total) && (
             <div style={{ marginBottom: '0.75rem' }}>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem' }}>
-                📋 Season Records
+                [list] Season Records
               </div>
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
                 {[
@@ -1610,7 +1610,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                   <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.07em', color: '#FFB800', textTransform: 'uppercase' }}>
-                    🤖 BetOS AI Lean
+                    [AI] BetOS AI Lean
                   </span>
                   {lean.conf && (
                     <span style={{
@@ -1646,7 +1646,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 onClick={() => setExpanded(false)}
                 style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '4px' }}
               >
-                ▲ click to collapse
+                ^ click to collapse
               </div>
             )}
 
@@ -1655,7 +1655,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 onClick={(e) => {
                   e.stopPropagation();
                   const gameInfo = gameState.state === 'pre'
-                    ? `${awayName} @ ${homeName} — ${gameState.label}`
+                    ? `${awayName} @ ${homeName} - ${gameState.label}`
                     : `${awayName} ${awayScore ?? ''} @ ${homeName} ${homeScore ?? ''} (${gameState.label})`;
 
                   // Calculate market-implied probabilities from real odds (pure math)
@@ -1669,7 +1669,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
 
                   // Build a verified data block Grok must treat as ground truth
                   const verifiedBlock = odds ? [
-                    '--- VERIFIED ODDS (from live feed — treat as ground truth, do not search for different odds) ---',
+                    '--- VERIFIED ODDS (from live feed - treat as ground truth, do not search for different odds) ---',
                     `Matchup: ${awayName} @ ${homeName}`,
                     odds.awayOdds ? `${awayName} ML: ${formatOdds(odds.awayOdds)}${awayImpl ? ` (market implied: ${awayImpl}%)` : ''}` : '',
                     odds.homeOdds ? `${homeName} ML: ${formatOdds(odds.homeOdds)}${homeImpl ? ` (market implied: ${homeImpl}%)` : ''}` : '',
@@ -1679,7 +1679,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     '--- END VERIFIED ODDS ---',
                   ].filter(Boolean).join('\n') : '';
 
-                  const recInfo = `${awayName} record: ${awayRec.total || '—'} (away: ${awayRec.away || '—'}). ${homeName} record: ${homeRec.total || '—'} (home: ${homeRec.home || '—'}).`;
+                  const recInfo = `${awayName} record: ${awayRec.total || '-'} (away: ${awayRec.away || '-'}). ${homeName} record: ${homeRec.total || '-'} (home: ${homeRec.home || '-'}).`;
                   const venueInfo = venue ? `Venue: ${venue}.` : '';
 
                   const prompt = [
@@ -1702,7 +1702,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.16)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.08)'; e.currentTarget.style.transform = ''; }}
               >
-                🎯 BetOS Analyze
+                [target] BetOS Analyze
               </button>
             )}
           </div>
@@ -1756,7 +1756,7 @@ function NewsCard({ article, sportKey }) {
               {teamLabel && (
                 <span style={{ fontSize: '0.64rem', color: accent, fontWeight: 700, opacity: 0.85 }}>{teamLabel}</span>
               )}
-              {teamLabel && dateStr && <span style={{ color: 'var(--border)', fontSize: '0.6rem' }}>·</span>}
+              {teamLabel && dateStr && <span style={{ color: 'var(--border)', fontSize: '0.6rem' }}>.</span>}
               {dateStr && <span style={{ color: 'var(--text-muted)', fontSize: '0.64rem' }}>{dateStr}</span>}
             </div>
           </div>
@@ -1803,9 +1803,9 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const userPrefs = useMemo(() => getUserPrefs(user), [user]);
 
   const [betSlipGame, setBetSlipGame] = useState(null); // { event, sport } | null
-  const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team → bookmaker game data
+  const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team -> bookmaker game data
 
-  // Pick → Scoreboard highlight
+  // Pick -> Scoreboard highlight
   const [highlightedEventId, setHighlightedEventId] = useState(null);
   const gameCardRefs = useRef({});
 
@@ -1951,7 +1951,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     setNewsLoading(true);
     try {
       if (s === 'all') {
-        // Pull headlines from MLB, NBA, NFL in parallel → interleave top stories
+        // Pull headlines from MLB, NBA, NFL in parallel -> interleave top stories
         const picks = ['mlb', 'nba', 'nfl'];
         const results = await Promise.allSettled(
           picks.map(key =>
@@ -2073,7 +2073,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     return () => clearInterval(tick);
   }, [lastUpdated, liveCount, selectedDate, todayStr]);
 
-  // ── Pick → Scoreboard: switch sport/date when a pick is passed in ────────────
+  // ── Pick -> Scoreboard: switch sport/date when a pick is passed in ────────────
   useEffect(() => {
     if (!highlightGame) return;
     const targetSport = (highlightGame.sport || '').toLowerCase();
@@ -2145,7 +2145,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
       // Real game-level ML odds are always between -1500 and +1500.
       // Anything outside that range is a futures price, alt-market, or data error.
       // Spread juice is always between -300 and +300.
-      // Game totals (baseball 6–14, hockey 4–8, basketball 180–240, football 35–60).
+      // Game totals (baseball 6-14, hockey 4-8, basketball 180-240, football 35-60).
       function validML(price) {
         return price != null && Math.abs(price) >= 100 && Math.abs(price) <= 1500;
       }
@@ -2297,7 +2297,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', display: 'inline-block', boxShadow: '0 0 5px #4ade80', animation: 'live-pulse 1.5s infinite' }} />
                 {liveCount} LIVE
                 {nextRefreshIn != null && (
-                  <span style={{ color: '#4ade8088', fontSize: '0.66rem', marginLeft: '2px' }}>· refresh in {nextRefreshIn}s</span>
+                  <span style={{ color: '#4ade8088', fontSize: '0.66rem', marginLeft: '2px' }}>. refresh in {nextRefreshIn}s</span>
                 )}
               </span>
             )}
@@ -2307,7 +2307,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           </span>
           <button onClick={() => { loadGames(sport, selectedDate); loadNews(sport); }}
             style={{ background: 'none', border: '1px solid #2a2a2a', borderRadius: '6px', color: 'var(--text-secondary)', padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem' }}>
-            ↻ Refresh
+            [refresh] Refresh
           </button>
         </div>
 
@@ -2321,7 +2321,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               setSelectedDate(toLocalDateStr(d));
             }}
             style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-          >‹</button>
+          ><</button>
 
           {/* Quick presets: Yesterday + Today + next 6 days */}
           <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px', flexShrink: 1 }}>
@@ -2378,17 +2378,17 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               setSelectedDate(toLocalDateStr(d));
             }}
             style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-          >›</button>
+          >></button>
         </div>
 
         {/* Filter pills */}
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
           {[
             { id: 'all',      label: 'All' },
-            { id: 'live',     label: liveCount > 0 ? `● LIVE (${liveCount})` : 'Live' },
+            { id: 'live',     label: liveCount > 0 ? `* LIVE (${liveCount})` : 'Live' },
             { id: 'upcoming', label: 'Upcoming' },
             { id: 'final',    label: 'Final' },
-            { id: 'starred',  label: `★ Starred${Object.keys(starred).length > 0 ? ` (${Object.keys(starred).length})` : ''}` },
+            { id: 'starred',  label: `* Starred${Object.keys(starred).length > 0 ? ` (${Object.keys(starred).length})` : ''}` },
           ].map(f => (
             <button key={f.id} onClick={() => setFilter(f.id)}
               style={{
@@ -2419,20 +2419,20 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           <SoccerScoreboard />
         ) : null}
 
-        {/* Games grid — hidden for sports with dedicated views */}
+        {/* Games grid - hidden for sports with dedicated views */}
         {sport !== 'golf' && sport !== 'tennis' && sport !== 'tenniswta' && sport !== 'soccer' && (
         <>
         {loading && games.length === 0 ? (
-          /* First-load skeleton only — never show this on background refresh */
+          /* First-load skeleton only - never show this on background refresh */
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-            <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{isAllMode ? '⏳' : currentSport?.emoji || '⏳'}</div>
+            <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{isAllMode ? '[wait]' : currentSport?.emoji || '[wait]'}</div>
             <p style={{ fontSize: '0.85rem' }}>
-              {isAllMode ? 'Loading all sports in parallel…' : `Loading ${currentSport?.label} games…`}
+              {isAllMode ? 'Loading all sports in parallel...' : `Loading ${currentSport?.label} games...`}
             </p>
           </div>
         ) : error ? (
           <div style={{ padding: '1.5rem', background: '#2b0d0d', border: '1px solid #991b1b', borderRadius: '8px', color: '#f87171', fontSize: '0.85rem' }}>
-            ⚠️ {error}
+            [!] {error}
           </div>
         ) : sortedFilteredGames.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
@@ -2473,7 +2473,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         )}
       </div>
 
-      {/* Right sidebar — tabbed: Headlines | Injury Intel */}
+      {/* Right sidebar - tabbed: Headlines | Injury Intel */}
       <div className="scoreboard-sidebar" style={{
         width: '300px', flexShrink: 0,
         display: 'flex', flexDirection: 'column',
@@ -2483,8 +2483,8 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         {/* Tab switcher */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '0.75rem', background: 'var(--bg-elevated)', borderRadius: '8px', padding: '3px' }}>
           {[
-            { key: 'headlines', label: '📰 Headlines' },
-            { key: 'intel',     label: '🏥 Injury Intel' },
+            { key: 'headlines', label: '[news] Headlines' },
+            { key: 'intel',     label: '[injury] Injury Intel' },
           ].map(tab => (
             <button key={tab.key} onClick={() => setSidebarTab(tab.key)}
               style={{
@@ -2504,13 +2504,13 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {isAllMode ? 'MLB · NBA · NFL top stories' : `Latest ${currentSport?.label} news`}
+                {isAllMode ? 'MLB . NBA . NFL top stories' : `Latest ${currentSport?.label} news`}
               </div>
-              {newsLoading && <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}>↻</span>}
+              {newsLoading && <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}>[refresh]</span>}
             </div>
             {news.length === 0 && !newsLoading ? (
               <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>📰</div>
+                <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>[news]</div>
                 No headlines available
               </div>
             ) : (
@@ -2536,7 +2536,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                🏥 {isAllMode ? 'MLB' : currentSport?.label} Injury Intel
+                [injury] {isAllMode ? 'MLB' : currentSport?.label} Injury Intel
               </div>
               <button
                 onClick={() => loadInjuryNews(sport)}
@@ -2549,19 +2549,19 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                   opacity: injuryLoading ? 0.4 : 1, fontFamily: 'inherit',
                 }}
               >
-                {injuryLoading ? '↻' : '↻ Refresh'}
+                {injuryLoading ? '[refresh]' : '[refresh] Refresh'}
               </button>
             </div>
 
             {/* Loading state */}
             {injuryLoading && injuryPlayers.length === 0 && injuryArticles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: '1.2rem', marginBottom: '6px', opacity: 0.5 }}>🏥</div>
-                <div style={{ fontSize: '0.72rem' }}>Loading injury intel…</div>
+                <div style={{ fontSize: '1.2rem', marginBottom: '6px', opacity: 0.5 }}>[injury]</div>
+                <div style={{ fontSize: '0.72rem' }}>Loading injury intel...</div>
               </div>
             ) : injuryError ? (
               <div style={{ padding: '0.6rem', background: 'var(--red-subtle)', borderRadius: '7px', color: 'var(--red)', fontSize: '0.72rem' }}>
-                ⚠️ {injuryError}
+                [!] {injuryError}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1, paddingRight: '2px' }}>
@@ -2570,7 +2570,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                 {injuryPlayers.length > 0 && (
                   <div>
                     <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--gold, #FFB800)', marginBottom: '6px', fontWeight: 700 }}>
-                      Injury Report — tap player for latest intel
+                      Injury Report - tap player for latest intel
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                       {injuryPlayers.map((p, i) => {
@@ -2621,11 +2621,11 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                 {p.status}
                               </span>
                               <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.6 }}>
-                                {isLoadingThis ? '⏳' : isExpanded ? '▲' : '▼'}
+                                {isLoadingThis ? '[wait]' : isExpanded ? '^' : 'v'}
                               </span>
                             </div>
 
-                            {/* Expanded player panel — shows ESPN data immediately */}
+                            {/* Expanded player panel - shows ESPN data immediately */}
                             {isExpanded && (
                               <div style={{
                                 background: 'var(--bg-overlay)', borderRadius: '0 0 5px 5px',
@@ -2633,7 +2633,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                 padding: '8px 8px 10px',
                                 borderTop: '1px solid var(--border)',
                               }}>
-                                {/* ESPN injury details — always available instantly */}
+                                {/* ESPN injury details - always available instantly */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
                                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                     <span style={{ fontSize: '0.62rem', fontWeight: 700, color: statusColor, padding: '2px 7px', background: `${statusColor}15`, borderRadius: '4px', border: `1px solid ${statusColor}30` }}>{p.status}</span>
@@ -2644,18 +2644,18 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                       {p.side ? `${p.side} ` : ''}{p.detail}
                                     </div>
                                   )}
-                                  <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', opacity: 0.7 }}>📋 Source: ESPN official injury report</div>
+                                  <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', opacity: 0.7 }}>[list] Source: ESPN official injury report</div>
                                 </div>
 
                                 {/* X/Twitter check section */}
                                 {isLoadingThis ? (
                                   <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.65rem' }}>
-                                    <div style={{ marginBottom: '4px' }}>🔍</div>
-                                    Scanning X/Twitter for {p.name}…
+                                    <div style={{ marginBottom: '4px' }}>[search]</div>
+                                    Scanning X/Twitter for {p.name}...
                                   </div>
                                 ) : newsData?.error ? (
                                   <div style={{ fontSize: '0.65rem', color: '#f87171', marginTop: '4px' }}>
-                                    ⚠️ {newsData.error}
+                                    [!] {newsData.error}
                                     <button onClick={() => loadPlayerNews(p.name, p.team)} style={{ marginLeft: '6px', fontSize: '0.6rem', background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
                                   </div>
                                 ) : newsData ? (
@@ -2679,7 +2679,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                       }}>
                                         AI Status: {newsData.status}
                                         {newsData.returnTimeline && (
-                                          <span style={{ fontWeight: 400, opacity: 0.8 }}> · ETA: {newsData.returnTimeline}</span>
+                                          <span style={{ fontWeight: 400, opacity: 0.8 }}> . ETA: {newsData.returnTimeline}</span>
                                         )}
                                       </div>
                                     )}
@@ -2699,7 +2699,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                           }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px' }}>
                                               <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                                                {u.platform === 'X' ? '𝕏' : u.platform === 'ESPN' ? '📺' : u.platform === 'Team' ? '🏟️' : '📰'} {u.source}
+                                                {u.platform === 'X' ? '[?]' : u.platform === 'ESPN' ? '[TV]' : u.platform === 'Team' ? '[arena]' : '[news]'} {u.source}
                                               </span>
                                               {u.time && (
                                                 <span style={{ fontSize: '0.54rem', color: 'var(--text-muted)', opacity: 0.6 }}>
@@ -2716,11 +2716,11 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                     )}
                                     {/* Provider tag */}
                                     <div style={{ fontSize: '0.52rem', color: 'var(--text-muted)', opacity: 0.5, textAlign: 'right' }}>
-                                      via {newsData.provider === 'xai' ? 'Grok' : 'Claude'} {newsData.fallback ? '(fallback)' : ''} · {newsData.lastUpdated || 'just now'}
+                                      via {newsData.provider === 'xai' ? 'Grok' : 'Claude'} {newsData.fallback ? '(fallback)' : ''} . {newsData.lastUpdated || 'just now'}
                                     </div>
                                   </div>
                                 ) : (
-                                  /* No Twitter data yet — show the button to trigger search */
+                                  /* No Twitter data yet - show the button to trigger search */
                                   <button
                                     onClick={(e) => { e.stopPropagation(); loadPlayerNews(p.name, p.team); }}
                                     style={{
@@ -2731,7 +2731,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                                       cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
                                     }}
                                   >
-                                    𝕏 Check X / Twitter for latest rumors
+                                    [?] Check X / Twitter for latest rumors
                                   </button>
                                 )}
                               </div>
@@ -2791,7 +2791,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                               )}
                               {dateStr && (
                                 <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '3px', opacity: 0.65 }}>
-                                  {ageHours < 6 ? '🔴 ' : ageHours < 24 ? '🟡 ' : ''}{dateStr}
+                                  {ageHours < 6 ? '[rec] ' : ageHours < 24 ? '[?] ' : ''}{dateStr}
                                 </div>
                               )}
                             </div>
@@ -2805,7 +2805,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                 {/* Empty state */}
                 {injuryPlayers.length === 0 && injuryArticles.length === 0 && !injuryLoading && (
                   <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>🏥</div>
+                    <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>[injury]</div>
                     <div style={{ fontSize: '0.75rem' }}>No injury data found</div>
                   </div>
                 )}
@@ -2818,7 +2818,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
     {/* ── Bet Slip Modal ─────────────────────────────────────────────────── */}
     {betSlipGame && (() => {
-      // Events are pre-enriched via enrichedGames — single source of truth, no separate merge needed
+      // Events are pre-enriched via enrichedGames - single source of truth, no separate merge needed
       const { away, home } = getCompetitors(betSlipGame.event);
       const odds = getOdds(betSlipGame.event);
       return (
