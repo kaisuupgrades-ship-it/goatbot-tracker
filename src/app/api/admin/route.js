@@ -14,7 +14,7 @@ function isAdminEmail(email) {
   return ADMIN_EMAILS.includes((email || '').toLowerCase());
 }
 
-// Verify admin identity from JWT â NEVER trust client-supplied email
+// Verify admin identity from JWT — NEVER trust client-supplied email
 async function getAdminUser(req) {
   const auth = req.headers.get('authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '').trim();
@@ -23,6 +23,7 @@ async function getAdminUser(req) {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !user) return null;
     if (isAdminEmail(user.email)) return user;
+    // Check DB role as fallback
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('role')
@@ -30,7 +31,6 @@ async function getAdminUser(req) {
       .single();
     if (profile?.role === 'admin') return user;
     return null; // neither email-list nor DB role
-    return user;
   } catch { return null; }
 }
 
@@ -38,7 +38,7 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action') || 'stats';
 
-  // Verify admin via JWT â ignore any client-supplied email
+  // Verify admin via JWT — ignore any client-supplied email
   const adminUser = await getAdminUser(req);
   if (!adminUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -184,7 +184,7 @@ export async function GET(req) {
       return NextResponse.json({
         environment: process.env.NODE_ENV || 'production',
         serviceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'â Set' : 'â Missing',
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✓ Set' : '✗ Missing',
         currentAnnouncement: announcementRow?.value || '',
         announcementUpdatedAt: announcementRow?.updated_at || null,
       });
@@ -202,7 +202,7 @@ export async function GET(req) {
     }
 
     if (action === 'activity') {
-      // Pull all auth users (last_sign_in_at, created_at) â requires service role
+      // Pull all auth users (last_sign_in_at, created_at) — requires service role
       let authUsers = [];
       try {
         const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 500 });
@@ -252,7 +252,7 @@ export async function GET(req) {
       const profileMap = {};
       (profiles || []).forEach(p => { profileMap[p.id] = p; });
 
-      // Session time tracking â aggregate per user
+      // Session time tracking — aggregate per user
       let sessionMap = {};
       try {
         const { data: sessionRows } = await supabaseAdmin
@@ -368,7 +368,7 @@ export async function POST(req) {
   const body = await req.json();
   const { action, targetId, value, newEmail, newPassword, newUsername } = body;
 
-  // Session tracking is unauthenticated â any logged-in user can log their own session
+  // Session tracking is unauthenticated — any logged-in user can log their own session
   if (action === 'track_session') {
     const { userId, sessionId, durationSeconds, deviceInfo } = body;
     if (!userId || !sessionId) return NextResponse.json({ ok: false });
@@ -420,7 +420,7 @@ export async function POST(req) {
     }
 
     if (action === 'reset_pick') {
-      // Reset a pick back to PENDING â clears result, profit, and graded timestamps
+      // Reset a pick back to PENDING — clears result, profit, and graded timestamps
       const { error } = await supabaseAdmin
         .from('picks')
         .update({
@@ -535,7 +535,7 @@ export async function POST(req) {
           source: source || 'chatbot',
           created_at: new Date().toISOString(),
         }]);
-      } catch { /* table may not exist yet â non-critical */ }
+      } catch { /* table may not exist yet — non-critical */ }
       return NextResponse.json({ ok: true });
     }
 
@@ -566,7 +566,7 @@ export async function POST(req) {
     }
 
     if (action === 'cron_toggle') {
-      // Enable or disable a cron job â stored as a soft flag in settings
+      // Enable or disable a cron job — stored as a soft flag in settings
       const { jobKey, enabled } = body;
       if (!jobKey) return NextResponse.json({ error: 'jobKey required' }, { status: 400 });
       await supabaseAdmin.from('settings').upsert(
@@ -630,7 +630,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: true });
     }
 
-    // ââ Chat moderation actions ââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ── Chat moderation actions ────────────────────────────────────────────────
     if (action === 'chat_mute') {
       const { targetUserId, reason, durationMinutes } = body;
       if (!targetUserId) return NextResponse.json({ error: 'targetUserId required' }, { status: 400 });
@@ -696,7 +696,7 @@ export async function POST(req) {
       if (!targetUserId || !amount) return NextResponse.json({ error: 'targetUserId and amount required' }, { status: 400 });
       const { data: profile } = await supabaseAdmin.from('profiles').select('xp').eq('id', targetUserId).single();
       const newXp = Math.max(0, (profile?.xp || 0) + parseInt(amount));
-      // Compute rank â reuse same tier data
+      // Compute rank — reuse same tier data
       const RANKS = [
         { title: 'Degenerate', minXp: 0 }, { title: 'Square', minXp: 100 },
         { title: 'Handicapper', minXp: 300 }, { title: 'Sharp', minXp: 700 },

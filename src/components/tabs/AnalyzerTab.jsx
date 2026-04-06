@@ -6,9 +6,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// GOAT PICK CARD â premium result renderer
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
+// GOAT PICK CARD — premium result renderer
+// ────────────────────────────────────────────────────────────────────────────
 
 const CONF_STYLES = {
   ELITE:  { color: '#00D48B', bg: 'rgba(0,212,139,0.1)',  border: 'rgba(0,212,139,0.3)'  },
@@ -20,9 +20,9 @@ const CONF_STYLES = {
 // Strip markdown formatting and source URLs from text
 function stripMarkdown(text) {
   return (text || '')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')           // **bold** â plain
-    .replace(/\*([^*\n]{1,120})\*/g, '$1')        // *italic* â plain
-    .replace(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g, '$1') // [text](url) â text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')           // **bold** → plain
+    .replace(/\*([^*\n]{1,120})\*/g, '$1')        // *italic* → plain
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g, '$1') // [text](url) → text
     .replace(/https?:\/\/\S+/g, '')               // bare URLs
     .replace(/\s{2,}/g, ' ')                       // collapse extra spaces
     .trim();
@@ -45,7 +45,7 @@ function renderRichLines(text) {
   return filtered.map((line, i) => {
     if (!line.trim()) return <div key={i} style={{ height: '0.4rem' }} />;
 
-    // Section headers â ALL CAPS words followed by colon
+    // Section headers — ALL CAPS words followed by colon
     if (/^[A-Z][A-Z\s\/\-]{3,}:/.test(line)) {
       return (
         <div key={i} style={{
@@ -70,11 +70,11 @@ function renderRichLines(text) {
       );
     }
     // Dash bullets
-    if (/^[-â¢]\s/.test(line)) {
-      const body = stripMarkdown(line.replace(/^[-â¢]\s*/, ''));
+    if (/^[-•]\s/.test(line)) {
+      const body = stripMarkdown(line.replace(/^[-•]\s*/, ''));
       return (
         <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '3px' }}>
-          <span style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: '2px' }}>âº</span>
+          <span style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: '2px' }}>›</span>
           <span style={{ color: '#d0d0d0', fontSize: '0.87rem', lineHeight: 1.6 }}>{body}</span>
         </div>
       );
@@ -90,12 +90,12 @@ function renderRichLines(text) {
   });
 }
 
-// ââ BetOS PICK CARD â AI-Powered Pick Report ââââââââââââââââââââââââââââ
+// ── BetOS PICK CARD — AI-Powered Pick Report ────────────────────────────
 
 // Parse key metrics out of the AI text
-// ââ Shared extraction helpers (used by parseReport + history rows) ââââââââââââ
+// ── Shared extraction helpers (used by parseReport + history rows) ────────────
 
-// Robust confidence extractor â tries multiple AI output patterns
+// Robust confidence extractor — tries multiple AI output patterns
 function extractConf(text) {
   const t = text || '';
   // Pattern 1: "CONFIDENCE: HIGH" (canonical, enforced by system prompt)
@@ -125,7 +125,7 @@ function extractEdge(text) {
   return null;
 }
 
-// Clean prompt for display â strip context prefixes and "Run a full BetOS analysis on"
+// Clean prompt for display — strip context prefixes and "Run a full BetOS analysis on"
 function cleanPromptDisplay(prompt, maxLen = 72) {
   return (prompt || '')
     .replace(/^\[(?:Today|Target date|TOURNAMENT|EVENT|FUTURES)[^\]]*\]\n?/i, '')
@@ -138,16 +138,16 @@ function cleanPromptDisplay(prompt, maxLen = 72) {
 function parseReport(text) {
   const t = text || '';
 
-  // THE PICK â match "THE PICK:" followed by the actual bet on the same line
+  // THE PICK — match "THE PICK:" followed by the actual bet on the same line
   // Be careful NOT to capture date context like "for April 5, 2026" when the AI
-  // writes "Best Pick for April 5, 2026:" â only capture if line has team/odds content
+  // writes "Best Pick for April 5, 2026:" — only capture if line has team/odds content
   const pickM = t.match(/(?:^|\n)THE PICK\s*:\s*([^\n]{5,100})/im)
              || t.match(/(?:^|\n)(?:MY PICK|BEST PICK)\s*:\s*([^\n]{5,100})/im);
   let pick = pickM ? stripMarkdown(pickM[1]).trim() : null;
   // Sanity-check: reject if the "pick" looks like just a date phrase
   if (pick && /^for\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}\/)/i.test(pick)) pick = null;
 
-  // CONFIDENCE â use robust extractor
+  // CONFIDENCE — use robust extractor
   const conf = extractConf(t);
 
   // EDGE SCORE
@@ -157,11 +157,11 @@ function parseReport(text) {
   const oddsM = t.match(/(?:odds?|line|ml)[:\s]*([+-]\d{3,4})/i) || t.match(/([+-]\d{3,4})/);
   const odds  = oddsM ? oddsM[1] : null;
 
-  // MARKET IMPLIED PROB â matches both old "WIN PROBABILITY" and new "MARKET IMPLIED PROB"
+  // MARKET IMPLIED PROB — matches both old "WIN PROBABILITY" and new "MARKET IMPLIED PROB"
   const winPM = t.match(/(?:market\s*implied\s*prob(?:ability)?|win\s*prob(?:ability)?)[:\s]+(\d{1,3})%/i);
   const winProb = winPM ? parseInt(winPM[1]) : null;
 
-  // KEY FACTORS â numbered/bulleted items (max 5)
+  // KEY FACTORS — numbered/bulleted items (max 5)
   const factors = [];
   const lines = t.split('\n');
   let inFactors = false;
@@ -169,8 +169,8 @@ function parseReport(text) {
     const clean = stripMarkdown(line).trim();
     if (/^(key factors?|key reasons?|why this pick|edge factors?|analysis)[:\s]*$/i.test(clean)) { inFactors = true; continue; }
     if (inFactors) {
-      const bM = clean.match(/^[\d\-â¢âº*]\s+(.+)/) || (clean.match(/^[A-Z]/) && !clean.match(/^[A-Z]{4,}/));
-      const m  = clean.match(/^(?:[\dâ¢\-âº*]+\.?\s+)(.{10,})/);
+      const bM = clean.match(/^[\d\-•›*]\s+(.+)/) || (clean.match(/^[A-Z]/) && !clean.match(/^[A-Z]{4,}/));
+      const m  = clean.match(/^(?:[\d•\-›*]+\.?\s+)(.{10,})/);
       if (m) { factors.push(m[1].trim()); if (factors.length >= 5) break; }
       else if (clean && !/^[A-Z\s:]{5,}$/.test(clean) && factors.length > 0 && clean.length < 5) break;
     }
@@ -179,7 +179,7 @@ function parseReport(text) {
   if (factors.length === 0) {
     for (const line of lines) {
       const clean = stripMarkdown(line).trim();
-      const m = clean.match(/^(?:[\dâ¢\-âº]+\.?\s+)(.{15,})/);
+      const m = clean.match(/^(?:[\d•\-›]+\.?\s+)(.{15,})/);
       if (m) { factors.push(m[1].trim()); if (factors.length >= 5) break; }
     }
   }
@@ -191,7 +191,7 @@ function parseReport(text) {
   return { pick, conf, edge, odds, winProb, factors, sport };
 }
 
-// Confidence score â numeric
+// Confidence score → numeric
 function confToScore(conf) {
   return { ELITE: 95, HIGH: 78, MEDIUM: 58, LOW: 38 }[conf] || 60;
 }
@@ -234,17 +234,17 @@ function ConfGauge({ pct, color, label }) {
 // Edge factor icon
 function factorIcon(text) {
   const t = text.toLowerCase();
-  if (/injur|health|il |out |doubtful/i.test(t)) return 'ð';
-  if (/weather|wind|rain|cold|precip/i.test(t)) return 'ð¤';
-  if (/line|move|sharp|steam|clv/i.test(t)) return 'ð';
-  if (/public|fade|square/i.test(t)) return 'ð';
-  if (/rest|fatigue|travel|back.to.back/i.test(t)) return 'ð´';
-  if (/pitcher|starter|bullpen|goalie/i.test(t)) return 'â¾';
-  if (/trend|ats|over|under|total/i.test(t)) return 'ð';
-  if (/value|price|odds|number/i.test(t)) return 'ð°';
-  if (/home|away|field|court/i.test(t)) return 'ðï¸';
-  if (/streak|hot|cold|form/i.test(t)) return 'ð¥';
-  return 'â¡';
+  if (/injur|health|il |out |doubtful/i.test(t)) return '🚑';
+  if (/weather|wind|rain|cold|precip/i.test(t)) return '🌤';
+  if (/line|move|sharp|steam|clv/i.test(t)) return '📊';
+  if (/public|fade|square/i.test(t)) return '📉';
+  if (/rest|fatigue|travel|back.to.back/i.test(t)) return '😴';
+  if (/pitcher|starter|bullpen|goalie/i.test(t)) return '⚾';
+  if (/trend|ats|over|under|total/i.test(t)) return '📈';
+  if (/value|price|odds|number/i.test(t)) return '💰';
+  if (/home|away|field|court/i.test(t)) return '🏟️';
+  if (/streak|hot|cold|form/i.test(t)) return '🔥';
+  return '⚡';
 }
 
 function exportReportToPDF(parsed, result, prompt, runTime) {
@@ -294,8 +294,8 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
 <body>
   <div class="header">
     <div>
-      <div class="brand">ð¯ BetOSâ¢</div>
-      <div class="subtitle">AI-Powered Sports Betting OS Â· Pick Report</div>
+      <div class="brand">🎯 BetOS™</div>
+      <div class="subtitle">AI-Powered Sports Betting OS · Pick Report</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:12px;color:#888;">${ts}</div>
@@ -306,7 +306,7 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
 
   ${pick ? `
   <div class="pick-box">
-    <div class="pick-label">â¡ The Pick <span class="conf-badge">${conf || 'MEDIUM'}</span></div>
+    <div class="pick-label">⚡ The Pick <span class="conf-badge">${conf || 'MEDIUM'}</span></div>
     <div class="pick-text">${pick}</div>
   </div>` : ''}
 
@@ -335,15 +335,15 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
   </div>` : ''}
 
   <div class="disclaimer">
-    â ï¸ For entertainment and informational purposes only. BetOS reports are AI-generated analysis and do not constitute financial or gambling advice. Always gamble responsibly.
+    ⚠️ For entertainment and informational purposes only. BetOS reports are AI-generated analysis and do not constitute financial or gambling advice. Always gamble responsibly.
   </div>
 
   <div class="footer">
-    <span class="footer-ts">Generated ${ts} Â· BetOS Intelligence</span>
-    <span class="footer-brand">BetOSâ¢</span>
+    <span class="footer-ts">Generated ${ts} · BetOS Intelligence</span>
+    <span class="footer-brand">BetOS™</span>
   </div>
 
-  <button class="print-btn no-print" onclick="window.print()">ð¨ Save as PDF</button>
+  <button class="print-btn no-print" onclick="window.print()">🖨 Save as PDF</button>
 
   <script>
     window.onload = function() {
@@ -361,9 +361,9 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
   }
 }
 
-// ââ Team logo helpers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Team logo helpers ─────────────────────────────────────────────────────────
 
-// Map each team name to its sport â used to detect correct sport from team names
+// Map each team name to its sport — used to detect correct sport from team names
 const TEAM_SPORT_MAP = {
   // MLB
   'Arizona Diamondbacks':'mlb','Atlanta Braves':'mlb','Baltimore Orioles':'mlb',
@@ -469,7 +469,7 @@ const SPORT_ABBR_MAP = {
   },
 };
 
-// Detect sport from team name â searches per-sport maps with exact â case-insensitive â partial
+// Detect sport from team name — searches per-sport maps with exact → case-insensitive → partial
 function detectTeamSport(name) {
   if (!name) return null;
   if (TEAM_SPORT_MAP[name]) return TEAM_SPORT_MAP[name];
@@ -508,7 +508,7 @@ function getTeamAbbrForSport(sport, name) {
 
 function teamLogoUrl(sport, name) {
   if (!name) return null;
-  // Derive the correct sport from the team name itself â never trust the default 'mlb' fallback
+  // Derive the correct sport from the team name itself — never trust the default 'mlb' fallback
   const resolvedSport = detectTeamSport(name) || sport?.toLowerCase();
   if (!resolvedSport) return null;
   const abbr = getTeamAbbrForSport(resolvedSport, name);
@@ -519,12 +519,12 @@ function teamLogoUrl(sport, name) {
 // Extract "Away @ Home" matchup from a prompt string
 function extractMatchup(prompt) {
   if (!prompt) return { away: null, home: null };
-  const m = prompt.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-ââ]|\s*\(|,|\.\s|$)/i);
+  const m = prompt.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|,|\.\s|$)/i);
   if (!m) return { away: null, home: null };
   return { away: m[1].trim(), home: m[2].trim() };
 }
 
-// ââ Quick "Add as Pick" helper â detects bet type from pick text ââââââââââââââ
+// ── Quick "Add as Pick" helper — detects bet type from pick text ──────────────
 function detectBetType(pickText) {
   if (!pickText) return 'Moneyline';
   const t = pickText.toLowerCase();
@@ -562,7 +562,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
   const homeLogoUrl = homeName ? teamLogoUrl(sportKey, homeName) : null;
   const hasMatchup  = !!(awayName && homeName);
 
-  // ââ Export as JPG (via /api/og/pick) ââââââââââââââââââââââââââââââââââââ
+  // ── Export as JPG (via /api/og/pick) ────────────────────────────────────
   async function downloadPickImage() {
     setExporting(true);
     try {
@@ -582,7 +582,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
       if (!res.ok) throw new Error('Image generation failed');
       const pngBlob = await res.blob();
 
-      // Convert PNG â JPG using canvas for smaller file size
+      // Convert PNG → JPG using canvas for smaller file size
       const img = new Image();
       const pngUrl = URL.createObjectURL(pngBlob);
       await new Promise((resolve, reject) => {
@@ -608,7 +608,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       }, 'image/jpeg', 0.93);
     } catch (e) {
-      alert('Image export failed â try again in a moment.');
+      alert('Image export failed — try again in a moment.');
     } finally {
       setExporting(false);
       setExportOpen(false);
@@ -623,7 +623,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
       boxShadow: '0 4px 40px rgba(255,184,0,0.06)',
     }}>
 
-      {/* ââ HERO HEADER ââ */}
+      {/* ── HERO HEADER ── */}
       <div style={{
         padding: '1.1rem 1.4rem',
         background: 'linear-gradient(135deg, rgba(255,184,0,0.08) 0%, rgba(255,140,0,0.04) 50%, rgba(0,0,0,0) 100%)',
@@ -646,7 +646,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '1.5rem', flexShrink: 0,
               boxShadow: '0 0 14px rgba(255,184,0,0.2)',
-            }}>ð¯</div>
+            }}>🎯</div>
             <div>
               <div style={{
                 fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -658,8 +658,8 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                 BetOS PICK REPORT
               </div>
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.62rem', marginTop: '1px', letterSpacing: '0.04em' }}>
-                Live Intel Â· {ts}{runTime ? ` Â· ${runTime}s runtime` : ''}
-                {sport && <span style={{ marginLeft: '6px', color: 'rgba(255,184,0,0.5)', fontWeight: 700 }}>Â· {sport}</span>}
+                Live Intel · {ts}{runTime ? ` · ${runTime}s runtime` : ''}
+                {sport && <span style={{ marginLeft: '6px', color: 'rgba(255,184,0,0.5)', fontWeight: 700 }}>· {sport}</span>}
               </div>
             </div>
           </div>
@@ -678,7 +678,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         </div>
       </div>
 
-      {/* ââ MATCHUP BUG â team logos + names ââ */}
+      {/* ── MATCHUP BUG — team logos + names ── */}
       {hasMatchup && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -693,7 +693,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                 style={{ objectFit: 'contain', filter: 'drop-shadow(0 2px 8px rgba(255,255,255,0.08))' }}
                 onError={e => { e.target.style.display = 'none'; }} />
             ) : (
-              <div style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>ðï¸</div>
+              <div style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🏟️</div>
             )}
             <div style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, color: '#e0e0e0', fontSize: '0.78rem', textAlign: 'center' }}>
               {awayName?.split(' ').pop() || awayName}
@@ -713,7 +713,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                 style={{ objectFit: 'contain', filter: 'drop-shadow(0 2px 8px rgba(255,255,255,0.08))' }}
                 onError={e => { e.target.style.display = 'none'; }} />
             ) : (
-              <div style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>ðï¸</div>
+              <div style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🏟️</div>
             )}
             <div style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, color: '#e0e0e0', fontSize: '0.78rem', textAlign: 'center' }}>
               {homeName?.split(' ').pop() || homeName}
@@ -723,7 +723,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         </div>
       )}
 
-      {/* ââ THE PICK HERO ââ */}
+      {/* ── THE PICK HERO ── */}
       {pick && (
         <div style={{
           margin: '1.25rem 1.4rem',
@@ -771,7 +771,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         </div>
       )}
 
-      {/* ââ METRICS ROW ââ */}
+      {/* ── METRICS ROW ── */}
       {(conf || edge || winProb) && (
         <div style={{ display: 'flex', gap: '10px', padding: '0 1.4rem 1.25rem', flexWrap: 'wrap' }}>
 
@@ -817,7 +817,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         </div>
       )}
 
-      {/* ââ KEY FACTORS ââ */}
+      {/* ── KEY FACTORS ── */}
       {factors.length > 0 && (
         <div style={{ padding: '0 1.4rem 1.25rem' }}>
           <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, marginBottom: '8px' }}>
@@ -839,7 +839,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         </div>
       )}
 
-      {/* ââ FULL ANALYSIS (collapsible) ââ */}
+      {/* ── FULL ANALYSIS (collapsible) ── */}
       <div style={{ padding: '0 1.4rem 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <button
           onClick={() => setAnalysisOpen(v => !v)}
@@ -850,8 +850,8 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
             fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
           }}
         >
-          <span>ð Full Analysis</span>
-          <span style={{ fontSize: '0.65rem', transition: 'transform 0.2s', transform: analysisOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>â¼</span>
+          <span>📄 Full Analysis</span>
+          <span style={{ fontSize: '0.65rem', transition: 'transform 0.2s', transform: analysisOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
         </button>
 
         {analysisOpen && (
@@ -861,7 +861,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         )}
       </div>
 
-      {/* ââ ADD AS PICK INLINE PANEL ââ */}
+      {/* ── ADD AS PICK INLINE PANEL ── */}
       {addOpen && pick && (
         <div style={{
           borderTop: '1px solid rgba(74,222,128,0.15)',
@@ -870,7 +870,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         }}>
           {addDone ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4ade80', fontWeight: 700, fontSize: '0.85rem' }}>
-              â Pick logged! Head to My Picks to track it.
+              ✅ Pick logged! Head to My Picks to track it.
             </div>
           ) : (
             <>
@@ -928,7 +928,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                         book: 'BetOS',
                         result: 'PENDING',
                         profit: null,
-                        notes: `${unitSize}u | BetOS AI Pick${conf ? ` â ${conf} confidence` : ''}${edge ? `, edge ${edge}/10` : ''}`,
+                        notes: `${unitSize}u | BetOS AI Pick${conf ? ` — ${conf} confidence` : ''}${edge ? `, edge ${edge}/10` : ''}`,
                       });
                       setAddDone(true);
                     } catch { /* silent */ }
@@ -942,7 +942,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                     opacity: addSaving || !user?.id ? 0.5 : 1, transition: 'opacity 0.15s',
                   }}
                 >
-                  {addSaving ? 'Savingâ¦' : `+ Log ${unitSize}u Pick`}
+                  {addSaving ? 'Saving…' : `+ Log ${unitSize}u Pick`}
                 </button>
                 {!user?.id && (
                   <span style={{ color: '#666', fontSize: '0.72rem' }}>Sign in to log picks</span>
@@ -954,7 +954,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         </div>
       )}
 
-      {/* ââ ODDS DISCLAIMER ââ */}
+      {/* ── ODDS DISCLAIMER ── */}
       <div style={{
         margin: '0 1.4rem 0.75rem',
         padding: '6px 10px',
@@ -963,13 +963,13 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
         border: '1px solid rgba(255,184,0,0.15)',
         display: 'flex', alignItems: 'flex-start', gap: '6px',
       }}>
-        <span style={{ fontSize: '0.72rem', flexShrink: 0, marginTop: '1px' }}>â ï¸</span>
+        <span style={{ fontSize: '0.72rem', flexShrink: 0, marginTop: '1px' }}>⚠️</span>
         <span style={{ fontSize: '0.62rem', color: 'rgba(255,200,80,0.75)', lineHeight: 1.5 }}>
           AI-generated odds may be stale or incorrect. Always verify lines on your sportsbook (DraftKings, FanDuel, etc.) before placing any bet. BetOS analysis is for informational purposes only.
         </span>
       </div>
 
-      {/* ââ FOOTER ââ */}
+      {/* ── FOOTER ── */}
       <div style={{
         borderTop: '1px solid rgba(255,184,0,0.08)', padding: '0.65rem 1.4rem',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -979,7 +979,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
           {prompt}
         </span>
 
-        {/* Add as Pick button â shown when AI found a specific pick */}
+        {/* Add as Pick button — shown when AI found a specific pick */}
         {pick && !addDone && (
           <button
             onClick={() => { setAddOpen(v => !v); setAddDone(false); }}
@@ -996,7 +996,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
           </button>
         )}
         {pick && addDone && (
-          <span style={{ color: '#4ade80', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>â Logged</span>
+          <span style={{ color: '#4ade80', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>✓ Logged</span>
         )}
 
         {/* Export dropdown */}
@@ -1012,7 +1012,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
               display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.12s',
             }}
           >
-            â Export {exportOpen ? 'â²' : 'â¼'}
+            ↗ Export {exportOpen ? '▲' : '▼'}
           </button>
 
           {exportOpen && (
@@ -1037,10 +1037,10 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                 onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
               >
-                <span style={{ fontSize: '1rem' }}>ð¸</span>
+                <span style={{ fontSize: '1rem' }}>📸</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                  <span>{exporting ? 'Generatingâ¦' : 'Download Image'}</span>
-                  <span style={{ fontSize: '0.58rem', color: '#555' }}>1200Ã628 JPG</span>
+                  <span>{exporting ? 'Generating…' : 'Download Image'}</span>
+                  <span style={{ fontSize: '0.58rem', color: '#555' }}>1200×628 JPG</span>
                 </div>
               </button>
 
@@ -1059,7 +1059,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
               >
-                <span style={{ fontSize: '1rem' }}>ð</span>
+                <span style={{ fontSize: '1rem' }}>📄</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
                   <span>Export PDF</span>
                   <span style={{ fontSize: '0.58rem', color: '#555' }}>Full analysis report</span>
@@ -1074,31 +1074,31 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
           background: 'linear-gradient(90deg, #FFD700, #FF9500)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
           flexShrink: 0,
-        }}>BetOSâ¢</span>
+        }}>BetOS™</span>
       </div>
     </div>
   );
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// 1. BetOS LIVE â command center
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
+// 1. BetOS LIVE — command center
+// ────────────────────────────────────────────────────────────────────────────
 
 const SPORT_PRESETS = [
-  { emoji: 'â¾', label: 'MLB Today',     color: '#E31937', prompt: 'Find me the sharpest MLB pick for today. Give me the best edge on tonight\'s slate â line movement, CLV, key matchup factors, full analysis.' },
-  { emoji: 'ð', label: 'NBA Tonight',   color: '#F58426', prompt: 'Analyze tonight\'s NBA slate. Find the single sharpest pick â rest spots, pace mismatches, line movement vs closing number.' },
-  { emoji: 'ð', label: 'NFL This Week', color: '#013369', prompt: 'Give me the sharpest NFL pick this week. Edge metrics, CLV projection, public fading angle, full BetOS breakdown.' },
-  { emoji: 'ð', label: 'NHL Slate',     color: '#00528C', prompt: 'Run a full BetOS scan on tonight\'s NHL slate. Find the best moneyline or puck line value.' },
-  { emoji: 'â³', label: 'Golf Pick',     color: '#4ade80', prompt: 'Give me the sharpest golf betting angle â top-10 finish, outright winner, or head-to-head matchup. Consider form, course fit, and odds value.' },
-  { emoji: 'ð¥', label: 'Best Bet Now',  color: '#FF6B35', prompt: 'Scan ALL sports right now â MLB, NBA, NFL, NHL â and find me the single best bet with the highest true edge anywhere on the board today. Don\'t limit to one sport.' },
+  { emoji: '⚾', label: 'MLB Today',     color: '#E31937', prompt: 'Find me the sharpest MLB pick for today. Give me the best edge on tonight\'s slate — line movement, CLV, key matchup factors, full analysis.' },
+  { emoji: '🏀', label: 'NBA Tonight',   color: '#F58426', prompt: 'Analyze tonight\'s NBA slate. Find the single sharpest pick — rest spots, pace mismatches, line movement vs closing number.' },
+  { emoji: '🏈', label: 'NFL This Week', color: '#013369', prompt: 'Give me the sharpest NFL pick this week. Edge metrics, CLV projection, public fading angle, full BetOS breakdown.' },
+  { emoji: '🏒', label: 'NHL Slate',     color: '#00528C', prompt: 'Run a full BetOS scan on tonight\'s NHL slate. Find the best moneyline or puck line value.' },
+  { emoji: '⛳', label: 'Golf Pick',     color: '#4ade80', prompt: 'Give me the sharpest golf betting angle — top-10 finish, outright winner, or head-to-head matchup. Consider form, course fit, and odds value.' },
+  { emoji: '🔥', label: 'Best Bet Now',  color: '#FF6B35', prompt: 'Scan ALL sports right now — MLB, NBA, NFL, NHL — and find me the single best bet with the highest true edge anywhere on the board today. Don\'t limit to one sport.' },
 ];
 
 const CTX_OPTIONS = [
-  { id: 'today',      label: 'Today',       emoji: 'ð', input: false },
-  { id: 'tomorrow',   label: 'Tomorrow',    emoji: 'ð', input: false },
-  { id: 'date',       label: 'Pick Date',   emoji: 'ð',  input: 'date',   placeholder: 'Target date...' },
-  { id: 'tournament', label: 'Tournament',  emoji: 'ð', input: 'text',   placeholder: 'e.g. The Masters, NCAA Tournament...' },
-  { id: 'futures',    label: 'Futures',     emoji: 'ð®', input: 'text',   placeholder: 'e.g. Masters winner, NFL MVP 26/27...' },
+  { id: 'today',      label: 'Today',       emoji: '📅', input: false },
+  { id: 'tomorrow',   label: 'Tomorrow',    emoji: '🌅', input: false },
+  { id: 'date',       label: 'Pick Date',   emoji: '🗓',  input: 'date',   placeholder: 'Target date...' },
+  { id: 'tournament', label: 'Tournament',  emoji: '🏆', input: 'text',   placeholder: 'e.g. The Masters, NCAA Tournament...' },
+  { id: 'futures',    label: 'Futures',     emoji: '🔮', input: 'text',   placeholder: 'e.g. Masters winner, NFL MVP 26/27...' },
 ];
 
 function buildContextualPrompt(base, ctx, ctxInput) {
@@ -1114,7 +1114,7 @@ function buildContextualPrompt(base, ctx, ctxInput) {
   return (prefixes[ctx] || '') + base;
 }
 
-// ââ Report persistence âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Report persistence ─────────────────────────────────────────────────────────
 const REPORTS_KEY = 'betos_reports';
 function saveReport(report) {
   try {
@@ -1173,9 +1173,8 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   const taRef        = useRef(null);
   const timerRefs    = useRef([]);
   const startTime    = useRef(null);
-  const [retrying, setRetrying] = useState(false);
-  const retryRef     = useRef(false);
-  const lastPromptRef = useRef('');
+  const retryRef     = useRef(false);   // true if we're in an auto-retry
+  const lastPromptRef = useRef('');     // tracks prompt for tab-return retry
 
   // Load history on mount
   useEffect(() => { setHistory(getReports()); }, []);
@@ -1241,7 +1240,6 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
     setResult('');
     setError('');
     setModel('');
-    setRetrying(false);
     const t0 = Date.now();
     try {
       const res = await fetch('/api/goatbot', {
@@ -1251,13 +1249,13 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'API error');
-      retryRef.current = false; // success â reset retry flag
+      retryRef.current = false; // success — reset retry flag
       const rt = Math.floor((Date.now() - t0) / 1000);
       setResult(data.result);
       setModel(data.model || 'BetOS AI');
       setRunTime(rt);
       // Extract team names from prompt for cross-tab linkage (Featured, History)
-      const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-ââ]|\s*\(|$)/i);
+      const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|$)/i);
       const report = {
         id: Date.now().toString(),
         prompt: base,
@@ -1273,7 +1271,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       setResultCollapsed(false); // auto-expand new report
       setExpandedHistoryId(null);
     } catch (e) {
-      // ââ Auto-retry on browser-cancelled network errors ââââââââââââââââââââ
+      // ── Auto-retry on browser-cancelled network errors ────────────────────
       // When a user switches browser tabs, some browsers kill long-running fetches.
       // "Load failed" / "Failed to fetch" = browser abort, not a real error.
       // Auto-retry once silently instead of showing a confusing error.
@@ -1283,7 +1281,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         || e.name === 'TypeError';
       if (isNetworkAbort && !retryRef.current) {
         retryRef.current = true;
-        setError(''); // don't show error â silently retry
+        setError(''); // don't show error — silently retry
         setLoading(false);
         // Brief pause, then re-fire the same prompt
         setTimeout(() => runBetOS(base), 800);
@@ -1295,11 +1293,11 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
     setLoading(false);
   }
 
-  // ââ Tab visibility: if user returns while loading was killed, re-fire âââââââââ
+  // ── Tab visibility: if user returns while loading was killed, re-fire ─────────
   useEffect(() => {
     function handleVisibility() {
       if (document.visibilityState === 'visible' && !loading && retryRef.current && lastPromptRef.current) {
-        // Tab came back and we were in a retry state â fire again
+        // Tab came back and we were in a retry state — fire again
         runBetOS(lastPromptRef.current);
       }
     }
@@ -1371,7 +1369,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-      {/* ââ COMMAND CENTER âââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ── COMMAND CENTER ─────────────────────────────────────────── */}
       <div style={{
         background: 'linear-gradient(160deg, #0f0b00 0%, #0a0a0f 60%)',
         border: '1px solid rgba(255,184,0,0.22)',
@@ -1388,7 +1386,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           background: 'rgba(255,184,0,0.025)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '1.9rem', lineHeight: 1 }}>ð¯</span>
+            <span style={{ fontSize: '1.9rem', lineHeight: 1 }}>🎯</span>
             <div>
               <div style={{ fontWeight: 900, color: '#FFB800', fontSize: '1.1rem', letterSpacing: '-0.02em', lineHeight: 1 }}>
                 BetOS
@@ -1403,7 +1401,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Engine</div>
               <div style={{ color: 'rgba(255,184,0,0.7)', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', marginTop: '1px' }}>
-                GROK-4 Â· LIVE SEARCH
+                GROK-4 · LIVE SEARCH
               </div>
             </div>
             <div style={{
@@ -1422,7 +1420,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         {/* Sport presets */}
         <div style={{ padding: '0.9rem 1.5rem 0' }}>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: '0.55rem' }}>
-            â¡ Quick Fire
+            ⚡ Quick Fire
           </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {SPORT_PRESETS.map(sp => (
@@ -1457,10 +1455,10 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           </div>
         </div>
 
-        {/* ââ CONTEXT PICKER ââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* ── CONTEXT PICKER ──────────────────────────────────────────── */}
         <div style={{ padding: '0.75rem 1.5rem 0' }}>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-            ð Pick Context
+            🗓 Pick Context
           </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
             {CTX_OPTIONS.map(opt => (
@@ -1522,7 +1520,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
               flexShrink: 0, alignSelf: 'flex-start',
               userSelect: 'none', letterSpacing: '-0.03em',
             }}>
-              GOAT&nbsp;âº
+              GOAT&nbsp;›
             </div>
 
             <textarea
@@ -1535,7 +1533,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                   runBetOS();
                 }
               }}
-              placeholder={`"Find the sharpest edge on tonight's MLB slate"  Â·  "Analyze Dodgers vs Padres, I like the under"  Â·  "Best dog on the board right now"`}
+              placeholder={`"Find the sharpest edge on tonight's MLB slate"  ·  "Analyze Dodgers vs Padres, I like the under"  ·  "Best dog on the board right now"`}
               rows={3}
               style={{
                 flex: 1,
@@ -1576,18 +1574,18 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                 onMouseEnter={e => { if (canFire) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(255,149,0,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = canFire ? '0 4px 20px rgba(255,149,0,0.4)' : 'none'; }}
               >
-                {loading ? 'Â· Â· Â·' : 'â¶ FIRE'}
+                {loading ? '· · ·' : '▶ FIRE'}
               </button>
             </div>
           </div>
 
           <div style={{ marginTop: '6px', color: 'var(--text-muted)', fontSize: '0.62rem', textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>
-            ââµ to run
+            ⌘↵ to run
           </div>
         </div>
       </div>
 
-      {/* ââ LOADING â animated terminal steps + ETA ââââââââââââââââ */}
+      {/* ── LOADING — animated terminal steps + ETA ──────────────── */}
       {loading && (
         <div style={{
           background: '#050505',
@@ -1601,7 +1599,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
               color: '#FFB800', fontSize: '0.68rem',
               letterSpacing: '0.15em', textTransform: 'uppercase',
             }}>
-              â BetOS ACTIVATING
+              ◈ BetOS ACTIVATING
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ textAlign: 'right' }}>
@@ -1609,7 +1607,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                   {elapsed}s
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.6rem', marginTop: '1px' }}>
-                  ~15â30s typical
+                  ~15–30s typical
                 </div>
               </div>
               {/* Progress bar */}
@@ -1640,7 +1638,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                     color: done ? '#4ade80' : active ? '#FFB800' : '#333',
                     fontSize: done ? '0.8rem' : '0.7rem',
                   }}>
-                    {done ? 'â' : active ? 'â¶' : 'â'}
+                    {done ? '✓' : active ? '▶' : '○'}
                   </span>
                   <span style={{
                     color: done ? '#4ade80' : active ? '#e0e0e0' : '#444',
@@ -1653,7 +1651,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                       color: '#FFB800', fontSize: '0.65rem',
                       letterSpacing: '0.2em', marginLeft: '2px',
                     }}>
-                      âââ
+                      ●●●
                     </span>
                   )}
                 </div>
@@ -1663,7 +1661,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         </div>
       )}
 
-      {/* ââ ERROR ââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ── ERROR ──────────────────────────────────────────────────── */}
       {error && (
         <div style={{
           background: 'rgba(248,113,113,0.04)',
@@ -1672,16 +1670,16 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           padding: '1rem 1.25rem',
           display: 'flex', gap: '12px',
         }}>
-          <span style={{ color: '#f87171', fontSize: '1rem', flexShrink: 0, marginTop: '1px' }}>â</span>
+          <span style={{ color: '#f87171', fontSize: '1rem', flexShrink: 0, marginTop: '1px' }}>✕</span>
           <div>
             <div style={{ color: '#f87171', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>Analysis Failed</div>
             <div style={{ color: 'rgba(248,113,113,0.85)', fontSize: '0.8rem' }}>{error}</div>
-            {(error?.includes('providers')||error?.includes('503')) && <div style={{ color: 'rgba(248,113,113,0.55)', fontSize: '0.72rem', marginTop: '6px' }}>All AI providers failed — check API keys in Vercel env vars.</div>}{(error?.includes('Load failed')||error?.includes('Failed to fetch')) && <div style={{ color: 'rgba(248,113,113,0.55)', fontSize: '0.72rem', marginTop: '6px' }}>Network interrupted — retry will use server cache.</div>}
+            <div style={{ color: 'rgba(248,113,113,0.55)', fontSize: '0.72rem', marginTop: '6px' }}>Ensure XAI_API_KEY is set in .env.local and restart the server.</div>
           </div>
         </div>
       )}
 
-      {/* ââ GET STARTED (empty state) ââââââââââââââââââââââââââââââ */}
+      {/* ── GET STARTED (empty state) ────────────────────────────── */}
       {!loading && !result && !error && history.length === 0 && (
         <div style={{
           background: 'linear-gradient(160deg, #0a0800 0%, #080810 100%)',
@@ -1690,7 +1688,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           padding: '2.5rem 2rem',
           textAlign: 'center',
         }}>
-          <div style={{ fontSize: '2.8rem', marginBottom: '1rem', lineHeight: 1 }}>ð¯</div>
+          <div style={{ fontSize: '2.8rem', marginBottom: '1rem', lineHeight: 1 }}>🎯</div>
           <div style={{ color: 'rgba(255,184,0,0.85)', fontWeight: 900, fontSize: '1rem', letterSpacing: '0.06em', marginBottom: '6px' }}>
             BetOS READY
           </div>
@@ -1699,9 +1697,9 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           </div>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
             {[
-              { emoji: 'â¾', label: 'Best MLB tonight' },
-              { emoji: 'ð', label: 'Sharp NBA angle' },
-              { emoji: 'ð¥', label: 'Best bet right now' },
+              { emoji: '⚾', label: 'Best MLB tonight' },
+              { emoji: '🏀', label: 'Sharp NBA angle' },
+              { emoji: '🔥', label: 'Best bet right now' },
             ].map(tip => (
               <button
                 key={tip.label}
@@ -1719,7 +1717,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         </div>
       )}
 
-      {/* ââ RESULT (collapsible) âââââââââââââââââââââââââââââââââââââ */}
+      {/* ── RESULT (collapsible) ───────────────────────────────────── */}
       {result && !loading && (
         <div style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,184,0,0.25)', borderRadius: '12px', overflow: 'hidden' }}>
           {/* Collapse header */}
@@ -1728,7 +1726,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
             style={{ width: '100%', padding: '0.75rem 1.25rem', background: 'rgba(255,184,0,0.04)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-              <span style={{ fontSize: '1rem' }}>ð¯</span>
+              <span style={{ fontSize: '1rem' }}>🎯</span>
               <div style={{ minWidth: 0, textAlign: 'left' }}>
                 <div style={{ color: 'var(--gold)', fontWeight: 800, fontSize: '0.78rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>BetOS Pick Report</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '360px' }}>
@@ -1753,7 +1751,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                   </span>
                 ) : null;
               })()}
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', transition: 'transform 0.2s', display: 'inline-block', transform: resultCollapsed ? 'rotate(0deg)' : 'rotate(180deg)' }}>â¼</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', transition: 'transform 0.2s', display: 'inline-block', transform: resultCollapsed ? 'rotate(0deg)' : 'rotate(180deg)' }}>▼</span>
             </div>
           </button>
           {/* Full report content */}
@@ -1765,7 +1763,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         </div>
       )}
 
-      {/* ââ HISTORY PANEL â collapsible report cards âââââââââââââââââ */}
+      {/* ── HISTORY PANEL — collapsible report cards ───────────────── */}
       {history.length > 0 && (
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
           {/* Section header */}
@@ -1774,13 +1772,13 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
             style={{ width: '100%', padding: '0.75rem 1.25rem', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>ð</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>🗂</span>
               <span style={{ color: 'var(--text-secondary)', fontWeight: 700, fontSize: '0.82rem' }}>GOAT History</span>
               <span style={{ background: 'rgba(255,184,0,0.12)', color: 'var(--gold)', borderRadius: '10px', padding: '1px 8px', fontSize: '0.68rem', fontWeight: 800 }}>
                 {history.length}
               </span>
             </div>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{showHistory ? 'â² Hide' : 'â¼ Show'}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{showHistory ? '▲ Hide' : '▼ Show'}</span>
           </button>
 
           {showHistory && (
@@ -1788,7 +1786,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
               {history.map((entry, idx) => {
                 const conf = extractConf(entry.result);
                 const confColor = { ELITE: '#00D48B', HIGH: '#4ade80', MEDIUM: '#FFB800', LOW: '#888' }[conf] || '#888';
-                // Robust pick extraction â reject date phrases like "for April 5, 2026"
+                // Robust pick extraction — reject date phrases like "for April 5, 2026"
                 const rawPick = (entry.result || '').match(/(?:^|\n)THE PICK\s*:\s*([^\n]{5,100})/im)?.[1]?.trim()
                              || (entry.result || '').match(/(?:^|\n)(?:MY PICK|BEST PICK)\s*:\s*([^\n]{5,100})/im)?.[1]?.trim();
                 const pickLine = (rawPick && !/^for\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d)/i.test(rawPick))
@@ -1804,7 +1802,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                     key={entry.id}
                     style={{ borderTop: idx > 0 ? '1px solid var(--border-subtle)' : 'none' }}
                   >
-                    {/* Row header â always visible */}
+                    {/* Row header — always visible */}
                     <button
                       onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
                       style={{
@@ -1814,13 +1812,13 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                       onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
                       onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'none'; }}
                     >
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', flexShrink: 0 }}>ð¯</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', flexShrink: 0 }}>🎯</span>
                       <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {pickLine ? `â ${pickLine}` : `â ${cleanPromptDisplay(entry.prompt, 68)}`}
+                          {pickLine ? `→ ${pickLine}` : `→ ${cleanPromptDisplay(entry.prompt, 68)}`}
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.63rem', marginTop: '1px' }}>
-                          {timeLabel}{entry.runTime ? ` Â· ${entry.runTime}s` : ''}
+                          {timeLabel}{entry.runTime ? ` · ${entry.runTime}s` : ''}
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -1833,7 +1831,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                             {conf}
                           </span>
                         )}
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>â¼</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
                       </div>
                     </button>
                     {/* Expanded full report */}
@@ -1850,7 +1848,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         </div>
       )}
 
-      {/* ââ LIVE X FEED ââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {/* ── LIVE X FEED ────────────────────────────────────────────── */}
       <div style={{
         background: 'var(--bg-surface)', border: '1px solid var(--border)',
         borderRadius: '12px', overflow: 'hidden',
@@ -1861,7 +1859,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           borderBottom: showFeed ? '1px solid var(--border)' : 'none',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '1rem' }}>ð¡</span>
+            <span style={{ fontSize: '1rem' }}>📡</span>
             <div>
               <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.85rem' }}>Live Sports Intel</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '1px' }}>
@@ -1887,10 +1885,10 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                 opacity: feedLoading ? 0.6 : 1, transition: 'all 0.12s',
               }}
             >
-              {feedLoading ? 'â³ Loading...' : 'â³ Refresh Feed'}
+              {feedLoading ? '⟳ Loading...' : '⟳ Refresh Feed'}
             </button>
             {showFeed && (
-              <button onClick={() => setShowFeed(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>â</button>
+              <button onClick={() => setShowFeed(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
             )}
           </div>
         </div>
@@ -1915,7 +1913,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                         background: 'rgba(255,184,0,0.06)', border: '1px solid rgba(255,184,0,0.15)',
                         borderRadius: '4px', padding: '2px 8px', fontSize: '0.7rem', color: 'var(--gold)',
                       }}>
-                        â¡ {item.angle}
+                        ⚡ {item.angle}
                       </div>
                     )}
                   </div>
@@ -1926,7 +1924,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
             {/* News Chat */}
             <div style={{ borderTop: '1px solid var(--border)', padding: '1rem 1.25rem', background: 'rgba(255,184,0,0.02)' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.65rem', fontWeight: 700 }}>
-                ð¬ Ask about the news
+                💬 Ask about the news
               </div>
               {chatMessages.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px', maxHeight: '200px', overflowY: 'auto' }}>
@@ -1946,7 +1944,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                   ))}
                   {chatLoading && (
                     <div style={{ padding: '0.5rem 0.85rem', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', alignSelf: 'flex-start' }}>
-                      <span style={{ color: '#FFB800', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>âââ</span>
+                      <span style={{ color: '#FFB800', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>●●●</span>
                     </div>
                   )}
                 </div>
@@ -1985,9 +1983,9 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   );
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 // 2. FILTER ANALYSIS
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 
 function FilterAnalysis({ picks }) {
   const settled = picks.filter(p => p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH');
@@ -2049,7 +2047,7 @@ function FilterAnalysis({ picks }) {
   }, [settled]);
 
   if (settled.length === 0) {
-    return <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No settled picks yet â results will appear here after you log wins and losses.</div>;
+    return <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No settled picks yet — results will appear here after you log wins and losses.</div>;
   }
 
   const barColor = (val) => val >= 0 ? '#4ade80' : '#f87171';
@@ -2133,9 +2131,9 @@ function FilterAnalysis({ picks }) {
   );
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 // 3. KELLY CALCULATOR
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 
 function KellyCalculator() {
   const [bankroll, setBankroll]   = useState(1000);
@@ -2194,7 +2192,7 @@ function KellyCalculator() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.8rem' }}>
         {[
           { label: 'Edge', value: `${result.edge}%`, color: parseFloat(result.edge) > 0 ? '#4ade80' : '#f87171' },
-          { label: 'Expected Value', value: `+${result.ev}Â¢ per $1`, color: parseFloat(result.ev) > 0 ? '#4ade80' : '#f87171' },
+          { label: 'Expected Value', value: `+${result.ev}¢ per $1`, color: parseFloat(result.ev) > 0 ? '#4ade80' : '#f87171' },
           { label: 'Full Kelly', value: `${result.kelly}%`, color: '#FFB800' },
           { label: `${(fraction * 100).toFixed(0)}% Kelly Wager`, value: `$${result.wager}`, color: result.isPositive ? '#FFB800' : '#f87171' },
         ].map(({ label, value, color }) => (
@@ -2207,21 +2205,21 @@ function KellyCalculator() {
 
       {!result.isPositive && (
         <div style={{ background: '#2b0d0d', border: '1px solid #991b1b', borderRadius: '8px', padding: '0.8rem 1rem', color: '#f87171', fontSize: '0.85rem' }}>
-          â ï¸ Negative Kelly â no edge at these odds with this win%. Pass this bet.
+          ⚠️ Negative Kelly — no edge at these odds with this win%. Pass this bet.
         </div>
       )}
       {result.isPositive && (
         <div style={{ background: '#0d2b0d', border: '1px solid #166534', borderRadius: '8px', padding: '0.8rem 1rem', color: '#4ade80', fontSize: '0.85rem' }}>
-          â Positive edge! Bet ${result.wager} on ${bankroll} bankroll ({result.fractional}% of roll).
+          ✅ Positive edge! Bet ${result.wager} on ${bankroll} bankroll ({result.fractional}% of roll).
         </div>
       )}
     </div>
   );
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 // 4. HEAD-TO-HEAD SCORER
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 
 const FACTORS = [
   { key: 'record', label: 'Season Record / Form' },
@@ -2282,7 +2280,7 @@ function HeadToHead() {
       {/* Factor Sliders */}
       <div className="card" style={{ padding: '1.3rem' }}>
         <p style={{ color: '#888', fontSize: '0.78rem', marginBottom: '1rem' }}>
-          Score each factor 1â10 for each team. Higher = stronger edge.
+          Score each factor 1–10 for each team. Higher = stronger edge.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
           {FACTORS.map(f => (
@@ -2330,10 +2328,10 @@ function HeadToHead() {
         {winner ? (
           <div style={{ background: '#0d2b0d', border: '1px solid #166534', borderRadius: '8px', padding: '0.9rem 1.1rem' }}>
             <p style={{ color: '#4ade80', fontWeight: 700, fontSize: '1rem' }}>
-              ð Edge: <span style={{ color: totals.a > totals.b ? '#60a5fa' : '#f472b6' }}>{winner}</span>
+              🏆 Edge: <span style={{ color: totals.a > totals.b ? '#60a5fa' : '#f472b6' }}>{winner}</span>
             </p>
             <p style={{ color: '#888', fontSize: '0.82rem', marginTop: '4px' }}>
-              Confidence: {confidence.toFixed(0)}% â {confidence < 15 ? 'Lean (flip or pass)' : confidence < 30 ? 'Moderate edge' : 'Strong edge'}
+              Confidence: {confidence.toFixed(0)}% — {confidence < 15 ? 'Lean (flip or pass)' : confidence < 30 ? 'Moderate edge' : 'Strong edge'}
             </p>
           </div>
         ) : (
@@ -2344,9 +2342,9 @@ function HeadToHead() {
   );
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// 5. AI INSIGHTS â BETTING COACH
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
+// 5. AI INSIGHTS — BETTING COACH
+// ────────────────────────────────────────────────────────────────────────────
 
 const SEVERITY_COLOR  = { high: '#FF4560', medium: '#FF8C42', low: '#FFB800' };
 const STRENGTH_COLOR  = { strong: '#00D48B', moderate: '#4E9BF5', developing: '#9B6DFF' };
@@ -2383,7 +2381,7 @@ function BettingInsights({ picks }) {
   if (settled.length < 3) {
     return (
       <div className="surface" style={{ padding: '3rem', textAlign: 'center' }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>ð§ </div>
+        <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🧠</div>
         <p style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.5rem' }}>Log more picks to unlock AI Insights</p>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Need at least 3 settled picks. You have {settled.length} so far.</p>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.4rem' }}>The more picks you have, the sharper and more specific the analysis gets.</p>
@@ -2399,7 +2397,7 @@ function BettingInsights({ picks }) {
           <p style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>AI Betting Coach</p>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
             {analyzed > 0
-              ? `Last analysis ran on ${analyzed} picks â run again any time to refresh`
+              ? `Last analysis ran on ${analyzed} picks — run again any time to refresh`
               : `${settled.length} settled picks ready to analyze`}
           </p>
         </div>
@@ -2409,13 +2407,13 @@ function BettingInsights({ picks }) {
           disabled={loading}
           style={{ padding: '0.65rem 1.5rem', fontSize: '0.9rem' }}
         >
-          {loading ? 'ð§  Analyzing...' : 'ð§  Run Analysis'}
+          {loading ? '🧠 Analyzing...' : '🧠 Run Analysis'}
         </button>
       </div>
 
       {loading && (
         <div className="surface" style={{ padding: '2.5rem', textAlign: 'center' }}>
-          <div style={{ color: 'var(--gold)', fontSize: '1.8rem', marginBottom: '0.75rem' }}>ð§ </div>
+          <div style={{ color: 'var(--gold)', fontSize: '1.8rem', marginBottom: '0.75rem' }}>🧠</div>
           <p style={{ color: 'var(--text-secondary)' }}>Reviewing your {settled.length} picks for patterns, leaks, and edges...</p>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.4rem' }}>Analyzing patterns with BetOS AI...</p>
         </div>
@@ -2450,7 +2448,7 @@ function BettingInsights({ picks }) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
-                  Overall Assessment Â· {analyzed} picks analyzed
+                  Overall Assessment · {analyzed} picks analyzed
                 </div>
                 <p style={{ color: 'var(--text-primary)', fontSize: '0.92rem', lineHeight: 1.6 }}>{insights.summary}</p>
               </div>
@@ -2462,7 +2460,7 @@ function BettingInsights({ picks }) {
             {insights.leaks?.length > 0 && (
               <div className="surface" style={{ padding: '1.25rem' }}>
                 <h3 style={{ fontWeight: 700, color: 'var(--red)', fontSize: '0.9rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  ð´ Leaks to Fix
+                  🔴 Leaks to Fix
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                   {insights.leaks.map((leak, i) => (
@@ -2484,7 +2482,7 @@ function BettingInsights({ picks }) {
             {insights.edges?.length > 0 && (
               <div className="surface" style={{ padding: '1.25rem' }}>
                 <h3 style={{ fontWeight: 700, color: 'var(--green)', fontSize: '0.9rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  ð¢ Your Edges
+                  🟢 Your Edges
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                   {insights.edges.map((edge, i) => (
@@ -2506,11 +2504,11 @@ function BettingInsights({ picks }) {
           {/* Patterns */}
           {insights.patterns?.length > 0 && (
             <div className="surface" style={{ padding: '1.25rem' }}>
-              <h3 style={{ fontWeight: 700, color: 'var(--blue)', fontSize: '0.9rem', marginBottom: '1rem' }}>ð Patterns</h3>
+              <h3 style={{ fontWeight: 700, color: 'var(--blue)', fontSize: '0.9rem', marginBottom: '1rem' }}>📈 Patterns</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {insights.patterns.map((p, i) => (
                   <div key={i} style={{ display: 'flex', gap: '10px' }}>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', flexShrink: 0 }}>â</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', flexShrink: 0 }}>→</span>
                     <div>
                       <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.85rem' }}>{p.title}:</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.83rem', marginLeft: '5px' }}>{p.detail}</span>
@@ -2524,7 +2522,7 @@ function BettingInsights({ picks }) {
           {/* Recommendations */}
           {insights.recommendations?.length > 0 && (
             <div className="surface" style={{ padding: '1.25rem', borderColor: 'rgba(255,184,0,0.2)' }}>
-              <h3 style={{ fontWeight: 700, color: 'var(--gold)', fontSize: '0.9rem', marginBottom: '1rem' }}>ð¯ Recommendations</h3>
+              <h3 style={{ fontWeight: 700, color: 'var(--gold)', fontSize: '0.9rem', marginBottom: '1rem' }}>🎯 Recommendations</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                 {insights.recommendations.map((rec, i) => (
                   <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
@@ -2543,14 +2541,14 @@ function BettingInsights({ picks }) {
   );
 }
 
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 // MAIN ANALYZER TAB
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ────────────────────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: 'betos',   label: 'ð¯ BetOS Live',        desc: 'Real-time AI pick analysis + live web search' },
-  { id: 'filter',    label: 'ð Filter Analysis',        desc: 'ROI breakdown by sport, odds range, bet type' },
-  { id: 'insights',  label: 'ð§  AI Insights',           desc: 'Personalized coaching â leaks, edges, and habits from your pick history' },
+  { id: 'betos',   label: '🎯 BetOS Live',        desc: 'Real-time AI pick analysis + live web search' },
+  { id: 'filter',    label: '📊 Filter Analysis',        desc: 'ROI breakdown by sport, odds range, bet type' },
+  { id: 'insights',  label: '🧠 AI Insights',           desc: 'Personalized coaching — leaks, edges, and habits from your pick history' },
 ];
 
 export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPromptConsumed, goatReport, onGoatReportConsumed }) {
@@ -2592,7 +2590,7 @@ export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPro
       </p>
 
       {/* All three sections stay mounted at all times (display:none when inactive).
-          This means switching away mid-analysis NEVER cancels an in-flight request â
+          This means switching away mid-analysis NEVER cancels an in-flight request —
           the fetch continues, state updates land, and the result is waiting when
           the user comes back. Using conditional && rendering would unmount the
           component and silently discard the result. */}
