@@ -784,14 +784,17 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
     return () => clearInterval(interval);
   }, [load, isDemo]); // eslint-disable-line
 
-  // Refresh immediately when user switches to this tab
+  // Refresh + reset sub-tab whenever user navigates to this tab.
+  // Ensures clicking "Contest" in the sidebar always lands on the contest
+  // sub-tab, not wherever the user left it last time.
   const prevActiveRef = useRef(isActive);
   useEffect(() => {
     if (isActive && !prevActiveRef.current) {
-      load(); // Tab just became visible — refresh now
+      load();                    // fresh data on every tab switch
+      setSubTab(defaultSubTab);  // always reset to the intended sub-tab
     }
     prevActiveRef.current = isActive;
-  }, [isActive, load]);
+  }, [isActive, load, defaultSubTab]);
 
   // Load own profile
   useEffect(() => {
