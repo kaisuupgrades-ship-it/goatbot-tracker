@@ -1984,16 +1984,18 @@ function SystemPanel({ userEmail }) {
         )}
 
         {(() => {
-          // Compute ET today and tomorrow once for display and action
-          const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          // Use browser local time (respects user's OS timezone / profile setting)
+          // instead of hardcoding ET — so "Today" matches what the user's clock says.
+          const userTz   = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          const localNow = new Date(new Date().toLocaleString('en-US', { timeZone: userTz }));
           const etFmt = (d) => {
             const yyyy = d.getFullYear();
             const mm = String(d.getMonth() + 1).padStart(2, '0');
             const dd = String(d.getDate()).padStart(2, '0');
             return `${yyyy}-${mm}-${dd}`;
           };
-          const todayET = etFmt(etNow);
-          const etTom = new Date(etNow); etTom.setDate(etTom.getDate() + 1);
+          const todayET = etFmt(localNow);
+          const etTom = new Date(localNow); etTom.setDate(etTom.getDate() + 1);
           const tomorrowET = etFmt(etTom);
           const labelFmt = (dateStr) => {
             const [y, m, d] = dateStr.split('-');

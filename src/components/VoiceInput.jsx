@@ -11,11 +11,18 @@ export function useVoiceInput({ onResult, onPartial } = {}) {
   const [listening,    setListening]    = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [supported,    setSupported]    = useState(false);
-  const [noSpeech,     setNoSpeech]     = useState(false); // true for 2s when Groq returns empty
+  const [noSpeech,     setNoSpeech]     = useState(false); // true for 3s when Groq returns empty
 
   const mediaRecorderRef = useRef(null);
   const chunksRef        = useRef([]);
   const streamRef        = useRef(null);
+
+  // Always keep refs pointing to the LATEST callbacks so mr.onstop never calls
+  // a stale closure — this is the key fix for "text not appearing" after long recordings.
+  const onResultRef  = useRef(onResult);
+  const onPartialRef = useRef(onPartial);
+  useEffect(() => { onResultRef.current  = onResult;  }, [onResult]);
+  useEffect(() => { onPartialRef.current = onPartial; }, [onPartial]);
 
   // Check MediaRecorder support on mount
   useEffect(() => {
@@ -80,7 +87,9 @@ export function useVoiceInput({ onResult, onPartial } = {}) {
           const data = await res.json();
 
           if (data.text?.trim()) {
-            onResult?.(data.text.trim());
+            // Use the ref so we always call the LATEST onResult —
+            // avoids stale closure if the component re-rendered while recording.
+            onResultRef.current?.(data.text.trim());
           } else if (data.error) {
             console.warn('[VoiceInput] Transcription error:', data.error);
             setNoSpeech(true);
@@ -92,20 +101,22 @@ export function useVoiceInput({ onResult, onPartial } = {}) {
           }
         } catch (err) {
           console.warn('[VoiceInput] Fetch error:', err.message);
+          setNoSpeech(true);
+          setTimeout(() => setNoSpeech(false), 3000);
         }
         setTranscribing(false);
       };
 
-      // Collect in 500ms chunks so we don't miss the last bit
-      mr.start(500);
+      // Collect in 250ms chunks — finer granularity reduces chance of empty final chunk
+      mr.start(250);
       setListening(true);
 
     } catch (err) {
       console.warn('[VoiceInput] getUserMedia error:', err.message);
       setListening(false);
-      // Fallback hint — mic permission was denied or device unavailable
+      // Mic permission was denied or device unavailable
     }
-  }, [listening, transcribing, stop, onResult]);
+  }, [listening, transcribing, stop]);
 
   return { listening, transcribing, supported, noSpeech, start, stop };
 }
@@ -117,11 +128,18 @@ export function useVoiceInput({ onResult, onPartial } = {}) {
 //   <VoiceButton value={text} onChange={setText} />
 //   <VoiceButton value={text} onChange={setText} size="sm" />
 export default function VoiceButton({ value = '', onChange, size = 'md', style = {} }) {
+  // Keep a ref to the latest value/onChange so the hook always sees fresh props
+  const valueRef    = useRef(value);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { valueRef.current    = value;    }, [value]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
   const { listening, transcribing, noSpeech, supported, start, stop } = useVoiceInput({
-    onResult: (transcript) => {
-      const next = value ? `${value.trimEnd()} ${transcript}` : transcript;
-      onChange?.(next);
-    },
+    onResult: useCallback((transcript) => {
+      const cur  = valueRef.current || '';
+      const next = cur ? `${cur.trimEnd()} ${transcript}` : transcript;
+      onChangeRef.current?.(next);
+    }, []), // stable — uses refs internally
   });
 
   if (!supported) return null;
@@ -139,7 +157,11 @@ export default function VoiceButton({ value = '', onChange, size = 'md', style =
     <div style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
       <button
         type="button"
-        onMouseDown={e => { e.preventDefault(); isActive ? stop() : start(); }}
+        onClick={e => {
+          // onClick fires for both mouse clicks and touch taps (unlike onMouseDown)
+          e.preventDefault();
+          isActive ? stop() : start();
+        }}
         title={
           noSpeech    ? 'No speech detected — try again'
           : transcribing ? 'Transcribing…'
