@@ -66,7 +66,7 @@ function FollowedUserCard({ entry, onUnfollow, userId, onViewProfile }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            {entry.wins ?? 0}W–{entry.losses ?? 0}L · {entry.total ?? 0} picks
+            {entry.wins ?? 0}W-{entry.losses ?? 0}L · {entry.total ?? 0} picks
           </span>
           <ResultStrip results={entry.recent_results || []} />
         </div>
