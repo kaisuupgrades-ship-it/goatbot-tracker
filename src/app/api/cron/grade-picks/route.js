@@ -289,16 +289,17 @@ export async function GET(req) {
         }
 
         // Also update the audit log if one exists
-        await supabase
-          .from('analysis_audit_logs')
-          .update({
-            prediction_result: result,
-            final_score: `${game.awayScore}-${game.homeScore}`,
-            graded_at: new Date().toISOString(),
-          })
-          .eq('analysis_id', row.id)
-          .is('prediction_result', null)
-          .catch(() => {});
+        try {
+          await supabase
+            .from('analysis_audit_logs')
+            .update({
+              prediction_result: result,
+              final_score: `${game.awayScore}-${game.homeScore}`,
+              graded_at: new Date().toISOString(),
+            })
+            .eq('analysis_id', row.id)
+            .is('prediction_result', null);
+        } catch { /* non-critical */ }
       }
     }
   } catch (aiErr) {
@@ -334,9 +335,10 @@ export async function GET(req) {
   console.log('[cron/grade-picks]', JSON.stringify(summary));
 
   // Persist last-run stats for Admin Panel visibility
-  await supabase.from('settings')
-    .upsert([{ key: 'cron_grade_last_run', value: JSON.stringify(summary) }], { onConflict: 'key' })
-    .catch(() => {});
+  try {
+    await supabase.from('settings')
+      .upsert([{ key: 'cron_grade_last_run', value: JSON.stringify(summary) }], { onConflict: 'key' });
+  } catch { /* non-critical */ }
 
   return NextResponse.json(summary);
 }

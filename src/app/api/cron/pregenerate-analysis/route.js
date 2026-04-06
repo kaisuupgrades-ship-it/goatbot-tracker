@@ -325,20 +325,22 @@ export async function GET(req) {
   const totalSports = sportsToProcess.length;
   let sportIndex = 0;
   async function writeProgress(currentSport, status) {
-    await supabase.from('settings').upsert(
-      [{ key: 'pregenerate_progress', value: JSON.stringify({
-        status,           // 'running' | 'done'
-        current_sport: currentSport,
-        sport_index: sportIndex,
-        total_sports: totalSports,
-        generated: generated.length,
-        skipped: skipped.length,
-        errors: errors.length,
-        started_at: new Date(started).toISOString(),
-        updated_at: new Date().toISOString(),
-      })}],
-      { onConflict: 'key' }
-    ).catch(() => {});
+    try {
+      await supabase.from('settings').upsert(
+        [{ key: 'pregenerate_progress', value: JSON.stringify({
+          status,           // 'running' | 'done'
+          current_sport: currentSport,
+          sport_index: sportIndex,
+          total_sports: totalSports,
+          generated: generated.length,
+          skipped: skipped.length,
+          errors: errors.length,
+          started_at: new Date(started).toISOString(),
+          updated_at: new Date().toISOString(),
+        })}],
+        { onConflict: 'key' }
+      );
+    } catch { /* non-critical */ }
   }
 
   // Cache performance context per sport (one DB query per sport, not per game)
@@ -495,10 +497,12 @@ export async function GET(req) {
   console.log('[pregenerate-analysis]', summary);
 
   // Store summary for Admin Panel
-  await supabase.from('settings').upsert(
-    [{ key: 'cron_pregenerate_last_run', value: JSON.stringify(summary) }],
-    { onConflict: 'key' }
-  ).catch(() => {});
+  try {
+    await supabase.from('settings').upsert(
+      [{ key: 'cron_pregenerate_last_run', value: JSON.stringify(summary) }],
+      { onConflict: 'key' }
+    );
+  } catch { /* non-critical */ }
 
   // Mark progress as done so polling clients know it finished
   await writeProgress('', 'done');

@@ -118,10 +118,12 @@ export async function GET(req) {
   // ── Mark seen ──────────────────────────────────────────────────────────────
   const seenUserId = searchParams.get('markSeen');
   if (seenUserId) {
-    await db().from('settings').upsert(
-      [{ key: `chat_last_seen_${seenUserId}`, value: new Date().toISOString() }],
-      { onConflict: 'key' }
-    ).catch(() => {});
+    try {
+      await db().from('settings').upsert(
+        [{ key: `chat_last_seen_${seenUserId}`, value: new Date().toISOString() }],
+        { onConflict: 'key' }
+      );
+    } catch { /* non-critical */ }
   }
 
   // ── Normal message fetch ───────────────────────────────────────────────────
