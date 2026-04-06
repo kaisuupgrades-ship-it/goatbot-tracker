@@ -801,6 +801,119 @@ function WinProbBar({ homeTeam, awayTeam, homeProb, awayProb, homeOdds, awayOdds
   );
 }
 
+// ── Linescore helpers ─────────────────────────────────────────────────────────
+function getLinescoreData(event, sport) {
+  const comp  = event?.competitions?.[0]?.competitors || [];
+  const away  = comp.find(c => c.homeAway === 'away') || comp[0] || {};
+  const home  = comp.find(c => c.homeAway === 'home') || comp[1] || {};
+  const awayLS = away.linescores || [];
+  const homeLS = home.linescores || [];
+  const periodCount = Math.max(awayLS.length, homeLS.length);
+  if (periodCount === 0) return null;
+  return {
+    away: {
+      abbr:   away.team?.abbreviation || 'Away',
+      scores: awayLS.map(ls => ls.value != null ? ls.value : null),
+      total:  away.score != null ? away.score : '—',
+      hits:   away.hits   ?? null,
+      errors: away.errors ?? null,
+    },
+    home: {
+      abbr:   home.team?.abbreviation || 'Home',
+      scores: homeLS.map(ls => ls.value != null ? ls.value : null),
+      total:  home.score != null ? home.score : '—',
+      hits:   home.hits   ?? null,
+      errors: home.errors ?? null,
+    },
+    periodCount,
+    sport,
+  };
+}
+
+function getPeriodLabels(sport, count) {
+  if (sport === 'mlb') return Array.from({ length: count }, (_, i) => String(i + 1));
+  if (sport === 'ncaab') {
+    const base = ['1H', '2H'];
+    const extra = count > 2 ? Array.from({ length: count - 2 }, (_, i) => i === 0 ? 'OT' : `${i + 1}OT`) : [];
+    return [...base, ...extra].slice(0, count);
+  }
+  if (sport === 'nhl') {
+    const base = ['1', '2', '3'];
+    const extra = count > 3 ? Array.from({ length: count - 3 }, (_, i) => i === 0 ? 'OT' : `${i + 1}OT`) : [];
+    return [...base, ...extra].slice(0, count);
+  }
+  if (sport === 'nba' || sport === 'wnba') {
+    const base = ['1', '2', '3', '4'];
+    const extra = count > 4 ? Array.from({ length: count - 4 }, (_, i) => i === 0 ? 'OT' : `${i + 1}OT`) : [];
+    return [...base, ...extra].slice(0, count);
+  }
+  if (sport === 'nfl' || sport === 'ncaaf') {
+    const base = ['1', '2', '3', '4'];
+    const extra = count > 4 ? Array.from({ length: count - 4 }, (_, i) => i === 0 ? 'OT' : `${i + 1}OT`) : [];
+    return [...base, ...extra].slice(0, count);
+  }
+  return Array.from({ length: count }, (_, i) => String(i + 1));
+}
+
+// ── Linescore Table Component ─────────────────────────────────────────────────
+function LinescoreTable({ data }) {
+  if (!data) return null;
+  const { away, home, periodCount, sport } = data;
+  const isMLB = sport === 'mlb';
+  const showRHE = isMLB && (home.hits != null || away.hits != null || home.errors != null || away.errors != null);
+  const labels  = getPeriodLabels(sport, periodCount);
+
+  const hdrCell  = { textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em', padding: '3px 5px', minWidth: '22px' };
+  const dataCell = { textAlign: 'center', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem', padding: '4px 5px', color: 'rgba(255,255,255,0.45)', minWidth: '22px' };
+  const totalHdr = { ...hdrCell, borderLeft: '1px solid rgba(255,255,255,0.08)', paddingLeft: '9px' };
+  const totalCell= { ...dataCell, fontWeight: 800, color: 'var(--text-primary)', borderLeft: '1px solid rgba(255,255,255,0.08)', paddingLeft: '9px' };
+  const rheHdr   = { ...hdrCell, color: 'rgba(255,255,255,0.3)', fontSize: '0.58rem' };
+  const rheCell  = { ...dataCell, color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' };
+
+  const renderRow = (team) => (
+    <tr style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+      <td style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-primary)', paddingRight: '10px', whiteSpace: 'nowrap', textAlign: 'left', padding: '4px 10px 4px 0' }}>
+        {team.abbr}
+      </td>
+      {labels.map((_, i) => {
+        const val = team.scores[i];
+        return (
+          <td key={i} style={{ ...dataCell, color: val != null && val !== 0 ? 'var(--text-secondary)' : 'rgba(255,255,255,0.2)' }}>
+            {val != null ? val : '-'}
+          </td>
+        );
+      })}
+      <td style={totalCell}>{team.total}</td>
+      {showRHE && <>
+        <td style={rheCell}>{team.hits   != null ? team.hits   : '—'}</td>
+        <td style={rheCell}>{team.errors != null ? team.errors : '—'}</td>
+      </>}
+    </tr>
+  );
+
+  return (
+    <div style={{ overflowX: 'auto', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', padding: '6px 10px' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'auto' }}>
+        <thead>
+          <tr>
+            <th style={{ ...hdrCell, textAlign: 'left', paddingRight: '10px', paddingLeft: '0' }}>Team</th>
+            {labels.map((lbl, i) => <th key={i} style={hdrCell}>{lbl}</th>)}
+            <th style={totalHdr}>{isMLB ? 'R' : 'T'}</th>
+            {showRHE && <>
+              <th style={rheHdr}>H</th>
+              <th style={rheHdr}>E</th>
+            </>}
+          </tr>
+        </thead>
+        <tbody>
+          {renderRow(away)}
+          {renderRow(home)}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Game Card ─────────────────────────────────────────────────────────────────
 export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York', gameLeans = {} }) {
   const [expanded, setExpanded] = useState(false);
@@ -1185,6 +1298,17 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             />
           )}
 
+
+          {/* ── Linescore Table (live/final games only) ───────────────── */}
+          {(gameState.state === 'live' || gameState.state === 'final') && (() => {
+            const lsData = getLinescoreData(event, sport);
+            if (!lsData) return null;
+            return (
+              <div style={{ marginBottom: '0.75rem' }}>
+                <LinescoreTable data={lsData} />
+              </div>
+            );
+          })()}
 
           {/* ── Weather / Stadium / Indoor Matchup Context ─────────────── */}
           {isIndoorSport ? (

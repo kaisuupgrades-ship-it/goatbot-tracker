@@ -245,6 +245,24 @@ export async function GET(req) {
       const profileMap = {};
       (profiles || []).forEach(p => { profileMap[p.id] = p; });
 
+      // Session time tracking — aggregate per user
+      let sessionMap = {};
+      try {
+        const { data: sessionRows } = await supabaseAdmin
+          .from('user_sessions')
+          .select('user_id, duration_seconds, started_at')
+          .order('started_at', { ascending: false })
+          .limit(5000);
+        (sessionRows || []).forEach(s => {
+          if (!sessionMap[s.user_id]) sessionMap[s.user_id] = { totalSeconds: 0, sessions: 0, lastSeen: null };
+          sessionMap[s.user_id].totalSeconds += s.duration_seconds || 0;
+          sessionMap[s.user_id].sessions++;
+          if (!sessionMap[s.user_id].lastSeen || s.started_at > sessionMap[s.user_id].lastSeen) {
+            sessionMap[s.user_id].lastSeen = s.started_at;
+          }
+        });
+      } catch { /* user_sessions table may not exist yet */ }
+
       const activity = authUsers.map(u => ({
         id: u.id,
         email: u.email,
@@ -254,6 +272,9 @@ export async function GET(req) {
         last_sign_in_at: u.last_sign_in_at || null,
         last_pick: lastPickMap[u.id] || null,
         ip_address: ipMap[u.id] || null,
+        total_time_seconds: sessionMap[u.id]?.totalSeconds || 0,
+        session_count: sessionMap[u.id]?.sessions || 0,
+        last_seen: sessionMap[u.id]?.lastSeen || null,
       }));
 
       // Sort: most recently signed-in first
@@ -271,10 +292,28 @@ export async function GET(req) {
       // Return recent session logs with device info and time spent
       const { data: sessions } = await supabaseAdmin
         .from('user_sessions')
-        .select('*')
+        .select('*, profiles(username)')
         .order('started_at', { ascending: false })
         .limit(500);
       return NextResponse.json({ sessions: sessions || [] });
+    }
+
+    if (action === 'ai_errors') {
+      const { data: errors } = await supabaseAdmin
+        .from('ai_error_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      return NextResponse.json({ errors: errors || [] });
+    }
+
+    if (action === 'concerns') {
+      const { data: concerns } = await supabaseAdmin
+        .from('ai_concerns')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      return NextResponse.json({ concerns: concerns || [] });
     }
 
     if (action === 'game_analyses') {
@@ -392,6 +431,34 @@ export async function POST(req) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === 'edit_profile') {
+      const allowed = ['username', 'display_name', 'bio', 'avatar_emoji', 'role', 'is_banned', 'twitter_handle', 'location'];
+      const updates = {};
+      for (const key of allowed) {
+        if (body[key] !== undefined) updates[key] = body[key];
+      }
+      if (!Object.keys(updates).length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      updates.updated_at = new Date().toISOString();
+      const { error } = await supabaseAdmin.from('profiles').update(updates).eq('id', targetId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'log_concern') {
+      const { message, userId, username, source } = body;
+      if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 });
+      try {
+        await supabaseAdmin.from('ai_concerns').insert([{
+          message,
+          user_id: userId || null,
+          username: username || null,
+          source: source || 'chatbot',
+          created_at: new Date().toISOString(),
+        }]);
+      } catch { /* table may not exist yet — non-critical */ }
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === 'create_user') {
       if (!newEmail || !newPassword) {
         return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
@@ -447,6 +514,40 @@ export async function POST(req) {
       } catch (fetchErr) {
         return NextResponse.json({ ok: false, error: fetchErr.message }, { status: 200 });
       }
+    }
+
+    if (action === 'log_ai_error') {
+      const { pickId, userId, errorMsg, pickData, diagnosis } = body;
+      try {
+        await supabaseAdmin.from('ai_error_logs').insert([{
+          pick_id: pickId || null,
+          user_id: userId || null,
+          error_message: errorMsg || 'Unknown error',
+          pick_data: pickData ? JSON.stringify(pickData) : null,
+          ai_diagnosis: diagnosis || null,
+          created_at: new Date().toISOString(),
+          resolved: false,
+        }]);
+      } catch { /* non-critical */ }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'resolve_ai_error') {
+      const { error } = await supabaseAdmin
+        .from('ai_error_logs')
+        .update({ resolved: true, resolved_at: new Date().toISOString(), resolved_by: adminEmail })
+        .eq('id', targetId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'resolve_concern') {
+      const { error } = await supabaseAdmin
+        .from('ai_concerns')
+        .update({ resolved: true, resolved_at: new Date().toISOString() })
+        .eq('id', targetId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
     }
 
     if (action === 'broadcast') {

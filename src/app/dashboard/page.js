@@ -217,7 +217,16 @@ function DashboardInner() {
       if (!u) { router.push('/'); return; }
       setUser(u);
 
-      const { data: picksData   } = await fetchPicks(u.id);
+      // Fetch picks with retry — on mobile, auth session can take a moment to propagate
+      let picksData = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const result = await fetchPicks(u.id);
+        if (result.data && result.data.length > 0) { picksData = result.data; break; }
+        if (!result.error && result.data !== null) { picksData = result.data; break; }
+        // Wait a bit and retry — session may not be propagated yet on mobile
+        if (attempt < 2) await new Promise(r => setTimeout(r, 600));
+      }
+
       const { data: contestData } = await fetchContest(u.id);
       setPicks(picksData || []);
       setContest(contestData);

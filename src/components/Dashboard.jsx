@@ -18,7 +18,8 @@ import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
 import AdminTab          from './tabs/AdminTab';
 import ProfileModal      from './ProfileModal';
 import PublicProfileModal from './PublicProfileModal';
-import InboxPanel        from './InboxPanel';
+import InboxPanel           from './InboxPanel';
+import SupportChatWidget    from './SupportChatWidget';
 
 const ADMIN_EMAIL = 'kaisuupgrades@gmail.com';
 
@@ -444,6 +445,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         initialRecipient={inboxRecipient}
         isDemo={isDemo}
       />
+
+      {/* Support Chat Widget — bottom left, always visible */}
+      {!isDemo && <SupportChatWidget user={currentUser} />}
     </div>
   );
 }

@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import PublicProfileModal from '../PublicProfileModal';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+import { supabase } from '@/lib/supabase';
 const POLL_INTERVAL = 6000; // 6 seconds
 
 function timeLabel(dateStr) {
@@ -124,12 +123,20 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
     if (isAtBottom.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  };
+
   const send = async () => {
     const content = text.trim();
     if (!content || !userId || sending) return;
     setSending(true); setError('');
+    const token = await getToken();
+    if (!token) { setError('Session expired — please sign in again.'); setSending(false); return; }
     const res = await fetch('/api/chat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ userId, content }),
     });
     const data = await res.json();
@@ -142,8 +149,11 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
   };
 
   const deleteMsg = async (msgId) => {
+    const token = await getToken();
+    if (!token) return;
     await fetch('/api/chat', {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ messageId: msgId, userId }),
     });
     setMessages(m => m.filter(x => x.id !== msgId));
@@ -257,6 +267,13 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
         {!userId || isDemo ? (
           <div style={{ flex: 1, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '0.5rem' }}>
             Sign in to participate in the chat.
+          </div>
+        ) : !user?.email_confirmed_at ? (
+          <div style={{ flex: 1, textAlign: 'center', padding: '0.5rem' }}>
+            <div style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 600 }}>✉️ Email verification required</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+              Please verify your email address to participate in Community Chat.
+            </div>
           </div>
         ) : (
           <>

@@ -69,6 +69,38 @@ function useIsMobile(breakpoint = 640) {
   return isMobile;
 }
 
+// ── Robust golf statistics parser ────────────────────────────────────────────
+// ESPN sometimes injects win odds (e.g. +208) at statistics[2] for featured
+// players, which shifts all subsequent stats. Detect and handle this gracefully.
+function parseGolfStats(statistics) {
+  const stats = statistics || [];
+  const toPar  = stats[0]?.displayValue ?? '—';
+  const thru   = stats[1]?.displayValue ?? '—';
+
+  let today    = '—';
+  let total    = '—';
+  let winOdds  = null;
+
+  // stats[2] is normally "today" but ESPN sometimes puts odds there
+  const raw2 = stats[2]?.displayValue;
+  if (raw2 != null) {
+    const n2 = parseInt(raw2);
+    // Odds are large positive integers (e.g. +208, +105). Golf round scores
+    // realistically range from -12 to +15. Anything > 30 is odds, not a score.
+    if (!isNaN(n2) && n2 > 30) {
+      // This is a win-odds value — store it and look for the real today at [3]
+      winOdds = n2 > 0 ? `+${n2}` : `${n2}`;
+      today   = stats[3]?.displayValue ?? '—';
+      total   = stats[4]?.displayValue ?? stats[3]?.displayValue ?? '—';
+    } else {
+      today = raw2;
+      total = stats[3]?.displayValue ?? '—';
+    }
+  }
+
+  return { toPar, thru, today, total, winOdds };
+}
+
 // ── Score helpers ─────────────────────────────────────────────────────────────
 function scoreColor(val) {
   const n = val === 'E' ? 0 : parseInt(val);
@@ -124,10 +156,10 @@ function getHotCold(player) {
     if (bogeys >= 2) return 'cold';
     return null;
   }
-  // Fallback: use today's round score pace
-  const stats    = player.statistics || [];
-  const todayStr = stats[2]?.displayValue ?? '—';
-  const thruVal  = player.status?.thru ?? stats[1]?.displayValue;
+  // Fallback: use today's round score pace (use robust parser to avoid odds contamination)
+  const parsed_   = parseGolfStats(player.statistics);
+  const todayStr  = parsed_.today;
+  const thruVal   = player.status?.thru ?? parsed_.thru;
   if (todayStr === '—' || !thruVal || thruVal === 'F') return null;
   const today = todayStr === 'E' ? 0 : parseInt(todayStr);
   const thru  = parseInt(thruVal);
@@ -602,11 +634,12 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
 
 // ── Player row ────────────────────────────────────────────────────────────────
 function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
-  const stats      = player.statistics || [];
-  const toPar      = stats[0]?.displayValue ?? player.score?.displayValue ?? '—';
-  const thru       = player.status?.thru ?? stats[1]?.displayValue ?? '—';
-  const todayScore = stats[2]?.displayValue ?? '—';
-  const totalScore = stats[3]?.displayValue ?? player.score?.value ?? '—';
+  const parsed     = parseGolfStats(player.statistics);
+  const toPar      = parsed.toPar !== '—' ? parsed.toPar : (player.score?.displayValue ?? '—');
+  const thru       = player.status?.thru ?? parsed.thru;
+  const todayScore = parsed.today;
+  const totalScore = parsed.total !== '—' ? parsed.total : (player.score?.value ?? '—');
+  const winOdds    = parsed.winOdds;
   const toParNum   = toPar === 'E' ? 0 : parseInt(toPar);
   const todayNum   = todayScore === 'E' ? 0 : parseInt(todayScore);
   const isLead     = player.status?.position?.displayName === '1' || player._isLead;
@@ -619,6 +652,7 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
 
   const [starred, setStarred]           = useState(() => isGolferStarred(player));
   const [showScorecard, setScorecard]   = useState(false);
+  const toggleScorecard = () => setScorecard(v => !v);
 
   useEffect(() => {
     const handler = () => setStarred(isGolferStarred(player));
@@ -638,7 +672,7 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
         display: 'grid',
         gridTemplateColumns: isMobile
           ? '30px 1fr 44px 40px 40px 28px'
-          : '40px 32px 1fr 56px 50px 50px 60px 28px',
+          : '40px 32px 1fr 56px 50px 50px 60px 56px 28px',
         alignItems: 'center',
         padding: isMobile ? '7px 12px' : '7px 14px',
         borderBottom: '1px solid rgba(255,255,255,0.04)',
@@ -661,18 +695,19 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
         <div style={{ overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', overflow: 'hidden' }}>
             <button
-              onClick={() => setScorecard(true)}
-              title="View scorecard"
+              onClick={toggleScorecard}
+              title={showScorecard ? 'Close scorecard' : 'View scorecard'}
               style={{
                 background: 'none', border: 'none', padding: 0, cursor: 'pointer',
                 fontSize: isMobile ? '0.82rem' : '0.85rem', fontWeight: 600,
-                color: 'var(--text-primary)',
+                color: showScorecard ? '#60a5fa' : 'var(--text-primary)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.15)',
+                textDecoration: 'underline',
+                textDecorationColor: showScorecard ? '#60a5fa' : 'rgba(255,255,255,0.15)',
                 textUnderlineOffset: '2px',
               }}
               onMouseEnter={e => { e.currentTarget.style.color = '#60a5fa'; e.currentTarget.style.textDecorationColor = '#60a5fa'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.textDecorationColor = 'rgba(255,255,255,0.15)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = showScorecard ? '#60a5fa' : 'var(--text-primary)'; e.currentTarget.style.textDecorationColor = showScorecard ? '#60a5fa' : 'rgba(255,255,255,0.15)'; }}
             >
               {player.athlete?.displayName || player.athlete?.fullName || '—'}
             </button>
@@ -712,6 +747,20 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
             {totalScore !== '—' ? totalScore : '—'}
           </div>
         )}
+        {/* Win Odds — desktop only */}
+        {!isMobile && (
+          <div style={{ textAlign: 'center' }}>
+            {winOdds ? (
+              <span style={{
+                fontSize: '0.65rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
+                background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)',
+                color: '#93c5fd', fontFamily: 'IBM Plex Mono, monospace',
+              }}>
+                {winOdds}
+              </span>
+            ) : <span style={{ color: 'rgba(255,255,255,0.12)', fontSize: '0.68rem' }}>—</span>}
+          </div>
+        )}
         {/* Star button */}
         <div style={{ textAlign: 'center' }}>
           <button
@@ -737,6 +786,7 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
         <InlineScorecardPanel
           player={player}
           eventId={eventId}
+          onClose={toggleScorecard}
           league={league}
           onClose={() => setScorecard(false)}
         />
@@ -893,18 +943,18 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
                 display: 'grid',
                 gridTemplateColumns: isMobile
                   ? '30px 1fr 44px 40px 40px 28px'
-                  : '40px 32px 1fr 56px 50px 50px 60px 28px',
+                  : '40px 32px 1fr 56px 50px 50px 60px 56px 28px',
                 padding: isMobile ? '5px 12px' : '5px 14px',
                 background: 'rgba(255,255,255,0.02)',
                 borderTop: '1px solid rgba(255,255,255,0.04)',
               }}>
                 {(isMobile
                   ? ['Pos', 'Player', 'Par', 'Today', 'Thru', '']
-                  : ['Pos', '', 'Player', 'To Par', 'Today', 'Thru', 'Total', '']
+                  : ['Pos', '', 'Player', 'To Par', 'Today', 'Thru', 'Total', 'Odds', '']
                 ).map((h, i) => (
                   <div key={i} style={{
                     fontSize: '0.57rem', textTransform: 'uppercase', letterSpacing: '0.08em',
-                    color: 'var(--text-muted)',
+                    color: h === 'Odds' ? '#93c5fd' : 'var(--text-muted)',
                     textAlign: i >= (isMobile ? 2 : 3) ? 'center' : 'left',
                     ...(i === 6 ? { textAlign: 'right' } : {}),
                   }}>

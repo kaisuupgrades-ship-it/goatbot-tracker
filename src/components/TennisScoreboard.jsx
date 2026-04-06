@@ -206,6 +206,34 @@ function TournamentSection({ name, matches, defaultOpen }) {
   const finalCount   = matches.filter(m => m.competitions?.[0]?.status?.type?.state === 'post').length;
   const pendingCount = matches.filter(m => m.competitions?.[0]?.status?.type?.state === 'pre').length;
 
+  // Build compact matchup previews for collapsed header
+  const getMatchupLabel = (match) => {
+    const comp = match.competitions?.[0];
+    const competitors = comp?.competitors || [];
+    const p1 = competitors[0];
+    const p2 = competitors[1];
+    if (!p1 || !p2) return null;
+    const n1 = p1.athlete?.shortName || p1.athlete?.lastName || p1.athlete?.displayName || 'P1';
+    const n2 = p2.athlete?.shortName || p2.athlete?.lastName || p2.athlete?.displayName || 'P2';
+    const state = comp?.status?.type?.state;
+    const isLive = state === 'in';
+    const isFinal = state === 'post';
+    // Score if available
+    const p1Score = (isFinal || isLive) ? (parseInt(p1.score) ?? '') : '';
+    const p2Score = (isFinal || isLive) ? (parseInt(p2.score) ?? '') : '';
+    const scoreStr = (p1Score !== '' && p2Score !== '') ? ` ${p1Score}–${p2Score}` : '';
+    return { label: `${n1} vs ${n2}${scoreStr}`, isLive, isFinal };
+  };
+
+  // Show live matches first in preview, then limit to 3
+  const sortedForPreview = [...matches].sort((a, b) => {
+    const aLive = a.competitions?.[0]?.status?.type?.state === 'in' ? 0 : 1;
+    const bLive = b.competitions?.[0]?.status?.type?.state === 'in' ? 0 : 1;
+    return aLive - bLive;
+  });
+  const previewMatchups = sortedForPreview.slice(0, 3).map(getMatchupLabel).filter(Boolean);
+  const moreCount = matches.length - 3;
+
   return (
     <div style={{
       background: 'var(--bg-surface)',
@@ -244,14 +272,35 @@ function TournamentSection({ name, matches, defaultOpen }) {
               </span>
             )}
           </div>
-          {/* Match count summary */}
-          <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+          {/* Match count summary + collapsed matchup preview */}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>
               {matches.length} match{matches.length !== 1 ? 'es' : ''}
             </span>
             {finalCount > 0 && <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>· {finalCount} final</span>}
             {pendingCount > 0 && <span style={{ fontSize: '0.67rem', color: '#60a5fa' }}>· {pendingCount} upcoming</span>}
           </div>
+          {/* Matchup previews — only shown when collapsed */}
+          {!open && previewMatchups.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '5px' }}>
+              {previewMatchups.map((m, i) => (
+                <span key={i} style={{
+                  fontSize: '0.65rem', fontWeight: 600, padding: '2px 7px', borderRadius: '10px',
+                  background: m.isLive ? 'rgba(74,222,128,0.1)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${m.isLive ? 'rgba(74,222,128,0.25)' : 'rgba(255,255,255,0.08)'}`,
+                  color: m.isLive ? '#4ade80' : 'var(--text-secondary)',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {m.isLive && <span style={{ marginRight: '3px' }}>●</span>}{m.label}
+                </span>
+              ))}
+              {moreCount > 0 && (
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', padding: '2px 4px' }}>
+                  +{moreCount} more
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Expand chevron */}

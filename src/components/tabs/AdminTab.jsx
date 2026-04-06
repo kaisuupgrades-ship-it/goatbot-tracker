@@ -135,12 +135,106 @@ function OverviewPanel({ userEmail }) {
 }
 
 // ── USERS TAB ─────────────────────────────────────────────────────────────────
-function UsersPanel({ userEmail }) {
-  const [data, setData]     = useState(null);
+// ── Edit User Profile Modal ───────────────────────────────────────────────────
+function EditUserModal({ user: u, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    username:       u.username       || '',
+    display_name:   u.display_name   || '',
+    bio:            u.bio            || '',
+    avatar_emoji:   u.avatar_emoji   || '',
+    twitter_handle: u.twitter_handle || '',
+    location:       u.location       || '',
+    role:           u.role           || 'user',
+    is_banned:      u.is_banned      ?? false,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+
+  const field = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function save() {
+    setSaving(true); setError('');
+    const res = await adminFetch('/api/admin', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'edit_profile', targetId: u.id, ...form }),
+    });
+    const d = await res.json();
+    if (d.error) { setError(d.error); setSaving(false); return; }
+    onSaved({ ...u, ...form });
+    onClose();
+  }
+
+  const row = (label, children) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700 }}>{label}</label>
+      {children}
+    </div>
+  );
+  const inp = (k, opts = {}) => (
+    <input className="input" value={form[k]} onChange={e => field(k, e.target.value)}
+      style={{ fontSize: '0.82rem', padding: '5px 8px' }} {...opts} />
+  );
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '14px', width: '100%', maxWidth: '560px', padding: '1.5rem', boxShadow: '0 24px 64px rgba(0,0,0,0.7)', maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--gold)' }}>✏️ Edit Profile</div>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>{u.email || u.id}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+        </div>
+
+        {error && <div style={{ color: '#f87171', fontSize: '0.78rem', marginBottom: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(248,113,113,0.07)', borderRadius: '6px' }}>{error}</div>}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          {row('Username', inp('username', { placeholder: 'SharpBettor99' }))}
+          {row('Display Name', inp('display_name', { placeholder: 'Jon S.' }))}
+          {row('Avatar Emoji', inp('avatar_emoji', { placeholder: '🐐', maxLength: 4 }))}
+          {row('Twitter / X Handle', inp('twitter_handle', { placeholder: '@bettor' }))}
+          {row('Location', inp('location', { placeholder: 'Las Vegas, NV' }))}
+          {row('Role', (
+            <select className="input" value={form.role} onChange={e => field('role', e.target.value)} style={{ fontSize: '0.82rem', padding: '5px 8px' }}>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="moderator">Moderator</option>
+            </select>
+          ))}
+        </div>
+
+        {row('Bio', (
+          <textarea className="input" value={form.bio} onChange={e => field('bio', e.target.value)}
+            rows={3} style={{ fontSize: '0.82rem', padding: '5px 8px', resize: 'vertical' }} placeholder="Sharp bettor, 5+ years, specializing in MLB props..." />
+        ))}
+
+        <div style={{ display: 'flex', gap: '16px', marginTop: '12px', marginBottom: '1.25rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: form.is_banned ? '#f87171' : 'var(--text-muted)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.is_banned} onChange={e => field('is_banned', e.target.checked)} />
+            🚫 Banned
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '6px 16px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: '6px 18px', borderRadius: '7px', border: 'none', background: saving ? 'rgba(255,184,0,0.3)' : 'rgba(255,184,0,0.85)', color: '#000', fontWeight: 800, cursor: saving ? 'default' : 'pointer', fontSize: '0.82rem' }}>
+            {saving ? 'Saving…' : '💾 Save Profile'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsersPanel({ userEmail, onNavigate }) {
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
-  const [search, setSearch] = useState('');
+  const [error, setError]     = useState('');
+  const [search, setSearch]   = useState('');
   const [actionMsg, setActionMsg] = useState('');
+  const [editingUser, setEditingUser] = useState(null);
 
   // Create user form
   const [showCreate, setShowCreate] = useState(false);
@@ -379,7 +473,16 @@ function UsersPanel({ userEmail }) {
                 </span>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '6px', flexShrink: 0, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setEditingUser(u)}
+                style={{
+                  padding: '4px 10px', borderRadius: '5px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer',
+                  border: '1px solid rgba(255,184,0,0.3)', background: 'rgba(255,184,0,0.06)', color: 'var(--gold)',
+                }}
+              >
+                ✏️ Edit
+              </button>
               <button
                 onClick={() => handleAction('ban_user', u.id, !u.is_banned)}
                 style={{
@@ -414,6 +517,21 @@ function UsersPanel({ userEmail }) {
           </div>
         )}
       </div>
+
+      {/* Edit User Profile Modal */}
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={(updated) => {
+            setData(d => ({
+              ...d,
+              users: (d?.users || []).map(u => u.id === updated.id ? { ...u, ...updated } : u),
+            }));
+            setEditingUser(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1137,7 +1255,7 @@ function ActivityPanel({ userEmail }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              {['User', 'Email', 'Last Sign-In', 'Last Activity', 'Joined', hasIPs ? 'IP Address' : null, 'Status']
+              {['User', 'Email', 'Last Sign-In', 'Last Activity', 'Time on Site', 'Joined', hasIPs ? 'IP Address' : null, 'Status']
                 .filter(Boolean)
                 .map(h => (
                   <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
@@ -1189,6 +1307,20 @@ function ActivityPanel({ userEmail }) {
                         <span style={{ color: '#60a5fa', fontSize: '0.6rem' }}>📋 pick</span>
                       )}
                     </div>
+                  </td>
+                  {/* Time on Site */}
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>
+                    {u.total_time_seconds > 0 ? (() => {
+                      const hrs  = Math.floor(u.total_time_seconds / 3600);
+                      const mins = Math.floor((u.total_time_seconds % 3600) / 60);
+                      const label = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                          <span style={{ color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem' }}>{label}</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>{u.session_count} session{u.session_count !== 1 ? 's' : ''}</span>
+                        </div>
+                      );
+                    })() : <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>—</span>}
                   </td>
                   {/* Joined */}
                   <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
@@ -1449,7 +1581,10 @@ function SystemPanel({ userEmail }) {
   const [pregenLog,        setPregenLog]        = useState(null);
   const [pregenLiveLog,    setPregenLiveLog]    = useState([]); // [{sport, status, count}]
   const [generatedAnalyses,setGeneratedAnalyses]= useState(null); // fetched from game_analyses
-  const [analysesDate,     setAnalysesDate]     = useState(new Date().toISOString().split('T')[0]);
+  const [analysesDate,     setAnalysesDate]     = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [expandedAnalysis, setExpandedAnalysis] = useState(null); // id of expanded row
   const [gradingId,        setGradingId]        = useState(null); // id currently being saved
   const [aiRecord,         setAiRecord]         = useState(null); // { wins, losses, pushes, winPct, byConf, bySport }
@@ -2240,12 +2375,217 @@ function AIChatPanel({ userEmail }) {
   );
 }
 
+// ── AI Error Queue Panel ──────────────────────────────────────────────────────
+function AIErrorQueuePanel({ userEmail }) {
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('unresolved'); // all | unresolved | resolved
+  const [actionMsg, setActionMsg] = useState('');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch('/api/admin?action=ai_errors')
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function resolve(id) {
+    await adminFetch('/api/admin', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'resolve_ai_error', targetId: id }),
+    });
+    setActionMsg('✓ Marked resolved');
+    load();
+    setTimeout(() => setActionMsg(''), 3000);
+  }
+
+  const errors = (data?.errors || []).filter(e => {
+    if (filter === 'unresolved') return !e.resolved;
+    if (filter === 'resolved')   return e.resolved;
+    return true;
+  });
+
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading AI error queue…</div>;
+
+  return (
+    <div>
+      {actionMsg && <div style={{ color: '#4ade80', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{actionMsg}</div>}
+
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center' }}>
+        {[['unresolved','🔴 Unresolved'],['resolved','✅ Resolved'],['all','All']].map(([v,l]) => (
+          <button key={v} onClick={() => setFilter(v)} style={{
+            padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem',
+            border: `1px solid ${filter === v ? '#f87171' : 'var(--border)'}`,
+            background: filter === v ? 'rgba(248,113,113,0.08)' : 'transparent',
+            color: filter === v ? '#f87171' : 'var(--text-muted)', fontWeight: filter === v ? 700 : 400,
+          }}>{l}</button>
+        ))}
+        <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
+        <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem' }}>↺</button>
+      </div>
+
+      {errors.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
+          <div>{filter === 'unresolved' ? 'No unresolved AI errors — great shape!' : 'No errors in this filter.'}</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {errors.map(e => {
+            let pickData = null;
+            try { pickData = e.pick_data ? JSON.parse(e.pick_data) : null; } catch {}
+            return (
+              <div key={e.id} style={{
+                background: 'var(--bg-elevated)', border: `1px solid ${e.resolved ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.25)'}`,
+                borderRadius: '10px', padding: '1rem',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-muted)' }}>
+                        {new Date(e.created_at).toLocaleString()}
+                      </span>
+                      {e.resolved && <span style={{ fontSize: '0.65rem', color: '#4ade80', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', padding: '1px 6px' }}>RESOLVED</span>}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#f87171', fontWeight: 600, marginBottom: '6px' }}>
+                      ⚠ {e.error_message}
+                    </div>
+                    {pickData && (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 8px', marginBottom: '6px', fontFamily: 'IBM Plex Mono, monospace' }}>
+                        Pick: {pickData.team} · {pickData.bet_type} · {pickData.odds > 0 ? '+' : ''}{pickData.odds} · {pickData.sport}
+                      </div>
+                    )}
+                    {e.ai_diagnosis && (
+                      <div style={{ fontSize: '0.78rem', color: '#fbbf24', background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '6px', padding: '6px 8px' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: '6px' }}>🤖 AI Diagnosis:</span>
+                        {e.ai_diagnosis}
+                      </div>
+                    )}
+                  </div>
+                  {!e.resolved && (
+                    <button
+                      onClick={() => resolve(e.id)}
+                      style={{ padding: '5px 12px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(74,222,128,0.12)', color: '#4ade80', flexShrink: 0 }}
+                    >
+                      ✓ Resolve
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Concerns Panel (AI chatbot-flagged issues) ────────────────────────────────
+function ConcernsPanel({ userEmail }) {
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('unresolved');
+  const [actionMsg, setActionMsg] = useState('');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch('/api/admin?action=concerns')
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function resolve(id) {
+    await adminFetch('/api/admin', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'resolve_concern', targetId: id }),
+    });
+    setActionMsg('✓ Marked resolved');
+    load();
+    setTimeout(() => setActionMsg(''), 3000);
+  }
+
+  const concerns = (data?.concerns || []).filter(c => {
+    if (filter === 'unresolved') return !c.resolved;
+    if (filter === 'resolved')   return c.resolved;
+    return true;
+  });
+
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading concerns…</div>;
+
+  return (
+    <div>
+      {actionMsg && <div style={{ color: '#4ade80', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{actionMsg}</div>}
+
+      <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(251,191,36,0.04)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '7px', marginBottom: '1rem', fontSize: '0.75rem', color: '#888' }}>
+        <span style={{ color: '#fbbf24', fontWeight: 700 }}>⚠ Serious Concerns</span> — these are issues the AI chatbot determined were significant enough to escalate to admin review. Review each one and mark resolved when handled.
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', alignItems: 'center' }}>
+        {[['unresolved','⚠ Unresolved'],['resolved','✅ Resolved'],['all','All']].map(([v,l]) => (
+          <button key={v} onClick={() => setFilter(v)} style={{
+            padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem',
+            border: `1px solid ${filter === v ? '#fbbf24' : 'var(--border)'}`,
+            background: filter === v ? 'rgba(251,191,36,0.08)' : 'transparent',
+            color: filter === v ? '#fbbf24' : 'var(--text-muted)', fontWeight: filter === v ? 700 : 400,
+          }}>{l}</button>
+        ))}
+        <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{concerns.length} concern{concerns.length !== 1 ? 's' : ''}</span>
+        <button onClick={load} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem' }}>↺</button>
+      </div>
+
+      {concerns.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
+          <div>{filter === 'unresolved' ? 'No unresolved concerns.' : 'No concerns in this filter.'}</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {concerns.map(c => (
+            <div key={c.id} style={{
+              background: 'var(--bg-elevated)', border: `1px solid ${c.resolved ? 'rgba(74,222,128,0.15)' : 'rgba(251,191,36,0.25)'}`,
+              borderRadius: '10px', padding: '1rem',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
+                    {c.username && <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>{c.username}</span>}
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', padding: '1px 6px' }}>{c.source || 'chatbot'}</span>
+                    <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>{new Date(c.created_at).toLocaleString()}</span>
+                    {c.resolved && <span style={{ fontSize: '0.65rem', color: '#4ade80', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', padding: '1px 6px' }}>RESOLVED</span>}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{c.message}</div>
+                </div>
+                {!c.resolved && (
+                  <button
+                    onClick={() => resolve(c.id)}
+                    style={{ padding: '5px 12px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(74,222,128,0.12)', color: '#4ade80', flexShrink: 0 }}
+                  >
+                    ✓ Resolve
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ADMIN_TABS = [
   { id: 'overview',  label: '📊 Overview',     desc: 'Site-wide stats and recent activity' },
-  { id: 'users',     label: '👥 Users',         desc: 'Manage user accounts, roles & bans' },
-  { id: 'activity',  label: '📡 Activity',      desc: 'Last sign-on, recent activity & IP addresses' },
+  { id: 'users',     label: '👥 Users',         desc: 'Manage user accounts, roles, bans & edit profiles' },
+  { id: 'activity',  label: '📡 Activity',      desc: 'Last sign-on, time on site & IP addresses' },
   { id: 'picks',     label: '📋 Picks Audit',   desc: 'View and moderate all picks' },
   { id: 'contests',  label: '🏆 Contests',      desc: 'Active contests and participants' },
+  { id: 'ai_errors', label: '🔴 AI Errors',     desc: 'Picks where AI analysis failed — with auto-diagnosis and resolution queue' },
+  { id: 'concerns',  label: '⚠️ Concerns',      desc: 'Serious issues flagged by the AI chatbot from user conversations' },
   { id: 'backtest',  label: '📈 Backtester',    desc: 'Import historical data, run backtests, save sharp edges' },
   { id: 'ailab',     label: '🧪 AI Lab',          desc: 'Track AI analyzer performance, prompt versions, model stats & full audit trail' },
   { id: 'cron',      label: '⏱ Cron Jobs',       desc: 'View scheduled jobs, toggle on/off, and trigger manually' },
@@ -2313,16 +2653,18 @@ export default function AdminTab({ user }) {
       <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '-0.5rem 0 0' }}>{desc}</p>
 
       {/* Panel content */}
-      {active === 'overview'  && <OverviewPanel   userEmail={user.email} />}
-      {active === 'users'     && <UsersPanel      userEmail={user.email} />}
-      {active === 'activity'  && <ActivityPanel   userEmail={user.email} />}
-      {active === 'picks'     && <PicksAuditPanel userEmail={user.email} />}
-      {active === 'contests'  && <ContestsPanel   userEmail={user.email} />}
-      {active === 'backtest'  && <BacktestPanel   userEmail={user.email} />}
-      {active === 'ailab'     && <AILabPanel      userEmail={user.email} />}
-      {active === 'cron'      && <CronPanel       userEmail={user.email} />}
-      {active === 'system'    && <SystemPanel     userEmail={user.email} />}
-      {active === 'chat'      && <AIChatPanel     userEmail={user.email} />}
+      {active === 'overview'  && <OverviewPanel      userEmail={user.email} />}
+      {active === 'users'     && <UsersPanel         userEmail={user.email} onNavigate={setActive} />}
+      {active === 'activity'  && <ActivityPanel      userEmail={user.email} />}
+      {active === 'picks'     && <PicksAuditPanel    userEmail={user.email} />}
+      {active === 'contests'  && <ContestsPanel      userEmail={user.email} />}
+      {active === 'ai_errors' && <AIErrorQueuePanel  userEmail={user.email} />}
+      {active === 'concerns'  && <ConcernsPanel      userEmail={user.email} />}
+      {active === 'backtest'  && <BacktestPanel      userEmail={user.email} />}
+      {active === 'ailab'     && <AILabPanel         userEmail={user.email} />}
+      {active === 'cron'      && <CronPanel          userEmail={user.email} />}
+      {active === 'system'    && <SystemPanel        userEmail={user.email} />}
+      {active === 'chat'      && <AIChatPanel        userEmail={user.email} />}
     </div>
   );
 }

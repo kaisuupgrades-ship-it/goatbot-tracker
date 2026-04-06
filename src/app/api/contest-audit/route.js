@@ -179,7 +179,10 @@ async function aiAuditPick(pick) {
     : '\nPinnacle check unavailable.';
 
   try {
-    const prompt = `You are an AI auditor for a sports betting contest. Review this pick for legitimacy:
+    const todayDate = new Date().toISOString().split('T')[0];
+    const prompt = `You are an AI auditor for a sports betting contest. Today's date is ${todayDate} (this is a real date in 2026 — the system is live and 2026 dates are correct and current).
+
+Review this pick for legitimacy:
 - Team: ${pick.team}
 - Bet Type: ${pick.bet_type}
 - Odds: ${pick.odds}
@@ -190,6 +193,7 @@ async function aiAuditPick(pick) {
 ${pinContext}
 
 Check for: suspicious timing (submitted after game started), obvious data entry errors, implausible lines for the sport/matchup.
+NOTE: Picks submitted in 2026 are legitimate — do NOT flag a pick just because the year is 2026.
 Respond with EXACTLY one line: APPROVED or FLAGGED followed by a brief reason.`;
 
     const result = await callAI({ user: prompt, maxTokens: 100, temperature: 0.1 });
