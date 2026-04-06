@@ -671,7 +671,7 @@ function NeutralSummaryBar({ stats, picks }) {
   else { heatEmoji = '🧊'; heatColor = '#60a5fa'; }
 
   const statItems = [
-    { label: 'Record',    value: `${stats.wins}–${stats.losses}`, sub: winPct ? `${winPct}%` : null, tone: stats.wins > stats.losses ? 'green' : stats.losses > stats.wins ? 'red' : null },
+    { label: 'Record',    value: `${stats.wins}-${stats.losses}`, sub: winPct ? `${winPct}%` : null, tone: stats.wins > stats.losses ? 'green' : stats.losses > stats.wins ? 'red' : null },
     { label: 'Units P/L', value: `${stats.units >= 0 ? '+' : ''}${stats.units.toFixed(2)}u`, sub: `${stats.total} settled`, tone: stats.units >= 0 ? 'green' : 'red' },
     { label: 'ROI',       value: `${stats.roi >= 0 ? '+' : ''}${stats.roi.toFixed(1)}%`, sub: 'per pick', tone: stats.roi >= 0 ? 'green' : 'red' },
     { label: 'Streak',    value: stats.streak.count > 0 ? `${stats.streak.type === 'WIN' ? 'W' : 'L'}${stats.streak.count}` : '—', sub: 'current', tone: stats.streak.type === 'WIN' ? 'green' : stats.streak.type === 'LOSS' ? 'red' : null },
@@ -926,7 +926,7 @@ export default function TrackerTab({ picks, user }) {
               return (
                 <div key={row.sport} className="surface-elevated" style={{ display: 'grid', gridTemplateColumns: '80px 70px 1fr 80px', gap: '8px', padding: '0.55rem', borderRadius: '6px', alignItems: 'center' }}>
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.82rem' }}>{sportEmoji(row.sport)} {row.sport}</span>
-                  <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', color: row.wins > row.losses ? 'var(--green)' : row.losses > row.wins ? 'var(--red)' : 'var(--text-secondary)' }}>{row.wins}–{row.losses}</span>
+                  <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', color: row.wins > row.losses ? 'var(--green)' : row.losses > row.wins ? 'var(--red)' : 'var(--text-secondary)' }}>{row.wins}-{row.losses}</span>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', color: row.units >= 0 ? 'var(--green)' : 'var(--red)' }}>{row.units >= 0 ? '+' : ''}{row.units.toFixed(2)}u</span>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: roi >= 0 ? 'var(--green)' : 'var(--red)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}%</span>
                 </div>
