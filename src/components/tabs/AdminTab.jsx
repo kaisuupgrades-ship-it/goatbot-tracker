@@ -1101,7 +1101,7 @@ function DeclareWinnerModal({ userEmail, onClose, onDeclared }) {
                       {e.display_name || e.username}
                     </div>
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                      {e.wins}W–{e.losses}L · {e.total_settled} picks
+                      {e.wins}W-{e.losses}L · {e.total_settled} picks
                     </div>
                   </div>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.9rem', color: e.units >= 0 ? '#4ade80' : '#f87171' }}>
