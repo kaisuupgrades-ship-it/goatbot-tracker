@@ -295,7 +295,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
           {/* Quick stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '1rem' }}>
             {[
-              { label: 'Record',     value: `${displayWins}–${displayLosses}`,
+              { label: 'Record',     value: `${displayWins}-${displayLosses}`,
                 color: displayWins > displayLosses ? 'var(--green)' : displayWins < displayLosses ? 'var(--red)' : 'var(--text-primary)',
                 sub: `${displayTotal} picks` },
               { label: 'Win %',      value: winRate === '—' ? '—' : `${winRate}%`,
@@ -540,7 +540,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                       return (
                         <div key={sport} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', minWidth: '46px' }}>{sport}</span>
-                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', minWidth: '44px' }}>{sw}–{sl}</span>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', minWidth: '44px' }}>{sw}-{sl}</span>
                           <div style={{ flex: 1, height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
                             <div style={{ height: '100%', borderRadius: '3px', width: `${wr}%`, background: wr >= 55 ? 'var(--green)' : wr >= 45 ? '#fbbf24' : 'var(--red)', transition: 'width 0.6s ease' }} />
                           </div>
