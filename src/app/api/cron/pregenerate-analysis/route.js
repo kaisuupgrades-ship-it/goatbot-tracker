@@ -75,7 +75,11 @@ RECORD IMPACT: [One sentence on unit sizing.]
 
 Rules: No markdown asterisks. No invented numbers. If you cannot verify a stat or odds figure, say so explicitly. Be decisive.`;
 
-async function fetchTodaysGames(sport, dateStr) {
+// includeAll=true: return every game on that date regardless of state (used for
+// admin manual runs where the admin picks an explicit date — games may already be
+// final, but we still want to cache analyses for them).
+// includeAll=false (default, cron runs): only return pre/in-progress games.
+async function fetchTodaysGames(sport, dateStr, includeAll = false) {
   const path = SPORT_PATHS[sport];
   if (!path) return [];
   try {
@@ -89,20 +93,22 @@ async function fetchTodaysGames(sport, dateStr) {
     }
     const data = await res.json();
     const all = data.events || [];
-    const filtered = all.filter(ev => {
-      const comp  = ev.competitions?.[0];
-      const state = comp?.status?.type?.state;
-      // Always include pre-game (scheduled/upcoming)
-      if (state === 'pre') return true;
-      // Include in-progress games started less than 90 min ago
-      if (state === 'in' && comp?.date) {
-        const started = new Date(comp.date).getTime();
-        const elapsed = Date.now() - started;
-        return elapsed < 90 * 60 * 1000;
-      }
-      return false;
-    });
-    console.log(`[pregenerate] ESPN ${sport.toUpperCase()} ${dateStr}: ${all.length} total events, ${filtered.length} pre/in-progress`);
+
+    const filtered = includeAll
+      ? all // admin date-pick: include all games (pre, in, post) on that date
+      : all.filter(ev => {
+          const comp  = ev.competitions?.[0];
+          const state = comp?.status?.type?.state;
+          if (state === 'pre') return true;
+          if (state === 'in' && comp?.date) {
+            const started = new Date(comp.date).getTime();
+            const elapsed = Date.now() - started;
+            return elapsed < 90 * 60 * 1000; // in-progress < 90 min
+          }
+          return false;
+        });
+
+    console.log(`[pregenerate] ESPN ${sport.toUpperCase()} ${dateStr}: ${all.length} total events, ${filtered.length} included (includeAll=${includeAll})`);
     return filtered;
   } catch (e) {
     console.warn(`[pregenerate] ESPN fetch failed for ${sport}:`, e.message);
@@ -364,7 +370,10 @@ export async function GET(req) {
       }
     }
 
-    const events = await fetchTodaysGames(sport, espnDate);
+    // When admin picks a specific date, include ALL game states (pre/in/post)
+    // because the games for that date may have already finished.
+    // Cron-triggered runs only include pre/in-progress games (don't waste tokens on final games).
+    const events = await fetchTodaysGames(sport, espnDate, !!dateOverride);
     if (!events.length) continue;
 
     // Determine trigger source for audit logging
