@@ -1936,7 +1936,14 @@ function SystemPanel({ userEmail }) {
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             className="btn-gold"
-            onClick={() => runPregenAnalysis(null)}
+            onClick={() => {
+              // Use ET date so "today" is correct even after midnight UTC
+              const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+              const yyyy = etNow.getFullYear();
+              const mm = String(etNow.getMonth() + 1).padStart(2, '0');
+              const dd = String(etNow.getDate()).padStart(2, '0');
+              runPregenAnalysis(`${yyyy}-${mm}-${dd}`);
+            }}
             disabled={pregenRunning}
             style={{ opacity: pregenRunning ? 0.6 : 1 }}
           >
@@ -1944,9 +1951,13 @@ function SystemPanel({ userEmail }) {
           </button>
           <button
             onClick={() => {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              runPregenAnalysis(tomorrow.toISOString().split('T')[0]);
+              // Use ET (America/New_York) so "tomorrow" is correct even after midnight UTC
+              const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+              etNow.setDate(etNow.getDate() + 1);
+              const yyyy = etNow.getFullYear();
+              const mm = String(etNow.getMonth() + 1).padStart(2, '0');
+              const dd = String(etNow.getDate()).padStart(2, '0');
+              runPregenAnalysis(`${yyyy}-${mm}-${dd}`);
             }}
             disabled={pregenRunning}
             style={{

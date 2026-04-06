@@ -271,8 +271,15 @@ export async function GET(req) {
   const dateOverride = params.get('date') || null;
 
   const started = Date.now();
-  const today = dateOverride ? new Date(dateOverride + 'T12:00:00Z') : new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  // Use ET (America/New_York) for "today" so late-night cron runs don't accidentally
+  // process the wrong date. When dateOverride is given (admin buttons), use it directly.
+  let todayStr;
+  if (dateOverride) {
+    todayStr = dateOverride;
+  } else {
+    const etFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+    todayStr = etFormatter.format(new Date()); // YYYY-MM-DD in ET
+  }
   const espnDate = todayStr.replace(/-/g, '');
   // Unique run ID groups all analyses from this single cron/admin invocation
   const runId = `run_${todayStr}_${Date.now()}`;
