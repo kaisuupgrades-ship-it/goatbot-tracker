@@ -108,7 +108,7 @@ async function callClaude({ system, user, maxTokens = 1500, temperature = 0.7, s
  * Main entry point - tries xAI first, falls back to Claude
  *
  * @param {object} opts
- * @param {string}  opts.system        — system prompt
+ * @param {string}  opts.system        - system prompt
  * @param {string}  opts.user          — user message / prompt
  * @param {number}  [opts.maxTokens]   — max response tokens
  * @param {number}  [opts.temperature] — 0-1 creativity
@@ -148,11 +148,4 @@ export async function callAI({ system, user, maxTokens = 1500, temperature = 0.7
  * Convenience: call AI and just return the text string
  * Returns null on failure instead of throwing (for non-critical paths)
  */
-export async function callAISafe(opts) {
-  try {
-    const result = await callAI(opts);
-    return result.text;
-  } catch {
-    return null;
-  }
-}
+e

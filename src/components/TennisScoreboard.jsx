@@ -58,7 +58,7 @@ function MatchCard({ match }) {
   // Round label - extract from series name or competition note
   const round   = comp.series?.name || comp.notes?.[0]?.headline || match.name?.split(' - ').slice(-1)[0] || '';
 
-  // Scheduled time — format nicely like Flashscore
+  // Scheduled time - format nicely like Flashscore
   const matchDate = comp.date ? new Date(comp.date) : null;
   const startTime = matchDate ? matchDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const startDay  = matchDate ? matchDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
@@ -509,23 +509,4 @@ export default function TennisScoreboard({ initialTour = 'atp' }) {
               >
                 Try again
               </button>
-            </div>
-          ) : (
-            <p style={{ fontSize: '0.85rem' }}>No matches match the current filter.</p>
-          )}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {sortedGroups.map(([tournName, matches], i) => (
-            <TournamentSection
-              key={tournName}
-              name={tournName}
-              matches={matches}
-              defaultOpen={i === 0}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+            

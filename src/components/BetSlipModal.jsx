@@ -221,7 +221,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const resolvedAwayOdds = odds?.awayOdds ?? (mlFromSpread?.awayLine ? mlFromSpread.awayLine : null);
   const resolvedHomeOdds = odds?.homeOdds ?? (mlFromSpread?.homeLine ? mlFromSpread.homeLine : null);
 
-  // For NHL and MLB the line is ALWAYS +/-1.5 — show puck/run line even when odds data is missing
+  // For NHL and MLB the line is ALWAYS +/-1.5 - show puck/run line even when odds data is missing
   const alwaysHasFixedLine = ['nhl', 'mlb'].includes(sport);
   // Infer which team is favored from ML odds to assign -1.5 correctly
   const homeFavored = resolvedHomeOdds != null && resolvedAwayOdds != null
@@ -1158,30 +1158,4 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 onClick={handleSave}
                 disabled={saving || aiChecking || !hasSelection || showConfirm}
                 style={{
-                  background: saving || aiChecking || !hasSelection
-                    ? 'var(--bg-overlay)'
-                    : 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)',
-                  color: saving || aiChecking || !hasSelection ? 'var(--text-muted)' : '#0a0a0a',
-                  border: 'none', borderRadius: '8px', padding: '0.5rem 1.4rem',
-                  fontSize: '0.88rem', fontWeight: 800,
-                  cursor: saving || aiChecking || !hasSelection || showConfirm ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit',
-                  boxShadow: saving || aiChecking || !hasSelection ? 'none' : '0 2px 12px rgba(255,184,0,0.35)',
-                  transition: 'all 0.15s',
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  opacity: !hasSelection || showConfirm ? 0.5 : 1,
-                }}
-              >
-                {saving || aiChecking
-                  ? '[refresh] Saving...'
-                  : isContest && contestResult?.eligible
-                    ? '[trophy] Save Contest Pick'
-                    : '[save] Save Bet'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
+                  background: saving || aiChecking
