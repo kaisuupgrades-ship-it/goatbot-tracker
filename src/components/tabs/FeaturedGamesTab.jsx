@@ -984,4 +984,30 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
               }
             }
           }
-          odd
+          odds = {
+            homeOdds, awayOdds,
+            spread:          rawOdds.details || null,
+            total:           rawOdds.overUnder ?? null,
+            homeSpreadOdds:  rawOdds._homeSpreadOdds ?? rawOdds.homeTeamOdds?.spreadLine ?? null,
+            awaySpreadOdds:  rawOdds._awaySpreadOdds ?? rawOdds.awayTeamOdds?.spreadLine ?? null,
+            overOdds:        rawOdds._overOdds  ?? rawOdds.overOdds  ?? null,
+            underOdds:       rawOdds._underOdds ?? rawOdds.underOdds ?? null,
+            provider:        rawOdds._source    ?? rawOdds.provider?.name ?? '',
+          };
+        }
+        return (
+          <BetSlipModal
+            game={{ away, home, odds, date: ev?.date }}
+            sport={betSlipGame.sport}
+            user={user}
+            picks={picks}
+            setPicks={setPicks}
+            isDemo={isDemo}
+            onAnalyze={onAnalyze}
+            onClose={() => setBetSlipGame(null)}
+          />
+        );
+      })()}
+    </div>
+  );
+}

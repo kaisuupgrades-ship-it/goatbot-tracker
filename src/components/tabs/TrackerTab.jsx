@@ -950,4 +950,22 @@ export default function TrackerTab({ picks, user }) {
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{p.sport} . {p.bet_type}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ color: pa
+                  <span style={{ color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.88rem', fontFamily: 'IBM Plex Mono' }}>
+                    {parseInt(p.odds) > 0 ? '+' : ''}{p.odds}
+                  </span>
+                  <span className={`badge-${p.result?.toLowerCase() || 'pending'}`} style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
+                    {p.result || 'PENDING'}
+                  </span>
+                  <span style={{ color: parseFloat(p.profit) >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600, fontSize: '0.82rem', fontFamily: 'IBM Plex Mono', minWidth: '50px', textAlign: 'right' }}>
+                    {p.profit != null && p.profit !== '' ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '-'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}

@@ -396,4 +396,20 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
         </div>
       )}
 
-      <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted
+      <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+        Only bettors with settled picks are shown. Click any row to view profile.
+        {isDemo && ' (Demo data)'}
+      </div>
+
+      {/* Profile modal */}
+      {viewProfile && (
+        <PublicProfileModal
+          entry={viewProfile}
+          onClose={() => setViewProfile(null)}
+          onOpenInbox={onOpenInbox}
+          currentUser={user}
+        />
+      )}
+    </div>
+  );
+}
