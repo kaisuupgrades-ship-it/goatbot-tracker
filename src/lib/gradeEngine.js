@@ -31,14 +31,21 @@ export function teamMatches(a, b) {
   return n1 === n2 || n1.includes(n2) || n2.includes(n1);
 }
 
-/** "BOS @ TB" or "PHI vs COL" → { away, home } normalized strings */
+/** "BOS @ TB" or "PHI vs COL" or "Tulsa at Auburn" → { away, home } normalized strings */
 export function parseMatchupStr(matchup) {
   if (!matchup) return null;
   const lower = matchup.toLowerCase();
   const atIdx = lower.indexOf(' @ ');
   const vsIdx = lower.indexOf(' vs ');
+  // " at " as a word — only treat as separator when surrounded by spaces
+  // e.g. "Tulsa at Auburn" but not "Washington" containing "at"
+  const atWordIdx = lower.search(/\s+at\s+/);
   if (atIdx > -1) return { away: normalize(matchup.slice(0, atIdx)),  home: normalize(matchup.slice(atIdx + 3)) };
   if (vsIdx > -1) return { away: normalize(matchup.slice(0, vsIdx)),  home: normalize(matchup.slice(vsIdx + 4)) };
+  if (atWordIdx > -1) {
+    const atWordMatch = lower.match(/^(.*?)\s+at\s+(.*?)$/);
+    if (atWordMatch) return { away: normalize(atWordMatch[1]), home: normalize(atWordMatch[2]) };
+  }
   return null;
 }
 
@@ -57,13 +64,20 @@ export function isMatchupString(str) {
  * "Under 139.5 total points" → 139.5
  * "LAD -1.5 run line"       → -1.5
  * "Over 7.5"                → 7.5
+ * "Auburn -1.5 live spread" → -1.5  (number BEFORE keyword)
  */
 export function parseLineFromNotes(notes) {
   if (!notes) return null;
-  // Look for a number that follows over/under/total/spread keywords
-  const match = notes.match(/(?:over|under|total|spread|line|o\/u|ou)\s*([+-]?\d+(?:\.\d+)?)/i)
-    || notes.match(/([+-]?\d+\.\d+)\s*(?:total|points|runs|goals|assists)/i);
-  if (match) return parseFloat(match[1]);
+  // Pattern 1: keyword THEN number  e.g. "spread -1.5" / "over 7.5"
+  const m1 = notes.match(/(?:over|under|total|spread|line|o\/u|ou)\s*([+-]?\d+(?:\.\d+)?)/i);
+  if (m1) return parseFloat(m1[1]);
+  // Pattern 2: number THEN unit word  e.g. "-1.5 total points"
+  const m2 = notes.match(/([+-]?\d+\.\d+)\s*(?:total|points|runs|goals|assists)/i);
+  if (m2) return parseFloat(m2[1]);
+  // Pattern 3: number immediately BEFORE spread/line keyword (possibly with words in between)
+  // e.g. "Auburn -1.5 live spread" or "team -2.5 run line"
+  const m3 = notes.match(/([+-]?\d+(?:\.\d+)?)\s+(?:\w+\s+)*(?:spread|run line|puck line|line)/i);
+  if (m3) return parseFloat(m3[1]);
   return null;
 }
 

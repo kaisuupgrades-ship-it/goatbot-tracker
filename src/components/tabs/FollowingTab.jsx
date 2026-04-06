@@ -1,6 +1,14 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import PublicProfileModal from '../PublicProfileModal';
+
+async function authHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return token ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+               : { 'Content-Type': 'application/json' };
+}
 
 
 function ResultStrip({ results = [] }) {
@@ -162,7 +170,7 @@ export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
   const handleUnfollow = async (entry) => {
     await fetch('/api/follow', {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders(),
       body: JSON.stringify({ followerId: userId, followingId: entry.id }),
     });
     setFollowing(f => f.filter(u => u.id !== entry.id));

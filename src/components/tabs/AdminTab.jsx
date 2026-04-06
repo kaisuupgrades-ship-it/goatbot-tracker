@@ -1713,38 +1713,52 @@ function SystemPanel({ userEmail }) {
     }
   }
 
-  // Fire-and-forget: sends ONE request for all sports. The server processes
-  // them sequentially and writes progress to the settings table. We poll that
-  // table so the UI stays alive even if the user switches tabs or refreshes.
+  // Fires ONE request per sport, sequentially. Each sport gets its own
+  // 5-minute Vercel function call so we never hit the timeout regardless of
+  // how many games are on the slate (e.g. 15 MLB games × 30s = fine).
   async function runPregenAnalysis(targetDate = null) {
     setPregenRunning(true);
     setPregenResult(null);
     setPregenLiveLog([]);
 
-    const body = { userEmail, force: true };
-    if (targetDate) body.date = targetDate;
+    const SPORTS = ['mlb', 'nba', 'nhl', 'nfl', 'mls'];
+    const base   = { userEmail, force: true };
+    if (targetDate) base.date = targetDate;
 
-    // Fire the request — don't await it (it can take 2-5 min on Vercel)
-    fetch('/api/cron/pregenerate-analysis', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }).then(async res => {
-      // When the full request completes, show the final result
+    let totalGenerated = 0, totalSkipped = 0, totalErrors = 0;
+
+    for (const sport of SPORTS) {
+      // Show which sport is running in the live log
+      setPregenLiveLog(prev => [...prev, { sport, status: 'running', count: null, ts: Date.now() }]);
+
       try {
+        const res = await fetch('/api/cron/pregenerate-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...base, sport }),
+        });
         const data = await res.json();
-        setPregenResult(data);
-      } catch { /* polling will catch completion */ }
-      setPregenRunning(false);
-      loadPregenLog();
-      loadGeneratedAnalyses();
-    }).catch(() => {
-      // Request may fail if user navigated away — that's fine,
-      // the server-side function continues and polling will catch it
-    });
+        totalGenerated += data.generated || 0;
+        totalSkipped   += data.skipped   || 0;
+        totalErrors    += data.errors    || 0;
 
-    // Start polling progress from Supabase settings table
-    startPregenPolling();
+        // Mark this sport done in the live log
+        setPregenLiveLog(prev => prev.map(e =>
+          e.sport === sport
+            ? { ...e, status: 'done', count: data.generated || 0 }
+            : e
+        ));
+      } catch {
+        setPregenLiveLog(prev => prev.map(e =>
+          e.sport === sport ? { ...e, status: 'error' } : e
+        ));
+      }
+    }
+
+    setPregenResult({ generated: totalGenerated, skipped: totalSkipped, errors: totalErrors });
+    setPregenRunning(false);
+    loadPregenLog();
+    loadGeneratedAnalyses();
   }
 
   function startPregenPolling() {

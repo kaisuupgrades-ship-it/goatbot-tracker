@@ -1,6 +1,14 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { RankBadge } from './tabs/ChatRoomTab';
+
+async function authHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return token ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+               : { 'Content-Type': 'application/json' };
+}
 
 
 function UserAvatar({ userId, avatarUrl, avatarEmoji, displayName, username, size = 62 }) {
@@ -110,7 +118,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
     try {
       await fetch('/api/follow', {
         method: following ? 'DELETE' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({ followerId: currentUserId, followingId: userId }),
       });
       setFollowing(f => !f);

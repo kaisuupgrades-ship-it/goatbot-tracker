@@ -1,7 +1,15 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+async function authHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return token ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+               : { 'Content-Type': 'application/json' };
+}
 
 function Avatar({ userId, avatarUrl, emoji, size = 36 }) {
   const [err, setErr] = useState(false);
@@ -251,7 +259,7 @@ function ComposeView({ userId, onSent, onCancel }) {
     if (!picked || !content.trim()) return;
     setSending(true); setError('');
     const res = await fetch('/api/messages', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: await authHeaders(),
       body: JSON.stringify({ senderId: userId, recipientId: picked.user_id, content: content.trim() }),
     });
     const data = await res.json();
@@ -386,7 +394,7 @@ export default function InboxPanel({ user, isOpen, onClose, initialRecipient = n
     if (!activePartner || sending) return;
     setSending(true);
     await fetch('/api/messages', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: await authHeaders(),
       body: JSON.stringify({ senderId: userId, recipientId: activePartner.id, content }),
     });
     // Reload thread
