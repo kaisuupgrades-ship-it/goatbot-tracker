@@ -1429,7 +1429,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         fontWeight: 700, fontSize: '0.72rem',
                         color: pick.result === 'WIN' ? '#4ade80' : pick.result === 'LOSS' ? '#f87171' : '#94a3b8',
                       }}>
-                        {pick.graded_away_score}–{pick.graded_home_score} <span style={{ fontWeight: 400, color: '#555' }}>FINAL</span>
+                        {pick.graded_away_score}-{pick.graded_home_score} <span style={{ fontWeight: 400, color: '#555' }}>FINAL</span>
                       </div>
                     )}
                   </div>
