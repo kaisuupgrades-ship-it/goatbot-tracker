@@ -221,7 +221,7 @@ function TournamentSection({ name, matches, defaultOpen }) {
     // Score if available
     const p1Score = (isFinal || isLive) ? (parseInt(p1.score) ?? '') : '';
     const p2Score = (isFinal || isLive) ? (parseInt(p2.score) ?? '') : '';
-    const scoreStr = (p1Score !== '' && p2Score !== '') ? ` ${p1Score}–${p2Score}` : '';
+    const scoreStr = (p1Score !== '' && p2Score !== '') ? ` ${p1Score}-${p2Score}` : '';
     return { label: `${n1} vs ${n2}${scoreStr}`, isLive, isFinal };
   };
 
