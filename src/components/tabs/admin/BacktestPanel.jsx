@@ -499,7 +499,7 @@ function ActiveEdges({ userEmail }) {
   if (error)   return <div style={{ color: '#f87171', fontSize: '0.78rem' }}>{error}</div>;
   if (!edges.length) return (
     <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-      No edges saved yet. Run a backtest with positive ROI and a sample size >= 20 games to save your first edge.
+      No edges saved yet. Run a backtest with positive ROI and a sample size {'>='} 20 games to save your first edge.
     </div>
   );
 

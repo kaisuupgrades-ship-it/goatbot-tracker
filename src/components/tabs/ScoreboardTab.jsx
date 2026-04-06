@@ -657,7 +657,7 @@ function WeatherWidget({ stadium, gameDate, sport }) {
             </div>
             {windContext && (
               <div style={{ fontSize: '0.62rem', color: windHigh ? '#fbbf24' : '#93c5fd', textAlign: 'right', lineHeight: 1.4, maxWidth: '90px' }}>
-                {windContext.replace(/^[^<--><^]\s*/, '')}
+                {windContext.replace(/^[<>\-^]+\s*/, '')}
                 {windHigh && sport === 'mlb' && <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem' }}>affects fly balls</div>}
               </div>
             )}
