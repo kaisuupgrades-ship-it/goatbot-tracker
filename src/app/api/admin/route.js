@@ -317,7 +317,6 @@ export async function GET(req) {
     }
 
     if (action === 'game_analyses') {
-      // Return all pre-generated analyses, optionally filtered by date
       const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
       const { data: analyses } = await supabaseAdmin
         .from('game_analyses')
@@ -325,6 +324,30 @@ export async function GET(req) {
         .eq('game_date', date)
         .order('updated_at', { ascending: false });
       return NextResponse.json({ analyses: analyses || [], date });
+    }
+
+    if (action === 'chat_settings') {
+      const { data } = await supabaseAdmin.from('chat_settings').select('key, value');
+      const settings = {};
+      (data || []).forEach(r => { settings[r.key] = r.value; });
+      return NextResponse.json({ settings });
+    }
+
+    if (action === 'chat_mods') {
+      const { data: mods } = await supabaseAdmin
+        .from('chat_mods')
+        .select('user_id, created_at, profiles:profiles!user_id(username, display_name, avatar_emoji, xp, rank_title)')
+        .order('created_at', { ascending: false });
+      return NextResponse.json({ mods: mods || [] });
+    }
+
+    if (action === 'chat_bans') {
+      const { data: bans } = await supabaseAdmin
+        .from('chat_bans')
+        .select('id, user_id, reason, created_at, active, profiles:profiles!user_id(username, display_name)')
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+      return NextResponse.json({ bans: bans || [] });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
@@ -546,6 +569,94 @@ export async function POST(req) {
         .from('ai_concerns')
         .update({ resolved: true, resolved_at: new Date().toISOString() })
         .eq('id', targetId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Chat moderation actions ────────────────────────────────────────────────
+    if (action === 'chat_mute') {
+      const { targetUserId, reason, durationMinutes } = body;
+      if (!targetUserId) return NextResponse.json({ error: 'targetUserId required' }, { status: 400 });
+      const mins = Math.min(Math.max(parseInt(durationMinutes || 30), 1), 10080);
+      const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
+      await supabaseAdmin.from('chat_mutes').delete().eq('user_id', targetUserId);
+      await supabaseAdmin.from('chat_mutes').insert([{
+        user_id: targetUserId, muted_by: adminUser.id, reason: reason || null, expires_at: expiresAt,
+      }]);
+      return NextResponse.json({ ok: true, expiresAt });
+    }
+
+    if (action === 'chat_unmute') {
+      const { targetUserId } = body;
+      await supabaseAdmin.from('chat_mutes').delete().eq('user_id', targetUserId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'chat_ban') {
+      const { targetUserId, reason } = body;
+      if (!targetUserId) return NextResponse.json({ error: 'targetUserId required' }, { status: 400 });
+      await supabaseAdmin.from('chat_bans').update({ active: false }).eq('user_id', targetUserId);
+      await supabaseAdmin.from('chat_bans').insert([{
+        user_id: targetUserId, banned_by: adminUser.id, reason: reason || null, active: true,
+      }]);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'chat_unban') {
+      const { targetUserId } = body;
+      await supabaseAdmin.from('chat_bans').update({ active: false }).eq('user_id', targetUserId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'chat_promote_mod') {
+      const { targetUserId } = body;
+      if (!targetUserId) return NextResponse.json({ error: 'targetUserId required' }, { status: 400 });
+      await supabaseAdmin.from('chat_mods').upsert([{
+        user_id: targetUserId, promoted_by: adminUser.id, created_at: new Date().toISOString(),
+      }], { onConflict: 'user_id' });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'chat_demote_mod') {
+      const { targetUserId } = body;
+      await supabaseAdmin.from('chat_mods').delete().eq('user_id', targetUserId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'update_chat_settings') {
+      const { settings } = body;
+      if (!settings || typeof settings !== 'object') return NextResponse.json({ error: 'settings required' }, { status: 400 });
+      const rows = Object.entries(settings).map(([key, value]) => ({
+        key, value: String(value), updated_at: new Date().toISOString(),
+      }));
+      const { error } = await supabaseAdmin.from('chat_settings').upsert(rows, { onConflict: 'key' });
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'award_xp') {
+      const { targetUserId, amount } = body;
+      if (!targetUserId || !amount) return NextResponse.json({ error: 'targetUserId and amount required' }, { status: 400 });
+      const { data: profile } = await supabaseAdmin.from('profiles').select('xp').eq('id', targetUserId).single();
+      const newXp = Math.max(0, (profile?.xp || 0) + parseInt(amount));
+      // Compute rank — reuse same tier data
+      const RANKS = [
+        { title: 'Degenerate', minXp: 0 }, { title: 'Square', minXp: 100 },
+        { title: 'Handicapper', minXp: 300 }, { title: 'Sharp', minXp: 700 },
+        { title: 'Steam Chaser', minXp: 1500 }, { title: 'Wiseguy', minXp: 3000 },
+        { title: 'Line Mover', minXp: 6000 }, { title: 'Syndicate', minXp: 10000 },
+        { title: 'Whale', minXp: 20000 }, { title: 'Legend', minXp: 40000 },
+      ];
+      let rank = RANKS[0];
+      for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
+      await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', targetUserId);
+      return NextResponse.json({ ok: true, newXp, rank: rank.title });
+    }
+
+    if (action === 'chat_delete_message') {
+      const { messageId } = body;
+      if (!messageId) return NextResponse.json({ error: 'messageId required' }, { status: 400 });
+      const { error } = await supabaseAdmin.from('chat_messages').delete().eq('id', messageId);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }

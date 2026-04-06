@@ -303,6 +303,22 @@ export async function POST(req) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // ── Award XP for submitting a pick (+5 XP) ───────────────────────────────
+  try {
+    const RANKS = [
+      { title: 'Degenerate', minXp: 0 }, { title: 'Square', minXp: 100 },
+      { title: 'Handicapper', minXp: 300 }, { title: 'Sharp', minXp: 700 },
+      { title: 'Steam Chaser', minXp: 1500 }, { title: 'Wiseguy', minXp: 3000 },
+      { title: 'Line Mover', minXp: 6000 }, { title: 'Syndicate', minXp: 10000 },
+      { title: 'Whale', minXp: 20000 }, { title: 'Legend', minXp: 40000 },
+    ];
+    const { data: profile } = await supabaseAdmin.from('profiles').select('xp').eq('id', userId).single();
+    const newXp = (profile?.xp || 0) + 5;
+    let rank = RANKS[0];
+    for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
+    await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', userId);
+  } catch { /* non-critical */ }
+
   return NextResponse.json({ pick: data, commence_time_found: !!commence_time });
 }
 

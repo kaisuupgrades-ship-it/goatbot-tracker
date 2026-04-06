@@ -175,6 +175,13 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
   const [viewYear, setViewYear]   = useState(todayYear);
   const [viewMonth, setViewMonth] = useState(todayMonth);
   const [selected, setSelected]   = useState(null);
+  const [isMobile, setIsMobile]   = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     if (dateRange?.start) {
@@ -251,9 +258,9 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0.6rem 0.75rem' : '0.85rem 1rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div>
-          <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1rem' }}>{MONTHS[viewMonth]} {viewYear}</div>
+          <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: isMobile ? '0.9rem' : '1rem' }}>{MONTHS[viewMonth]} {viewYear}</div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
             <span style={{ color: monthStats.pl >= 0 ? 'var(--green)' : 'var(--red)', fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', fontWeight: 700 }}>
               {monthStats.pl >= 0 ? '+' : ''}{monthStats.pl.toFixed(2)}u
@@ -274,17 +281,17 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
       </div>
 
       {/* Day-of-week labels */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '6px 8px 2px', flexShrink: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: isMobile ? '4px 6px 1px' : '6px 8px 2px', flexShrink: 0 }}>
         {WEEKDAYS_SHORT.map((d, i) => (
-          <div key={i} style={{ textAlign: 'center', fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{d}</div>
+          <div key={i} style={{ textAlign: 'center', fontSize: isMobile ? '0.55rem' : '0.62rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{d}</div>
         ))}
       </div>
 
       {/* Heat tile grid */}
-      <div style={{ padding: '4px 8px 8px', flex: 1 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+      <div style={{ padding: isMobile ? '3px 6px 6px' : '4px 8px 8px', flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: isMobile ? '2px' : '3px' }}>
           {cells.map((day, idx) => {
-            if (!day) return <div key={`e${idx}`} style={{ borderRadius: '8px', minHeight: '76px', background: 'rgba(255,255,255,0.01)' }} />;
+            if (!day) return <div key={`e${idx}`} style={{ borderRadius: isMobile ? '6px' : '8px', minHeight: isMobile ? '52px' : '76px', background: 'rgba(255,255,255,0.01)' }} />;
 
             const dateKey   = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const dayPicks  = byDate[dateKey] || [];
@@ -305,32 +312,38 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
             // Team name length shrinks with density: 9 → 7 → 4 → 0
             const teamNameLen = density === 1 ? 9 : density === 2 ? 7 : 4;
             const teamShort = firstPick ? ((firstPick.team || '').split(' ').pop().slice(0, teamNameLen)) : '';
-            // Emoji size shrinks: 0.90 → 0.80 → 0.70 → hidden
-            const emojiSize = density === 1 ? '0.9rem' : density === 2 ? '0.80rem' : '0.70rem';
-            // Text label size: 0.65 → 0.58 → 0.52
-            const labelSize = density === 1 ? '0.65rem' : density === 2 ? '0.58rem' : '0.52rem';
-            // Date number shrinks slightly when very crowded
-            const dateNumSize = density >= 3 ? '0.68rem' : '0.78rem';
+            // Emoji size shrinks: 0.90 → 0.80 → 0.70 → hidden (smaller on mobile)
+            const emojiSize = isMobile
+              ? (density === 1 ? '0.62rem' : density === 2 ? '0.55rem' : '0.48rem')
+              : (density === 1 ? '0.9rem'  : density === 2 ? '0.80rem' : '0.70rem');
+            // Text label size: 0.65 → 0.58 → 0.52 (smaller on mobile)
+            const labelSize = isMobile
+              ? (density === 1 ? '0.52rem' : density === 2 ? '0.48rem' : '0.44rem')
+              : (density === 1 ? '0.65rem' : density === 2 ? '0.58rem' : '0.52rem');
+            // Date number shrinks slightly when very crowded (even smaller on mobile)
+            const dateNumSize = isMobile ? (density >= 3 ? '0.56rem' : '0.62rem') : (density >= 3 ? '0.68rem' : '0.78rem');
             // P/L font shrinks too
-            const plSize = density >= 3 ? '0.60rem' : '0.72rem';
+            const plSize = isMobile ? (density >= 3 ? '0.5rem' : '0.58rem') : (density >= 3 ? '0.60rem' : '0.72rem');
 
             return (
               <div
                 key={dateKey}
                 onClick={() => dayPicks.length && setSelected(isSel ? null : dateKey)}
                 style={{
-                  borderRadius: '8px',
+                  borderRadius: isMobile ? '6px' : '8px',
                   border: `1px solid ${ts.border}`,
                   background: ts.bg,
                   boxShadow: ts.glow,
-                  padding: density >= 3 ? '5px 4px 4px' : '6px 6px 5px',
+                  padding: isMobile
+                    ? (density >= 3 ? '3px 2px 3px' : '4px 4px 3px')
+                    : (density >= 3 ? '5px 4px 4px' : '6px 6px 5px'),
                   cursor: dayPicks.length ? 'pointer' : 'default',
-                  display: 'flex', flexDirection: 'column', gap: density >= 3 ? '2px' : '3px',
-                  minHeight: '76px',
+                  display: 'flex', flexDirection: 'column', gap: isMobile ? '1px' : (density >= 3 ? '2px' : '3px'),
+                  minHeight: isMobile ? '52px' : '76px',
                   transition: 'all 0.15s',
                   position: 'relative', overflow: 'hidden',
                 }}
-                onMouseEnter={e => { if (dayPicks.length) { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.zIndex = '2'; } }}
+                onMouseEnter={e => { if (!isMobile && dayPicks.length) { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.zIndex = '2'; } }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.zIndex = ''; }}
               >
                 {/* Date + P/L on same row */}

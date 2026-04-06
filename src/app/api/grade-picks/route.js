@@ -91,7 +91,27 @@ export async function POST(req) {
           .eq('id', g.id)
           .is('result', null);
 
-        if (!updateErr) allGraded.push(g);
+        if (!updateErr) {
+          allGraded.push(g);
+          // Award XP for result: WIN +20, PUSH +3
+          const xpGain = g.result === 'WIN' ? 20 : g.result === 'PUSH' ? 3 : 0;
+          if (xpGain > 0 && g.user_id) {
+            try {
+              const RANKS = [
+                { title: 'Degenerate', minXp: 0 }, { title: 'Square', minXp: 100 },
+                { title: 'Handicapper', minXp: 300 }, { title: 'Sharp', minXp: 700 },
+                { title: 'Steam Chaser', minXp: 1500 }, { title: 'Wiseguy', minXp: 3000 },
+                { title: 'Line Mover', minXp: 6000 }, { title: 'Syndicate', minXp: 10000 },
+                { title: 'Whale', minXp: 20000 }, { title: 'Legend', minXp: 40000 },
+              ];
+              const { data: prof } = await supabase.from('profiles').select('xp').eq('id', g.user_id).single();
+              const newXp = (prof?.xp || 0) + xpGain;
+              let rank = RANKS[0];
+              for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
+              await supabase.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', g.user_id);
+            } catch { /* non-critical */ }
+          }
+        }
       }
     }
 

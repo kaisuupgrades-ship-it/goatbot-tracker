@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { RankBadge } from './tabs/ChatRoomTab';
 
 
 function UserAvatar({ userId, avatarUrl, avatarEmoji, displayName, username, size = 62 }) {
@@ -123,7 +124,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const sportBreakdown = profileData?.sport_breakdown || [];
   const pendingCount   = pendingPicks.length || stats?.pending_count || 0;
 
-  const { rank, avatar_emoji, avatar_url, display_name, username, sharp_score } = entry;
+  const { rank, avatar_emoji, avatar_url, display_name, username, sharp_score, rank_title, xp } = entry;
   const displayName   = display_name || username || 'Anonymous';
   const displayWins   = stats?.wins   ?? entry.wins   ?? 0;
   const displayLosses = stats?.losses ?? entry.losses ?? 0;
@@ -199,8 +200,9 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                 <div style={{ fontWeight: 900, fontSize: '1.15rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
                   {displayName}
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '6px' }}>
-                  @{username}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>@{username}</span>
+                  {(rank_title || xp != null) && <RankBadge rankTitle={rank_title} xp={xp} size="sm" />}
                 </div>
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
                   <button

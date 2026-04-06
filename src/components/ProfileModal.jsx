@@ -569,6 +569,8 @@ export default function ProfileModal({ user, onClose, onUpdated }) {
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={() => setAvatarPreview(null)}
                     />
+                  ) : meta.avatar_emoji ? (
+                    <span style={{ fontSize: '1.8rem', lineHeight: 1 }}>{meta.avatar_emoji}</span>
                   ) : (
                     <span style={{ fontSize: '1.6rem', color: 'var(--text-muted)' }}>
                       {currentUsername[0]?.toUpperCase() || '?'}

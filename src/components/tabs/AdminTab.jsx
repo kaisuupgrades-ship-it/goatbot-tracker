@@ -2578,26 +2578,329 @@ function ConcernsPanel({ userEmail }) {
   );
 }
 
+// ── Flags Panel: AI Errors + Concerns merged ─────────────────────────────────
+function FlagsPanel({ userEmail }) {
+  const [sub, setSub] = useState('ai_errors');
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
+        {[
+          { id: 'ai_errors', label: '🔴 AI Errors' },
+          { id: 'concerns',  label: '⚠️ Concerns' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setSub(t.id)}
+            style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sub === 'ai_errors' && <AIErrorQueuePanel userEmail={userEmail} />}
+      {sub === 'concerns'  && <ConcernsPanel     userEmail={userEmail} />}
+    </div>
+  );
+}
+
+// ── AI Tools Panel: Backtester + AI Lab merged ────────────────────────────────
+function AIToolsPanel({ userEmail }) {
+  const [sub, setSub] = useState('ailab');
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
+        {[
+          { id: 'ailab',    label: '🧪 AI Lab' },
+          { id: 'backtest', label: '📈 Backtester' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setSub(t.id)}
+            style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sub === 'ailab'    && <AILabPanel    userEmail={userEmail} />}
+      {sub === 'backtest' && <BacktestPanel userEmail={userEmail} />}
+    </div>
+  );
+}
+
+// ── System Panel: Cron + Settings + AI Chat merged ────────────────────────────
+function SystemMegaPanel({ userEmail }) {
+  const [sub, setSub] = useState('system');
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
+        {[
+          { id: 'system', label: '⚙️ Settings' },
+          { id: 'cron',   label: '⏱ Cron Jobs' },
+          { id: 'chat',   label: '🤖 AI Chat' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setSub(t.id)}
+            style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sub === 'system' && <SystemPanel userEmail={userEmail} />}
+      {sub === 'cron'   && <CronPanel   userEmail={userEmail} />}
+      {sub === 'chat'   && <AIChatPanel userEmail={userEmail} />}
+    </div>
+  );
+}
+
+// ── Users+Activity Panel ──────────────────────────────────────────────────────
+function UsersMegaPanel({ userEmail }) {
+  const [sub, setSub] = useState('users');
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
+        {[
+          { id: 'users',    label: '👥 Accounts' },
+          { id: 'activity', label: '📡 Activity' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setSub(t.id)}
+            style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sub === 'users'    && <UsersPanel    userEmail={userEmail} onNavigate={() => {}} />}
+      {sub === 'activity' && <ActivityPanel userEmail={userEmail} />}
+    </div>
+  );
+}
+
+// ── Chat Room Admin Panel ─────────────────────────────────────────────────────
+function ChatRoomAdminPanel({ userEmail }) {
+  const [settings, setSettings]   = useState({});
+  const [mods, setMods]           = useState([]);
+  const [bans, setBans]           = useState([]);
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [sub, setSub]             = useState('settings');
+  const [promoteId, setPromoteId] = useState('');
+  const [xpUserId, setXpUserId]   = useState('');
+  const [xpAmount, setXpAmount]   = useState('');
+
+  const adminFetch = useCallback(async (url, opts = {}) => {
+    const { data: { session } } = await import('@/lib/supabase').then(m => m.supabase.auth.getSession());
+    // Use imported supabase directly
+    const s = await import('@/lib/supabase').then(m => m.supabase);
+    const { data: { session: sess } } = await s.auth.getSession();
+    const token = sess?.access_token;
+    if (!token) return null;
+    const res = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) } });
+    return res.json().catch(() => null);
+  }, []);
+
+  const load = useCallback(async () => {
+    try {
+      const [sRes, mRes, bRes] = await Promise.all([
+        fetch('/api/admin?action=chat_settings').then(r => r.json()),
+        fetch('/api/admin?action=chat_mods').then(r => r.json()),
+        fetch('/api/admin?action=chat_bans').then(r => r.json()),
+      ]);
+      if (sRes?.settings) setSettings(sRes.settings);
+      if (mRes?.mods)     setMods(mRes.mods);
+      if (bRes?.bans)     setBans(bRes.bans);
+    } catch { /* non-critical */ }
+  }, []);
+
+  // Use adminFetch from AdminTab's helper approach
+  const doAdminPost = useCallback(async (body) => {
+    // Get token via supabase client
+    const { createClient } = await import('@supabase/supabase-js');
+    const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+    const { data: { session } } = await s.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return null;
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    return res.json().catch(() => null);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const saveSettings = async () => {
+    setSaving(true);
+    await doAdminPost({ action: 'update_chat_settings', settings });
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const unban = async (userId) => {
+    await doAdminPost({ action: 'chat_unban', targetUserId: userId });
+    setBans(b => b.filter(x => x.user_id !== userId));
+  };
+
+  const demoteMod = async (userId) => {
+    await doAdminPost({ action: 'chat_demote_mod', targetUserId: userId });
+    setMods(m => m.filter(x => x.user_id !== userId));
+  };
+
+  const promoteMod = async () => {
+    if (!promoteId.trim()) return;
+    await doAdminPost({ action: 'chat_promote_mod', targetUserId: promoteId.trim() });
+    setPromoteId(''); load();
+  };
+
+  const awardXp = async () => {
+    if (!xpUserId.trim() || !xpAmount) return;
+    const res = await doAdminPost({ action: 'award_xp', targetUserId: xpUserId.trim(), amount: parseInt(xpAmount) });
+    if (res?.ok) { alert(`XP awarded! New total: ${res.newXp} (${res.rank})`); setXpUserId(''); setXpAmount(''); }
+  };
+
+  const fieldStyle = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '6px 10px', color: 'var(--text-primary)', fontSize: '0.8rem' };
+  const labelStyle = { fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', marginBottom: '4px' };
+  const rowStyle   = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' };
+
+  return (
+    <div>
+      {/* Sub-nav */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem', flexWrap: 'wrap' }}>
+        {[
+          { id: 'settings', label: '⚙️ Settings' },
+          { id: 'mods',     label: `🛡️ Mods (${mods.length})` },
+          { id: 'bans',     label: `🚫 Bans (${bans.length})` },
+          { id: 'xp',       label: '⭐ XP / Ranks' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setSub(t.id)}
+            style={{ padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem', border: `1px solid ${sub === t.id ? 'rgba(255,184,0,0.5)' : 'var(--border)'}`, background: sub === t.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: sub === t.id ? 'var(--gold)' : 'var(--text-muted)', fontWeight: sub === t.id ? 700 : 400 }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Settings */}
+      {sub === 'settings' && (
+        <div style={{ maxWidth: '520px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+          <div style={{ ...rowStyle }}>
+            <div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Chat enabled</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Globally enable or disable the chat room</div></div>
+            <input type="checkbox" checked={settings.chat_enabled === 'true'} onChange={e => setSettings(s => ({ ...s, chat_enabled: e.target.checked ? 'true' : 'false' }))} style={{ accentColor: 'var(--gold)', width: '17px', height: '17px', cursor: 'pointer' }} />
+          </div>
+          <div style={{ ...rowStyle }}>
+            <div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Require email verified</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Block unverified accounts from chatting</div></div>
+            <input type="checkbox" checked={settings.require_email_verified === 'true'} onChange={e => setSettings(s => ({ ...s, require_email_verified: e.target.checked ? 'true' : 'false' }))} style={{ accentColor: 'var(--gold)', width: '17px', height: '17px', cursor: 'pointer' }} />
+          </div>
+          <div style={{ ...rowStyle }}>
+            <div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Minimum XP to chat</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>0 = anyone can chat. Raise to require activity first</div></div>
+            <input type="number" min="0" max="10000" value={settings.min_xp_to_chat || '0'} onChange={e => setSettings(s => ({ ...s, min_xp_to_chat: e.target.value }))} style={{ width: '80px', ...fieldStyle, padding: '4px 8px' }} />
+          </div>
+          <div style={{ ...rowStyle, borderBottom: 'none' }}>
+            <div><div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>Max message length</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Characters per message (50–2000)</div></div>
+            <input type="number" min="50" max="2000" value={settings.max_message_length || '500'} onChange={e => setSettings(s => ({ ...s, max_message_length: e.target.value }))} style={{ width: '80px', ...fieldStyle, padding: '4px 8px' }} />
+          </div>
+          <button onClick={saveSettings} disabled={saving}
+            style={{ marginTop: '1rem', padding: '8px 20px', borderRadius: '8px', background: saved ? 'rgba(74,222,128,0.2)' : 'rgba(255,184,0,0.18)', border: `1px solid ${saved ? 'rgba(74,222,128,0.5)' : 'rgba(255,184,0,0.4)'}`, color: saved ? '#4ade80' : 'var(--gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', alignSelf: 'flex-start' }}>
+            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Settings'}
+          </button>
+        </div>
+      )}
+
+      {/* Mods */}
+      {sub === 'mods' && (
+        <div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
+            <input value={promoteId} onChange={e => setPromoteId(e.target.value)} placeholder="User UUID to promote…" style={{ ...fieldStyle, flex: 1 }} />
+            <button onClick={promoteMod} style={{ padding: '6px 14px', borderRadius: '6px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', color: '#a78bfa', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+              + Promote
+            </button>
+          </div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Tip: Get a user's UUID from the Users tab. Mods can delete messages, mute, and chat-ban users.</div>
+          {mods.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', padding: '1rem', textAlign: 'center' }}>No moderators yet.</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {mods.map(m => (
+              <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                <span style={{ fontSize: '1.1rem' }}>{m.profiles?.avatar_emoji || '👤'}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{m.profiles?.display_name || m.profiles?.username || 'Unknown'}</div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{m.user_id}</div>
+                </div>
+                <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa', fontWeight: 700 }}>{m.profiles?.rank_title || 'Degenerate'}</span>
+                <button onClick={() => demoteMod(m.user_id)} style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '5px', color: '#f87171', cursor: 'pointer', padding: '3px 8px', fontSize: '0.72rem', fontWeight: 600 }}>Remove</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Bans */}
+      {sub === 'bans' && (
+        <div>
+          {bans.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', padding: '1rem', textAlign: 'center' }}>No active chat bans.</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {bans.map(b => (
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: 'var(--bg-elevated)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '8px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{b.profiles?.display_name || b.profiles?.username}</div>
+                  {b.reason && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>"{b.reason}"</div>}
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{b.user_id}</div>
+                </div>
+                <button onClick={() => unban(b.user_id)} style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: '5px', color: '#4ade80', cursor: 'pointer', padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600 }}>Unban</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* XP & Ranks */}
+      {sub === 'xp' && (
+        <div style={{ maxWidth: '520px' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Award / Deduct XP</div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input value={xpUserId} onChange={e => setXpUserId(e.target.value)} placeholder="User UUID…" style={{ ...fieldStyle, flex: 1 }} />
+              <input type="number" value={xpAmount} onChange={e => setXpAmount(e.target.value)} placeholder="±XP" style={{ ...fieldStyle, width: '80px' }} />
+              <button onClick={awardXp} style={{ padding: '6px 14px', borderRadius: '6px', background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.4)', color: 'var(--gold)', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>Award</button>
+            </div>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '5px' }}>Use negative values to deduct. Rank title updates automatically.</div>
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Rank Tiers</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {[
+              { title: 'Degenerate',   minXp: 0,     emoji: '🎰', color: '#888' },
+              { title: 'Square',       minXp: 100,   emoji: '🎯', color: '#a78bfa' },
+              { title: 'Handicapper',  minXp: 300,   emoji: '📊', color: '#60a5fa' },
+              { title: 'Sharp',        minXp: 700,   emoji: '⚡', color: '#34d399' },
+              { title: 'Steam Chaser', minXp: 1500,  emoji: '🔥', color: '#fb923c' },
+              { title: 'Wiseguy',      minXp: 3000,  emoji: '🕶️', color: '#f472b6' },
+              { title: 'Line Mover',   minXp: 6000,  emoji: '📈', color: '#facc15' },
+              { title: 'Syndicate',    minXp: 10000, emoji: '💎', color: '#38bdf8' },
+              { title: 'Whale',        minXp: 20000, emoji: '🐳', color: '#c084fc' },
+              { title: 'Legend',       minXp: 40000, emoji: '👑', color: '#FFB800' },
+            ].map(r => (
+              <div key={r.title} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px', background: 'var(--bg-elevated)', border: `1px solid ${r.color}22`, borderRadius: '6px' }}>
+                <span style={{ fontSize: '1rem' }}>{r.emoji}</span>
+                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: r.color, flex: 1 }}>{r.title}</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{r.minXp.toLocaleString()}+ XP</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: '1rem', padding: '10px 12px', background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '8px', fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--gold)' }}>How users earn XP:</strong> +1 XP per day for chatting · +5 XP per pick submitted · +20 XP per WIN · +3 XP per PUSH · XP is automatically calculated and rank title updates on each action.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Consolidated tab definitions ──────────────────────────────────────────────
 const ADMIN_TABS = [
-  { id: 'overview',  label: '📊 Overview',     desc: 'Site-wide stats and recent activity' },
-  { id: 'users',     label: '👥 Users',         desc: 'Manage user accounts, roles, bans & edit profiles' },
-  { id: 'activity',  label: '📡 Activity',      desc: 'Last sign-on, time on site & IP addresses' },
-  { id: 'picks',     label: '📋 Picks Audit',   desc: 'View and moderate all picks' },
-  { id: 'contests',  label: '🏆 Contests',      desc: 'Active contests and participants' },
-  { id: 'ai_errors', label: '🔴 AI Errors',     desc: 'Picks where AI analysis failed — with auto-diagnosis and resolution queue' },
-  { id: 'concerns',  label: '⚠️ Concerns',      desc: 'Serious issues flagged by the AI chatbot from user conversations' },
-  { id: 'backtest',  label: '📈 Backtester',    desc: 'Import historical data, run backtests, save sharp edges' },
-  { id: 'ailab',     label: '🧪 AI Lab',          desc: 'Track AI analyzer performance, prompt versions, model stats & full audit trail' },
-  { id: 'cron',      label: '⏱ Cron Jobs',       desc: 'View scheduled jobs, toggle on/off, and trigger manually' },
-  { id: 'system',    label: '⚙️ System',         desc: 'Announcements and system settings' },
-  { id: 'chat',      label: '🤖 AI Chat',        desc: 'Chat directly with the BetOS AI assistant' },
+  { id: 'overview', label: '📊 Overview',  desc: 'Site-wide stats, leaderboard, and recent sign-ups' },
+  { id: 'users',    label: '👥 Users',     desc: 'Manage accounts, roles, bans, and view activity' },
+  { id: 'picks',    label: '📋 Picks',     desc: 'Audit and moderate all user picks' },
+  { id: 'contests', label: '🏆 Contests',  desc: 'Active contests and participants' },
+  { id: 'chat',     label: '💬 Chat Room', desc: 'Chat settings, mods, bans, and XP/rank management' },
+  { id: 'flags',    label: '🔔 Flags',     desc: 'AI analysis errors and chatbot-escalated concerns' },
+  { id: 'aitools',  label: '🧪 AI Tools',  desc: 'AI Lab performance tracker and historical backtester' },
+  { id: 'system',   label: '⚙️ System',   desc: 'Site settings, scheduled jobs, and AI chat console' },
 ];
 
 export default function AdminTab({ user }) {
   const [active, setActive] = useState('overview');
 
-  // If ADMIN_EMAILS env var is set, use it; otherwise fall back to true since
-  // Dashboard.jsx already gates this component to the hardcoded admin email.
   const isAdmin = ADMIN_EMAILS.length > 0
     ? ADMIN_EMAILS.includes(user?.email?.toLowerCase())
     : true;
@@ -2619,9 +2922,7 @@ export default function AdminTab({ user }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div>
-          <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            🛡 Admin Panel
-          </h1>
+          <h1 style={{ fontWeight: 900, fontSize: '1.4rem', color: 'var(--gold)', margin: 0 }}>🛡 Admin Panel</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '3px 0 0' }}>
             Signed in as <strong style={{ color: 'var(--text-secondary)' }}>{user?.email}</strong>
           </p>
@@ -2631,40 +2932,33 @@ export default function AdminTab({ user }) {
         </div>
       </div>
 
-      {/* Sub-nav */}
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+      {/* Tab nav — compact, grouped feel */}
+      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '6px' }}>
         {ADMIN_TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActive(t.id)}
+          <button key={t.id} onClick={() => setActive(t.id)}
             style={{
-              padding: '0.55rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.82rem',
-              border: `1px solid ${active === t.id ? 'rgba(255,184,0,0.6)' : 'var(--border)'}`,
-              background: active === t.id ? 'rgba(255,184,0,0.08)' : 'transparent',
+              padding: '6px 12px', borderRadius: '7px', cursor: 'pointer', fontSize: '0.8rem',
+              border: 'none',
+              background: active === t.id ? 'rgba(255,184,0,0.14)' : 'transparent',
               color: active === t.id ? 'var(--gold)' : 'var(--text-muted)',
               fontWeight: active === t.id ? 700 : 400,
               transition: 'all 0.12s',
-            }}
-          >
+            }}>
             {t.label}
           </button>
         ))}
       </div>
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '-0.5rem 0 0' }}>{desc}</p>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '-0.5rem 0 0' }}>{desc}</p>
 
       {/* Panel content */}
-      {active === 'overview'  && <OverviewPanel      userEmail={user.email} />}
-      {active === 'users'     && <UsersPanel         userEmail={user.email} onNavigate={setActive} />}
-      {active === 'activity'  && <ActivityPanel      userEmail={user.email} />}
-      {active === 'picks'     && <PicksAuditPanel    userEmail={user.email} />}
-      {active === 'contests'  && <ContestsPanel      userEmail={user.email} />}
-      {active === 'ai_errors' && <AIErrorQueuePanel  userEmail={user.email} />}
-      {active === 'concerns'  && <ConcernsPanel      userEmail={user.email} />}
-      {active === 'backtest'  && <BacktestPanel      userEmail={user.email} />}
-      {active === 'ailab'     && <AILabPanel         userEmail={user.email} />}
-      {active === 'cron'      && <CronPanel          userEmail={user.email} />}
-      {active === 'system'    && <SystemPanel        userEmail={user.email} />}
-      {active === 'chat'      && <AIChatPanel        userEmail={user.email} />}
+      {active === 'overview' && <OverviewPanel         userEmail={user.email} />}
+      {active === 'users'    && <UsersMegaPanel        userEmail={user.email} />}
+      {active === 'picks'    && <PicksAuditPanel       userEmail={user.email} />}
+      {active === 'contests' && <ContestsPanel         userEmail={user.email} />}
+      {active === 'chat'     && <ChatRoomAdminPanel    userEmail={user.email} />}
+      {active === 'flags'    && <FlagsPanel            userEmail={user.email} />}
+      {active === 'aitools'  && <AIToolsPanel          userEmail={user.email} />}
+      {active === 'system'   && <SystemMegaPanel       userEmail={user.email} />}
     </div>
   );
 }

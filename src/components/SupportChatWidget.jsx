@@ -95,7 +95,7 @@ export default function SupportChatWidget({ user }) {
       {/* ── Widget container ── */}
       {open && (
         <div style={{
-          position: 'fixed', bottom: '72px', left: '16px', zIndex: 900,
+          position: 'fixed', bottom: '72px', right: '16px', zIndex: 900,
           width: 'min(360px, calc(100vw - 32px))',
           background: 'var(--bg-surface)',
           border: '1px solid var(--border)',
@@ -228,7 +228,7 @@ export default function SupportChatWidget({ user }) {
       <button
         onClick={() => setOpen(v => !v)}
         style={{
-          position: 'fixed', bottom: '16px', left: '16px', zIndex: 900,
+          position: 'fixed', bottom: '16px', right: '16px', zIndex: 900,
           width: '48px', height: '48px', borderRadius: '50%',
           background: open ? 'rgba(255,184,0,0.9)' : 'rgba(255,184,0,0.15)',
           border: `2px solid ${open ? 'rgba(255,184,0,0.6)' : 'rgba(255,184,0,0.3)'}`,

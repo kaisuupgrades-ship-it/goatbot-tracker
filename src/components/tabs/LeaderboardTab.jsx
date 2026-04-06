@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchProfile, upsertProfile } from '@/lib/supabase';
 import PublicProfileModal from '../PublicProfileModal';
+import { RankBadge } from './ChatRoomTab';
 
 // ── Mobile breakpoint hook ────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 640) {
@@ -137,7 +138,7 @@ function SharpBar({ score, maxScore }) {
 // ── Leaderboard Row ────────────────────────────────────────────────────────────
 
 function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
-  const { rank, avatar_emoji, avatar_url, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, user_id: userId } = entry;
+  const { rank, avatar_emoji, avatar_url, display_name, username, wins, losses, total, units, roi, verified_picks, sharp_score, user_id: userId, rank_title, xp } = entry;
 
   return (
     <div
@@ -171,6 +172,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
               {display_name || username}
             </span>
             {isMe && <span style={{ fontSize: '0.6rem', color: 'var(--gold)', fontWeight: 700, flexShrink: 0 }}>YOU</span>}
+            {!isMobile && (rank_title || xp != null) && <RankBadge rankTitle={rank_title} xp={xp} size="xs" showTitle={false} />}
             {!isMobile && <VerifiedBadge count={verified_picks} />}
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
