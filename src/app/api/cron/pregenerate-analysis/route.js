@@ -12,6 +12,7 @@
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { buildPerformanceContext } from '@/lib/feedbackLoop';
 
 export const maxDuration = 300; // full 5 min — many games to process
 
@@ -31,6 +32,10 @@ const SPORT_PATHS = {
   mls:  'soccer/usa.1',
   wnba: 'basketball/wnba',
 };
+
+// ── Prompt versioning ─────────────────────────────────────────────────────────
+// Bump this when you change the system prompt so we can A/B test performance
+const PROMPT_VERSION = 'v1.0';
 
 const ANALYSIS_SYSTEM = `You are BetOS — a sharp AI sports analyst. Produce a concise but complete pre-game analysis report for the given matchup. Use live web search to gather:
 - Starting pitcher/goalie/lineup news confirmed for this specific date
@@ -71,11 +76,19 @@ async function fetchTodaysGames(sport, dateStr) {
     if (!res.ok) return [];
     const data = await res.json();
     return (data.events || []).filter(ev => {
-      // Only pre-generate for games that haven't started yet.
-      // 'pre' = scheduled/upcoming. Skip 'in' (live) and 'post' (final) —
-      // the 8am run covers the full slate; the 4pm run just fills any gaps.
-      const state = ev.competitions?.[0]?.status?.type?.state;
-      return state === 'pre';
+      const comp  = ev.competitions?.[0];
+      const state = comp?.status?.type?.state;
+      // Always include pre-game (scheduled/upcoming)
+      if (state === 'pre') return true;
+      // Also include recently-started games (within 90 min of first pitch/tipoff)
+      // so that late-afternoon cron runs can still generate for early games that
+      // started between the 8am and 4pm runs. Skip 'post' (final) games.
+      if (state === 'in' && comp?.date) {
+        const started = new Date(comp.date).getTime();
+        const elapsed = Date.now() - started;
+        return elapsed < 90 * 60 * 1000; // less than 90 min ago
+      }
+      return false;
     });
   } catch {
     return [];
@@ -131,11 +144,12 @@ async function fetchCachedOdds(sport, homeTeam, awayTeam) {
   }
 }
 
-async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext) {
+async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext) {
   const prompt = `Analyze this ${sport.toUpperCase()} matchup for ${gameDate}:
 
 ${awayTeam} @ ${homeTeam}
 ${oddsContext ? `\nKnown odds context:\n${oddsContext}` : ''}
+${performanceContext || ''}
 
 Provide a full BetOS sharp analysis report. Search for confirmed lineups/starters, current odds and line movement, injury reports, and any situational edges. Pick the sharpest play.`;
 
@@ -145,6 +159,7 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
   // Tier 1: Grok-4 + web search (primary for pre-generation — thorough)
   if (xaiKey) {
     try {
+      const t0 = Date.now();
       const res = await fetch(`${XAI_BASE}/responses`, {
         method: 'POST',
         headers: {
@@ -162,11 +177,24 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
       });
       if (res.ok) {
         const data = await res.json();
+        const latency = Date.now() - t0;
         const texts = (data.output || [])
           .filter(item => item.type === 'message')
           .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
         const text = texts.join('\n\n').trim();
-        if (text) return { text, model: 'BetOS AI' };
+        if (text) return {
+          text,
+          model: 'BetOS AI',
+          model_used: 'grok-4',
+          provider: 'xai',
+          was_fallback: false,
+          latency_ms: latency,
+          tokens_in: data.usage?.input_tokens || null,
+          tokens_out: data.usage?.output_tokens || null,
+          system_prompt: ANALYSIS_SYSTEM,
+          user_prompt: prompt,
+          prompt_version: PROMPT_VERSION,
+        };
       }
     } catch (e) {
       console.log(`[pregenerate] grok-4 failed for ${awayTeam}@${homeTeam}:`, e.message);
@@ -176,6 +204,7 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
   // Tier 2: Claude Opus 4.6 + web search
   if (claudeKey) {
     try {
+      const t0 = Date.now();
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -195,9 +224,22 @@ Provide a full BetOS sharp analysis report. Search for confirmed lineups/starter
       });
       if (res.ok) {
         const data = await res.json();
+        const latency = Date.now() - t0;
         const text = (data.content || [])
           .filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
-        if (text) return { text, model: 'BetOS AI' };
+        if (text) return {
+          text,
+          model: 'BetOS AI',
+          model_used: 'claude-opus-4-6',
+          provider: 'claude',
+          was_fallback: true,
+          latency_ms: latency,
+          tokens_in: data.usage?.input_tokens || null,
+          tokens_out: data.usage?.output_tokens || null,
+          system_prompt: ANALYSIS_SYSTEM,
+          user_prompt: prompt,
+          prompt_version: PROMPT_VERSION,
+        };
       }
     } catch (e) {
       console.log(`[pregenerate] Claude failed for ${awayTeam}@${homeTeam}:`, e.message);
@@ -230,6 +272,8 @@ export async function GET(req) {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
   const espnDate = todayStr.replace(/-/g, '');
+  // Unique run ID groups all analyses from this single cron/admin invocation
+  const runId = `run_${todayStr}_${Date.now()}`;
 
   console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}`);
 
@@ -295,9 +339,22 @@ export async function GET(req) {
     ).catch(() => {});
   }
 
+  // Cache performance context per sport (one DB query per sport, not per game)
+  const perfContextCache = {};
+
   for (const [sport, _] of sportsToProcess) {
     sportIndex++;
     await writeProgress(sport, 'running');
+
+    // Build the self-improvement context for this sport (cached)
+    if (!perfContextCache[sport]) {
+      try {
+        perfContextCache[sport] = await buildPerformanceContext(sport);
+      } catch (e) {
+        console.warn(`[pregenerate] Performance context failed for ${sport}:`, e.message);
+        perfContextCache[sport] = '';
+      }
+    }
 
     const events = await fetchTodaysGames(sport, espnDate);
     if (!events.length) continue;
@@ -345,24 +402,74 @@ export async function GET(req) {
 
       console.log(`[pregenerate] Generating: ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) ${gameTime}`);
 
+      // Determine trigger source for audit logging
+      const triggerSource = sportFilter
+        ? 'admin_per_sport'
+        : params.get('force') === 'true'
+          ? 'admin_manual'
+          : new Date().getUTCHours() < 14 ? 'cron_8am' : 'cron_4pm';
+
       try {
-        const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext);
+        const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport]);
         if (!result) { errors.push(`${awayTeam}@${homeTeam}: no AI response`); continue; }
 
-        // Upsert into game_analyses table
-        await supabase.from('game_analyses').upsert(
+        // Parse pick/conf/edge from the response for immediate storage
+        const pickM = result.text.match(/THE PICK[:\s]+([^\n]{5,120})/i);
+        const confM = result.text.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
+        const edgeM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+)/i);
+
+        // Upsert into game_analyses table (now with audit columns)
+        const { data: upserted } = await supabase.from('game_analyses').upsert(
           [{
             sport,
-            game_date:  todayStr,
-            home_team:  homeTeam,
-            away_team:  awayTeam,
-            analysis:   result.text,
-            model:      result.model,
-            generated_at: new Date().toISOString(),
-            updated_at:   new Date().toISOString(),
+            game_date:      todayStr,
+            home_team:      homeTeam,
+            away_team:      awayTeam,
+            analysis:       result.text,
+            model:          result.model,
+            provider:       result.provider,
+            was_fallback:   result.was_fallback,
+            latency_ms:     result.latency_ms,
+            tokens_in:      result.tokens_in,
+            tokens_out:     result.tokens_out,
+            prompt_version: result.prompt_version,
+            trigger_source: triggerSource,
+            run_id:         runId,
+            prediction_pick: pickM?.[1]?.trim() || null,
+            prediction_conf: confM?.[1]?.trim() || null,
+            generated_at:   new Date().toISOString(),
+            updated_at:     new Date().toISOString(),
           }],
           { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
-        );
+        ).select('id').maybeSingle();
+
+        // Write to the detailed audit log
+        await supabase.from('analysis_audit_logs').insert([{
+          analysis_id:     upserted?.id || null,
+          sport,
+          game_date:       todayStr,
+          home_team:       homeTeam,
+          away_team:       awayTeam,
+          model_requested: 'grok-4',
+          model_used:      result.model_used,
+          provider:        result.provider,
+          was_fallback:    result.was_fallback,
+          prompt_version:  result.prompt_version,
+          system_prompt:   result.system_prompt,
+          user_prompt:     result.user_prompt,
+          odds_context:    oddsContext || null,
+          espn_game_state: 'pre',
+          game_time:       gameTime || null,
+          raw_response:    result.text,
+          tokens_in:       result.tokens_in,
+          tokens_out:      result.tokens_out,
+          latency_ms:      result.latency_ms,
+          parsed_pick:     pickM?.[1]?.trim() || null,
+          parsed_conf:     confM?.[1]?.trim() || null,
+          parsed_edge:     edgeM?.[1]?.trim() || null,
+          trigger_source:  triggerSource,
+          run_id:          runId,
+        }]).catch(e => console.warn('[pregenerate] Audit log insert failed:', e.message));
 
         generated.push(`${awayTeam}@${homeTeam} (${sport.toUpperCase()})`);
         // Small delay between games to avoid rate limiting

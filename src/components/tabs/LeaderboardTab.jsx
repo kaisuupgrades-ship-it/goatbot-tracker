@@ -955,6 +955,17 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
         </div>
       )}
 
+      {/* Fallback notice — when verified had 0 results but all-picks has data */}
+      {!loading && !error && data?.filter === 'all_fallback' && entries.length > 0 && (
+        <div style={{
+          padding: '0.55rem 0.9rem', background: 'rgba(250,204,21,0.06)', border: '1px solid rgba(250,204,21,0.2)',
+          borderRadius: '8px', fontSize: '0.75rem', color: '#facc15', display: 'flex', gap: '8px', alignItems: 'center',
+        }}>
+          <span>📋</span>
+          <span>Showing <strong>all public picks</strong> — verified pick tracking is being set up. Once game start times sync, picks submitted before tipoff will earn ✓ Verified status and boost your Sharp Score.</span>
+        </div>
+      )}
+
       {/* Empty state */}
       {!loading && !error && entries.length === 0 && (
         <div style={{

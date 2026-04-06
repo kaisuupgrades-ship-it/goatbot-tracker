@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import BacktestPanel from './admin/BacktestPanel';
+import AILabPanel from './admin/AILabPanel';
 
 const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
@@ -2208,6 +2209,7 @@ const ADMIN_TABS = [
   { id: 'picks',     label: '📋 Picks Audit',   desc: 'View and moderate all picks' },
   { id: 'contests',  label: '🏆 Contests',      desc: 'Active contests and participants' },
   { id: 'backtest',  label: '📈 Backtester',    desc: 'Import historical data, run backtests, save sharp edges' },
+  { id: 'ailab',     label: '🧪 AI Lab',          desc: 'Track AI analyzer performance, prompt versions, model stats & full audit trail' },
   { id: 'cron',      label: '⏱ Cron Jobs',       desc: 'View scheduled jobs, toggle on/off, and trigger manually' },
   { id: 'system',    label: '⚙️ System',         desc: 'Announcements and system settings' },
   { id: 'chat',      label: '🤖 AI Chat',        desc: 'Chat directly with the BetOS AI assistant' },
@@ -2279,6 +2281,7 @@ export default function AdminTab({ user }) {
       {active === 'picks'     && <PicksAuditPanel userEmail={user.email} />}
       {active === 'contests'  && <ContestsPanel   userEmail={user.email} />}
       {active === 'backtest'  && <BacktestPanel   userEmail={user.email} />}
+      {active === 'ailab'     && <AILabPanel      userEmail={user.email} />}
       {active === 'cron'      && <CronPanel       userEmail={user.email} />}
       {active === 'system'    && <SystemPanel     userEmail={user.email} />}
       {active === 'chat'      && <AIChatPanel     userEmail={user.email} />}

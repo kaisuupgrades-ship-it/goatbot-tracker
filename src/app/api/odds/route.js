@@ -224,14 +224,13 @@ async function fetchPinnacleLines(sportKey) {
           const hP = pinPriceToAmerican(h.price);
           const aP = pinPriceToAmerican(a.price);
           if (hP != null && aP != null) {
+            // Select the spread line whose juice is closest to standard (-110).
+            // This avoids alt lines like -1.5 (-909) in NBA.
+            const juiceScore = Math.abs(Math.abs(hP) - 110) + Math.abs(Math.abs(aP) - 110);
             if (!oddsMap[mid].spread) {
-              oddsMap[mid].spread = { homePoint: h.points, homePrice: hP, awayPoint: a.points, awayPrice: aP };
-            } else {
-              const curDiff  = Math.abs(Math.abs(oddsMap[mid].spread.homePoint) - 1.5);
-              const newDiff  = Math.abs(Math.abs(h.points) - 1.5);
-              if (newDiff < curDiff) {
-                oddsMap[mid].spread = { homePoint: h.points, homePrice: hP, awayPoint: a.points, awayPrice: aP };
-              }
+              oddsMap[mid].spread = { homePoint: h.points, homePrice: hP, awayPoint: a.points, awayPrice: aP, _juiceScore: juiceScore };
+            } else if (juiceScore < oddsMap[mid].spread._juiceScore) {
+              oddsMap[mid].spread = { homePoint: h.points, homePrice: hP, awayPoint: a.points, awayPrice: aP, _juiceScore: juiceScore };
             }
           }
         }

@@ -77,7 +77,16 @@ const ESPN_ENDPOINTS = {
   WNBA: 'basketball/wnba', NFL: 'football/nfl', NCAAF: 'football/college-football',
   MLB: 'baseball/mlb', NHL: 'hockey/nhl', MLS: 'soccer/usa.1',
   EPL: 'soccer/eng.1', UCL: 'soccer/uefa.champions',
+  SOCCER: 'soccer/usa.1',  // generic fallback — also tries other leagues below
+  'LA LIGA': 'soccer/esp.1', 'SERIE A': 'soccer/ita.1',
+  'BUNDESLIGA': 'soccer/ger.1', 'LIGUE 1': 'soccer/fra.1',
 };
+
+// Additional soccer league paths to try when sport is generic "Soccer"
+const SOCCER_FALLBACK_LEAGUES = [
+  'soccer/eng.1', 'soccer/esp.1', 'soccer/ita.1', 'soccer/ger.1',
+  'soccer/fra.1', 'soccer/uefa.champions', 'soccer/uefa.europa',
+];
 
 function normalizeSport(sport) {
   if (!sport) return null;
@@ -87,16 +96,61 @@ function normalizeSport(sport) {
     'COLLEGE BASKETBALL': 'NCAAB', 'CBB': 'NCAAB',
     "MEN'S COLLEGE BASKETBALL": 'NCAAB', 'COLLEGE FOOTBALL': 'NCAAF',
     'CFB': 'NCAAF', 'PREMIER LEAGUE': 'EPL', 'CHAMPIONS LEAGUE': 'UCL',
+    'SOCCER': 'SOCCER', 'FUTBOL': 'SOCCER', 'FOOTBALL (SOCCER)': 'SOCCER',
   };
   return aliases[s] || null;
 }
 
+/**
+ * Clean team name for ESPN matching — strip bet type suffixes like "ML", "-1.5",
+ * odds like "+110", and common noise that users add to the team field.
+ */
+function cleanTeamForLookup(team) {
+  if (!team) return '';
+  return team
+    .replace(/\s+(ML|ml|Ml)\b/g, '')                     // "Cubs ML" → "Cubs"
+    .replace(/\s+[+-]?\d+\.?\d*\s*$/g, '')                // "Tigers -1.5" → "Tigers"
+    .replace(/\s+\([+-]?\d+\)/g, '')                       // "Cubs (+110)" → "Cubs"
+    .replace(/\s+(over|under|o|u)\s+[\d.]+/gi, '')         // "Cubs over 8.5" → "Cubs"
+    .replace(/\s+(spread|run line|puck line)/gi, '')        // "Cubs spread" → "Cubs"
+    .trim();
+}
+
 async function lookupCommenceTime(sport, team, dateStr) {
   const sportKey = normalizeSport(sport);
-  if (!sportKey || !ESPN_ENDPOINTS[sportKey]) return null;
+  if (!sportKey) return null;
 
+  const cleaned = cleanTeamForLookup(team);
   const espnDate = dateStr?.replace(/-/g, '');
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${ESPN_ENDPOINTS[sportKey]}/scoreboard?limit=100${espnDate ? `&dates=${espnDate}` : ''}`;
+
+  // Build list of ESPN paths to try
+  const paths = [];
+  if (ESPN_ENDPOINTS[sportKey]) paths.push(ESPN_ENDPOINTS[sportKey]);
+  // For generic "Soccer", also try all major leagues
+  if (sportKey === 'SOCCER') {
+    for (const p of SOCCER_FALLBACK_LEAGUES) {
+      if (!paths.includes(p)) paths.push(p);
+    }
+  }
+
+  for (const path of paths) {
+    const result = await searchESPNScoreboard(path, cleaned, espnDate, dateStr);
+    if (result) return result;
+  }
+
+  // Last resort: try with the original (uncleaned) team name in case cleaning was too aggressive
+  if (cleaned !== team) {
+    for (const path of paths) {
+      const result = await searchESPNScoreboard(path, team, espnDate, dateStr);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+async function searchESPNScoreboard(path, team, espnDate, dateStr) {
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?limit=100${espnDate ? `&dates=${espnDate}` : ''}`;
 
   try {
     const res = await fetch(url, {

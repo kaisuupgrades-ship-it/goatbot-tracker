@@ -412,10 +412,25 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 
                 const awayMLPrice  = h2h?.outcomes?.find(o => o.name === away)?.price;
                 const homeMLPrice  = h2h?.outcomes?.find(o => o.name === home)?.price;
-                const awaySprOut   = spreads?.outcomes?.find(o => o.name === away);
-                const homeSprOut   = spreads?.outcomes?.find(o => o.name === home);
-                const overOut      = totals?.outcomes?.find(o => o.name === 'Over');
-                const underOut     = totals?.outcomes?.find(o => o.name === 'Under');
+
+                // Filter out alternate spread lines — if EITHER side's juice is beyond
+                // -200/+170, this is not the main market line (e.g. -1.5 at -909 in NBA).
+                // Show nothing rather than misleading alt-line data.
+                let awaySprOut = spreads?.outcomes?.find(o => o.name === away);
+                let homeSprOut = spreads?.outcomes?.find(o => o.name === home);
+                const sprJuiceOk = (p) => p != null && p >= -200 && p <= 170;
+                if (awaySprOut && homeSprOut && (!sprJuiceOk(awaySprOut.price) || !sprJuiceOk(homeSprOut.price))) {
+                  awaySprOut = null;
+                  homeSprOut = null;
+                }
+
+                // Same for totals — filter out alt total lines with crazy juice
+                let overOut  = totals?.outcomes?.find(o => o.name === 'Over');
+                let underOut = totals?.outcomes?.find(o => o.name === 'Under');
+                if (overOut && underOut && (!sprJuiceOk(overOut.price) || !sprJuiceOk(underOut.price))) {
+                  overOut  = null;
+                  underOut = null;
+                }
 
                 function OddsCell({ price, isBest, point }) {
                   if (price == null) return <td style={{ padding: '5px 8px', textAlign: 'center', color: '#2a2a2a' }}>—</td>;

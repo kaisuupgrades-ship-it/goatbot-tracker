@@ -61,11 +61,22 @@ export async function GET(req) {
     if (error) throw error;
 
     // Apply filter projection and rank
-    const projected = applyFilter(data || [], filter);
+    let projected = applyFilter(data || [], filter);
+
+    // Graceful fallback: if the user requested 'verified' but NO users have verified picks,
+    // automatically fall back to 'all' so the leaderboard isn't empty.
+    // This prevents the "No public handicappers yet" issue when commence_time hasn't
+    // been backfilled yet or ESPN lookup is failing.
+    let actualFilter = filter;
+    if (filter === 'verified' && projected.length === 0 && (data || []).length > 0) {
+      projected = applyFilter(data || [], 'all');
+      actualFilter = 'all_fallback'; // signal to the UI that we fell back
+    }
+
     const ranked = projected.map((row, i) => ({ ...row, rank: i + 1 }));
 
     cache[cacheKey] = { data: ranked, ts: Date.now() };
-    return NextResponse.json(withUserRank(ranked, userId, false, filter));
+    return NextResponse.json(withUserRank(ranked, userId, false, actualFilter));
   } catch (err) {
     console.warn('Leaderboard: Supabase error.', err.message);
     return NextResponse.json({ leaderboard: [], userRank: null, userEntry: null, total: 0, filter, error: 'Temporarily unavailable', cachedAt: new Date().toISOString() });
