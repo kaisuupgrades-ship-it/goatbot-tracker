@@ -174,59 +174,94 @@ async function fetchTodaysGames(sport, dateStr, includeAll = false) {
   }
 }
 
-// Fetch cached odds from settings table and find the matching game
-// Returns a rich multi-bookmaker odds string for the AI prompt
+// Build a rich multi-bookmaker odds string from a bookmakers array (shared helper)
+function buildOddsString(bookmakers) {
+  const lines = [];
+  for (const book of (bookmakers || []).slice(0, 4)) {
+    const bookLines = [];
+    for (const market of (book.markets || [])) {
+      const outcomes = (market.outcomes || []).map(o =>
+        `${o.name} ${o.point != null ? (o.point > 0 ? '+' : '') + o.point : ''} (${o.price > 0 ? '+' : ''}${o.price})`
+      ).join(' / ');
+      if (outcomes) bookLines.push(`${market.key}: ${outcomes}`);
+    }
+    if (bookLines.length) lines.push(`${book.title || book.key}: ${bookLines.join(' | ')}`);
+  }
+  return lines.length ? `LIVE ODDS (from The Odds API cache):\n${lines.join('\n')}` : '';
+}
+
+// Fetch cached odds for a specific game — reads from odds_cache table (primary)
+// then falls back to the legacy settings table. Returns a formatted odds string.
 async function fetchCachedOdds(sport, homeTeam, awayTeam) {
   try {
-    // Map sport codes to odds cache keys
-    const sportKeyMap = {
-      mlb: 'mlb', nba: 'nba', nhl: 'nhl', nfl: 'nfl', mls: 'mls', wnba: 'wnba',
-    };
-    const cacheKey = `odds_cache_${sportKeyMap[sport] || sport}`;
+    const ht = homeTeam.toLowerCase();
+    const at = awayTeam.toLowerCase();
+    const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
+
+    // Primary: per-game odds_cache table (populated by /api/cron/refresh-odds)
+    const { data: rows } = await supabase
+      .from('odds_cache')
+      .select('home_team, away_team, odds_data')
+      .eq('sport', sport)
+      .gte('last_fetched_at', cutoff);
+
+    if (rows?.length) {
+      const row = rows.find(r =>
+        r.home_team?.toLowerCase().includes(ht.split(' ').pop()) &&
+        r.away_team?.toLowerCase().includes(at.split(' ').pop())
+      );
+      if (row?.odds_data?.bookmakers?.length) {
+        const result = buildOddsString(row.odds_data.bookmakers);
+        if (result) return result;
+      }
+    }
+
+    // Fallback: legacy settings table
+    const cacheKey = `odds_cache_${sport}`;
     const { data } = await supabase
       .from('settings').select('value').eq('key', cacheKey).maybeSingle();
     if (!data?.value) return '';
-
     const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
     const odds = parsed.data || parsed;
     if (!Array.isArray(odds)) return '';
-
-    // Find the matching game (fuzzy match on team names)
-    const ht = homeTeam.toLowerCase();
-    const at = awayTeam.toLowerCase();
     const game = odds.find(g =>
       g.home_team?.toLowerCase().includes(ht.split(' ').pop()) &&
       g.away_team?.toLowerCase().includes(at.split(' ').pop())
     );
-    if (!game || !game.bookmakers?.length) return '';
-
-    // Build a rich odds summary from up to 4 bookmakers
-    const lines = [];
-    const books = game.bookmakers.slice(0, 4);
-    for (const book of books) {
-      const bookLines = [];
-      for (const market of (book.markets || [])) {
-        const key = market.key;
-        const outcomes = (market.outcomes || []).map(o =>
-          `${o.name} ${o.point != null ? (o.point > 0 ? '+' : '') + o.point : ''} (${o.price > 0 ? '+' : ''}${o.price})`
-        ).join(' / ');
-        if (outcomes) bookLines.push(`${key}: ${outcomes}`);
-      }
-      if (bookLines.length) lines.push(`${book.title || book.key}: ${bookLines.join(' | ')}`);
-    }
-    return lines.length
-      ? `LIVE ODDS (from The Odds API cache):\n${lines.join('\n')}`
-      : '';
+    if (!game?.bookmakers?.length) return '';
+    return buildOddsString(game.bookmakers);
   } catch (e) {
     console.log(`[pregenerate] odds cache fetch failed for ${sport}:`, e.message);
     return '';
   }
 }
 
-// List games from pre-warmed Odds API cache — used as fallback when ESPN returns nothing.
-// Returns [{ homeTeam, awayTeam, gameTime }] for each upcoming game in the cache.
+// List games from odds_cache table — used as fallback when ESPN returns nothing.
+// Returns [{ homeTeam, awayTeam, gameTime }] for each pre/live game in the cache.
 async function fetchGamesFromOddsCache(sport) {
   try {
+    const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
+
+    // Primary: per-game odds_cache table
+    const { data: rows } = await supabase
+      .from('odds_cache')
+      .select('home_team, away_team, commence_time')
+      .eq('sport', sport)
+      .in('game_status', ['pre', 'live'])
+      .gte('last_fetched_at', cutoff)
+      .order('commence_time');
+
+    if (rows?.length) {
+      return rows.map(r => ({
+        homeTeam: r.home_team,
+        awayTeam: r.away_team,
+        gameTime: r.commence_time
+          ? new Date(r.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+          : '',
+      }));
+    }
+
+    // Fallback: legacy settings table
     const { data } = await supabase
       .from('settings').select('value').eq('key', `odds_cache_${sport}`).maybeSingle();
     if (!data?.value) return [];
@@ -621,9 +656,8 @@ export async function GET(req) {
 
   console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}, admin=${isAdmin}`);
 
-  // Pre-warm odds cache: fetch fresh odds from The Odds API for each sport
-  // so analyses have the best available line data. This uses the same API key
-  // as /api/odds and caches to the same settings keys.
+  // Odds cache check: the refresh-odds cron (*/2 * * * *) normally keeps odds_cache fresh.
+  // Only call The Odds API directly here as a fallback when the table has no recent data.
   const THE_ODDS_KEY = (process.env.THE_ODDS_API_KEY || '').trim();
   const ODDS_SPORT_KEYS = {
     mlb: 'baseball_mlb', nba: 'basketball_nba', nhl: 'icehockey_nhl',
@@ -635,15 +669,40 @@ export async function GET(req) {
       const oddsKey = ODDS_SPORT_KEYS[sk];
       if (!oddsKey) continue;
       try {
+        // Check if odds_cache table already has fresh data for this sport (< 15 min old)
+        const freshCutoff = new Date(Date.now() - 15 * 60_000).toISOString();
+        const { data: freshRows } = await supabase
+          .from('odds_cache')
+          .select('game_id')
+          .eq('sport', sk)
+          .gte('last_fetched_at', freshCutoff)
+          .limit(1);
+
+        if (freshRows?.length) {
+          console.log(`[pregenerate] Odds already fresh in odds_cache for ${sk} — skipping direct API call`);
+          continue;
+        }
+
+        // Cache is stale or empty — fetch directly and upsert into odds_cache
         const url = `https://api.the-odds-api.com/v4/sports/${oddsKey}/odds?apiKey=${THE_ODDS_KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american`;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         if (res.ok) {
-          const data = await res.json();
+          const events = await res.json();
+          const now = new Date().toISOString();
+          const rows = events.map(ev => ({
+            sport: sk, game_id: ev.id, home_team: ev.home_team, away_team: ev.away_team,
+            commence_time: ev.commence_time,
+            game_status: new Date(ev.commence_time).getTime() > Date.now() + 120_000 ? 'pre' : 'live',
+            odds_data: { bookmakers: ev.bookmakers || [], sport_title: ev.sport_title || '' },
+            last_fetched_at: now,
+          }));
+          await supabase.from('odds_cache').upsert(rows, { onConflict: 'sport,game_id' });
+          // Also update legacy settings key for backward compat
           await supabase.from('settings').upsert(
-            [{ key: `odds_cache_${sk}`, value: JSON.stringify({ data, timestamp: Date.now(), source: 'the-odds-api' }) }],
+            [{ key: `odds_cache_${sk}`, value: JSON.stringify({ data: events, timestamp: Date.now(), source: 'the-odds-api' }) }],
             { onConflict: 'key' }
           );
-          console.log(`[pregenerate] Odds pre-warmed for ${sk}: ${data.length} games`);
+          console.log(`[pregenerate] Odds fallback-fetched for ${sk}: ${events.length} games`);
         }
       } catch (e) {
         console.log(`[pregenerate] Odds pre-warm failed for ${sk}:`, e.message);

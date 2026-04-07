@@ -59,6 +59,43 @@ async function setSupabaseCache(sportKey, result) {
   } catch { /* cache write failure is non-fatal */ }
 }
 
+// ── Primary L2: odds_cache table (populated by /api/cron/refresh-odds) ────────
+// Reads per-game rows for a sport. Falls through to settings cache / direct API
+// if the table is empty or all rows are older than 30 min.
+async function getOddsCacheTable(sport) {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
+    const { data: rows, error } = await supabase
+      .from('odds_cache')
+      .select('game_id, home_team, away_team, commence_time, odds_data, game_status, last_fetched_at')
+      .eq('sport', sport)
+      .gte('last_fetched_at', cutoff)
+      .order('commence_time');
+
+    if (error || !rows || rows.length === 0) return null;
+
+    const events = rows.map(row => ({
+      id:            row.game_id,
+      home_team:     row.home_team,
+      away_team:     row.away_team,
+      commence_time: row.commence_time,
+      sport_title:   row.odds_data?.sport_title  || '',
+      bookmakers:    row.odds_data?.bookmakers    || [],
+      pinnacle:      row.odds_data?.pinnacle      || null,
+      suspectOdds:   row.odds_data?.suspectOdds   || false,
+    }));
+
+    return {
+      data:              events,
+      configured:        true,
+      sport,
+      total:             events.length,
+      source:            'odds_cache_table',
+      pinnacleConnected: events.some(e => e.pinnacle != null),
+    };
+  } catch { return null; }
+}
+
 // L1: In-process memory cache (warm instances only — keeps latency low when
 // the same serverless instance handles back-to-back requests within 5 min)
 const memCache = new Map();
@@ -539,7 +576,16 @@ export async function GET(req) {
     }
   }
 
-  // L2: Supabase persistent cache (skip for live requests — too slow for 30s window)
+  // L2: odds_cache table — populated by /api/cron/refresh-odds (primary shared cache)
+  if (!isLive) {
+    const tableHit = await getOddsCacheTable(sportKey);
+    if (tableHit) {
+      setMemCache(cacheKey, tableHit);
+      return NextResponse.json({ ...tableHit, cached: true });
+    }
+  }
+
+  // L3: settings table — legacy Supabase cache (skip for live requests)
   if (!isLive) {
     const sbHit = await getSupabaseCache(sportKey);
     if (sbHit) {
