@@ -2835,6 +2835,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         <BetSlipModal
           game={{ away, home, odds, date: betSlipGame.event?.date }}
           sport={betSlipGame.sport}
+          eventId={betSlipGame.event?.odds_api_event_id || null}
           user={user}
           picks={picks}
           setPicks={setPicks}
