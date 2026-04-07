@@ -6,7 +6,7 @@ echo.
 
 cd /d "%~dp0"
 
-echo [1/4] Clearing any stuck git lock files...
+echo [1/5] Clearing any stuck git lock files...
 if exist ".git\HEAD.lock"        del /f /q ".git\HEAD.lock"
 if exist ".git\index.lock"       del /f /q ".git\index.lock"
 if exist ".git\COMMIT_EDITMSG.lock" del /f /q ".git\COMMIT_EDITMSG.lock"
@@ -19,10 +19,19 @@ echo.
 git config user.email "kaisuupgrades@gmail.com"
 git config user.name "kaisuupgrades-ship-it"
 
-echo [2/4] Staging all changes...
+echo [2/5] Pulling latest from GitHub (sync before push)...
+git pull --rebase origin main
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo   Pull failed - trying merge instead...
+    git pull origin main
+)
+echo.
+
+echo [3/5] Staging all changes...
 git add -A
 
-echo [3/4] Committing...
+echo [4/5] Committing...
 git diff --cached --quiet
 if %ERRORLEVEL% EQU 0 (
     echo Nothing new to commit - will still push any unpushed commits.
@@ -33,7 +42,7 @@ if %ERRORLEVEL% EQU 0 (
 )
 echo.
 
-echo [4/4] Pushing to GitHub (Vercel will auto-deploy)...
+echo [5/5] Pushing to GitHub (Vercel will auto-deploy)...
 git push origin main
 set PUSH_RESULT=%ERRORLEVEL%
 

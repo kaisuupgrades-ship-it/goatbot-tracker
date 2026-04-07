@@ -198,6 +198,7 @@ function buildUnifiedPrompt(game) {
   const books = game.bookmakers || [];
   const away  = game.away_team;
   const home  = game.home_team;
+  const hasApiOdds = books.length > 0;
 
   const awayML  = bestOdds(books, away, 'h2h');
   const homeML  = bestOdds(books, home, 'h2h');
@@ -210,6 +211,14 @@ function buildUnifiedPrompt(game) {
   const oddsStr = [mlStr, sprStr, totStr].filter(Boolean).join(' · ');
 
   const dateCtx = `[Game date: ${dateLabel}. Today is ${today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.]\n`;
+
+  if (hasApiOdds && oddsStr) {
+    // Odds come from The Odds API (verified premium source) — tell the AI so it
+    // skips "verify before betting" disclaimers for these specific numbers.
+    const verifiedBlock = `[VERIFIED_ODDS_API]\nVERIFIED ODDS (The Odds API — confirmed live feed, do NOT add verify disclaimers for these numbers):\n${oddsStr}\n`;
+    return `${dateCtx}${verifiedBlock}\nRun a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
+  }
+
   return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
 }
 
