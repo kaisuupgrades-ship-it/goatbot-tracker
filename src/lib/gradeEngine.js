@@ -91,10 +91,8 @@ export function parseLineFromNotes(notes) {
  */
 export function parseLineFromTeam(team) {
   if (!team) return null;
-  // Match +/- number at the end or after team name: "Team Name +6.5" or "Team +3"
   const m = team.match(/[+-]\d+(?:\.\d+)?(?:\s*$)/);
   if (m) return parseFloat(m[0]);
-  // Match "Over/Under X.X" patterns
   const m2 = team.match(/(?:over|under|o|u)\s*(\d+(?:\.\d+)?)/i);
   if (m2) return parseFloat(m2[1]);
   return null;
@@ -108,8 +106,8 @@ export function parseLineFromTeam(team) {
 export function stripLineFromTeam(team) {
   if (!team) return team;
   return team
-    .replace(/\s*[+-]\d+(?:\.\d+)?\s*$/, '')  // trailing "+6.5" or "-1.5"
-    .replace(/\s+(?:ML|ml|Ml)\s*$/, '')        // trailing "ML"
+    .replace(/\s*[+-]\d+(?:\.\d+)?\s*$/, '')
+    .replace(/\s+(?:ML|ml|Ml)\s*$/, '')
     .trim();
 }
 
@@ -118,7 +116,7 @@ export function stripLineFromTeam(team) {
  * Handles normal team names AND "ILL vs UCONN" style team fields.
  */
 export function pickMatchesGame(pick, homeTeamName, awayTeamName) {
-  // Strip embedded spread/line numbers before matching: "UConn Huskies +6.5" → "UConn Huskies"
+  // Strip embedded spread/line numbers before matching
   const teamField = stripLineFromTeam(pick.team || '');
 
   if (isMatchupString(teamField)) {
@@ -390,4 +388,22 @@ export function gradePicksAgainstScoreboard(picks, scoreboard) {
       if (!pickMatchesGame(pick, homeTeamName, awayTeamName)) continue;
 
       const gradeResult = gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore);
-      if (
+      if (!gradeResult) break; // game matched but couldn't grade (e.g. no line) — stop searching
+
+      results.push({
+        id:        pick.id,
+        user_id:   pick.user_id,
+        result:    gradeResult.result,
+        profit:    gradeResult.profit,
+        home_score: homeScore,
+        away_score: awayScore,
+        home_team:  homeTeamName,
+        away_team:  awayTeamName,
+        contest_entry: pick.contest_entry,
+      });
+      break; // matched — move to next pick
+    }
+  }
+
+  return results;
+}

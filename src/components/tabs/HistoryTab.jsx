@@ -1615,4 +1615,35 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         const gameStarted = pick.commence_time && Date.now() > new Date(pick.commence_time).getTime() + 120000;
                         if (isSettled) return null; // graded — no edits
                         if (gameStarted) return (
-                          <span title="Game started — locked" style={{ fontSize: '0.65rem', color: '#94a3b8', 
+                          <span title="Game started — locked" style={{ fontSize: '0.65rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🔒</span>
+                        );
+                        return (
+                          <>
+                            <button
+                              onClick={() => handleEdit(pick)}
+                              title={pick.contest_entry ? 'Edit pick (team name & notes only for contest picks)' : 'Edit pick'}
+                              style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.72rem' }}
+                            >✏️</button>
+                            {!pick.contest_entry && (
+                              <button
+                                onClick={() => handleDelete(pick.id)}
+                                disabled={deleting === pick.id}
+                                title="Delete pick"
+                                style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.72rem', opacity: deleting === pick.id ? 0.5 : 1 }}
+                              >{deleting === pick.id ? '…' : '🗑️'}</button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
