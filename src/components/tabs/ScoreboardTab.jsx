@@ -1035,14 +1035,15 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
             {broadcast && (
-              <span className="game-card-broadcast" style={{ color: 'var(--text-muted)', fontSize: '0.66rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }} title={broadcast}>
-                {truncBroadcast(broadcast, 36)}
+              <span className="game-card-broadcast" style={{ color: 'var(--text-muted)', fontSize: '0.66rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }} title={broadcast}>
+                {truncBroadcast(broadcast, 24)}
               </span>
             )}
             {/* ＋ Add Pick button */}
             <button
               onClick={e => { e.stopPropagation(); onAddBet?.(event, sport); }}
               title="Add a pick on this game"
+              className="game-card-add-pick"
               style={{
                 background: 'rgba(0,212,139,0.12)', border: '1px solid rgba(0,212,139,0.35)',
                 borderRadius: '6px', cursor: 'pointer', padding: '4px 10px',

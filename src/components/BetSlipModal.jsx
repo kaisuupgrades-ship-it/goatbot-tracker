@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { addPick } from '@/lib/supabase';
 import { saveDemoPicks, demoId } from '@/lib/demoData';
 import { useVoiceInput } from '@/components/VoiceInput';
@@ -354,9 +355,13 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
   const [saveError,   setSaveError]   = useState('');
+  const [mounted,     setMounted]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false); // Contest confirmation dialog
   const [aiChecking,  setAiChecking]  = useState(false); // AI pre-save audit in progress
   const [aiCheckResult, setAiCheckResult] = useState(null); // { ok, reason } from AI
+
+  // Mount flag for portal rendering (avoids SSR mismatch)
+  useEffect(() => { setMounted(true); }, []);
 
   // Auto-compose customTeam from prop fields when bet type is Prop
   useEffect(() => {
@@ -703,7 +708,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
   const hasSelection = !!selectedId || (showCustom && customTeam.trim() && customOdds);
 
-  return (
+  const modalContent = (
     <>
       {/* Backdrop */}
       <div
@@ -1516,4 +1521,6 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       </div>
     </>
   );
+
+  return mounted ? createPortal(modalContent, document.body) : null;
 }

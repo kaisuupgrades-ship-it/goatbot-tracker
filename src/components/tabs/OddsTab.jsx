@@ -236,7 +236,9 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
       background: '#111',
       border: `1px solid ${isLive ? 'rgba(255,69,96,0.22)' : '#1c1c1c'}`,
       borderRadius: '10px',
-      overflow: 'hidden',
+      /* overflow:clip instead of hidden — clips visual overflow while still allowing
+         inner overflow-x:auto children (expanded book table) to scroll on mobile */
+      overflow: 'clip',
     }}>
 
       {/* ── Card header: time + badges ── */}
@@ -284,7 +286,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
         {/* Column labels */}
-        <div style={{ display: 'grid', gridTemplateColumns: gridCols, marginBottom: '0.35rem' }}>
+        <div className="odds-grid-cols" style={{ display: 'grid', gridTemplateColumns: gridCols, marginBottom: '0.35rem' }}>
           <div />
           <div style={{ textAlign: 'center', fontSize: '0.58rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.07em' }}>ML</div>
           <div style={{ textAlign: 'center', fontSize: '0.58rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Spread</div>
@@ -297,7 +299,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
         </div>
 
         {/* Away row */}
-        <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
+        <div className="odds-grid-cols" style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
           <div className="odds-team-cell" style={{ paddingRight: '8px' }}>
             {awayCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{awayCity}</div>}
             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{awayNick}</div>
@@ -330,7 +332,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
         <div style={{ height: '1px', background: '#1a1a1a' }} />
 
         {/* Home row */}
-        <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
+        <div className="odds-grid-cols" style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
           <div className="odds-team-cell" style={{ paddingRight: '8px' }}>
             {homeCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{homeCity}</div>}
             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{homeNick}</div>
