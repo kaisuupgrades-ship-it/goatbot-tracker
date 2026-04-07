@@ -745,7 +745,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
               {remaining} API req left
             </span>
           )}
-          <button onClick={() => load(sport)}
+          <button onClick={() => load(sport, dateOffset)}
             style={{ background: 'none', border: '1px solid #1e1e1e', borderRadius: '6px', color: '#555', padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'inherit', transition: 'border-color 0.1s' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = '#333'}
             onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}>
