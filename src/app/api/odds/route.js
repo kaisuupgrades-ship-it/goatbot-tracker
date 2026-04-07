@@ -72,8 +72,8 @@ function getMemCache(key) {
 function setMemCache(key, data) { memCache.set(key, { data, time: Date.now() }); }
 
 // ── Config ─────────────────────────────────────────────────────────────────────
-const THE_ODDS_KEY  = process.env.THE_ODDS_API_KEY;
-const LEGACY_KEY    = process.env.ODDS_API_KEY;        // odds-api.io (fallback only)
+const THE_ODDS_KEY  = process.env.THE_ODDS_API_KEY?.trim();
+const LEGACY_KEY    = process.env.ODDS_API_KEY?.trim();        // odds-api.io (fallback only)
 
 const THE_ODDS_BASE = 'https://api.the-odds-api.com/v4';
 const LEGACY_BASE   = 'https://api.odds-api.io/v3';
@@ -380,10 +380,10 @@ function sanitizeOddsConsistency(events) {
 
 // ── The Odds API (primary) ────────────────────────────────────────────────────
 async function fetchFromTheOddsAPI(sportKey) {
-  const apiKey = SPORT_KEYS[sportKey];
-  if (!apiKey) throw new Error(`Unknown sport: ${sportKey}`);
+  const theOddsSportKey = SPORT_KEYS[sportKey];
+  if (!theOddsSportKey) throw new Error(`Unknown sport: ${sportKey}`);
 
-  const url = new URL(`${THE_ODDS_BASE}/sports/${apiKey}/odds/`);
+  const url = new URL(`${THE_ODDS_BASE}/sports/${theOddsSportKey}/odds/`);
   url.searchParams.set('apiKey', THE_ODDS_KEY);
   url.searchParams.set('regions', 'us');
   url.searchParams.set('markets', 'h2h,spreads,totals');
@@ -409,7 +409,7 @@ async function fetchFromTheOddsAPI(sportKey) {
   return {
     data:       events,
     configured: true,
-    sport:      apiKey,
+    sport:      theOddsSportKey,
     total:      events.length,
     source:     'the-odds-api',
   };
