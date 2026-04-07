@@ -220,8 +220,10 @@ If something changed: respond with "UPDATE NEEDED" on the first line, then a rev
 
 Keep response under 150 words. Do NOT repeat prior analysis. Be fast and factual.`;
 
-// Maximum games to process per sport per run. Prevents timeout on heavy slates (MLB 15+ games).
-const MAX_GAMES_PER_SPORT = 10;
+// Maximum games to process per sport per run. Keeps total processing within Vercel's 5-min limit.
+// With grokTimeout=120s and BATCH_SIZE=4: 2 batches × 120s = 240s + ~30s overhead = ~270s per sport.
+// 8 games = exactly 2 batches of 4, fitting safely within the 300s Vercel budget.
+const MAX_GAMES_PER_SPORT = 8;
 
 // ── generateAnalysis ──────────────────────────────────────────────────────────
 // mode: 'full' = complete analysis (new games)
@@ -248,17 +250,20 @@ Cover all output sections: THE PICK, ALTERNATE ANGLES, EDGE BREAKDOWN, KEY FACTO
   // required sections. This is "expensive AI once, serve many users from cache."
   // Refresh: lightweight freshness check only (400 tokens, 30s).
   const maxTokens     = isRefresh ? 400 : 3500;
-  // grok-4 timeout reduced to 50s (was 90s) so it fails faster and leaves budget for grok-3 fallback.
-  // grok-3 via chat/completions takes ~20-30s — ensures something always generates even if grok-4 is slow/rate-limited.
-  const grokTimeout   = isRefresh ? 30_000 : 50_000;
+  // Full analyses: 120s — baseball research (starting pitchers, ERA/WHIP, bullpen, splits) requires
+  // more web search calls than other sports and was consistently timing out at 90s for MLB.
+  // Refresh: 30s (lightweight check only).
+  const grokTimeout   = isRefresh ? 30_000 : 120_000;
+  // NO Claude fallback during bulk runs. One timeout = skip, not retry-with-Claude.
+  // Claude is reserved for live user queries (goatbot route) where the UX demands a result.
 
   const xaiKey = process.env.XAI_API_KEY;
 
   if (xaiKey) {
-    // Primary: grok-4 + web search via Responses API
+    const t0 = Date.now();
+    let res;
     try {
-      const t0 = Date.now();
-      const res = await fetch(`${XAI_BASE}/responses`, {
+      res = await fetch(`${XAI_BASE}/responses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -273,84 +278,62 @@ Cover all output sections: THE PICK, ALTERNATE ANGLES, EDGE BREAKDOWN, KEY FACTO
         }),
         signal: AbortSignal.timeout(grokTimeout),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const latency = Date.now() - t0;
-        const texts = (data.output || [])
-          .filter(item => item.type === 'message')
-          .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
-        const text = texts.join('\n\n').trim();
-        if (text) return {
-          text,
-          mode,
-          model: 'BetOS AI',
-          model_used: 'grok-4',
-          provider: 'xai',
-          was_fallback: false,
-          latency_ms: latency,
-          tokens_in: data.usage?.input_tokens || null,
-          tokens_out: data.usage?.output_tokens || null,
-          system_prompt: systemToUse,
-          user_prompt: prompt,
-          prompt_version: PROMPT_VERSION,
-        };
-      } else {
-        console.log(`[pregenerate] grok-4 returned ${res.status} for ${awayTeam}@${homeTeam}`);
-      }
     } catch (e) {
-      console.log(`[pregenerate] grok-4 ${mode} failed for ${awayTeam}@${homeTeam}:`, e.message);
+      const isTimeout = e.name === 'TimeoutError' || e.name === 'AbortError';
+      const msg = isTimeout ? `grok-4 timeout (${grokTimeout / 1000}s)` : `grok-4 fetch error: ${e.message}`;
+      console.log(`[pregenerate] ${msg} for ${awayTeam}@${homeTeam}`);
+      throw new Error(msg);
     }
 
-    // Fallback: grok-3 via chat/completions (fast ~20-30s, no web search — uses training knowledge + provided odds context).
-    // Critical: ensures analyses are generated even when grok-4 times out or is rate-limited.
-    // No Claude fallback — grok-3 is sufficient and avoids cross-provider cost during bulk runs.
-    if (!isRefresh) {
-      try {
-        const t1 = Date.now();
-        const res = await fetch(`${XAI_BASE}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${xaiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'grok-3',
-            messages: [
-              { role: 'system', content: systemToUse },
-              { role: 'user', content: prompt },
-            ],
-            max_tokens: 2500,
-          }),
-          signal: AbortSignal.timeout(40_000),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const latency = Date.now() - t1;
-          const text = data.choices?.[0]?.message?.content?.trim();
-          if (text) return {
-            text,
-            mode,
-            model: 'BetOS AI',
-            model_used: 'grok-3',
-            provider: 'xai',
-            was_fallback: true,
-            latency_ms: latency,
-            tokens_in: data.usage?.prompt_tokens || null,
-            tokens_out: data.usage?.completion_tokens || null,
-            system_prompt: systemToUse,
-            user_prompt: prompt,
-            prompt_version: PROMPT_VERSION,
-          };
-        } else {
-          console.log(`[pregenerate] grok-3 fallback returned ${res.status} for ${awayTeam}@${homeTeam}`);
-        }
-      } catch (e) {
-        console.log(`[pregenerate] grok-3 fallback failed for ${awayTeam}@${homeTeam}:`, e.message);
-      }
+    if (!res.ok) {
+      // Log actual xAI error status so we can diagnose rate-limits vs auth vs server errors
+      let errBody = '';
+      try { errBody = await res.text(); } catch { /* ignore */ }
+      const msg = `grok-4 HTTP ${res.status}`;
+      console.warn(`[pregenerate] ${msg} for ${awayTeam}@${homeTeam}: ${errBody.slice(0, 200)}`);
+      throw new Error(msg);
     }
+
+    const data = await res.json();
+    const latency = Date.now() - t0;
+    // Primary parse: standard Responses API format (type=message / type=output_text)
+    const texts = (data.output || [])
+      .filter(item => item.type === 'message')
+      .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
+    let text = texts.join('\n\n').trim();
+    // Fallback parse: handle alternative output formats (e.g. item.content[].text or item.text)
+    if (!text && data.output?.length) {
+      const anyTexts = data.output.flatMap(item => {
+        if (item.content) return item.content.filter(c => c.text).map(c => c.text);
+        if (item.text) return [item.text];
+        return [];
+      });
+      text = anyTexts.join('\n\n').trim();
+    }
+    // Last resort: OpenAI chat-completions shape
+    if (!text && data.choices?.[0]?.message?.content) {
+      text = data.choices[0].message.content.trim();
+    }
+    if (text) return {
+      text,
+      mode,
+      model: 'BetOS AI',
+      model_used: 'grok-4',
+      provider: 'xai',
+      was_fallback: false,
+      latency_ms: latency,
+      tokens_in: data.usage?.input_tokens || null,
+      tokens_out: data.usage?.output_tokens || null,
+      system_prompt: systemToUse,
+      user_prompt: prompt,
+      prompt_version: PROMPT_VERSION,
+    };
+    const msg = `grok-4 empty response`;
+    console.warn(`[pregenerate] ${msg} for ${awayTeam}@${homeTeam} — output keys: ${JSON.stringify(Object.keys(data))}, output length: ${data.output?.length}`);
+    throw new Error(msg);
   }
 
-  return null; // both models failed — game will be skipped this run
+  return null; // only reached when XAI_API_KEY is not set — no Claude fallback in bulk mode
 }
 
 export async function GET(req) {
@@ -552,7 +535,7 @@ export async function GET(req) {
       gamesToProcess.splice(MAX_GAMES_PER_SPORT);
     }
 
-    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 4, grok-4 50s → grok-3 fallback 40s)`);
+    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 4, 90s timeout each, 3500 tokens, no Claude fallback)`);
 
     // ── Process games in PARALLEL batches of 4 ──────────────────────────────
     // Upgraded for "expensive AI once, serve many" model:
