@@ -812,7 +812,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
           {(() => {
             const gamesToShow = gameFilter === 'live' ? liveGames
               : gameFilter === 'upcoming' ? upcomingGames
-              : filteredGames;
+              : filtered;
             const groups = groupByDate(gamesToShow);
             if (gamesToShow.length === 0) return (
               <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#3a3a3a', fontSize: '0.82rem' }}>

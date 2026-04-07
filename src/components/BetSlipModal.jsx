@@ -242,15 +242,14 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     ? resolvedHomeOdds < resolvedAwayOdds
     : true; // default: home is favored
 
-  const effectiveSpreadData = spreadIsML
-    ? { awayLine: -1.5, homeLine: 1.5 }  // normalize to actual run/puck line
+  const needsInferredLine = spreadIsML || (!spreadData && alwaysHasFixedLine);
+  const effectiveSpreadData = needsInferredLine
+    ? (homeFavored
+        ? { awayLine: 1.5,  homeLine: -1.5 }   // home favored → away +1.5 / home -1.5
+        : { awayLine: -1.5, homeLine: 1.5  })   // away favored → away -1.5 / home +1.5
     : spreadData
       ? spreadData
-      : alwaysHasFixedLine
-        ? (homeFavored
-            ? { awayLine: 1.5,  homeLine: -1.5 }   // home favored → away +1.5 / home -1.5
-            : { awayLine: -1.5, homeLine: 1.5  })   // away favored → away -1.5 / home +1.5
-        : null;
+      : null;
 
   const quickBets = [
     // ── Moneyline ──────────────────────────────────────────────────────────
