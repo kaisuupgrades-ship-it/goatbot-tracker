@@ -215,6 +215,31 @@ async function fetchCachedOdds(sport, homeTeam, awayTeam) {
   }
 }
 
+// List games from pre-warmed Odds API cache — used as fallback when ESPN returns nothing.
+// Returns [{ homeTeam, awayTeam, gameTime }] for each upcoming game in the cache.
+async function fetchGamesFromOddsCache(sport) {
+  try {
+    const { data } = await supabase
+      .from('settings').select('value').eq('key', `odds_cache_${sport}`).maybeSingle();
+    if (!data?.value) return [];
+    const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    const odds = parsed.data || parsed;
+    if (!Array.isArray(odds) || !odds.length) return [];
+    return odds
+      .filter(g => g.home_team && g.away_team)
+      .map(g => ({
+        homeTeam: g.home_team,
+        awayTeam: g.away_team,
+        gameTime: g.commence_time
+          ? new Date(g.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+          : '',
+      }));
+  } catch (e) {
+    console.log(`[pregenerate] fetchGamesFromOddsCache failed for ${sport}:`, e.message);
+    return [];
+  }
+}
+
 // ── Quick-refresh system prompt (used when a fresh analysis already exists) ───
 // Lightweight: web search only, no full re-analysis, cheap on tokens.
 const QUICK_REFRESH_SYSTEM = `You are BetOS — a sharp sports analyst performing a quick data refresh on a pre-existing analysis. Do NOT re-write the full analysis. Only check for recent changes that would materially affect the pick.
@@ -254,16 +279,30 @@ async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens 
   });
 
   if (!res.ok) {
-    const status = res.status;
-    throw new Error(`grok-4 HTTP ${status}`);
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`grok-4 HTTP ${res.status}${errBody ? ': ' + errBody.slice(0, 120) : ''}`);
   }
 
   const data = await res.json();
   const latency = Date.now() - t0;
-  const texts = (data.output || [])
+
+  // Robust parsing — handles multiple xAI output format variations
+  let text = '';
+  const output = data.output || [];
+  const primaryTexts = output
     .filter(item => item.type === 'message')
     .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
-  const text = texts.join('\n\n').trim();
+  if (primaryTexts.length) {
+    text = primaryTexts.join('\n\n').trim();
+  } else {
+    const anyTexts = output.flatMap(item => {
+      if (item.content) return item.content.filter(c => c.text).map(c => c.text);
+      if (item.text) return [item.text];
+      return [];
+    });
+    text = anyTexts.join('\n\n').trim();
+  }
+  if (!text && data.choices?.[0]?.message?.content) text = data.choices[0].message.content.trim();
   if (!text) return null;
 
   return {
@@ -573,17 +612,37 @@ export async function GET(req) {
     // so the admin can generate analyses regardless of whether games are pre/in/post.
     // Cron-triggered runs only include pre/recently-in-progress games.
     const events = await fetchTodaysGames(sport, espnDate, isAdmin || !!dateOverride);
-    if (!events.length) continue;
 
     // Determine trigger source for audit logging
     const triggerSource = sportFilter
-      ? 'admin_per_sport'
+      ? (isAdmin ? 'admin_per_sport' : 'cron_per_sport')
       : params.get('force') === 'true'
         ? 'admin_manual'
         : new Date().getUTCHours() < 14 ? 'cron_8am' : 'cron_4pm';
 
     // Build list of games that need analysis
     const gamesToProcess = [];
+
+    // Helper: apply freshness check and push game onto the queue (or skip if fresh)
+    const enqueueGame = async (homeTeam, awayTeam, oddsContext, gameTime) => {
+      let gameMode = 'full';
+      if (!force) {
+        const freshCutoff   = new Date(Date.now() - 3  * 60 * 60 * 1000).toISOString();
+        const refreshCutoff = new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString();
+        const { data: existing } = await supabase
+          .from('game_analyses')
+          .select('id, updated_at')
+          .eq('sport', sport).eq('game_date', todayStr)
+          .ilike('home_team', homeTeam).ilike('away_team', awayTeam)
+          .maybeSingle();
+        if (existing) {
+          if (existing.updated_at > freshCutoff) { skipped.push(`${awayTeam}@${homeTeam}`); return; }
+          if (existing.updated_at > refreshCutoff) { gameMode = 'refresh'; }
+        }
+      }
+      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode });
+    };
+
     for (const event of events) {
       const comps   = event.competitions?.[0]?.competitors || [];
       const homeComp = comps.find(c => c.homeAway === 'home');
@@ -593,38 +652,6 @@ export async function GET(req) {
       const homeTeam = homeComp.team?.displayName || homeComp.team?.name || '';
       const awayTeam = awayComp.team?.displayName || awayComp.team?.name || '';
       if (!homeTeam || !awayTeam) continue;
-
-      // ── Smart freshness check ─────────────────────────────────────────────
-      // Three-tier logic:
-      //   SKIP    — analysis updated < 3h ago (still fresh, save tokens)
-      //   REFRESH — analysis updated 3–10h ago (quick lightweight update, ~400 tokens)
-      //   FULL    — no analysis OR force=true (complete report, ~1600 tokens)
-      let gameMode = 'full';
-      if (!force) {
-        const freshCutoff   = new Date(Date.now() - 3   * 60 * 60 * 1000).toISOString(); // 3 h
-        const refreshCutoff = new Date(Date.now() - 10  * 60 * 60 * 1000).toISOString(); // 10 h
-
-        const { data: existing } = await supabase
-          .from('game_analyses')
-          .select('id, updated_at')
-          .eq('sport', sport)
-          .eq('game_date', todayStr)
-          .ilike('home_team', homeTeam)
-          .ilike('away_team', awayTeam)
-          .maybeSingle();
-
-        if (existing) {
-          if (existing.updated_at > freshCutoff) {
-            // Very fresh — skip entirely
-            skipped.push(`${awayTeam}@${homeTeam}`);
-            continue;
-          } else if (existing.updated_at > refreshCutoff) {
-            // Getting stale — lightweight refresh only
-            gameMode = 'refresh';
-          }
-          // else: old enough to warrant a full re-analysis
-        }
-      }
 
       // Build odds context — prefer rich cached odds from The Odds API,
       // fall back to ESPN's basic spread/total if no cache available
@@ -640,7 +667,21 @@ export async function GET(req) {
         ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
         : '';
 
-      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode });
+      await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime);
+    }
+
+    // ── Odds API fallback ─────────────────────────────────────────────────────
+    // If ESPN returned nothing (timeout, off-schedule, rate-limited) but The Odds
+    // API has games pre-warmed in cache, use those. Same source the Odds Board uses.
+    if (!events.length && !gamesToProcess.length) {
+      const oddsGames = await fetchGamesFromOddsCache(sport);
+      if (oddsGames.length) {
+        console.log(`[pregenerate] ${sport.toUpperCase()}: ESPN 0 events — falling back to Odds API cache (${oddsGames.length} games)`);
+        for (const { homeTeam, awayTeam, gameTime } of oddsGames) {
+          const oddsContext = await fetchCachedOdds(sport, homeTeam, awayTeam);
+          await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime);
+        }
+      }
     }
 
     if (!gamesToProcess.length) continue;

@@ -2159,10 +2159,12 @@ function SystemPanel({ userEmail }) {
                 {status === 'done' && count > 0 && (
                   <span style={{ color: '#4ade80' }}>✓ {count} generated{sk > 0 ? `, ${sk} skipped` : ''}{games?.length ? ` · ${games.slice(0,3).map(g => g.split('(')[0].trim()).join(', ')}${games.length > 3 ? ` +${games.length-3}` : ''}` : ''}</span>
                 )}
-                {status === 'done' && count === 0 && <span style={{ color: '#555' }}>— No games found</span>}
+                {status === 'done' && count === 0 && error_list?.length > 0 && (
+                  <span style={{ color: '#f87171' }}>⚠ {error_list.length} failed — {(error_list[0]?.split(':').slice(1).join(':').trim() || 'AI error').slice(0, 60)}</span>
+                )}
+                {status === 'done' && count === 0 && !error_list?.length && <span style={{ color: '#555' }}>— No games found</span>}
                 {status === 'skipped' && <span style={{ color: '#555' }}>— {sk > 0 ? `${sk} already cached` : 'No pre-game games'}</span>}
                 {status === 'error' && <span style={{ color: '#f87171' }}>✗ {error?.slice(0, 80) || 'Failed'}</span>}
-                {error_list?.length > 0 && <span style={{ color: '#f87171', fontSize: '0.6rem' }}> ({error_list.length} timeouts)</span>}
               </div>
             ))}
           </div>
