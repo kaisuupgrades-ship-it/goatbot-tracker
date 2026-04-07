@@ -45,6 +45,15 @@ function normName(s) {
     .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 }
 
+// Pinnacle's guest API returns decimal (European) prices — convert to American for comparison
+function pinPriceToAmerican(price) {
+  if (price == null) return null;
+  if (price <= -100 || price >= 100) return price; // already American
+  if (price >= 2.0) return Math.round((price - 1) * 100);
+  if (price > 1.0)  return Math.round(-100 / (price - 1));
+  return null; // invalid decimal price
+}
+
 function teamMatches(pickTeam, pinnacleTeam) {
   const a = normName(pickTeam), b = normName(pinnacleTeam);
   if (!a || !b) return false;
@@ -100,11 +109,17 @@ async function checkOddsAgainstPinnacle(pick) {
     const mlMarket = markets.find(m => m.matchupId === parseInt(matchupId) && m.type === 'moneyline');
     if (!mlMarket) return { found: true, game, pinnacleOdds: null, reason: 'No ML market found on Pinnacle yet' };
 
-    const prices  = mlMarket.prices || [];
-    const side    = isHome ? 'home' : 'away';
-    const pinOdds = prices.find(p => p.designation === side)?.price;
-    if (pinOdds === null || pinOdds === undefined) {
-      return { found: true, game, pinnacleOdds: null, reason: 'Pinnacle price missing for this side — unverifiable' };
+    const prices     = mlMarket.prices || [];
+    const side       = isHome ? 'home' : 'away';
+    const pinOddsRaw = prices.find(p => p.designation === side)?.price;
+    if (pinOddsRaw === null || pinOddsRaw === undefined) {
+      return { found: true, game, pinnacleOdds: null, reason: 'Pinnacle price missing for this side — flag for review' };
+    }
+
+    // Pinnacle returns decimal prices — convert to American before comparing
+    const pinOdds = pinPriceToAmerican(pinOddsRaw);
+    if (pinOdds === null) {
+      return { found: true, game, pinnacleOdds: pinOddsRaw, reason: 'Pinnacle price could not be converted — flag for review' };
     }
 
     const diff = Math.abs(submittedOdds - pinOdds);

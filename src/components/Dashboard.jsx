@@ -104,6 +104,8 @@ function AnnouncementBanner() {
 // ── Server Job Banner — shows when background server jobs are running ───────────
 // Polls the pregenerate_progress key in settings so the banner persists across
 // tab switches, page refreshes, etc. The server writes progress as it goes.
+const BANNER_MAX_RETRIES = 60; // 60 × 5s = 5 min max polling window
+
 function ServerJobBanner() {
   const [job, setJob]         = useState(null);
   const [done, setDone]       = useState(false);
@@ -113,6 +115,7 @@ function ServerJobBanner() {
   const MAX_RETRIES = 60; // 60 × 5s = 5 min
 
   useEffect(() => {
+    if (dismissed) return;
     let active = true;
     async function poll() {
       if (retryCount.current >= MAX_RETRIES) {
@@ -143,7 +146,7 @@ function ServerJobBanner() {
     poll();
     const id = setInterval(poll, 5000);
     return () => { active = false; clearInterval(id); };
-  }, []);
+  }, [dismissed]);
 
   if (dismissed) return null;
   if (!job && !stuck) return null;

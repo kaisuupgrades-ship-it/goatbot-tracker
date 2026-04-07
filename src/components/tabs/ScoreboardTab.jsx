@@ -21,7 +21,7 @@ export function useStarredGames() {
 
   useEffect(() => {
     loadFromStorage();
-    // React to changes made by FeaturedGamesTab (same tab) or other tabs
+    // React to changes made by other browser tabs
     function onStorage(e) {
       if (!e.key || e.key === STARRED_KEY) loadFromStorage();
     }
@@ -1212,7 +1212,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             }}
               title={event._closingLine ? 'Closing line — odds at game start' : event._staleOdds ? 'Odds from cache — may be up to 15 min old' : undefined}
             >
-              {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
+              {event._closingLine ? 'CLOSING' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
             </span>
             {event._staleOdds && !event._closingLine && (
               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', opacity: 0.6 }} title="Odds cached — may be up to 15 min old">🕐</span>
@@ -2414,7 +2414,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         },
         overUnder: tOver?.point ?? tUnder?.point ?? existingOdds.overUnder ?? null,
         details: sHome?.point != null
-          ? `${realGame.home_team.split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
+          ? `${(realGame.home_team || '').split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
           : existingOdds.details ?? null,
         // Enriched over/under prices (ESPN doesn't expose these in a standard field)
         _overOdds:       tOver?.price  ?? null,

@@ -97,7 +97,7 @@ export async function GET(req) {
   let totalUnits = 0, wagered = 0;
   const settledWithProfit = settled.map(p => {
     const profit = p.profit != null ? parseFloat(p.profit) : null;
-    if (p.result !== 'PUSH') wagered += (p.units || 1);
+    if (p.result !== 'PUSH' && profit != null) wagered += (p.units || 1);
     if (profit != null) totalUnits += profit;
     return {
       id:           p.id,

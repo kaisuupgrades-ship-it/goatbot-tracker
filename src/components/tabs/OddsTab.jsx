@@ -601,6 +601,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [search, setSearch]         = useState('');
   const [gameFilter, setGameFilter] = useState('upcoming');
   const [dateOffset, setDateOffset] = useState(0); // -1=yesterday, 0=today, 1=tomorrow
+  const [cachedAt, setCachedAt]     = useState(null); // ISO string when odds came from cache
 
   const load = useCallback(async (s, dateOff = dateOffset, { live = false } = {}) => {
     setLoading(true);
@@ -614,6 +615,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.message || (typeof data.error === 'string' ? data.error : 'Odds data temporarily unavailable'));
       setConfigured(true);
+      setCachedAt(data.cached && data._cachedAt ? data._cachedAt : null);
       const games = data.data || [];
       setGames(games);
       setRemaining(data.remaining ?? null);
