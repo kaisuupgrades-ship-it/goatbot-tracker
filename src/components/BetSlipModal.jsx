@@ -242,6 +242,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     ? resolvedHomeOdds < resolvedAwayOdds
     : true; // default: home is favored
 
+  // When spread string was actually an ML, OR no spread data at all, use homeFavored to assign ±1.5
   const needsInferredLine = spreadIsML || (!spreadData && alwaysHasFixedLine);
   const effectiveSpreadData = needsInferredLine
     ? (homeFavored
