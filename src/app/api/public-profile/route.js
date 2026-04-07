@@ -6,14 +6,6 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const CONFIGURED   = !!SUPABASE_URL && !!SUPABASE_KEY && !SUPABASE_URL.includes('placeholder');
 
-function calcProfit(result, odds, units = 1) {
-  if (result === 'PUSH') return 0;
-  if (result === 'LOSS') return -units;
-  if (result === 'WIN')
-    return odds < 0 ? (100 / Math.abs(odds)) * units : (odds / 100) * units;
-  return null;
-}
-
 // GET /api/public-profile?userId=xxx
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
@@ -101,14 +93,10 @@ export async function GET(req) {
     created_at: p.created_at,
   });
 
-  // Use the stored profit from DB (consistent with TrackerTab and admin panel).
-  // Skip picks with null odds from profit aggregation to avoid NaN in totals.
+  // Always read profit from DB column (standardized with TrackerTab and admin panel).
   let totalUnits = 0, wagered = 0;
   const settledWithProfit = settled.map(p => {
-    // Read profit directly from DB; fall back to calc only if DB profit is missing AND odds exist
-    const dbProfit = p.profit != null ? parseFloat(p.profit) : null;
-    const profit = dbProfit != null ? dbProfit
-      : (p.odds != null ? calcProfit(p.result, p.odds, p.units || 1) : null);
+    const profit = p.profit != null ? parseFloat(p.profit) : null;
     if (p.result !== 'PUSH') wagered += (p.units || 1);
     if (profit != null) totalUnits += profit;
     return {
@@ -122,7 +110,7 @@ export async function GET(req) {
       notes:        isOwner ? (p.notes || '') : '',  // notes are private
       created_at:   p.created_at,
       verified:     p.audit_status === 'APPROVED',
-      profit:       profit !== null ? Math.round(profit * 100) / 100 : null,
+      profit,
     };
   });
 

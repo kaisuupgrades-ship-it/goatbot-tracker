@@ -119,6 +119,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   useEffect(() => {
     if (!currentUserId || !userId || isMe) { setFollowCheckDone(true); return; }
     setFollowCheckDone(false);
+    setFollowing(false); // reset stale state while fetching
     let cancelled = false;
     (async () => {
       try {
@@ -143,6 +144,19 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
       }
     })();
     return () => { cancelled = true; };
+  }, [currentUserId, userId, isMe]);
+
+  // Re-sync follow status when window regains focus (handles out-of-band follow/unfollow)
+  useEffect(() => {
+    if (!currentUserId || !userId || isMe) return;
+    const onFocus = () => {
+      fetch(`/api/follow?followerId=${currentUserId}&followingId=${userId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setFollowing(!!d.following); })
+        .catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [currentUserId, userId, isMe]);
 
   const toggleFollow = async () => {

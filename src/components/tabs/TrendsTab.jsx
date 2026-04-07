@@ -142,7 +142,7 @@ function AskAnalyst({ user }) {
   const userId = user?.id || '';
 
   useEffect(() => {
-    if (!userId) { setRemaining(0); return; }
+    if (!userId) { setRemaining(null); return; }
     fetch(`/api/trends?action=usage&userId=${encodeURIComponent(userId)}`)
       .then(r => r.json())
       .then(d => setRemaining(d.remaining ?? null))
@@ -181,7 +181,7 @@ function AskAnalyst({ user }) {
             AI-powered
           </span>
         </div>
-        {remaining !== null && (
+        {remaining !== null ? (
           <span style={{
             fontSize: '0.68rem', fontWeight: 600, padding: '2px 8px', borderRadius: '4px',
             color: remaining > 2 ? '#4ade80' : remaining > 0 ? '#FFB800' : '#f87171',
@@ -190,7 +190,9 @@ function AskAnalyst({ user }) {
           }}>
             {remaining > 0 ? `${remaining} queries left today` : 'Daily limit reached'}
           </span>
-        )}
+        ) : userId ? (
+          <span style={{ fontSize: '0.68rem', color: '#888' }}>Usage unknown</span>
+        ) : null}
         {!userId && <span style={{ fontSize: '0.7rem', color: '#666' }}>Sign in to use Ask AI</span>}
       </div>
 
