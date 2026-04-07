@@ -42,7 +42,7 @@ function matchPicksToGame(picks, event) {
       team?.name,
       team?.shortDisplayName,
       // Last word of display name catches "Cardinals", "Yankees", etc.
-      team?.displayName?.split(' ').pop(),
+      team?.displayName?.split(' ')?.pop(),
     ].filter(t => t && t.length >= 2).map(t => t.toUpperCase());
   }
 

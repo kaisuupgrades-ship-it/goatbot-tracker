@@ -596,6 +596,8 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [configured, setConfigured] = useState(true);
   const [expanded, setExpanded]     = useState(null);
   const [remaining, setRemaining]   = useState(null);
+  const [isCached, setIsCached]     = useState(false);
+  const [loadedAt, setLoadedAt]     = useState(null);
   const [search, setSearch]         = useState('');
   const [gameFilter, setGameFilter] = useState('upcoming');
   const [dateOffset, setDateOffset] = useState(0); // -1=yesterday, 0=today, 1=tomorrow
@@ -615,6 +617,8 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
       const games = data.data || [];
       setGames(games);
       setRemaining(data.remaining ?? null);
+      setIsCached(data.cached ?? false);
+      setLoadedAt(new Date());
 
       setGameFilter(prev => {
         const hasUpcoming = games.some(g => !isGameLive(g));
@@ -746,6 +750,15 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
           style={{ width: '150px', padding: '4px 10px', fontSize: '0.8rem' }} />
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isCached && loadedAt && (
+            <span title="Odds served from cache — refresh for latest lines" style={{
+              fontSize: '0.68rem', color: '#555', background: '#111',
+              border: '1px solid #222', borderRadius: '4px',
+              padding: '2px 7px', fontFamily: 'IBM Plex Mono, monospace',
+            }}>
+              cached · {Math.round((Date.now() - loadedAt.getTime()) / 60000) || '<1'} min ago
+            </span>
+          )}
           {remaining != null && (
             <span style={{ color: '#3a3a3a', fontSize: '0.7rem' }}>
               {remaining} API req left

@@ -813,6 +813,18 @@ export default function TrackerTab({ picks, user }) {
   const curve     = useMemo(() => buildEquityCurve(filteredPicks), [filteredPicks]);
   const breakdown = useMemo(() => buildSportBreakdown(filteredPicks), [filteredPicks]);
 
+  if (picks.length === 0) {
+    return (
+      <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 1rem', gap: '1rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '3rem', opacity: 0.4 }}>📊</div>
+        <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1.1rem' }}>No picks yet</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', maxWidth: '320px', lineHeight: 1.6 }}>
+          Add your first pick to start tracking your record and ROI. Use the <strong style={{ color: 'var(--gold)' }}>+ Add Pick</strong> button to get started.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 

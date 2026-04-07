@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signOut } from '@/lib/supabase';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { startSessionTracking, stopSessionTracking } from '@/lib/sessionTracker';
@@ -105,12 +105,21 @@ function AnnouncementBanner() {
 // Polls the pregenerate_progress key in settings so the banner persists across
 // tab switches, page refreshes, etc. The server writes progress as it goes.
 function ServerJobBanner() {
-  const [job, setJob]     = useState(null);
-  const [done, setDone]   = useState(false);
+  const [job, setJob]         = useState(null);
+  const [done, setDone]       = useState(false);
+  const [stuck, setStuck]     = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const retryCount = React.useRef(0);
+  const MAX_RETRIES = 60; // 60 × 5s = 5 min
 
   useEffect(() => {
     let active = true;
     async function poll() {
+      if (retryCount.current >= MAX_RETRIES) {
+        setStuck(true);
+        return;
+      }
+      retryCount.current += 1;
       try {
         const res  = await fetch('/api/settings?key=pregenerate_progress');
         const data = await res.json();
@@ -136,10 +145,38 @@ function ServerJobBanner() {
     return () => { active = false; clearInterval(id); };
   }, []);
 
-  if (!job) return null;
+  if (dismissed) return null;
+  if (!job && !stuck) return null;
 
-  const sportLabel = job.current_sport ? job.current_sport.toUpperCase() : '';
-  const pct = job.total_sports > 0 ? Math.round((job.sport_index / job.total_sports) * 100) : 0;
+  const sportLabel = job?.current_sport ? job.current_sport.toUpperCase() : '';
+  const pct = job?.total_sports > 0 ? Math.round((job.sport_index / job.total_sports) * 100) : 0;
+
+  if (stuck) {
+    return (
+      <div style={{
+        background: 'linear-gradient(90deg, rgba(251,191,36,0.1) 0%, rgba(251,191,36,0.05) 100%)',
+        borderBottom: '1px solid rgba(251,191,36,0.2)',
+        padding: '0 1.5rem',
+        display: 'flex', alignItems: 'center', gap: '10px',
+        minHeight: '34px', flexShrink: 0,
+      }}>
+        <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>⚠️</span>
+        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(251,191,36,0.9)', flex: 1 }}>
+          Job may be stuck — pre-generation has been running for over 5 min.
+        </span>
+        <button
+          onClick={() => setDismissed(true)}
+          style={{
+            background: 'none', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '4px',
+            color: 'rgba(251,191,36,0.7)', fontSize: '0.72rem', fontWeight: 600,
+            cursor: 'pointer', padding: '2px 10px', flexShrink: 0,
+          }}
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{

@@ -26,11 +26,11 @@ export function useStarredGames() {
       if (!e.key || e.key === STARRED_KEY) loadFromStorage();
     }
     window.addEventListener('storage', onStorage);
-    // Also poll every 1s to catch same-page updates (localStorage events don't fire within same page)
-    const interval = setInterval(loadFromStorage, 1000);
+    // Custom event handles same-page updates (storage event doesn't fire within same page)
+    window.addEventListener('betos-starred-changed', loadFromStorage);
     return () => {
       window.removeEventListener('storage', onStorage);
-      clearInterval(interval);
+      window.removeEventListener('betos-starred-changed', loadFromStorage);
     };
   }, []);
 
@@ -41,6 +41,8 @@ export function useStarredGames() {
       if (next[game.id]) { delete next[game.id]; }
       else { next[game.id] = game; }
       try { localStorage.setItem(STARRED_KEY, JSON.stringify(next)); } catch {}
+      // Notify same-page listeners (cross-tab is handled by the native storage event)
+      window.dispatchEvent(new CustomEvent('betos-starred-changed'));
       return next;
     });
   }

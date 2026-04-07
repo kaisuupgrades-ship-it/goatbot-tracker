@@ -108,6 +108,15 @@ async function checkOddsAgainstPinnacle(pick) {
     }
 
     const diff = Math.abs(submittedOdds - pinOdds);
+    // NaN diff means Pinnacle returned a non-numeric price (e.g. decimal format not yet converted).
+    // Flag for manual review rather than silently passing.
+    if (isNaN(diff)) {
+      return {
+        found: true, game, pinnacleOdds: pinOdds, submittedOdds, diff: null,
+        suspicious: true,
+        reason: `Pinnacle price format unverifiable (got ${pinOdds}) — flagging for manual review`,
+      };
+    }
     return {
       found:        true,
       game,
