@@ -612,6 +612,11 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   .game-cards-grid {
     grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)) !important;
   }
+
+  /* Tables inside scrollable wrappers stay within their container */
+  .table-wrap table, .card table {
+    min-width: max-content;
+  }
 }
 
 @media (max-width: 480px) {
@@ -630,6 +635,23 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   header {
     padding: 0 0.75rem !important;
   }
+
+  /* Hide broadcast/TV network text inside game card status bar — too wide for small screens */
+  .game-card-broadcast {
+    display: none !important;
+  }
+
+  /* Compact Add Pick button on small screens */
+  .game-card-add-pick {
+    font-size: 0.68rem !important;
+    padding: 3px 8px !important;
+  }
+
+  /* Odds tab — smaller column widths */
+  .odds-grid-cols {
+    grid-template-columns: 1fr 60px 88px 74px !important;
+  }
+
 }
 
 /* ── Announcement banner ticker ─────────────────────────────────────────────── */

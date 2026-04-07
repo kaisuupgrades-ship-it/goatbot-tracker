@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { RankBadge } from './tabs/ChatRoomTab';
 
@@ -86,7 +87,10 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const [viewingEntry,   setViewingEntry]   = useState(null);
   // Mobile detection
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 600);
+  // Portal mount — ensures createPortal only runs client-side
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
+    setMounted(true);
     const onResize = () => setIsMobile(window.innerWidth < 600);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -210,7 +214,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const cRoi    = cTotal > 0 ? (cUnits / cTotal) * 100 : 0;
   const cWinPct = cTotal > 0 ? ((cWins / cTotal) * 100).toFixed(1) : '—';
 
-  return (
+  const modalContent = (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 500, display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', padding: isMobile ? '0' : '1rem' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
@@ -795,4 +799,8 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
       )}
     </div>
   );
+
+  // Use a portal so position:fixed is relative to the viewport, not any overflow:auto ancestor.
+  // This fixes iOS Safari where fixed elements inside overflow:auto containers are mispositioned.
+  return mounted ? createPortal(modalContent, document.body) : null;
 }
