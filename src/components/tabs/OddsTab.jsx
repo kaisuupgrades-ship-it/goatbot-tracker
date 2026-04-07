@@ -102,49 +102,66 @@ function hasExtremeOdds(awayML, homeML) {
          (homeML != null && Math.abs(homeML) > 500);
 }
 
-// Preferred bookmaker order: DraftKings → FanDuel → BetMGM → first available.
-// DraftKings always offers the standard ±1.5 MLB run line and NHL puck line.
-const BOOK_PRIORITY = ['draftkings', 'fanduel', 'betmgm', 'williamhill_us', 'pointsbetus', 'bovada'];
-
-function preferredBook(bookmakers, marketKey) {
-  for (const key of BOOK_PRIORITY) {
-    const bk = bookmakers.find(b => b.key === key);
-    if (bk && bk.markets?.some(m => m.key === marketKey)) return bk;
-  }
-  return bookmakers.find(b => b.markets?.some(m => m.key === marketKey)) ?? null;
+// DraftKings-first book priority — use one trusted source instead of scanning all
+const ODDS_BOOK_PRIORITY = ['draftkings', 'fanduel', 'betmgm'];
+function sortBooksByPriority(bookmakers) {
+  return [...bookmakers].sort((a, b) => {
+    const aIdx = ODDS_BOOK_PRIORITY.indexOf(a.key);
+    const bIdx = ODDS_BOOK_PRIORITY.indexOf(b.key);
+    return (aIdx >= 0 ? aIdx : ODDS_BOOK_PRIORITY.length) - (bIdx >= 0 ? bIdx : ODDS_BOOK_PRIORITY.length);
+  });
 }
 
 function bestOdds(bookmakers, outcomeName, marketKey) {
-  const bk = preferredBook(bookmakers, marketKey);
-  if (!bk) return null;
-  const mkt = bk.markets?.find(m => m.key === marketKey);
-  return mkt?.outcomes?.find(o => o.name === outcomeName)?.price ?? null;
+  // Use DraftKings-first priority instead of best-price scan
+  for (const bk of sortBooksByPriority(bookmakers)) {
+    const mkt = bk.markets?.find(m => m.key === marketKey);
+    const outcome = mkt?.outcomes?.find(o => o.name === outcomeName);
+    if (outcome?.price != null) return outcome.price;
+  }
+  return null;
 }
 
-// Get the spread from the preferred book, matched by team name to guarantee correct direction.
-function marketSpread(bookmakers, away, home) {
-  const bk = preferredBook(bookmakers, 'spreads');
-  if (!bk) return { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
-  const mkt = bk.markets?.find(m => m.key === 'spreads');
-  if (!mkt) return { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
-  const ao = mkt.outcomes?.find(o => o.name === away);
-  const ho = mkt.outcomes?.find(o => o.name === home);
-  return {
-    awayPoint: ao?.point ?? null,
-    awayPrice: ao?.price ?? null,
-    homePoint: ho?.point ?? null,
-    homePrice: ho?.price ?? null,
-  };
+// Get the market spread from the highest-priority book (DraftKings first).
+// Uses name-based matching to get correct away/home assignment.
+function marketSpread(bookmakers, awayTeam, homeTeam) {
+  for (const bk of sortBooksByPriority(bookmakers)) {
+    const mkt = bk.markets?.find(m => m.key === 'spreads');
+    if (!mkt) continue;
+    const outcomes = mkt.outcomes || [];
+    if (outcomes.length < 2) continue;
+    // Name-based matching — never rely on array index order
+    const awayOut = outcomes.find(o => o.name === awayTeam);
+    const homeOut = outcomes.find(o => o.name === homeTeam);
+    if (!awayOut || !homeOut) continue;
+    if (awayOut.price == null || homeOut.price == null || awayOut.point == null) continue;
+    // Reject wildly invalid prices (beyond ±500)
+    if (Math.abs(awayOut.price) > 500 || Math.abs(homeOut.price) > 500) continue;
+    return {
+      awayPoint: awayOut.point, awayPrice: awayOut.price,
+      homePoint: homeOut.point, homePrice: homeOut.price,
+    };
+  }
+  return { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
 }
 
+// Get total line from the highest-priority book (DraftKings first).
 function bestTotal(bookmakers) {
-  const bk = preferredBook(bookmakers, 'totals');
-  if (!bk) return { line: null, overPrice: null, underPrice: null };
-  const mkt = bk.markets?.find(m => m.key === 'totals');
-  const over  = mkt?.outcomes?.find(o => o.name === 'Over');
-  const under = mkt?.outcomes?.find(o => o.name === 'Under');
-  if (!over?.point) return { line: null, overPrice: null, underPrice: null };
-  return { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
+  for (const bk of sortBooksByPriority(bookmakers)) {
+    const mkt = bk.markets?.find(m => m.key === 'totals');
+    if (!mkt) continue;
+    const over  = mkt.outcomes?.find(o => o.name === 'Over');
+    const under = mkt.outcomes?.find(o => o.name === 'Under');
+    if (!over || over.point == null) continue;
+    // Reject wildly invalid prices
+    if (over.price != null && Math.abs(over.price) > 500) continue;
+    return {
+      line: over.point,
+      overPrice: over.price ?? null,
+      underPrice: under?.price ?? null,
+    };
+  }
+  return { line: null, overPrice: null, underPrice: null };
 }
 
 function buildUnifiedPrompt(game) {
@@ -177,10 +194,10 @@ function buildUnifiedPrompt(game) {
     // Odds come from The Odds API (verified premium source) — tell the AI so it
     // skips "verify before betting" disclaimers for these specific numbers.
     const verifiedBlock = `[VERIFIED_ODDS_API]\nVERIFIED ODDS (The Odds API — confirmed live feed, do NOT add verify disclaimers for these numbers):\n${oddsStr}\n`;
-    return `${dateCtx}${verifiedBlock}\nRun a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. Pick the single sharpest angle as THE PICK (moneyline, spread, or total — whichever has the best edge). List the other two markets as ALTERNATE ANGLES. Cover all standard BetOS analysis sections.`;
+    return `${dateCtx}${verifiedBlock}\nRun a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
   }
 
-  return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Pick the single sharpest angle as THE PICK, then cover the other markets as ALTERNATE ANGLES. Cover all standard BetOS analysis sections.`;
+  return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
@@ -398,11 +415,12 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
                 const awayMLPrice  = h2h?.outcomes?.find(o => o.name === away)?.price;
                 const homeMLPrice  = h2h?.outcomes?.find(o => o.name === home)?.price;
 
-                // Filter out wild alt-market lines (e.g. -1.5 at -909 in NBA, or futures mixes).
-                // Valid range ±100–500 covers NBA spreads, MLB run lines, and NHL puck lines.
+                // Filter out alternate spread lines — if EITHER side's juice is beyond
+                // -200/+170, this is not the main market line (e.g. -1.5 at -909 in NBA).
+                // Show nothing rather than misleading alt-line data.
                 let awaySprOut = spreads?.outcomes?.find(o => o.name === away);
                 let homeSprOut = spreads?.outcomes?.find(o => o.name === home);
-                const sprJuiceOk = (p) => p != null && Math.abs(p) >= 100 && Math.abs(p) <= 500;
+                const sprJuiceOk = (p) => p != null && p >= -200 && p <= 170;
                 if (awaySprOut && homeSprOut && (!sprJuiceOk(awaySprOut.price) || !sprJuiceOk(homeSprOut.price))) {
                   awaySprOut = null;
                   homeSprOut = null;

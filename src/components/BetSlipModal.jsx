@@ -45,17 +45,18 @@ function toLocalDateStr(d) {
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 }
 
-// Parse spread string like "DET -1.5" → { awayLine, homeLine }
+// Parse spread string like "DET -1.5" or "Guardians -1.5" → { awayLine, homeLine }
 function parseSpread(spreadStr, awayAbbr, homeAbbr) {
   if (!spreadStr) return null;
-  // ESPN odds.details is usually like "DET -1.5" (the favored team with negative line)
-  const match = spreadStr.match(/([A-Z]+)\s*([-+]?\d+\.?\d*)/);
+  // Match team name (caps abbreviation OR mixed-case word) followed by a spread number
+  const match = spreadStr.match(/([A-Za-z]+)\s*([-+]?\d+\.?\d*)/);
   if (!match) return null;
   const team = match[1];
   const line = parseFloat(match[2]);
   if (isNaN(line)) return null;
   // The team in the string is the one getting that spread; other team gets opposite
-  const isAway = team === awayAbbr;
+  // Check abbreviation match first, then check if it's a partial team name
+  const isAway = team === awayAbbr || team.toUpperCase() === awayAbbr;
   return {
     awayLine: isAway ? line : -line,
     homeLine: isAway ? -line : line,
@@ -242,10 +243,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     : true; // default: home is favored
 
   const effectiveSpreadData = spreadIsML
-    // spread string encoded ML prices, not a ±1.5 point — infer direction from ML odds
-    ? (homeFavored
-        ? { awayLine: 1.5,  homeLine: -1.5 }   // home favored → away +1.5 / home -1.5
-        : { awayLine: -1.5, homeLine: 1.5  })   // away favored → away -1.5 / home +1.5
+    ? { awayLine: -1.5, homeLine: 1.5 }  // normalize to actual run/puck line
     : spreadData
       ? spreadData
       : alwaysHasFixedLine
