@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BetOS — AI-Powered Sports Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold: #FFB800;
+    --gold-dim: rgba(255,184,0,0.1);
+    --green: #00D48B;
+    --red: #FF4560;
+    --bg: #07070D;
+    --bg-card: #0F0F1A;
+    --bg-el: #14141F;
+    --border: rgba(255,255,255,0.07);
+    --text: #F0F0F5;
+    --muted: rgba(240,240,245,0.45);
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Syne', sans-serif;
+    --body: 'Inter', sans-serif;
+    --max: 1140px;
+  }
+
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); font-size: 16px; line-height: 1.6; overflow-x: hidden; }
+
+  /* Max-width wrapper — used inside every section */
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 32px; }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(7,7,13,0.88); backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: var(--max); margin: 0 auto; padding: 0 32px;
+    height: 64px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .nav-logo svg { width: 36px; height: 36px; flex-shrink: 0; }
+  .nav-wordmark { font-family: var(--sans); font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
+  .nav-wordmark span { color: var(--gold); }
+  .nav-links { display: flex; align-items: center; gap: 2rem; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.88rem; font-weight: 500; transition: color 0.15s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta { display: flex; gap: 10px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--sans); font-weight: 700; font-size: 0.85rem;
+    padding: 9px 20px; border-radius: 8px; cursor: pointer;
+    text-decoration: none; transition: all 0.15s; border: none; letter-spacing: 0.01em;
+  }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { border-color: rgba(255,184,0,0.35); color: var(--gold); }
+  .btn-gold { background: linear-gradient(135deg, #FFB800 0%, #FF9500 100%); color: #000; box-shadow: 0 0 20px rgba(255,184,0,0.2); }
+  .btn-gold:hover { transform: translateY(-1px); box-shadow: 0 4px 28px rgba(255,184,0,0.4); }
+  .btn-lg { padding: 13px 26px; font-size: 0.92rem; border-radius: 10px; }
+
+  /* ── TICKER ── */
+  .ticker-wrap { overflow: hidden; border-bottom: 1px solid var(--border); background: rgba(255,184,0,0.02); padding: 9px 0; margin-top: 64px; }
+  .ticker { display: flex; animation: scroll 35s linear infinite; width: max-content; }
+  .ticker:hover { animation-play-state: paused; }
+  @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  .tick { display: flex; align-items: center; gap: 8px; padding: 0 24px; white-space: nowrap; font-family: var(--mono); font-size: 0.72rem; border-right: 1px solid var(--border); }
+  .tick-t { color: var(--muted); }
+  .tick-l { color: var(--text); font-weight: 600; }
+  .tw { color: var(--green); font-weight: 700; }
+  .tl { color: var(--red); font-weight: 700; }
+  .tp { color: var(--gold); font-weight: 700; }
+
+  /* ── HERO ── */
+  .hero { position: relative; overflow: hidden; padding: 90px 32px 80px; display: flex; flex-direction: column; align-items: center; }
+  .hero-glow { position: absolute; top: -300px; left: 50%; transform: translateX(-50%); width: 1000px; height: 800px; background: radial-gradient(ellipse, rgba(255,184,0,0.06) 0%, transparent 60%); pointer-events: none; border-radius: 50%; }
+  .hero-grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 64px 64px; mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, black 0%, transparent 70%); }
+  .hero-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; max-width: 860px; margin: 0 auto; width: 100%; }
+  .hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px; border-radius: 100px; border: 1px solid rgba(255,184,0,0.22); background: rgba(255,184,0,0.06); font-family: var(--mono); font-size: 0.68rem; color: var(--gold); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 30px; }
+  .bdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:.5;transform:scale(.8)} 50%{opacity:1;transform:scale(1.2)} }
+  .hero h1 { font-family: var(--sans); font-size: clamp(2.8rem, 6.5vw, 5rem); font-weight: 800; line-height: 1.0; letter-spacing: -0.04em; text-align: center; margin-bottom: 22px; }
+  .hero h1 em { font-style: normal; color: var(--gold); }
+  .hero-sub { color: var(--muted); font-size: clamp(0.95rem, 1.8vw, 1.15rem); text-align: center; max-width: 540px; line-height: 1.75; margin-bottom: 38px; }
+  .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 60px; }
+
+  /* Stats strip */
+  .stats { display: flex; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-card); width: 100%; max-width: 620px; }
+  .stat { flex: 1; padding: 18px 20px; border-right: 1px solid var(--border); text-align: center; }
+  .stat:last-child { border-right: none; }
+  .stat-n { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--gold); display: block; line-height: 1; margin-bottom: 4px; }
+  .stat-l { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+
+  /* ── SECTION SHELL ── */
+  .section { padding: 96px 0; }
+  .section.alt { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .section-label { font-family: var(--mono); font-size: 0.65rem; color: var(--gold); text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700; margin-bottom: 12px; }
+  .section-title { font-family: var(--sans); font-size: clamp(1.9rem, 3.5vw, 2.8rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 14px; }
+  .section-sub { color: var(--muted); font-size: 1rem; max-width: 500px; line-height: 1.75; margin-bottom: 52px; }
+
+  /* ── FEATURES GRID ── */
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .feat { background: var(--bg-card); padding: 32px 28px; position: relative; overflow: hidden; transition: background 0.2s; }
+  .feat::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0; transition: opacity 0.3s; }
+  .feat:hover { background: var(--bg-el); }
+  .feat:hover::after { opacity: 1; }
+  .feat-ico { width: 42px; height: 42px; border-radius: 10px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+  .feat h3 { font-family: var(--sans); font-size: 1rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .feat p { color: var(--muted); font-size: 0.85rem; line-height: 1.7; }
+
+  /* ── TWO-COL LAYOUT ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+  .two-col.flip { direction: rtl; }
+  .two-col.flip > * { direction: ltr; }
+
+  /* ── ODDS BOARD ── */
+  .odds-board { display: flex; flex-direction: column; gap: 6px; }
+  .odds-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; background: var(--bg-el); border: 1px solid var(--border); }
+  .odds-teams { font-size: 0.82rem; font-weight: 600; }
+  .odds-teams span { display: block; font-size: 0.68rem; color: var(--muted); margin-top: 1px; }
+  .chip { font-family: var(--mono); font-size: 0.72rem; font-weight: 700; padding: 4px 9px; border-radius: 5px; cursor: pointer; transition: filter 0.12s; text-align: center; white-space: nowrap; }
+  .chip:hover { filter: brightness(1.3); }
+  .chip-ml { background: rgba(255,184,0,0.08); color: var(--gold); border: 1px solid rgba(255,184,0,0.2); }
+  .chip-sp { background: rgba(96,165,250,0.08); color: #60a5fa; border: 1px solid rgba(96,165,250,0.2); }
+  .chip-to { background: rgba(0,212,139,0.08); color: var(--green); border: 1px solid rgba(0,212,139,0.2); }
+  .live-tag { font-family: var(--mono); font-size: 0.56rem; font-weight: 700; padding: 2px 5px; border-radius: 3px; background: rgba(255,69,96,0.1); color: var(--red); border: 1px solid rgba(255,69,96,0.2); text-transform: uppercase; letter-spacing: 0.05em; vertical-align: 1px; }
+  .odds-source { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); text-align: right; padding: 6px 14px 2px; }
+
+  /* ── LEADERBOARD ── */
+  .lb-card { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 32px 64px rgba(0,0,0,0.5); }
+  .lb-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); background: rgba(255,184,0,0.03); }
+  .lb-ht { font-family: var(--sans); font-weight: 800; font-size: 0.85rem; }
+  .lb-live { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 0.62rem; color: var(--green); text-transform: uppercase; letter-spacing: 0.1em; }
+  .lb-ldot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 1.5s ease-in-out infinite; }
+  .lb-cols { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; padding: 7px 18px; border-bottom: 1px solid var(--border); }
+  .lb-col { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .lb-col:last-child, .lb-col:nth-child(3) { text-align: right; }
+  .lb-row { display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-row:hover { background: rgba(255,184,0,0.02); }
+  .lb-rank { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; color: var(--muted); text-align: center; }
+  .r1 { color: var(--gold); } .r2 { color: #C0C0C0; } .r3 { color: #CD7F32; }
+  .lb-av { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+  .lb-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .lb-name { font-weight: 600; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-badge { font-family: var(--mono); font-size: 0.55rem; font-weight: 700; padding: 2px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
+  .lb-rec { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); text-align: right; }
+  .lb-u { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; text-align: right; min-width: 56px; }
+  .lb-u.p { color: var(--green); } .lb-u.n { color: var(--red); }
+
+  /* ── AI CARD ── */
+  .ai-card { background: var(--bg-el); border: 1px solid rgba(96,165,250,0.18); border-radius: 12px; padding: 20px; }
+  .ai-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .ai-tag { font-family: var(--mono); font-size: 0.58rem; font-weight: 700; padding: 3px 7px; border-radius: 4px; background: rgba(96,165,250,0.1); color: #60a5fa; text-transform: uppercase; letter-spacing: 0.08em; }
+  .ai-game { font-weight: 700; font-size: 0.85rem; }
+  .ai-body { color: var(--muted); font-size: 0.8rem; line-height: 1.75; }
+  .ai-pick { margin-top: 12px; padding: 10px 14px; border-radius: 7px; background: rgba(0,212,139,0.06); border: 1px solid rgba(0,212,139,0.18); font-family: var(--mono); font-size: 0.75rem; font-weight: 700; color: var(--green); }
+  .conf-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .conf-lbl { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+  .conf-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; }
+  .conf-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--green), var(--gold)); }
+  .conf-val { font-family: var(--mono); font-size: 0.65rem; color: var(--gold); font-weight: 700; }
+
+  /* ── HOW IT WORKS ── */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; position: relative; }
+  .steps::before { content: ''; position: absolute; top: 27px; left: calc(16.666% + 24px); right: calc(16.666% + 24px); height: 1px; background: linear-gradient(90deg, var(--gold), rgba(255,184,0,0.15)); }
+  .step { text-align: center; }
+  .step-n { width: 54px; height: 54px; border-radius: 50%; border: 2px solid rgba(255,184,0,0.35); background: var(--gold-dim); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--gold); margin: 0 auto 22px; }
+  .step h3 { font-family: var(--sans); font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .step p { color: var(--muted); font-size: 0.85rem; line-height: 1.7; }
+
+  /* ── SPORT PILLS ── */
+  .sports-bar { padding: 48px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg-card); }
+  .sports-lbl { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.15em; text-align: center; margin-bottom: 20px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .pill { display: flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 100px; border: 1px solid var(--border); background: var(--bg); font-family: var(--mono); font-size: 0.75rem; font-weight: 600; color: var(--muted); transition: all 0.15s; cursor: default; }
+  .pill:hover { border-color: rgba(255,184,0,0.3); color: var(--gold); background: var(--gold-dim); }
+
+  /* ── CTA ── */
+  .cta-section { padding: 100px 32px; text-align: center; position: relative; overflow: hidden; border-top: 1px solid var(--border); }
+  .cta-glow { position: absolute; bottom: -300px; left: 50%; transform: translateX(-50%); width: 800px; height: 600px; background: radial-gradient(ellipse, rgba(255,184,0,0.05) 0%, transparent 65%); pointer-events: none; border-radius: 50%; }
+  .cta-inner { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; }
+  .cta-eyebrow { font-family: var(--mono); font-size: 0.65rem; color: var(--gold); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 18px; display: block; }
+  .cta-section h2 { font-family: var(--sans); font-size: clamp(2rem, 4.5vw, 3.2rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 18px; }
+  .cta-section p { color: var(--muted); font-size: 1rem; margin-bottom: 36px; }
+  .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* ── PERKS ROW ── */
+  .perks { display: flex; align-items: flex-start; flex-direction: column; gap: 14px; }
+  .perk { display: flex; align-items: flex-start; gap: 14px; }
+  .perk-ico { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+  .perk h4 { font-weight: 700; font-size: 0.88rem; margin-bottom: 2px; }
+  .perk p { color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
+
+  /* ── FOOTER ── */
+  footer { border-top: 1px solid var(--border); background: var(--bg); }
+  .foot-inner { max-width: var(--max); margin: 0 auto; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .foot-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+  .foot-logo svg { width: 24px; height: 24px; }
+  .foot-logo-wm { font-family: var(--sans); font-size: 1rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .foot-logo-wm span { color: var(--gold); }
+  .foot-links { display: flex; gap: 20px; }
+  .foot-links a { font-size: 0.78rem; color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .foot-links a:hover { color: var(--text); }
+  .foot-meta { display: flex; align-items: center; gap: 12px; }
+  .foot-copy { font-size: 0.75rem; color: var(--muted); }
+  .foot-ver { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); padding: 2px 7px; border: 1px solid var(--border); border-radius: 4px; }
+
+  /* ── FADE IN ── */
+  .fade { opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease; }
+  .fade.in { opacity: 1; transform: translateY(0); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 960px) {
+    .feat-grid { grid-template-columns: 1fr 1fr; }
+    .two-col { grid-template-columns: 1fr; gap: 40px; }
+    .two-col.flip { direction: ltr; }
+    .steps { grid-template-columns: 1fr; }
+    .steps::before { display: none; }
+    nav .nav-links { display: none; }
+  }
+  @media (max-width: 600px) {
+    .feat-grid { grid-template-columns: 1fr; }
+    .stats { flex-direction: column; }
+    .stat { border-right: none; border-bottom: 1px solid var(--border); }
+    .stat:last-child { border-bottom: none; }
+    .wrap { padding: 0 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <!-- Icon (inline SVG from icon.svg) -->
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+        <defs>
+          <filter id="ag" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="cg" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <linearGradient id="gg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#FFD000"/><stop offset="100%" style="stop-color:#FF9500"/></linearGradient>
+        </defs>
+        <circle cx="100" cy="100" r="87" fill="none" stroke="#FFB800" stroke-width=".75" opacity=".15"/>
+        <circle cx="100" cy="100" r="74" fill="none" stroke="#FFB800" stroke-width="1.25" opacity=".28"/>
+        <circle cx="100" cy="100" r="55" fill="none" stroke="#FFB800" stroke-width="1.5" opacity=".48"/>
+        <circle cx="100" cy="100" r="30" fill="none" stroke="#FFB800" stroke-width="1.5" stroke-dasharray="3.5 4.5" opacity=".62"/>
+        <line x1="100" y1="13" x2="100" y2="70" stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+        <line x1="100" y1="130" x2="100" y2="187" stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+        <line x1="13" y1="100" x2="70" y2="100" stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+        <line x1="130" y1="100" x2="187" y2="100" stroke="#FFB800" stroke-width="2.25" stroke-linecap="round"/>
+        <path d="M32 65L32 32L65 32" fill="none" stroke="#FFB800" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M135 32L168 32L168 65" fill="none" stroke="#FFB800" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M32 135L32 168L65 168" fill="none" stroke="#FFB800" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M135 168L168 168L168 135" fill="none" stroke="#FFB800" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M100 45A55 55 0 0 1 155 100" fill="none" stroke="#FFB800" stroke-width="3.5" stroke-linecap="round" filter="url(#ag)" opacity=".95"/>
+        <circle cx="155" cy="100" r="5" fill="#FFB800" opacity=".9" filter="url(#ag)"/>
+        <circle cx="100" cy="100" r="14" fill="url(#gg)"/>
+        <circle cx="100" cy="100" r="7" fill="#0A0A0A"/>
+        <circle cx="100" cy="100" r="2.5" fill="#FFB800"/>
+      </svg>
+      <div class="nav-wordmark"><span>Bet</span>OS</div>
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#contest">Contest</a>
+      <a href="#how">How It Works</a>
+      <a href="#sports">Coverage</a>
+    </div>
+    <div class="nav-cta">
+      <a href="/auth" class="btn btn-ghost">Sign In</a>
+      <a href="/auth" class="btn btn-gold">Try Free →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── TICKER ── -->
+<div class="ticker-wrap">
+  <div class="ticker" id="ticker"></div>
+</div>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
+    <div class="hero-badge"><div class="bdot"></div> Live Contest Active — Daily picks now open</div>
+    <h1>Track Sharp.<br/><em>Bet</em> Sharper.</h1>
+    <p class="hero-sub">BetOS is AI-powered sports betting intelligence. Log picks, get real AI analysis, compete on the leaderboard — with live odds from DraftKings, FanDuel &amp; BetMGM.</p>
+    <div class="hero-btns">
+      <a href="/auth" class="btn btn-gold btn-lg">Start Tracking Free →</a>
+      <a href="/dashboard?demo=true" class="btn btn-ghost btn-lg">Try Demo Mode</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-n" id="n1">—</span><span class="stat-l">Picks Logged</span></div>
+      <div class="stat"><span class="stat-n" id="n2">—</span><span class="stat-l">Active Bettors</span></div>
+      <div class="stat"><span class="stat-n">9+</span><span class="stat-l">Sports Covered</span></div>
+      <div class="stat"><span class="stat-n">3</span><span class="stat-l">Odds Sources</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ── -->
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-label">Platform Features</div>
+    <h2 class="section-title">Everything a Sharp Needs</h2>
+    <p class="section-sub">From bankroll tracking to AI breakdowns — no spreadsheets, no guesswork.</p>
+    <div class="feat-grid fade">
+      <div class="feat"><div class="feat-ico" style="background:rgba(255,184,0,0.1);">📊</div><h3>Pick Tracker</h3><p>Log every bet — odds, units, book, matchup. Personal, Verified, and Contest tiers with automatic profit/loss and ROI across all sports.</p></div>
+      <div class="feat"><div class="feat-ico" style="background:rgba(96,165,250,0.1);">🤖</div><h3>BetOS Analyzer</h3><p>Ask BetOS to break down any game. It pulls live odds, injury reports, weather, and trends — then gives a sharp, reasoned take with a confidence rating.</p></div>
+      <div class="feat"><div class="feat-ico" style="background:rgba(0,212,139,0.1);">🏆</div><h3>Daily Contest</h3><p>Submit one pick per day. All picks are locked before tipoff, AI-audited for integrity, and auto-graded. Race up the leaderboard. Prove your edge.</p></div>
+      <div class="feat"><div class="feat-ico" style="background:rgba(168,85,247,0.1);">📡</div><h3>Live Odds + Props</h3><p>Real-time moneylines, spreads, and totals from three major books. Player props via The Odds API — one tap to pre-fill your bet slip.</p></div>
+      <div class="feat"><div class="feat-ico" style="background:rgba(255,69,96,0.1);">⚡</div><h3>Sharp Board</h3><p>Verified picks are locked pre-game and published on the public Sharp Board. Build a real, auditable record and let your edge speak for itself.</p></div>
+      <div class="feat"><div class="feat-ico" style="background:rgba(251,191,36,0.1);">🏌️</div><h3>Multi-Sport Coverage</h3><p>MLB, NFL, NBA, NHL, NCAAF, NCAAB, MLS, WNBA, and PGA Golf — live scorecards, round-by-round leaderboards, and full odds coverage.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ODDS DEMO ── -->
+<section class="section alt">
+  <div class="wrap">
+    <div class="two-col">
+      <div>
+        <div class="section-label">Scoreboard + Live Odds</div>
+        <h2 class="section-title" style="font-size:clamp(1.7rem,3vw,2.4rem);">Live Lines.<br/>One Tap to Add.</h2>
+        <p style="color:var(--muted);font-size:.92rem;line-height:1.75;margin-bottom:22px;">Real-time odds from three major books are baked right into the scoreboard. See the line, click it, and your slip is pre-filled with team, type, and odds. No switching apps.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="padding:4px 12px;border-radius:6px;background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2);font-family:var(--mono);font-size:.7rem;color:var(--gold);font-weight:700;">DraftKings</div>
+          <div style="padding:4px 12px;border-radius:6px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);font-family:var(--mono);font-size:.7rem;color:#60a5fa;font-weight:700;">FanDuel</div>
+          <div style="padding:4px 12px;border-radius:6px;background:rgba(0,212,139,0.08);border:1px solid rgba(0,212,139,0.2);font-family:var(--mono);font-size:.7rem;color:var(--green);font-weight:700;">BetMGM</div>
+        </div>
+      </div>
+      <div class="odds-board fade">
+        <div class="odds-row"><div class="odds-teams">NYY @ BOS <span>MLB · 7:10 PM <span class="live-tag">LIVE</span></span></div><div class="chip chip-ml">-118</div><div class="chip chip-sp">-1.5</div><div class="chip chip-to">O 9.5</div></div>
+        <div class="odds-row"><div class="odds-teams">LAD @ SF <span>MLB · 9:45 PM ET</span></div><div class="chip chip-ml">-165</div><div class="chip chip-sp">-1.5</div><div class="chip chip-to">O 8.0</div></div>
+        <div class="odds-row"><div class="odds-teams">MIL @ CHC <span>MLB · 2:20 PM ET</span></div><div class="chip chip-ml">+104</div><div class="chip chip-sp">+1.5</div><div class="chip chip-to">U 7.5</div></div>
+        <div class="odds-row"><div class="odds-teams">ATL @ PHI <span>MLB · 6:40 PM ET</span></div><div class="chip chip-ml">+112</div><div class="chip chip-sp">+1.5</div><div class="chip chip-to">O 8.5</div></div>
+        <div class="odds-source">Odds via The Odds API · Auto-refreshes every 60s</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CONTEST ── -->
+<section class="section" id="contest">
+  <div class="wrap">
+    <div class="two-col">
+      <div class="lb-card fade">
+        <div class="lb-head">
+          <span class="lb-ht">🏆 Contest Leaderboard — April 2026</span>
+          <span class="lb-live"><div class="lb-ldot"></div>Live</span>
+        </div>
+        <div class="lb-cols">
+          <span class="lb-col">#</span>
+          <span class="lb-col">Bettor</span>
+          <span class="lb-col">W-L</span>
+          <span class="lb-col">+/- U</span>
+        </div>
+        <div id="lb-rows"></div>
+      </div>
+      <div>
+        <div class="section-label">🏆 Daily Contest</div>
+        <h2 class="section-title" style="font-size:clamp(1.7rem,3vw,2.4rem);">One Pick.<br/>Prove Your Edge.</h2>
+        <p style="color:var(--muted);font-size:.92rem;line-height:1.75;margin-bottom:28px;">Submit one locked pick per day. BetOS audits it with AI, grades it the moment the game ends, and scores it on the live leaderboard. No pay-to-win — just skill.</p>
+        <div class="perks">
+          <div class="perk"><div class="perk-ico" style="background:rgba(255,184,0,0.1);border:1px solid rgba(255,184,0,0.2);">🔒</div><div><h4>Locked &amp; Immutable</h4><p>Once submitted, your contest pick can't be edited or deleted. Pure pre-game conviction.</p></div></div>
+          <div class="perk"><div class="perk-ico" style="background:rgba(0,212,139,0.1);border:1px solid rgba(0,212,139,0.2);">⚡</div><div><h4>Auto-Graded via ESPN</h4><p>BetOS grades every pick automatically when the final score comes in. WIN, LOSS, or PUSH — no manual review needed.</p></div></div>
+          <div class="perk"><div class="perk-ico" style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);">📈</div><div><h4>1-Unit Scoring</h4><p>Every contest pick is scored at exactly 1 unit. Win rate and ROI separate the sharps from the degens.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── AI SECTION ── -->
+<section class="section alt">
+  <div class="wrap">
+    <div class="two-col flip">
+      <div>
+        <div class="section-label">BetOS Analyzer</div>
+        <h2 class="section-title" style="font-size:clamp(1.7rem,3vw,2.4rem);">Ask Anything.<br/>Get Sharp Answers.</h2>
+        <p style="color:var(--muted);font-size:.92rem;line-height:1.75;margin-bottom:20px;">BetOS searches live injury reports, line movement, weather, and historical matchup data — then reasons through the edge like a real sharp would.</p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+          <div style="display:flex;align-items:center;gap:9px;font-size:.83rem;color:var(--muted);"><span style="color:var(--green);">✓</span>Live odds context from The Odds API</div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:.83rem;color:var(--muted);"><span style="color:var(--green);">✓</span>ESPN injury &amp; lineup data</div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:.83rem;color:var(--muted);"><span style="color:var(--green);">✓</span>Weather for outdoor stadiums</div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:.83rem;color:var(--muted);"><span style="color:var(--green);">✓</span>Historical H2H trends</div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:.83rem;color:var(--muted);"><span style="color:var(--green);">✓</span>Voice input — say your pick out loud</div>
+        </div>
+      </div>
+      <div class="ai-card fade">
+        <div class="ai-card-head">
+          <div class="ai-tag">BetOS Analysis</div>
+          <div class="ai-game">NYY @ BOS · MLB · Tonight</div>
+        </div>
+        <div class="ai-body">Gerrit Cole's return from the IL shifts this significantly. NYY opened -112, firmed to -118 on public — but sharp reverse line movement on BOS at +108 is worth noting. Wind blowing out to left at 12 mph inflates the total. Fenway's short porch is a factor with Cole's elevated HR rate this spring.</div>
+        <div class="ai-pick">🎯 THE PICK: Boston Red Sox ML +108 — EDGE play</div>
+        <div class="conf-row">
+          <span class="conf-lbl">Confidence</span>
+          <div class="conf-bar"><div class="conf-fill" style="width:72%"></div></div>
+          <span class="conf-val">HIGH</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section class="section" id="how">
+  <div class="wrap" style="text-align:center;">
+    <div class="section-label">How It Works</div>
+    <h2 class="section-title">Up &amp; Running in 60 Seconds</h2>
+    <p class="section-sub" style="margin:0 auto 56px;">No complex setup. No credit card. Just sharp betting intelligence from day one.</p>
+    <div class="steps fade">
+      <div class="step"><div class="step-n">01</div><h3>Create Your Account</h3><p>Sign up free in seconds — or jump straight into Demo Mode. Full access, no login required.</p></div>
+      <div class="step"><div class="step-n">02</div><h3>Log &amp; Analyze Picks</h3><p>Browse live scores, tap the line you like, and save it. Ask BetOS for a breakdown before you bet.</p></div>
+      <div class="step"><div class="step-n">03</div><h3>Compete &amp; Track ROI</h3><p>Submit your daily contest pick, climb the leaderboard, and see your true edge vs. the market over time.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SPORTS ── -->
+<div class="sports-bar" id="sports">
+  <div class="sports-lbl">Sports Coverage</div>
+  <div class="pills">
+    <div class="pill">⚾ MLB</div><div class="pill">🏈 NFL</div><div class="pill">🏀 NBA</div>
+    <div class="pill">🏒 NHL</div><div class="pill">🏈 NCAAF</div><div class="pill">🏀 NCAAB</div>
+    <div class="pill">⚽ MLS</div><div class="pill">🏀 WNBA</div><div class="pill">🏌️ PGA Golf</div>
+  </div>
+</div>
+
+<!-- ── CTA ── -->
+<section class="cta-section">
+  <div class="cta-glow"></div>
+  <div class="cta-inner">
+    <span class="cta-eyebrow">Free to Use · No Credit Card · Demo Available</span>
+    <h2>Ready to Track Like a Sharp?</h2>
+    <p>Join bettors who stopped guessing and started logging.</p>
+    <div class="cta-btns">
+      <a href="/auth" class="btn btn-gold btn-lg">Get Started Free →</a>
+      <a href="/dashboard?demo=true" class="btn btn-ghost btn-lg">Try Demo Mode</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="foot-inner">
+    <a href="#" class="foot-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+        <defs><linearGradient id="fgg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#FFD000"/><stop offset="100%" style="stop-color:#FF9500"/></linearGradient></defs>
+        <circle cx="100" cy="100" r="74" fill="none" stroke="#FFB800" stroke-width="1.5" opacity=".3"/>
+        <circle cx="100" cy="100" r="55" fill="none" stroke="#FFB800" stroke-width="1.5" opacity=".5"/>
+        <line x1="100" y1="13" x2="100" y2="70" stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+        <line x1="100" y1="130" x2="100" y2="187" stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+        <line x1="13" y1="100" x2="70" y2="100" stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+        <line x1="130" y1="100" x2="187" y2="100" stroke="#FFB800" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="100" cy="100" r="14" fill="url(#fgg)"/>
+        <circle cx="100" cy="100" r="7" fill="#0A0A0A"/>
+        <circle cx="100" cy="100" r="2.5" fill="#FFB800"/>
+      </svg>
+      <div class="foot-logo-wm"><span>Bet</span>OS</div>
+    </a>
+    <div class="foot-links">
+      <a href="#">Privacy</a><a href="#">Terms</a><a href="#">Support</a>
+      <a href="https://github.com/kaisuupgrades-ship-it/goatbot-tracker">GitHub</a>
+    </div>
+    <div class="foot-meta">
+      <div class="foot-copy">© 2026 BetOS. Not affiliated with any sportsbook.</div>
+      <div class="foot-ver">v2.1</div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ── TICKER ──
+const T = [
+  {t:'NYY @ BOS',l:'NYY -118 ML',r:'WIN',u:'+0.85u'},{t:'LAD @ SF',l:'LAD -1.5',r:'LOSS',u:'-1.0u'},
+  {t:'MIL @ CHC',l:'O 7.5 (-110)',r:'WIN',u:'+0.91u'},{t:'ATL @ PHI',l:'ATL ML +112',r:'WIN',u:'+1.12u'},
+  {t:'DET @ CLE',l:'U 8.0 (-110)',r:'LOSS',u:'-1.0u'},{t:'TB @ TOR',l:'TOR -1.5 (+132)',r:'WIN',u:'+1.32u'},
+  {t:'HOU @ OAK',l:'HOU ML -145',r:'WIN',u:'+0.69u'},{t:'COL @ ARI',l:'ARI -1.5 (-118)',r:'PUSH',u:'0.0u'},
+  {t:'SEA @ MIN',l:'O 9.5 (-110)',r:'WIN',u:'+0.91u'},{t:'CIN @ PIT',l:'PIT ML +105',r:'LOSS',u:'-1.0u'},
+];
+const tick = document.getElementById('ticker');
+const mkT = d => {
+  const cls = d.r==='WIN'?'tw':d.r==='LOSS'?'tl':'tp';
+  return `<div class="tick"><span class="tick-t">${d.t}</span><span style="color:var(--border)">|</span><span class="tick-l">${d.l}</span><span class="${cls}">${d.r} ${d.u}</span></div>`;
+};
+tick.innerHTML = T.map(mkT).join('') + T.map(mkT).join('');
+
+// ── LEADERBOARD ──
+const LB = [
+  {n:'SharpSteve',c:'#FFB800',bg:'rgba(255,184,0,.15)',badge:'🔥 HOT',bc:'#FF9500',bb:'rgba(255,149,0,.1)',rec:'8-2',u:'+6.84',p:true},
+  {n:'GrindsetGary',c:'#60a5fa',bg:'rgba(96,165,250,.15)',badge:null,rec:'7-3',u:'+4.21',p:true},
+  {n:'ValueVince',c:'#4ade80',bg:'rgba(74,222,128,.15)',badge:null,rec:'6-4',u:'+3.07',p:true},
+  {n:'OverlayOmar',c:'#c084fc',bg:'rgba(192,132,252,.15)',badge:null,rec:'6-4',u:'+1.88',p:true},
+  {n:'DegenDave',c:'#f87171',bg:'rgba(248,113,113,.15)',badge:'📉',bc:'#f87171',bb:'rgba(248,113,113,.1)',rec:'3-7',u:'-4.20',p:false},
+];
+const ranks = ['🥇','🥈','🥉','4','5'];
+const rCls = ['r1','r2','r3','',''];
+const cont = document.getElementById('lb-rows');
+LB.forEach((p,i) => {
+  const d = document.createElement('div');
+  d.className = 'lb-row';
+  d.innerHTML = `
+    <div class="lb-rank ${rCls[i]}">${ranks[i]}</div>
+    <div class="lb-who">
+      <div class="lb-av" style="background:${p.bg};color:${p.c}">${p.n[0]}</div>
+      <span class="lb-name">${p.n}</span>
+      ${p.badge?`<span class="lb-badge" style="color:${p.bc};background:${p.bb}">${p.badge}</span>`:''}
+    </div>
+    <div class="lb-rec">${p.rec}</div>
+    <div class="lb-u ${p.p?'p':'n'}">${p.p?'+':''}${p.u}u</div>`;
+  cont.appendChild(d);
+});
+
+// ── COUNTERS ──
+function count(el, end, suffix='') {
+  let v = 0;
+  const step = Math.ceil(end / 55);
+  const fn = () => { v = Math.min(v + step, end); el.textContent = v.toLocaleString() + suffix; if(v < end) requestAnimationFrame(fn); };
+  requestAnimationFrame(fn);
+}
+setTimeout(() => { count(document.getElementById('n1'), 2847, '+'); count(document.getElementById('n2'), 341, '+'); }, 500);
+
+// ── SCROLL FADE ──
+const obs = new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting) e.target.classList.add('in'); }), { threshold: 0.1 });
+document.querySelectorAll('.fade').forEach(el => obs.observe(el));
+</script>
+</body>
+</html>
