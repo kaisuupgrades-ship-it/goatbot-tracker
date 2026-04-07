@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { buildPerformanceContext } from '@/lib/feedbackLoop';
 
-export const maxDuration = 300; // full 5 min — many games to process
+export const maxDuration = 800; // 13+ min — admin runs need full time per game
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -275,9 +275,10 @@ async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens 
 
 // ── generateAnalysis ──────────────────────────────────────────────────────────
 // 2-tier pipeline:
-//   Tier 1: grok-4 + web search (120s) — searches for starters/injuries/form
+//   Tier 1: grok-4 + web search (120s cron / 300s admin) — searches for starters/injuries/form
 //   Tier 2: grok-4 no-search (60s) — uses only pre-fetched data (odds + matchup)
-async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, mode = 'full') {
+// adminMode: true = unlimited timeouts/tokens (admin panel), false = budget limits (cron)
+async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, mode = 'full', adminMode = false) {
   const isRefresh = mode === 'refresh';
 
   const userPrompt = isRefresh
@@ -293,12 +294,14 @@ Search ONLY for: confirmed starters/lineups, injuries (last 24h), recent form (l
 
   const hasVerifiedOdds = !isRefresh && !!(oddsContext && oddsContext.includes('The Odds API'));
 
-  // ── Tier 1: grok-4 + web search (120s) ──────────────────────────────────
+  // ── Tier 1: grok-4 + web search (120s cron / 300s admin) ─────────────
   if (!isRefresh) {
     try {
       const systemPrompt = buildAnalysisSystem(hasVerifiedOdds);
       const result = await callGrok(systemPrompt, userPrompt, {
-        useSearch: true, maxTokens: 2000, timeout: 120_000,
+        useSearch: true,
+        maxTokens: adminMode ? 4000 : 2000,
+        timeout: adminMode ? 300_000 : 120_000,  // admin: 5 min per game
       });
       if (result) {
         console.log(`[pregenerate] ✅ Tier 1 (grok-4+search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
@@ -329,7 +332,9 @@ ${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
 Produce a complete BetOS analysis using only this data. Note any limitations.`;
 
     const result = await callGrok(noSearchSystem, noSearchPrompt, {
-      useSearch: false, maxTokens: isRefresh ? 400 : 1500, timeout: isRefresh ? 30_000 : 60_000,
+      useSearch: false,
+      maxTokens: isRefresh ? 400 : (adminMode ? 3000 : 1500),
+      timeout: isRefresh ? 30_000 : (adminMode ? 180_000 : 60_000),
     });
     if (result) {
       console.log(`[pregenerate] ✅ Tier 2 (grok-4 no-search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
@@ -382,7 +387,11 @@ export async function GET(req) {
   // Unique run ID groups all analyses from this single cron/admin invocation
   const runId = `run_${todayStr}_${Date.now()}`;
 
-  console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}`);
+  // Detect admin-triggered runs: manual force, per-sport filter, or date override
+  // Admin gets unlimited timeouts and tokens; cron gets budget-conscious limits
+  const isAdmin = force || !!sportFilter || !!dateOverride;
+
+  console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}, admin=${isAdmin}`);
 
   // Pre-warm odds cache: fetch fresh odds from The Odds API for each sport
   // so analyses have the best available line data. This uses the same API key
@@ -539,31 +548,29 @@ export async function GET(req) {
 
     if (!gamesToProcess.length) continue;
 
-    // Cap to MAX_GAMES_PER_SPORT so heavy slates (MLB 15+ games) don't blow the timer.
-    // Games are naturally ordered by start time so we process the earliest ones first.
-    if (gamesToProcess.length > MAX_GAMES_PER_SPORT) {
+    // Cap games per sport: admin = unlimited, cron = capped to avoid timeout
+    if (!isAdmin && gamesToProcess.length > MAX_GAMES_PER_SPORT) {
       console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} → ${MAX_GAMES_PER_SPORT} games this run`);
       gamesToProcess.splice(MAX_GAMES_PER_SPORT);
     }
 
-    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 3, 2-tier: 120s search → 60s no-search fallback)`);
+    // Admin: process 1 at a time (give each game full time), Cron: batch of 3
+    const BATCH_SIZE = isAdmin ? 1 : 3;
+    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batch=${BATCH_SIZE}, admin=${isAdmin})`);
 
-    // ── Process games in PARALLEL batches of 3 ──────────────────────────────
-    // v3.0 pipeline: grok-4+search (120s) → grok-4 no-search fallback (60s)
-    // Each game can take up to 180s worst case (both tiers), so batch of 3 keeps within limits
-    // Expected: 8 games / 3 per batch = 3 batches × ~120s = ~360s ≈ 6 min (within 5-min Vercel limit for most)
-    const BATCH_SIZE = 3;
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
       const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
 
-      // Safety cutoff: stop with 60s buffer before Vercel's hard 5-min limit
-      const elapsed = Date.now() - started;
-      if (elapsed > 240_000) { // 4 min
-        console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
-        for (const g of gamesToProcess.slice(i)) {
-          errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
+      // Safety cutoff: cron stops at 4 min; admin has no cutoff (Vercel maxDuration handles it)
+      if (!isAdmin) {
+        const elapsed = Date.now() - started;
+        if (elapsed > 240_000) { // 4 min
+          console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
+          for (const g of gamesToProcess.slice(i)) {
+            errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
+          }
+          break;
         }
-        break;
       }
 
       const batchResults = await Promise.allSettled(
@@ -571,7 +578,7 @@ export async function GET(req) {
           const label = `${awayTeam}@${homeTeam} (${sport.toUpperCase()}) [${gameMode}]`;
           console.log(`[pregenerate] ${gameMode === 'refresh' ? '↻ Refreshing' : '⚡ Generating'}: ${label} ${gameTime}`);
 
-          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], gameMode);
+          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], gameMode, isAdmin);
           if (!result) throw new Error('no AI response');
 
           // Parse structured sections from the richer v2.0 analysis output

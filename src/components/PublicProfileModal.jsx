@@ -95,9 +95,9 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   // Fetch real profile data — pass auth token so API knows if we're the owner
   useEffect(() => {
     if (!userId) { setLoadingPicks(false); return; }
-    // Always fetch full profile — contest stats are derived client-side so the profile
-    // looks the same no matter which leaderboard the user was clicked from
-    const qs = `userId=${userId}`;
+    // When viewing a contest profile, pass contestOnly so the API applies timing filters
+    // to match the leaderboard scoring (prevents profile/leaderboard count mismatch)
+    const qs = contestOnly ? `userId=${userId}&contestOnly=true` : `userId=${userId}`;
     (async () => {
       try {
         const headers = {};

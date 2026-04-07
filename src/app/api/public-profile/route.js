@@ -44,11 +44,12 @@ export async function GET(req) {
   // so the record shown in the header matches what's in Pick History.
   let picksQuery = supabase
     .from('picks')
-    .select('id, team, sport, bet_type, odds, units, result, profit, notes, created_at, audit_status, is_public, contest_id')
+    .select('id, team, sport, bet_type, odds, units, result, profit, notes, created_at, audit_status, is_public, contest_id, commence_time, pick_type')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(100);
-  if (contestOnly) picksQuery = picksQuery.eq('contest_entry', true);
+  // Use pick_type='contest' to match leaderboard query (was contest_entry=true, causing mismatch)
+  if (contestOnly) picksQuery = picksQuery.eq('pick_type', 'contest');
 
   // Fetch profile + picks + follower count + following count in parallel
   const [profileRes, picksRes, followCountRes, followingCountRes] = await Promise.all([
@@ -61,7 +62,20 @@ export async function GET(req) {
   if (profileRes.error) return NextResponse.json({ error: profileRes.error.message }, { status: 500 });
 
   const profile = profileRes.data;
-  const allPicks = picksRes.data || [];
+  const rawPicks = picksRes.data || [];
+
+  // ── Timing integrity filter (same as contest-leaderboard) ─────────────
+  // Remove picks submitted after game start to match leaderboard scoring.
+  // Picks with null commence_time get benefit of the doubt.
+  const GRACE_MS = 2 * 60 * 1000;
+  const allPicks = contestOnly
+    ? rawPicks.filter(p => {
+        if (!p.commence_time || !p.created_at) return true;
+        const submitted = new Date(p.created_at).getTime();
+        const gameStart = new Date(p.commence_time).getTime();
+        return submitted <= gameStart + GRACE_MS;
+      })
+    : rawPicks;
 
   // Settled vs pending — sorted by created_at desc for correct streak direction
   const settled = allPicks
