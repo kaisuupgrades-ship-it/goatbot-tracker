@@ -626,7 +626,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
       const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}${liveParam}`);
       const data = await res.json();
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
-      if (data.error) throw new Error(data.error);
+      if (data.error) throw new Error(data.message || (typeof data.error === 'string' ? data.error : 'Odds data temporarily unavailable'));
       setConfigured(true);
       const games = data.data || [];
       setGames(games);

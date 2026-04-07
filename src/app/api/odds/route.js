@@ -608,7 +608,7 @@ export async function GET(req) {
       console.error('[/api/odds] Both odds providers failed:', err.message);
       return NextResponse.json({
         configured: true, data: [], total: 0, source: 'none', cached: false,
-        error: true, message: 'Odds data temporarily unavailable',
+        error: 'Odds data temporarily unavailable',
       }, { status: 503 });
     }
   }

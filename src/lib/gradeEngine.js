@@ -17,7 +17,8 @@
 export function normalize(str) {
   return (str || '')
     .toLowerCase()
-    .replace(/\b(fc|sc|cf|ac|united|city|town|utd)\b/g, '')
+    // Only strip suffixes like "FC", "SC" — NOT distinguishing words like "city", "united"
+    .replace(/\b(fc|sc|cf|ac)\b/g, '')
     .replace(/[^a-z0-9]/g, '')
     .trim();
 }

@@ -551,8 +551,11 @@ export async function PATCH(req) {
     return NextResponse.json({ error: 'Pick not found' }, { status: 404 });
   }
 
-  // Ownership check
-  if (verifiedUserId && existing.user_id !== verifiedUserId) {
+  // Ownership check — require valid auth
+  if (!verifiedUserId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+  if (existing.user_id !== verifiedUserId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
