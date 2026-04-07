@@ -248,13 +248,14 @@ Cover all output sections: THE PICK, ALTERNATE ANGLES, EDGE BREAKDOWN, KEY FACTO
   // required sections. This is "expensive AI once, serve many users from cache."
   // Refresh: lightweight freshness check only (400 tokens, 30s).
   const maxTokens     = isRefresh ? 400 : 3500;
-  const grokTimeout   = isRefresh ? 30_000 : 90_000; // full gets 90s for deep web search + rich output
-  // NO Claude fallback during bulk runs. One timeout = skip, not retry-with-Claude.
-  // Claude is reserved for live user queries (goatbot route) where the UX demands a result.
+  // grok-4 timeout reduced to 50s (was 90s) so it fails faster and leaves budget for grok-3 fallback.
+  // grok-3 via chat/completions takes ~20-30s — ensures something always generates even if grok-4 is slow/rate-limited.
+  const grokTimeout   = isRefresh ? 30_000 : 50_000;
 
   const xaiKey = process.env.XAI_API_KEY;
 
   if (xaiKey) {
+    // Primary: grok-4 + web search via Responses API
     try {
       const t0 = Date.now();
       const res = await fetch(`${XAI_BASE}/responses`, {
@@ -293,13 +294,63 @@ Cover all output sections: THE PICK, ALTERNATE ANGLES, EDGE BREAKDOWN, KEY FACTO
           user_prompt: prompt,
           prompt_version: PROMPT_VERSION,
         };
+      } else {
+        console.log(`[pregenerate] grok-4 returned ${res.status} for ${awayTeam}@${homeTeam}`);
       }
     } catch (e) {
       console.log(`[pregenerate] grok-4 ${mode} failed for ${awayTeam}@${homeTeam}:`, e.message);
     }
+
+    // Fallback: grok-3 via chat/completions (fast ~20-30s, no web search — uses training knowledge + provided odds context).
+    // Critical: ensures analyses are generated even when grok-4 times out or is rate-limited.
+    // No Claude fallback — grok-3 is sufficient and avoids cross-provider cost during bulk runs.
+    if (!isRefresh) {
+      try {
+        const t1 = Date.now();
+        const res = await fetch(`${XAI_BASE}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${xaiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'grok-3',
+            messages: [
+              { role: 'system', content: systemToUse },
+              { role: 'user', content: prompt },
+            ],
+            max_tokens: 2500,
+          }),
+          signal: AbortSignal.timeout(40_000),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const latency = Date.now() - t1;
+          const text = data.choices?.[0]?.message?.content?.trim();
+          if (text) return {
+            text,
+            mode,
+            model: 'BetOS AI',
+            model_used: 'grok-3',
+            provider: 'xai',
+            was_fallback: true,
+            latency_ms: latency,
+            tokens_in: data.usage?.prompt_tokens || null,
+            tokens_out: data.usage?.completion_tokens || null,
+            system_prompt: systemToUse,
+            user_prompt: prompt,
+            prompt_version: PROMPT_VERSION,
+          };
+        } else {
+          console.log(`[pregenerate] grok-3 fallback returned ${res.status} for ${awayTeam}@${homeTeam}`);
+        }
+      } catch (e) {
+        console.log(`[pregenerate] grok-3 fallback failed for ${awayTeam}@${homeTeam}:`, e.message);
+      }
+    }
   }
 
-  return null; // skip — no Claude fallback in bulk mode to protect against cascading timeouts
+  return null; // both models failed — game will be skipped this run
 }
 
 export async function GET(req) {
@@ -501,7 +552,7 @@ export async function GET(req) {
       gamesToProcess.splice(MAX_GAMES_PER_SPORT);
     }
 
-    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 4, 90s timeout each, 3500 tokens, no Claude fallback)`);
+    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 4, grok-4 50s → grok-3 fallback 40s)`);
 
     // ── Process games in PARALLEL batches of 4 ──────────────────────────────
     // Upgraded for "expensive AI once, serve many" model:
