@@ -556,12 +556,13 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
     min-width: calc(50% - 6px) !important;
   }
 
-  /* Main content — tighter padding with safe area support */
+  /* Main content — tighter padding with safe area support + no horizontal overflow */
   .main-content {
     padding: 1rem !important;
     padding-left: max(1rem, env(safe-area-inset-left)) !important;
     padding-right: max(1rem, env(safe-area-inset-right)) !important;
     padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
   }
 
   /* Tables — horizontal scroll */
@@ -617,6 +618,25 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   .table-wrap table, .card table {
     min-width: max-content;
   }
+
+  /* Scoreboard outer container — no horizontal overflow */
+  .scoreboard-outer {
+    overflow-x: hidden;
+    min-width: 0;
+  }
+
+  /* Leaderboard & tracker tables */
+  .leaderboard-table-wrap,
+  .tracker-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Touch targets — minimum 44px */
+  .touch-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -651,6 +671,12 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   /* Odds tab — smaller column widths on small phones */
   .odds-grid-cols {
     grid-template-columns: 1fr 60px 88px 74px !important;
+  }
+
+  /* Prevent pre-wrap text from overflowing container */
+  p, .analysis-text {
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 }
 

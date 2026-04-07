@@ -228,7 +228,11 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
   const homeCity  = homeParts.join(' ');
 
   const dimText = '#3e3e3e';
-  const colW = { team: '1fr', ml: '72px', spread: '108px', total: '88px' };
+  // Compact column widths on narrow screens to give team names more room
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 480;
+  const colW = isMobile
+    ? { team: '1fr', ml: '54px', spread: '88px', total: '68px' }
+    : { team: '1fr', ml: '72px', spread: '108px', total: '88px' };
   const gridCols = `${colW.team} ${colW.ml} ${colW.spread} ${colW.total}`;
 
   return (
@@ -300,9 +304,9 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 
         {/* Away row */}
         <div className="odds-grid-cols" style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
-          <div className="odds-team-cell" style={{ paddingRight: '8px' }}>
-            {awayCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{awayCity}</div>}
-            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{awayNick}</div>
+          <div className="odds-team-cell" style={{ paddingRight: '8px', minWidth: 0, overflow: 'hidden' }}>
+            {awayCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{awayCity}</div>}
+            <div style={{ fontSize: isMobile ? '0.8rem' : '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{awayNick}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <span style={{ fontFamily: 'monospace', fontSize: '0.92rem', fontWeight: 700, color: extreme ? '#3a3a3a' : oddsColor(awayML) }}>
@@ -311,9 +315,9 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
           </div>
           <div style={{ textAlign: 'center' }}>
             {spr.awayPoint != null
-              ? <span style={{ fontFamily: 'monospace', fontSize: '0.84rem', color: '#bbb' }}>
+              ? <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.76rem' : '0.84rem', color: '#bbb' }}>
                   {spr.awayPoint > 0 ? '+' : ''}{spr.awayPoint}
-                  <span style={{ color: '#4a4a4a', fontSize: '0.72rem', marginLeft: '3px' }}>({formatOdds(spr.awayPrice)})</span>
+                  <span style={{ color: '#4a4a4a', fontSize: isMobile ? '0.64rem' : '0.72rem', marginLeft: '3px' }}>({formatOdds(spr.awayPrice)})</span>
                 </span>
               : <span style={{ color: '#333', fontFamily: 'monospace' }}>—</span>
             }
@@ -333,9 +337,9 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 
         {/* Home row */}
         <div className="odds-grid-cols" style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
-          <div className="odds-team-cell" style={{ paddingRight: '8px' }}>
-            {homeCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{homeCity}</div>}
-            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{homeNick}</div>
+          <div className="odds-team-cell" style={{ paddingRight: '8px', minWidth: 0, overflow: 'hidden' }}>
+            {homeCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{homeCity}</div>}
+            <div style={{ fontSize: isMobile ? '0.8rem' : '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{homeNick}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <span style={{ fontFamily: 'monospace', fontSize: '0.92rem', fontWeight: 700, color: extreme ? '#3a3a3a' : oddsColor(homeML) }}>

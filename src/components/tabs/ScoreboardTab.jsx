@@ -1000,8 +1000,8 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
         onMouseLeave={e => { if (!expanded) e.currentTarget.parentElement.style.borderColor = expanded ? 'rgba(255,184,0,0.35)' : isStarred ? 'rgba(255,184,0,0.2)' : 'var(--border)'; }}
       >
         {/* Status bar */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.65rem', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.65rem', gap: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, minWidth: 0 }}>
             {/* Sport badge — only shown in All Sports mode */}
             {isAllMode && (() => {
               const sp = SPORTS.find(s => s.key === sport);
@@ -1808,6 +1808,14 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const todayStr = toLocalDateStr(new Date());
   const userPrefs = useMemo(() => getUserPrefs(user), [user]);
 
+  // Mobile detection — used to hide sidebar and adjust layouts
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const [betSlipGame, setBetSlipGame] = useState(null); // { event, sport } | null
   const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team → bookmaker game data
   const [oddsStale, setOddsStale]           = useState(false); // true when odds are served from cache
@@ -2291,7 +2299,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
   return (
     <>
-    <div className="fade-in" style={{ display: 'flex', gap: '1.25rem' }}>
+    <div className="fade-in scoreboard-outer" style={{ display: 'flex', gap: '1.25rem', minWidth: 0, overflow: 'hidden' }}>
 
       {/* Main column */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -2462,7 +2470,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
             <p>No {filter === 'all' ? '' : filter} {currentSport?.label} games {selectedDate === todayStr ? 'today' : 'on this date'}.</p>
           </div>
         ) : (
-          <div className="game-cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px', alignItems: 'start' }}>
+          <div className="game-cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: '10px', alignItems: 'start' }}>
             {sortedFilteredGames.map(event => (
               <div
                 key={`${event._sport || sport}-${event.id}`}
@@ -2495,8 +2503,8 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         )}
       </div>
 
-      {/* Right sidebar — tabbed: Headlines | Injury Intel */}
-      <div className="scoreboard-sidebar" style={{
+      {/* Right sidebar — tabbed: Headlines | Injury Intel (hidden on mobile) */}
+      {!isMobile && <div className="scoreboard-sidebar" style={{
         width: '300px', flexShrink: 0,
         display: 'flex', flexDirection: 'column',
         borderLeft: '1px solid var(--border)',
@@ -2835,7 +2843,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
             )}
           </div>
         )}
-      </div>
+      </div>}
     </div>
 
     {/* ── Bet Slip Modal ─────────────────────────────────────────────────── */}

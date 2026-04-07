@@ -244,7 +244,7 @@ function AskAnalyst({ user }) {
             <span>🤖</span>
             <span style={{ color: '#FFB800', fontWeight: 700, fontSize: '0.78rem' }}>BetOS Analyst</span>
           </div>
-          <p style={{ color: '#e0e0e0', fontSize: '0.83rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{answer}</p>
+          <p style={{ color: '#e0e0e0', fontSize: '0.83rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0, overflowWrap: 'break-word', wordBreak: 'break-word' }}>{answer}</p>
         </div>
       )}
     </div>
