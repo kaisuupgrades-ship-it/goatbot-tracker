@@ -216,10 +216,10 @@ function buildUnifiedPrompt(game) {
     // Odds come from The Odds API (verified premium source) — tell the AI so it
     // skips "verify before betting" disclaimers for these specific numbers.
     const verifiedBlock = `[VERIFIED_ODDS_API]\nVERIFIED ODDS (The Odds API — confirmed live feed, do NOT add verify disclaimers for these numbers):\n${oddsStr}\n`;
-    return `${dateCtx}${verifiedBlock}\nRun a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
+    return `${dateCtx}${verifiedBlock}\nRun a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. Pick the single sharpest angle as THE PICK (moneyline, spread, or total — whichever has the best edge). List the other two markets as ALTERNATE ANGLES. Cover all standard BetOS analysis sections.`;
   }
 
-  return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Cover all three angles — moneyline value, spread edge, and total lean. Give me sharpest line, key angles, and your best pick for each market.`;
+  return `${dateCtx}Run a full BetOS analysis on ${away} @ ${home} — ${dateLabel}. ${oddsStr ? oddsStr + '.' : ''} Pick the single sharpest angle as THE PICK, then cover the other markets as ALTERNATE ANGLES. Cover all standard BetOS analysis sections.`;
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
