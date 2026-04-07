@@ -33,33 +33,29 @@ function calcStats(picks) {
   const roi     = settled.length ? (units / settled.length) * 100 : 0;
   const streak  = calcStreak(settled);
   const pending = picks.filter(p => !p.result || p.result === 'PENDING').length;
-  // Correct avg odds: convert each line → implied prob → average → back to American
-  // (cannot simply average American numbers — they're non-linear)
+  // Avg implied probability — more meaningful than averaged American odds (non-linear scale)
   const oddsWithValues = settled.filter(p => p.odds && parseInt(p.odds) !== 0);
-  const avgOdds = oddsWithValues.length
-    ? (() => {
-        const avgProb = oddsWithValues.reduce((sum, p) => {
-          const o = parseInt(p.odds);
-          const prob = o > 0 ? 100 / (o + 100) : Math.abs(o) / (Math.abs(o) + 100);
-          return sum + prob;
-        }, 0) / oddsWithValues.length;
-        // Convert average prob back to American odds
-        return avgProb >= 0.5
-          ? -Math.round(avgProb * 100 / (1 - avgProb))
-          : Math.round((1 - avgProb) * 100 / avgProb);
-      })()
-    : 0;
+  let avgImpliedProb = null;
+  if (oddsWithValues.length) {
+    const totalProb = oddsWithValues.reduce((sum, p) => {
+      const o = parseInt(p.odds);
+      return sum + (o > 0 ? 100 / (o + 100) : Math.abs(o) / (Math.abs(o) + 100));
+    }, 0);
+    avgImpliedProb = Math.round(totalProb / oddsWithValues.length * 1000) / 10; // e.g. 52.3
+  }
   const biggestWin = settled.filter(p => p.result === 'WIN')
     .reduce((max, p) => Math.max(max, parseFloat(p.profit) || 0), 0);
-  return { wins, losses, total: settled.length, units, roi, streak, pending, avgOdds, biggestWin };
+  return { wins, losses, total: settled.length, units, roi, streak, pending, avgImpliedProb, biggestWin };
 }
 
 function calcStreak(settled) {
   if (!settled.length) return { count: 0, type: '-' };
-  const last = settled[settled.length - 1].result;
+  // Sort desc so index 0 = most recent pick, ensuring correct streak direction
+  const desc = [...settled].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const last = desc[0].result;
   let count = 0;
-  for (let i = settled.length - 1; i >= 0; i--) {
-    if (settled[i].result === last) count++;
+  for (const p of desc) {
+    if (p.result === last) count++;
     else break;
   }
   return { count, type: last };
@@ -659,7 +655,7 @@ function CustomTooltip({ active, payload, label }) {
 
 function NeutralSummaryBar({ stats, picks }) {
   const winPct = stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : null;
-  const avgOddsDisplay = stats.avgOdds ? `${stats.avgOdds >= 0 ? '+' : ''}${Math.round(stats.avgOdds)}` : '—';
+  const avgProbDisplay = stats.avgImpliedProb != null ? `${stats.avgImpliedProb}%` : '—';
 
   const settled = [...picks].filter(p => p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH').sort((a,b) => new Date(a.date)-new Date(b.date));
   const last5 = settled.slice(-5);
@@ -675,7 +671,7 @@ function NeutralSummaryBar({ stats, picks }) {
     { label: 'Units P/L', value: `${stats.units >= 0 ? '+' : ''}${stats.units.toFixed(2)}u`, sub: `${stats.total} settled`, tone: stats.units >= 0 ? 'green' : 'red' },
     { label: 'ROI',       value: `${stats.roi >= 0 ? '+' : ''}${stats.roi.toFixed(1)}%`, sub: 'per pick', tone: stats.roi >= 0 ? 'green' : 'red' },
     { label: 'Streak',    value: stats.streak.count > 0 ? `${stats.streak.type === 'WIN' ? 'W' : 'L'}${stats.streak.count}` : '—', sub: 'current', tone: stats.streak.type === 'WIN' ? 'green' : stats.streak.type === 'LOSS' ? 'red' : null },
-    { label: 'Avg Odds',  value: avgOddsDisplay, sub: 'settled picks', tone: 'gold' },
+    { label: 'Avg Implied', value: avgProbDisplay, sub: 'implied prob', tone: 'gold' },
     { label: 'Best Win',  value: stats.biggestWin > 0 ? `+${stats.biggestWin.toFixed(2)}u` : '—', sub: 'single pick', tone: stats.biggestWin > 0 ? 'green' : null },
     ...(stats.pending > 0 ? [{ label: 'Pending', value: stats.pending, sub: 'awaiting', tone: 'gold' }] : []),
   ];
@@ -909,9 +905,9 @@ export default function TrackerTab({ picks, user }) {
                 ))}
                 <div style={{ flex: 1, textAlign: 'center' }}>
                   <div style={{ fontFamily: 'IBM Plex Mono', fontWeight: 700, fontSize: '0.82rem', color: 'var(--gold)' }}>
-                    {filtStats.avgOdds ? `${filtStats.avgOdds >= 0 ? '+' : ''}${Math.round(filtStats.avgOdds)}` : '—'}
+                    {filtStats.avgImpliedProb != null ? `${filtStats.avgImpliedProb}%` : '—'}
                   </div>
-                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Avg Odds</div>
+                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Avg Implied</div>
                 </div>
               </div>
             )}

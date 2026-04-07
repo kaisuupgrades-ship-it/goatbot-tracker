@@ -199,7 +199,7 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
   const pickSide = (pick.side || '').toLowerCase(); // explicit side field
 
   // Resolve line: stored column → parse from team name → parse from notes → 0
-  const line = parseFloat(pick.line ?? parseLineFromTeam(pick.team) ?? parseLineFromNotes(pick.notes) ?? 0);
+  const line = parseFloat(pick.line ?? parseLineFromTeam(pick.team) ?? parseLineFromNotes(pick.notes) ?? null);
 
   const total = homeScore + awayScore;
 
@@ -238,13 +238,13 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
     const isOver  = betType.includes('over')  || pickSide === 'over'  || betType === 'total (over)';
     const isUnder = betType.includes('under') || pickSide === 'under' || betType === 'total (under)';
 
-    if (line > 0) {
+    if (line !== null && !isNaN(line)) {
       if (total > line)      result = isOver  ? 'WIN' : isUnder ? 'LOSS' : null;
       else if (total < line) result = isUnder ? 'WIN' : isOver  ? 'LOSS' : null;
       else                   result = 'PUSH';
     } else {
-      // line is 0 or missing — cannot grade this total bet
-      console.warn('[gradeEngine] Total bet has no line (line=0) for pick id:', pick.id, '— skipping');
+      // line is null or NaN — cannot grade this total bet
+      console.warn('[gradeEngine] Total bet has no line for pick id:', pick.id, '— skipping');
       return null;
     }
   }

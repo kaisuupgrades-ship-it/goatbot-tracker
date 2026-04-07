@@ -188,7 +188,7 @@ async function searchESPNScoreboard(path, team, espnDate, dateStr) {
       if (score > bestScore) { bestScore = score; bestEvent = evt; }
     }
 
-    if (bestScore >= 40 && bestEvent?.date) {
+    if (bestScore >= 50 && bestEvent?.date) {
       return bestEvent.date; // UTC ISO timestamp — actual game start
     }
     return null;
