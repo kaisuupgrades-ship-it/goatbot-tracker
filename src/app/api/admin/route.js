@@ -379,8 +379,15 @@ export async function POST(req) {
     if (token) {
       try {
         const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-        if (error || !user || user.id !== userId) {
-          return NextResponse.json({ ok: false, error: 'User ID mismatch' }, { status: 403 });
+        if (error || !user) {
+          return NextResponse.json({ ok: false, error: 'Auth verification failed' }, { status: 403 });
+        }
+        // Allow if: JWT user matches the requested userId, OR the caller is an admin
+        if (user.id !== userId && !isAdminEmail(user.email)) {
+          const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single();
+          if (profile?.role !== 'admin') {
+            return NextResponse.json({ ok: false, error: 'User ID mismatch' }, { status: 403 });
+          }
         }
       } catch {
         return NextResponse.json({ ok: false, error: 'Auth verification failed' }, { status: 403 });

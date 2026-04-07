@@ -19,16 +19,16 @@ export function useStarredGames() {
 
   useEffect(() => {
     loadFromStorage();
-    // React to changes made by FeaturedGamesTab (same tab) or other tabs
+    // React to changes made by other browser tabs
     function onStorage(e) {
       if (!e.key || e.key === STARRED_KEY) loadFromStorage();
     }
     window.addEventListener('storage', onStorage);
-    // Also poll every 1s to catch same-page updates (localStorage events don't fire within same page)
-    const interval = setInterval(loadFromStorage, 1000);
+    // Custom event for same-page updates — native storage events don't fire within the same page
+    window.addEventListener('betos:starred_updated', loadFromStorage);
     return () => {
       window.removeEventListener('storage', onStorage);
-      clearInterval(interval);
+      window.removeEventListener('betos:starred_updated', loadFromStorage);
     };
   }, []);
 
@@ -39,6 +39,8 @@ export function useStarredGames() {
       if (next[game.id]) { delete next[game.id]; }
       else { next[game.id] = game; }
       try { localStorage.setItem(STARRED_KEY, JSON.stringify(next)); } catch {}
+      // Notify same-page listeners (FeaturedGamesTab) — native storage events don't fire in same page
+      window.dispatchEvent(new Event('betos:starred_updated'));
       return next;
     });
   }
@@ -1170,7 +1172,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             }}
               title={event._closingLine ? 'Closing line — odds at game start' : event._staleOdds ? 'Odds from cache — may be up to 15 min old' : undefined}
             >
-              {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
+              {event._closingLine ? 'CLOSING' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
             </span>
             {event._staleOdds && !event._closingLine && (
               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', opacity: 0.6 }} title="Odds cached — may be up to 15 min old">🕐</span>
@@ -2249,7 +2251,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         },
         overUnder: tOver?.point ?? tUnder?.point ?? existingOdds.overUnder ?? null,
         details: sHome?.point != null
-          ? `${realGame.home_team.split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
+          ? `${(realGame.home_team || '').split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
           : existingOdds.details ?? null,
         // Enriched over/under prices (ESPN doesn't expose these in a standard field)
         _overOdds:       tOver?.price  ?? null,

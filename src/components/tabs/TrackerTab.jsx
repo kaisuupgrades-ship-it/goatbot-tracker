@@ -813,6 +813,18 @@ export default function TrackerTab({ picks, user }) {
   const curve     = useMemo(() => buildEquityCurve(filteredPicks), [filteredPicks]);
   const breakdown = useMemo(() => buildSportBreakdown(filteredPicks), [filteredPicks]);
 
+  if (picks.length === 0) {
+    return (
+      <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5rem 2rem', gap: '1rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '3rem', opacity: 0.35 }}>📊</div>
+        <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-primary)' }}>No picks yet</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '320px', lineHeight: 1.6 }}>
+          Head to <strong style={{ color: 'var(--gold)' }}>Pick History</strong> to log your first bet. Your stats, equity curve, and sport breakdown will appear here once you have picks on record.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 

@@ -593,6 +593,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [search, setSearch]         = useState('');
   const [gameFilter, setGameFilter] = useState('upcoming');
   const [dateOffset, setDateOffset] = useState(0); // -1=yesterday, 0=today, 1=tomorrow
+  const [cachedAt, setCachedAt]     = useState(null); // ISO string when odds came from cache
 
   const load = useCallback(async (s, dateOff = dateOffset, { live = false } = {}) => {
     setLoading(true);
@@ -606,6 +607,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.message || (typeof data.error === 'string' ? data.error : 'Odds data temporarily unavailable'));
       setConfigured(true);
+      setCachedAt(data.cached && data._cachedAt ? data._cachedAt : null);
       const games = data.data || [];
       setGames(games);
       setRemaining(data.remaining ?? null);
@@ -740,6 +742,14 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
           style={{ width: '150px', padding: '4px 10px', fontSize: '0.8rem' }} />
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {cachedAt && (
+            <span title={`Cached at ${new Date(cachedAt).toLocaleTimeString()}`} style={{
+              fontSize: '0.65rem', color: '#555',
+              display: 'inline-flex', alignItems: 'center', gap: '3px',
+            }}>
+              🕐 {Math.round((Date.now() - new Date(cachedAt).getTime()) / 60000)}m ago
+            </span>
+          )}
           {remaining != null && (
             <span style={{ color: '#3a3a3a', fontSize: '0.7rem' }}>
               {remaining} API req left

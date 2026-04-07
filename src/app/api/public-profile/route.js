@@ -109,7 +109,7 @@ export async function GET(req) {
     const dbProfit = p.profit != null ? parseFloat(p.profit) : null;
     const profit = dbProfit != null ? dbProfit
       : (p.odds != null ? calcProfit(p.result, p.odds, p.units || 1) : null);
-    if (p.result !== 'PUSH') wagered += (p.units || 1);
+    if (p.result !== 'PUSH' && profit != null) wagered += (p.units || 1);
     if (profit != null) totalUnits += profit;
     return {
       id:           p.id,

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { signOut } from '@/lib/supabase';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { startSessionTracking, stopSessionTracking } from '@/lib/sessionTracker';
@@ -104,13 +104,24 @@ function AnnouncementBanner() {
 // ── Server Job Banner — shows when background server jobs are running ───────────
 // Polls the pregenerate_progress key in settings so the banner persists across
 // tab switches, page refreshes, etc. The server writes progress as it goes.
+const BANNER_MAX_RETRIES = 60; // 60 × 5s = 5 min max polling window
+
 function ServerJobBanner() {
-  const [job, setJob]     = useState(null);
-  const [done, setDone]   = useState(false);
+  const [job, setJob]           = useState(null);
+  const [done, setDone]         = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [stalled, setStalled]   = useState(false);
+  const retryCount              = useRef(0);
 
   useEffect(() => {
+    if (dismissed) return;
     let active = true;
     async function poll() {
+      if (retryCount.current >= BANNER_MAX_RETRIES) {
+        setStalled(true);
+        return;
+      }
+      retryCount.current++;
       try {
         const res  = await fetch('/api/settings?key=pregenerate_progress');
         const data = await res.json();
@@ -134,12 +145,35 @@ function ServerJobBanner() {
     poll();
     const id = setInterval(poll, 5000);
     return () => { active = false; clearInterval(id); };
-  }, []);
+  }, [dismissed]);
 
-  if (!job) return null;
+  if (dismissed || (!job && !stalled)) return null;
 
-  const sportLabel = job.current_sport ? job.current_sport.toUpperCase() : '';
-  const pct = job.total_sports > 0 ? Math.round((job.sport_index / job.total_sports) * 100) : 0;
+  if (stalled) {
+    return (
+      <div style={{
+        background: 'linear-gradient(90deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.03) 100%)',
+        borderBottom: '1px solid rgba(245,158,11,0.18)',
+        padding: '0 1.5rem',
+        display: 'flex', alignItems: 'center', gap: '10px',
+        minHeight: '34px', flexShrink: 0,
+      }}>
+        <span style={{ fontSize: '0.78rem', flexShrink: 0 }}>⚠️</span>
+        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(245,158,11,0.85)', flex: 1 }}>
+          Pre-generation is taking longer than expected — it may still be running in the background.
+        </span>
+        <button
+          onClick={() => setDismissed(true)}
+          style={{ background: 'none', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', color: 'rgba(245,158,11,0.7)', padding: '2px 10px', cursor: 'pointer', fontSize: '0.72rem', fontFamily: 'inherit' }}
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
+
+  const sportLabel = job?.current_sport ? job.current_sport.toUpperCase() : '';
+  const pct = job?.total_sports > 0 ? Math.round((job.sport_index / job.total_sports) * 100) : 0;
 
   return (
     <div style={{

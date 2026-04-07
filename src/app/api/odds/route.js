@@ -46,7 +46,7 @@ async function getSupabaseCache(sportKey) {
     const ageMs = Date.now() - new Date(data.updated_at).getTime();
     if (ageMs > getOddsCacheTTL()) return null; // stale
     const payload = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-    return payload;
+    return { ...payload, _cachedAt: data.updated_at };
   } catch { return null; }
 }
 
