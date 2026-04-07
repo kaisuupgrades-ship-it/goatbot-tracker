@@ -169,16 +169,65 @@ export async function GET(req) {
         return NextResponse.json({ error: 'athleteId and eventId required for golf scorecard' }, { status: 400 });
       }
 
+      // Helper: extract individual round stroke counts from ESPN statistics array.
+      // ESPN puts per-round stroke counts (63–82 typical) at stats[3+], but sometimes
+      // stats[3] is the total tournament stroke count (268). Filter by realistic range.
+      function extractRoundScores(stats) {
+        const roundScores = [];
+        for (let i = 3; i < stats.length; i++) {
+          const val = stats[i]?.displayValue;
+          if (!val) continue;
+          const n = parseInt(val);
+          // Accept only realistic individual round stroke counts (55–90).
+          // This excludes total-tournament scores (260–290) and to-par strings like "-12"
+          // that would be caught by the negative-number check.
+          if (!isNaN(n) && n >= 55 && n <= 90) {
+            roundScores.push({
+              number: roundScores.length + 1, // sequential: always R1, R2, R3, R4
+              total:  n,
+              value:  null, // to-par per round unknown from leaderboard stats
+              holes:  [],
+            });
+          }
+        }
+        return roundScores;
+      }
+
       // Endpoint 1: site.web.api scorecards (most detailed — has par per hole)
       try {
         const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`, ESPN_WEB_BASE);
         const rounds = data?.rounds || data?.player?.rounds || [];
         if (rounds.length > 0) return NextResponse.json(data);
       } catch (err) {
-        console.warn('Golf scorecard primary endpoint failed:', err.message);
+        console.warn('Golf scorecard web endpoint failed:', err.message);
       }
 
-      // Endpoint 2: site.web.api competitor detail (sometimes has round-by-round linescores)
+      // Endpoint 1b: same scorecard path but via the public ESPN base (site.api.espn.com)
+      try {
+        const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`);
+        const rounds = data?.rounds || data?.player?.rounds || [];
+        if (rounds.length > 0) return NextResponse.json(data);
+      } catch (err) {
+        console.warn('Golf scorecard public endpoint failed:', err.message);
+      }
+
+      // Endpoint 2: event summary — sometimes includes full competitor round data
+      try {
+        const data = await espnFetch(`golf/${golfLeague}/summary?event=${eventId}`);
+        const competitors = data?.competitors || data?.competition?.competitors || [];
+        const player = competitors.find(c =>
+          String(c.id) === String(athleteId) ||
+          String(c.athlete?.id) === String(athleteId)
+        );
+        if (player) {
+          const rounds = player.rounds || player.athlete?.rounds || [];
+          if (rounds.length > 0) return NextResponse.json({ rounds, player: { displayName: player.athlete?.displayName }, _source: 'summary' });
+        }
+      } catch (err) {
+        console.warn('Golf summary endpoint failed:', err.message);
+      }
+
+      // Endpoint 2b: site.web.api competitor detail
       try {
         const data = await espnFetch(
           `golf/${golfLeague}/leaderboard/${eventId}/playersummary?player=${athleteId}`,
@@ -191,20 +240,23 @@ export async function GET(req) {
         console.warn('Golf player summary fallback failed:', err.message);
       }
 
-      // Endpoint 3: Try the main leaderboard AND past event endpoint
+      // Endpoint 3: Pull from the main leaderboard — always succeeds when an event is active.
+      // Extracts round-by-round totals from statistics array + live hole data from linescores.
       try {
-        // Try both current leaderboard and the specific event endpoint
-        const [lb, eventData] = await Promise.allSettled([
+        const [lb, eventLb] = await Promise.allSettled([
           espnFetch(`golf/leaderboard?league=${golfLeague}`),
+          // Event-specific leaderboard (web API may fail — that's OK)
           espnFetch(`golf/${golfLeague}/leaderboard/${eventId}`, ESPN_WEB_BASE).catch(() => null),
         ]);
-        const lbData = lb.status === 'fulfilled' ? lb.value : null;
-        const evtData = eventData.status === 'fulfilled' ? eventData.value : null;
-        // Merge: use the event-specific data if available, otherwise current leaderboard
+        const lbData  = lb.status    === 'fulfilled' ? lb.value    : null;
+        const evtData = eventLb.status === 'fulfilled' ? eventLb.value : null;
+
+        // Merge event lists; prefer event-specific data first
         const events = [
           ...(evtData?.events || []),
-          ...(lbData?.events || []),
+          ...(lbData?.events  || []),
         ];
+
         for (const evt of events) {
           if (String(evt.id) !== String(eventId)) continue;
           const competitors = evt.competitions?.[0]?.competitors || [];
@@ -212,30 +264,18 @@ export async function GET(req) {
             String(c.id) === String(athleteId) ||
             String(c.athlete?.id) === String(athleteId)
           );
-          if (player) {
-            // Build rounds from per-round statistics if available
-            const linescores = player.linescores || [];
-            const stats = player.statistics || [];
-            const roundScores = [];
-            // stats[0]=toPar, stats[1]=thru, stats[2]=today, stats[3+]=round scores
-            for (let i = 3; i < stats.length; i++) {
-              const val = stats[i]?.displayValue;
-              if (val && !isNaN(parseInt(val))) {
-                roundScores.push({
-                  number: i - 2,
-                  total: parseInt(val),
-                  value: null, // don't know par for the round from this data
-                  holes: [], // no per-hole data from leaderboard
-                });
-              }
-            }
-            return NextResponse.json({
-              rounds: roundScores,
-              linescores,
-              player: { displayName: player.athlete?.displayName },
-              _source: 'leaderboard_fallback',
-            });
-          }
+          if (!player) continue;
+
+          const linescores = player.linescores || [];
+          const stats      = player.statistics || [];
+          const roundScores = extractRoundScores(stats);
+
+          return NextResponse.json({
+            rounds:     roundScores,
+            linescores,
+            player: { displayName: player.athlete?.displayName },
+            _source: 'leaderboard_fallback',
+          });
         }
       } catch (err) {
         console.warn('Golf leaderboard fallback failed:', err.message);

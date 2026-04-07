@@ -1038,21 +1038,22 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 {truncBroadcast(broadcast, 36)}
               </span>
             )}
-            {/* ＋ Bet button */}
+            {/* ＋ Add Pick button */}
             <button
               onClick={e => { e.stopPropagation(); onAddBet?.(event, sport); }}
-              title="Add a bet on this game"
+              title="Add a pick on this game"
               style={{
-                background: 'rgba(0,212,139,0.10)', border: '1px solid rgba(0,212,139,0.25)',
-                borderRadius: '5px', cursor: 'pointer', padding: '2px 7px',
-                fontSize: '0.64rem', fontWeight: 800, lineHeight: 1.4, flexShrink: 0,
+                background: 'rgba(0,212,139,0.12)', border: '1px solid rgba(0,212,139,0.35)',
+                borderRadius: '6px', cursor: 'pointer', padding: '4px 10px',
+                fontSize: '0.72rem', fontWeight: 800, lineHeight: 1.4, flexShrink: 0,
                 color: 'var(--green)', fontFamily: 'inherit',
                 transition: 'all 0.12s',
+                whiteSpace: 'nowrap',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.2)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.5)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.10)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.25)'; }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.22)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.6)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.12)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.35)'; }}
             >
-              ＋ Bet
+              + Add Pick
             </button>
 
             {/* Star button */}

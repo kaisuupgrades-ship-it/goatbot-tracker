@@ -466,7 +466,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           }}
           title="Add a pick — go to Scoreboard"
           style={{
-            position: 'fixed', bottom: '28px', right: '28px', zIndex: 5000,
+            position: 'fixed', bottom: '82px', right: '20px', zIndex: 5000,
             display: 'flex', alignItems: 'center', gap: '8px',
             padding: '14px 22px', borderRadius: '50px',
             background: 'linear-gradient(135deg, #00D48B 0%, #00b876 100%)',

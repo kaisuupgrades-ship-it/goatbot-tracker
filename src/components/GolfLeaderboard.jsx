@@ -81,18 +81,19 @@ function parseGolfStats(statistics) {
   let total    = '—';
   let winOdds  = null;
 
-  // stats[2] is normally "today" but ESPN sometimes puts odds there
+  // stats[2] is normally "today" but ESPN sometimes puts win-odds there for featured players.
+  // A golf round score relative to par is always between -15 and +18 at most (pros never
+  // shoot higher). Any integer outside that range is almost certainly odds, not a score.
   const raw2 = stats[2]?.displayValue;
   if (raw2 != null) {
     const n2 = parseInt(raw2);
-    // Odds are large positive integers (e.g. +208, +105). Golf round scores
-    // realistically range from -12 to +15. Anything > 30 is odds, not a score.
-    if (!isNaN(n2) && n2 > 30) {
-      // This is a win-odds value — store it and look for the real today at [3]
+    const looksLikeScore = !isNaN(n2) && n2 >= -15 && n2 <= 18;
+    if (!isNaN(n2) && !looksLikeScore) {
+      // Out-of-range for a golf round score → treat as win odds
       winOdds = n2 > 0 ? `+${n2}` : `${n2}`;
       today   = stats[3]?.displayValue ?? '—';
       total   = stats[4]?.displayValue ?? stats[3]?.displayValue ?? '—';
-    } else {
+    } else if (raw2 !== null && raw2 !== undefined) {
       today = raw2;
       total = stats[3]?.displayValue ?? '—';
     }
@@ -314,18 +315,22 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
       return [{ number: 'Current', value: null, holes: ls.map(normalizeHole) }];
     }
 
-    // Build round-level scores from player.statistics (indices 3+ are round scores)
+    // Build round-level scores from player.statistics (indices 3+ may be round stroke counts).
+    // Filter to realistic individual round scores (55–90) to exclude total-tournament scores
+    // (typically 260–290) that ESPN sometimes puts at stats[3].
     const stats = player.statistics || [];
     const roundScores = [];
     for (let i = 3; i < stats.length; i++) {
       const val = stats[i]?.displayValue;
-      if (val && !isNaN(parseInt(val))) {
+      if (!val) continue;
+      const n = parseInt(val);
+      if (!isNaN(n) && n >= 55 && n <= 90) {
         roundScores.push({
-          number: i - 2,
-          total: parseInt(val),
-          value: null,
-          par: null,
-          holes: [],
+          number: roundScores.length + 1, // sequential: R1, R2, R3, R4
+          total:  n,
+          value:  null,
+          par:    null,
+          holes:  [],
         });
       }
     }
