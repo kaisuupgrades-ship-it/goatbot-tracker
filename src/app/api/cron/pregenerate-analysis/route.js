@@ -234,7 +234,7 @@ const MAX_GAMES_PER_SPORT = 8;
 
 // ── xAI API call helper ───────────────────────────────────────────────────────
 async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens = 2000, timeout = 120_000 } = {}) {
-  const xaiKey = process.env.XAI_API_KEY;
+  const xaiKey = (process.env.XAI_API_KEY || '').trim();
   if (!xaiKey) return null;
 
   const t0 = Date.now();
@@ -349,7 +349,61 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
     console.log(`[pregenerate] ❌ Tier 2 failed for ${awayTeam}@${homeTeam}: ${e.message}`);
   }
 
-  return null; // both tiers failed
+  // ── Tier 3: Claude Opus 4.6 no-search fallback ─────────────────────────
+  // Used when xAI is unavailable (bad key, outage, etc.) so pregenerate never
+  // produces 0 analyses when odds data is already pre-fetched.
+  const claudeKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  if (!isRefresh && claudeKey) {
+    try {
+      const noSearchSystem = buildAnalysisSystemNoSearch();
+      const noSearchPrompt = `Analyze this ${sport.toUpperCase()} matchup using ONLY the data provided below:
+
+MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
+DATE: ${gameDate}
+${oddsContext ? `\nODDS DATA:\n${oddsContext}` : '\nNo odds data available.'}
+${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
+
+Produce a complete BetOS analysis using only this data. Note any limitations.`;
+
+      const t0 = Date.now();
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': claudeKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-opus-4-6',
+          system: noSearchSystem,
+          messages: [{ role: 'user', content: noSearchPrompt }],
+          max_tokens: adminMode ? 3000 : 1500,
+        }),
+        signal: AbortSignal.timeout(adminMode ? 120_000 : 60_000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.content?.find(c => c.type === 'text')?.text?.trim();
+        if (text) {
+          const latency = Date.now() - t0;
+          console.log(`[pregenerate] ✅ Tier 3 (claude-opus fallback) ${awayTeam}@${homeTeam}: ${latency}ms`);
+          return {
+            text, mode, model: 'BetOS AI', model_used: 'claude-opus-4-6',
+            provider: 'anthropic', was_fallback: true, latency_ms: latency,
+            tokens_in: data.usage?.input_tokens || null,
+            tokens_out: data.usage?.output_tokens || null,
+            system_prompt: noSearchSystem, user_prompt: noSearchPrompt, prompt_version: PROMPT_VERSION,
+          };
+        }
+      } else {
+        console.log(`[pregenerate] ⚠️ Tier 3 Claude HTTP ${res.status} for ${awayTeam}@${homeTeam}`);
+      }
+    } catch (e) {
+      console.log(`[pregenerate] ❌ Tier 3 Claude failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+    }
+  }
+
+  return null; // all tiers failed
 }
 
 export async function GET(req) {
@@ -396,7 +450,7 @@ export async function GET(req) {
   // Pre-warm odds cache: fetch fresh odds from The Odds API for each sport
   // so analyses have the best available line data. This uses the same API key
   // as /api/odds and caches to the same settings keys.
-  const THE_ODDS_KEY = process.env.THE_ODDS_API_KEY;
+  const THE_ODDS_KEY = (process.env.THE_ODDS_API_KEY || '').trim();
   const ODDS_SPORT_KEYS = {
     mlb: 'baseball_mlb', nba: 'basketball_nba', nhl: 'icehockey_nhl',
     nfl: 'americanfootball_nfl', mls: 'soccer_usa_mls', wnba: 'basketball_wnba',
