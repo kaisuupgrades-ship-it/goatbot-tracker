@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { addPick, updatePick, deletePick } from '@/lib/supabase';
+import { addPick, updatePick, deletePick, fetchParlayLegs, submitParlay } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { validateContestEntry, DEFAULT_CONTEST_RULES } from '@/lib/contestValidation';
@@ -217,16 +217,17 @@ function fileToBase64(file) {
   });
 }
 
-function SlipImport({ onFilled }) {
-  const [mode, setMode]       = useState('image'); // 'image' | 'url' | 'text'
-  const [file, setFile]       = useState(null);
-  const [url, setUrl]         = useState('');
-  const [text, setText]       = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  const [parsed, setParsed]   = useState(null);
-  const [open, setOpen]       = useState(false);
-  const fileRef               = useRef();
+function SlipImport({ onFilled, onSubmitParlay }) {
+  const [mode, setMode]           = useState('image'); // 'image' | 'url' | 'text'
+  const [file, setFile]           = useState(null);
+  const [url, setUrl]             = useState('');
+  const [text, setText]           = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState('');
+  const [parsed, setParsed]       = useState(null);
+  const [open, setOpen]           = useState(false);
+  const [parlaySubmitting, setParlaySubmitting] = useState(false);
+  const fileRef                   = useRef();
 
   async function handleParse() {
     setLoading(true);
@@ -280,6 +281,37 @@ function SlipImport({ onFilled }) {
     setUrl('');
     setText('');
     setOpen(false);
+  }
+
+  async function handleSubmitParlay() {
+    if (!parsed?.parlay_legs?.length || !onSubmitParlay) return;
+    setParlaySubmitting(true);
+    setError('');
+    try {
+      const legs = parsed.parlay_legs.map(l => ({
+        team:      l.team || '',
+        sport:     l.sport || parsed.sport || 'Other',
+        bet_type:  l.bet_type || 'Moneyline',
+        line:      l.line ?? null,
+        odds:      l.odds ?? 0,
+        game_date: parsed.date || null,
+      }));
+      await onSubmitParlay({
+        units: parsed.units ?? 1,
+        book:  parsed.book ?? null,
+        date:  parsed.date ?? null,
+        notes: parsed.notes ?? null,
+      }, legs);
+      setParsed(null);
+      setFile(null);
+      setUrl('');
+      setText('');
+      setOpen(false);
+    } catch (e) {
+      setError(e.message || 'Parlay submit failed');
+    } finally {
+      setParlaySubmitting(false);
+    }
   }
 
   const MODES = [
@@ -408,11 +440,32 @@ function SlipImport({ onFilled }) {
           {/* Preview */}
           {parsed && (
             <div style={{ marginTop: '1rem', background: 'var(--bg-elevated)', border: '1px solid var(--gold)', borderRadius: '8px', padding: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--gold)', fontWeight: 700, fontSize: '0.85rem' }}>✓ Parsed Successfully</span>
-                <button className="btn btn-primary" onClick={handleUse} style={{ fontSize: '0.78rem', padding: '4px 12px' }}>
-                  Fill Form →
-                </button>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {/* Show "Submit as Parlay" if parse detected structured legs */}
+                  {parsed.bet_type === 'Parlay' && parsed.parlay_legs?.length >= 2 && onSubmitParlay && (
+                    <button
+                      className="btn"
+                      onClick={handleSubmitParlay}
+                      disabled={parlaySubmitting}
+                      style={{
+                        fontSize: '0.78rem', padding: '4px 12px',
+                        background: 'rgba(168,85,247,0.15)',
+                        border: '1px solid rgba(168,85,247,0.4)',
+                        color: '#c084fc',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {parlaySubmitting ? 'Submitting…' : `🎰 Submit ${parsed.parlay_legs.length}-Leg Parlay`}
+                    </button>
+                  )}
+                  <button className="btn btn-primary" onClick={handleUse} style={{ fontSize: '0.78rem', padding: '4px 12px' }}>
+                    Fill Form →
+                  </button>
+                </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', fontSize: '0.8rem' }}>
                 {[
@@ -784,6 +837,21 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   const [analyses, setAnalyses] = useState({}); // { pickId: analysisText }
   const [expandedAnalysis, setExpandedAnalysis] = useState(null); // pickId
   const [analysisLoading, setAnalysisLoading] = useState(false);
+
+  // ── Parlay leg expansion ─────────────────────────────────────────────────
+  // expandedParlayLegs: { [pickId]: null | 'loading' | leg[] }
+  const [expandedParlayLegs, setExpandedParlayLegs] = useState({});
+
+  async function toggleParlayLegs(pickId) {
+    if (expandedParlayLegs[pickId] && expandedParlayLegs[pickId] !== 'loading') {
+      // Collapse
+      setExpandedParlayLegs(prev => { const n = { ...prev }; delete n[pickId]; return n; });
+      return;
+    }
+    setExpandedParlayLegs(prev => ({ ...prev, [pickId]: 'loading' }));
+    const { data, error } = await fetchParlayLegs(pickId);
+    setExpandedParlayLegs(prev => ({ ...prev, [pickId]: error ? [] : data }));
+  }
 
   // ── Live Scores + Instant Grading ───────────────────────────────────────
   const pendingPicks = picks.filter(p => !p.result || p.result === 'PENDING');
@@ -1193,7 +1261,14 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       {/* Import flow */}
       {addMode === 'import' && (
         <div style={{ marginBottom: '1.25rem' }}>
-          <SlipImport onFilled={(filled) => { handleSlipFilled(filled); setAddMode('manual'); setShowForm(true); }} />
+          <SlipImport
+            onFilled={(filled) => { handleSlipFilled(filled); setAddMode('manual'); setShowForm(true); }}
+            onSubmitParlay={async (pick, legs) => {
+              const { data, error } = await submitParlay(pick, legs);
+              if (error) throw new Error(error.message);
+              if (data) setPicks(prev => [data, ...prev]);
+            }}
+          />
         </div>
       )}
 
@@ -1426,15 +1501,108 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
 
                   {/* ── Main: Team + Bet Type + Matchup ── */}
                   <div style={{ padding: '10px 13px 9px', flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '2px', lineHeight: 1.2 }}>
-                      {pick.team}
+                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '2px', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+                      {pick.is_parlay ? (
+                        <>
+                          <span style={{
+                            fontSize: '0.62rem', fontWeight: 800, padding: '2px 7px',
+                            borderRadius: '5px', letterSpacing: '0.07em',
+                            background: 'rgba(168,85,247,0.15)',
+                            color: '#c084fc',
+                            border: '1px solid rgba(168,85,247,0.3)',
+                            textTransform: 'uppercase',
+                            flexShrink: 0,
+                          }}>
+                            🎰 Parlay
+                          </span>
+                          <span>{pick.parlay_leg_count || '?'}-Leg</span>
+                        </>
+                      ) : pick.team}
                     </div>
-                    <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: pick.matchup ? '5px' : 0 }}>
-                      {pick.bet_type}
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: pick.matchup && !pick.is_parlay ? '5px' : 0 }}>
+                      {pick.is_parlay
+                        ? `${pick.parlay_leg_count || '?'} legs · Combined ${pick.parlay_combined_odds > 0 ? '+' : ''}${pick.parlay_combined_odds ?? (pick.odds > 0 ? '+' : '') + pick.odds}`
+                        : pick.bet_type}
                     </div>
-                    {pick.matchup && (
+                    {pick.matchup && !pick.is_parlay && (
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
                         {pick.matchup}
+                      </div>
+                    )}
+                    {/* Parlay expand/collapse legs */}
+                    {pick.is_parlay && (
+                      <div style={{ marginTop: '6px' }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); toggleParlayLegs(pick.id); }}
+                          style={{
+                            background: 'none', border: '1px solid rgba(168,85,247,0.25)',
+                            borderRadius: '5px', padding: '3px 9px',
+                            fontSize: '0.68rem', color: '#a855f7', cursor: 'pointer',
+                            fontFamily: 'inherit', fontWeight: 600,
+                            transition: 'all 0.1s',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                        >
+                          {expandedParlayLegs[pick.id] && expandedParlayLegs[pick.id] !== 'loading'
+                            ? '▲ Hide Legs'
+                            : expandedParlayLegs[pick.id] === 'loading'
+                              ? 'Loading…'
+                              : '▼ Show Legs'}
+                        </button>
+                        {/* Legs list */}
+                        {expandedParlayLegs[pick.id] && expandedParlayLegs[pick.id] !== 'loading' && (
+                          <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {(expandedParlayLegs[pick.id] || []).map((leg, li) => {
+                              const legResultColor =
+                                leg.result === 'WIN'  ? '#4ade80' :
+                                leg.result === 'LOSS' ? '#f87171' :
+                                leg.result === 'PUSH' ? '#94a3b8' :
+                                leg.result === 'VOID' ? '#94a3b8' : '#FFB800';
+                              return (
+                                <div key={leg.id || li} style={{
+                                  display: 'flex', alignItems: 'center', gap: '7px',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  background: 'rgba(168,85,247,0.05)',
+                                  border: '1px solid rgba(168,85,247,0.12)',
+                                  borderLeft: `3px solid ${legResultColor}`,
+                                }}>
+                                  <span style={{ fontSize: '0.65rem', color: '#718096', flexShrink: 0 }}>
+                                    {li + 1}.
+                                  </span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {leg.team}
+                                      {leg.line != null ? ` ${leg.line > 0 ? '+' : ''}${leg.line}` : ''}
+                                    </div>
+                                    <div style={{ fontSize: '0.65rem', color: '#718096' }}>
+                                      {leg.bet_type} · {leg.sport}
+                                      {leg.away_team && leg.home_team ? ` · ${leg.away_team} @ ${leg.home_team}` : ''}
+                                    </div>
+                                  </div>
+                                  <span style={{
+                                    fontSize: '0.75rem', fontWeight: 700,
+                                    color: leg.odds > 0 ? '#4ade80' : '#94a3b8',
+                                    fontFamily: 'IBM Plex Mono, monospace',
+                                    flexShrink: 0,
+                                  }}>
+                                    {leg.odds > 0 ? '+' : ''}{leg.odds}
+                                  </span>
+                                  {leg.result && (
+                                    <span style={{
+                                      fontSize: '0.62rem', fontWeight: 800,
+                                      color: legResultColor,
+                                      flexShrink: 0,
+                                    }}>
+                                      {leg.result}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Live score while game is in progress */}

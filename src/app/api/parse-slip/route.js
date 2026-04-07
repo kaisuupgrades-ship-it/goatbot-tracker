@@ -13,13 +13,26 @@ Return this exact structure:
   "team": "FULL official team name or full player name (see rules below)",
   "sport": "MLB|NBA|NFL|NHL|NCAAF|NCAAB|Soccer|UFC|Other",
   "bet_type": "Moneyline|Spread|Run Line|Puck Line|Total (Over)|Total (Under)|Prop|Parlay|Other",
-  "odds": <American odds as integer, e.g. -110 or 105. REQUIRED.>,
+  "odds": <American odds as integer, e.g. -110 or 105. REQUIRED. For parlays, this is the combined payout odds.>,
   "units": <wager size as decimal number. Parse '2u', '2 units', '2 unit', 'two units' as 2. Parse '0.5u', 'half unit' as 0.5. If not mentioned use null.>,
   "book": "sportsbook name or null",
   "matchup": "Away Team vs Home Team or null",
   "date": "YYYY-MM-DD or null",
-  "notes": "brief one-line description of the bet including key details like spread/total line"
+  "notes": "brief one-line description of the bet including key details like spread/total line",
+  "parlay_legs": null
 }
+
+PARLAY RULE: When bet_type is "Parlay", populate "parlay_legs" with an array of individual legs:
+"parlay_legs": [
+  {
+    "team": "FULL official team name or selection (e.g. 'Over 8.5')",
+    "sport": "MLB|NBA|NFL|NHL|NCAAF|NCAAB|Soccer|Other",
+    "bet_type": "Moneyline|Spread|Run Line|Puck Line|Total (Over)|Total (Under)|Prop",
+    "line": <spread or total line number as decimal, or null for ML>,
+    "odds": <American odds for THIS specific leg as integer, or null if not listed>
+  }
+]
+For non-parlay bets, "parlay_legs" must be null.
 
 TEAM NAME RULES (most important):
 - ALWAYS use the full official team name. Never use city-only or nickname-only.

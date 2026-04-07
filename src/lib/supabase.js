@@ -139,6 +139,51 @@ export async function deletePick(id) {
   return { error };
 }
 
+// ── Parlay helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Submit a parlay through /api/picks.
+ * pick   — top-level pick fields (units, book, notes, date)
+ * legs   — array of leg objects from ParlayTray
+ */
+export async function submitParlay(pick, legs) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return { data: null, error: { message: 'Not authenticated' } };
+
+    const res = await fetch('/api/picks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ pick: { ...pick, is_parlay: true }, parlay_legs: legs }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      return { data: null, error: { message: json.errors?.[0] || json.error || 'Parlay save failed' } };
+    }
+    return { data: json.pick, legs: json.parlay_legs, error: null };
+  } catch (err) {
+    return { data: null, error: { message: err.message || 'Network error' } };
+  }
+}
+
+/**
+ * Fetch parlay legs for a given pick_id.
+ * Uses the anon key — RLS enforces that only the owner can read their legs.
+ */
+export async function fetchParlayLegs(pickId) {
+  const { data, error } = await supabase
+    .from('parlay_legs')
+    .select('*')
+    .eq('pick_id', pickId)
+    .order('leg_number', { ascending: true });
+  return { data: data || [], error };
+}
+
 // ── Profile helpers ──────────────────────────────────────────────────────────
 
 export async function fetchProfile(userId) {

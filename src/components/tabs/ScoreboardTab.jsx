@@ -1,11 +1,13 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import BetSlipModal from '@/components/BetSlipModal';
+import ParlayTray, { calcParlayOdds } from '@/components/ParlayTray';
 import VoiceButton from '@/components/VoiceInput';
 import { getUserPrefs, formatGameTime, getTzAbbr } from '@/lib/userPrefs';
 import GolfLeaderboard from '@/components/GolfLeaderboard';
 import TennisScoreboard from '@/components/TennisScoreboard';
 import SoccerScoreboard from '@/components/SoccerScoreboard';
+import { submitParlay } from '@/lib/supabase';
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
@@ -914,9 +916,23 @@ function LinescoreTable({ data }) {
   );
 }
 
+// ── Parse spread string "DET -1.5" → { awayLine, homeLine } ──────────────────
+function parseSpreadLine(spreadStr, awayAbbr, awayName, homeAbbr, homeName) {
+  if (!spreadStr) return null;
+  const match = spreadStr.match(/([A-Za-z]+)\s*([-+]?\d+\.?\d*)/);
+  if (!match) return null;
+  const token = match[1].toLowerCase();
+  const line  = parseFloat(match[2]);
+  if (isNaN(line)) return null;
+  const awayTokens = [awayAbbr, awayName, awayName?.split(' ').pop()].filter(Boolean).map(s => s.toLowerCase());
+  const isAway = awayTokens.some(t => t.startsWith(token) || token.startsWith(t.slice(0, 3)));
+  return { awayLine: isAway ? line : -line, homeLine: isAway ? -line : line };
+}
+
 // ── Game Card ─────────────────────────────────────────────────────────────────
-export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York', gameLeans = {} }) {
+export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York', gameLeans = {}, parlayMode = false, parlayLegs = [], onAddParlayLeg }) {
   const [expanded, setExpanded] = useState(false);
+  const [parlayPickerOpen, setParlayPickerOpen] = useState(false);
   const isExpanded = suppressHeader ? (externalExpanded ?? false) : expanded;
   const [h2hData,  setH2hData]  = useState(null);   // { record, games } or null
   const [h2hLoad,  setH2hLoad]  = useState(false);
@@ -1039,24 +1055,46 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 {truncBroadcast(broadcast, 24)}
               </span>
             )}
-            {/* ＋ Add Pick button */}
-            <button
-              onClick={e => { e.stopPropagation(); onAddBet?.(event, sport); }}
-              title="Add a pick on this game"
-              className="game-card-add-pick"
-              style={{
-                background: 'rgba(0,212,139,0.12)', border: '1px solid rgba(0,212,139,0.35)',
-                borderRadius: '6px', cursor: 'pointer', padding: '4px 10px',
-                fontSize: '0.72rem', fontWeight: 800, lineHeight: 1.4, flexShrink: 0,
-                color: 'var(--green)', fontFamily: 'inherit',
-                transition: 'all 0.12s',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.22)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.6)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.12)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.35)'; }}
-            >
-              + Add Pick
-            </button>
+            {/* ＋ Add Pick / Add Leg button */}
+            {parlayMode ? (() => {
+              const alreadyAdded = parlayLegs.some(l => l.game_id === event.id);
+              return (
+                <button
+                  onClick={e => { e.stopPropagation(); setParlayPickerOpen(p => !p); }}
+                  title={alreadyAdded ? 'Add another leg from this game' : 'Add a leg to your parlay'}
+                  style={{
+                    background: alreadyAdded ? 'rgba(168,85,247,0.18)' : 'rgba(168,85,247,0.10)',
+                    border: `1px solid ${alreadyAdded ? 'rgba(168,85,247,0.6)' : 'rgba(168,85,247,0.35)'}`,
+                    borderRadius: '6px', cursor: 'pointer', padding: '4px 10px',
+                    fontSize: '0.72rem', fontWeight: 800, lineHeight: 1.4, flexShrink: 0,
+                    color: '#c084fc', fontFamily: 'inherit',
+                    transition: 'all 0.12s', whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.28)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = alreadyAdded ? 'rgba(168,85,247,0.18)' : 'rgba(168,85,247,0.10)'; }}
+                >
+                  {alreadyAdded ? '✓ Add Leg' : '＋ Add Leg'}
+                </button>
+              );
+            })() : (
+              <button
+                onClick={e => { e.stopPropagation(); onAddBet?.(event, sport); }}
+                title="Add a pick on this game"
+                className="game-card-add-pick"
+                style={{
+                  background: 'rgba(0,212,139,0.12)', border: '1px solid rgba(0,212,139,0.35)',
+                  borderRadius: '6px', cursor: 'pointer', padding: '4px 10px',
+                  fontSize: '0.72rem', fontWeight: 800, lineHeight: 1.4, flexShrink: 0,
+                  color: 'var(--green)', fontFamily: 'inherit',
+                  transition: 'all 0.12s',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.22)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.6)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.12)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.35)'; }}
+              >
+                + Add Pick
+              </button>
+            )}
 
             {/* Star button */}
             <button
@@ -1234,6 +1272,117 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           </div>
         )}
       </div>
+
+      {/* ── Parlay Leg Picker ─────────────────────────── */}
+      {parlayMode && parlayPickerOpen && (() => {
+        const spreadParsed = parseSpreadLine(
+          odds?.spread,
+          away.team?.abbreviation, awayName,
+          home.team?.abbreviation, homeName,
+        );
+        const gameDate = event.date ? event.date.split('T')[0] : null;
+
+        const options = [];
+        if (odds?.awayOdds != null) options.push({
+          label: away.team?.abbreviation || awayName, sublabel: 'Moneyline',
+          team: awayName, bet_type: 'Moneyline', odds: odds.awayOdds, line: null,
+        });
+        if (odds?.homeOdds != null) options.push({
+          label: home.team?.abbreviation || homeName, sublabel: 'Moneyline',
+          team: homeName, bet_type: 'Moneyline', odds: odds.homeOdds, line: null,
+        });
+        if (spreadParsed && odds?.awaySpreadOdds != null) options.push({
+          label: `${away.team?.abbreviation || awayName} ${spreadParsed.awayLine > 0 ? '+' : ''}${spreadParsed.awayLine}`,
+          sublabel: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+          team: awayName,
+          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+          odds: odds.awaySpreadOdds, line: spreadParsed.awayLine,
+        });
+        if (spreadParsed && odds?.homeSpreadOdds != null) options.push({
+          label: `${home.team?.abbreviation || homeName} ${spreadParsed.homeLine > 0 ? '+' : ''}${spreadParsed.homeLine}`,
+          sublabel: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+          team: homeName,
+          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
+          odds: odds.homeSpreadOdds, line: spreadParsed.homeLine,
+        });
+        if (odds?.total != null && odds?.overOdds != null) options.push({
+          label: `Over ${odds.total}`, sublabel: 'Total',
+          team: `Over ${odds.total}`, bet_type: 'Total (Over)', odds: odds.overOdds, line: odds.total,
+        });
+        if (odds?.total != null && odds?.underOdds != null) options.push({
+          label: `Under ${odds.total}`, sublabel: 'Total',
+          team: `Under ${odds.total}`, bet_type: 'Total (Under)', odds: odds.underOdds, line: odds.total,
+        });
+
+        if (!options.length) return (
+          <div onClick={e => e.stopPropagation()}
+            style={{ padding: '0.6rem 1rem', borderTop: '1px solid rgba(168,85,247,0.15)', background: 'rgba(168,85,247,0.04)', fontSize: '0.75rem', color: '#718096' }}>
+            No odds available to add to parlay
+          </div>
+        );
+
+        return (
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              borderTop: '1px solid rgba(168,85,247,0.2)',
+              background: 'rgba(168,85,247,0.05)',
+              padding: '0.6rem 0.9rem',
+            }}>
+            <div style={{ fontSize: '0.68rem', color: '#a855f7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '6px' }}>
+              Select Leg
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {options.map((opt, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    onAddParlayLeg?.({
+                      game_id:   event.id,
+                      home_team: homeName,
+                      away_team: awayName,
+                      sport,
+                      game_date: gameDate,
+                      team:      opt.team,
+                      bet_type:  opt.bet_type,
+                      line:      opt.line,
+                      odds:      opt.odds,
+                    });
+                    setParlayPickerOpen(false);
+                  }}
+                  style={{
+                    padding: '5px 11px',
+                    borderRadius: '7px',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                    background: 'rgba(168,85,247,0.1)',
+                    color: '#c084fc',
+                    cursor: 'pointer',
+                    fontSize: '0.77rem',
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                    transition: 'all 0.1s',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '1px',
+                    minWidth: '70px',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.22)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+                >
+                  <span style={{ whiteSpace: 'nowrap' }}>{opt.label}</span>
+                  <span style={{
+                    fontSize: '0.72rem',
+                    color: opt.odds > 0 ? '#4ade80' : '#94a3b8',
+                    fontFamily: 'IBM Plex Mono, monospace',
+                  }}>
+                    {opt.odds > 0 ? '+' : ''}{opt.odds}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Expanded panel ────────────────────────────── */}
       {isExpanded && (
@@ -1817,6 +1966,10 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   }, []);
 
   const [betSlipGame, setBetSlipGame] = useState(null); // { event, sport } | null
+  const [parlayMode, setParlayMode]     = useState(false);
+  const [parlayLegs, setParlayLegs]     = useState([]);
+  const [parlaySubmitting, setParlaySubmitting] = useState(false);
+  const [parlayError, setParlayError]   = useState(null);
   const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team → bookmaker game data
   const [oddsStale, setOddsStale]           = useState(false); // true when odds are served from cache
 
@@ -2283,6 +2436,35 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     });
   }, [games, realOddsLookup, oddsStale]);
 
+  // ── Parlay helpers ────────────────────────────────────────────────────────
+  function addParlayLeg(leg) {
+    setParlayError(null);
+    setParlayLegs(prev => [...prev, leg]);
+  }
+
+  function removeParlayLeg(idx) {
+    setParlayLegs(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  async function handleParlaySubmit(units) {
+    if (parlayLegs.length < 2) return;
+    setParlaySubmitting(true);
+    setParlayError(null);
+    try {
+      const { data, error } = await submitParlay(
+        { units, date: parlayLegs.find(l => l.game_date)?.game_date || todayStr },
+        parlayLegs,
+      );
+      if (error) { setParlayError(error.message); return; }
+      // Add the new pick to local picks state so HistoryTab updates immediately
+      if (data && setPicks) setPicks(prev => [data, ...prev]);
+      setParlayLegs([]);
+      setParlayMode(false);
+    } finally {
+      setParlaySubmitting(false);
+    }
+  }
+
   const filteredGames = enrichedGames.filter(e => {
     const state = getGameState(e).state;
     if (filter === 'live')    return state === 'live';
@@ -2432,6 +2614,38 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               {f.label}
             </button>
           ))}
+          {/* Build Parlay toggle */}
+          <button
+            onClick={() => {
+              setParlayMode(p => !p);
+              if (parlayMode) { setParlayLegs([]); setParlayError(null); }
+            }}
+            title={parlayMode ? 'Exit parlay builder' : 'Build a parlay — click legs on any game card'}
+            style={{
+              marginLeft: 'auto',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              border: `1px solid ${parlayMode ? 'rgba(168,85,247,0.6)' : 'rgba(168,85,247,0.3)'}`,
+              background: parlayMode ? 'rgba(168,85,247,0.15)' : 'transparent',
+              color: parlayMode ? '#c084fc' : 'rgba(168,85,247,0.7)',
+              transition: 'all 0.12s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              whiteSpace: 'nowrap',
+              fontFamily: 'inherit',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.18)'; e.currentTarget.style.color = '#c084fc'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = parlayMode ? 'rgba(168,85,247,0.15)' : 'transparent'; e.currentTarget.style.color = parlayMode ? '#c084fc' : 'rgba(168,85,247,0.7)'; }}
+          >
+            🎰 {parlayMode
+              ? parlayLegs.length > 0 ? `Building (${parlayLegs.length} leg${parlayLegs.length !== 1 ? 's' : ''})` : 'Building Parlay…'
+              : 'Build Parlay'}
+          </button>
+
           <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginLeft: '4px' }}>
             {sortedFilteredGames.length} game{sortedFilteredGames.length !== 1 ? 's' : ''}
             {isAllMode && sortedFilteredGames.length > 0 && (
@@ -2494,6 +2708,9 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                   oddsFormat={userPrefs.odds_format}
                   timezone={userPrefs.timezone}
                   gameLeans={gameLeans}
+                  parlayMode={parlayMode}
+                  parlayLegs={parlayLegs}
+                  onAddParlayLeg={addParlayLeg}
                 />
               </div>
             ))}
@@ -2865,6 +3082,17 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         />
       );
     })()}
+
+    {/* ── Parlay Tray ────────────────────────────────────────────── */}
+    <ParlayTray
+      legs={parlayLegs}
+      onRemoveLeg={removeParlayLeg}
+      onClear={() => { setParlayLegs([]); setParlayError(null); }}
+      onSubmit={handleParlaySubmit}
+      submitting={parlaySubmitting}
+      submitError={parlayError}
+      user={user}
+    />
     </>
   );
 }

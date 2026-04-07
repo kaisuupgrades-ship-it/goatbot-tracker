@@ -270,6 +270,22 @@ async function validateSpreadVsML(pick) {
   return null;
 }
 
+// ── Parlay odds helpers ───────────────────────────────────────────────────────
+function americanToDecimal(american) {
+  const n = parseInt(american);
+  if (isNaN(n) || n === 0) return 1;
+  return n > 0 ? n / 100 + 1 : 100 / Math.abs(n) + 1;
+}
+function decimalToAmerican(decimal) {
+  if (decimal <= 1) return -10000;
+  if (decimal >= 2) return Math.round((decimal - 1) * 100);
+  return Math.round(-100 / (decimal - 1));
+}
+function calcParlayOdds(legs) {
+  const decimal = legs.reduce((acc, leg) => acc * americanToDecimal(leg.odds), 1);
+  return decimalToAmerican(decimal);
+}
+
 // ── POST /api/picks ──────────────────────────────────────────────────────────
 export async function POST(req) {
   // Fail-closed: if service key is not configured, refuse to process picks
@@ -285,7 +301,12 @@ export async function POST(req) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { pick } = body;
+  const { pick, parlay_legs: parlayLegsInput } = body;
+
+  // ── Parlay submission path ────────────────────────────────────────────────
+  if (pick?.is_parlay || parlayLegsInput?.length >= 2) {
+    return handleParlayPost(req, user, pick, parlayLegsInput);
+  }
 
   if (!pick) {
     return NextResponse.json({ error: 'Pick data required' }, { status: 400 });
@@ -522,6 +543,105 @@ export async function POST(req) {
   } catch { /* non-critical */ }
 
   return NextResponse.json({ pick: data, commence_time_found: !!commence_time });
+}
+
+// ── handleParlayPost — parlay submission ──────────────────────────────────────
+async function handleParlayPost(req, user, pick, legs) {
+  if (!Array.isArray(legs) || legs.length < 2) {
+    return NextResponse.json({ error: 'A parlay requires at least 2 legs' }, { status: 422 });
+  }
+  if (legs.length > 12) {
+    return NextResponse.json({ error: 'Maximum 12 legs per parlay' }, { status: 422 });
+  }
+
+  // Validate each leg has required fields + valid odds
+  for (const [i, leg] of legs.entries()) {
+    if (!leg.team?.trim())    return NextResponse.json({ error: `Leg ${i + 1}: team is required` }, { status: 422 });
+    if (!leg.sport?.trim())   return NextResponse.json({ error: `Leg ${i + 1}: sport is required` }, { status: 422 });
+    if (!leg.bet_type?.trim()) return NextResponse.json({ error: `Leg ${i + 1}: bet_type is required` }, { status: 422 });
+    const o = parseInt(leg.odds);
+    if (isNaN(o) || o === 0 || Math.abs(o) < 100) {
+      return NextResponse.json({ error: `Leg ${i + 1}: invalid odds (${leg.odds})` }, { status: 422 });
+    }
+  }
+
+  const userId           = user.id;
+  const combinedOdds     = calcParlayOdds(legs);
+  const legCount         = legs.length;
+  const firstGameDate    = legs.find(l => l.game_date)?.game_date
+    || new Date().toISOString().split('T')[0];
+
+  // Build the parent pick row — contest_entry is never allowed for parlays
+  const pickRow = {
+    user_id:               userId,
+    team:                  `${legCount}-Leg Parlay`,
+    sport:                 'PARLAY',
+    bet_type:              'Parlay',
+    odds:                  combinedOdds,
+    units:                 pick?.units ?? 1,
+    date:                  pick?.date  ?? firstGameDate,
+    notes:                 pick?.notes ?? legs.map(l => `${l.team} ${l.bet_type}`).join(' / '),
+    result:                'PENDING',
+    contest_entry:         false,          // parlays are never contest picks
+    pick_type:             'personal',
+    is_parlay:             true,
+    parlay_leg_count:      legCount,
+    parlay_combined_odds:  combinedOdds,
+    book:                  pick?.book ?? null,
+  };
+
+  const { data: savedPick, error: pickErr } = await supabaseAdmin
+    .from('picks')
+    .insert([pickRow])
+    .select()
+    .single();
+
+  if (pickErr) {
+    console.error('[picks] parlay insert error:', pickErr);
+    return NextResponse.json({ error: pickErr.message }, { status: 500 });
+  }
+
+  // Insert each leg into parlay_legs
+  const legRows = legs.map((leg, i) => ({
+    pick_id:    savedPick.id,
+    leg_number: i + 1,
+    team:       (leg.team || '').trim(),
+    sport:      (leg.sport || '').toUpperCase().trim(),
+    bet_type:   (leg.bet_type || '').trim(),
+    line:       leg.line != null ? parseFloat(leg.line) : null,
+    odds:       parseInt(leg.odds),
+    game_id:    leg.game_id  ?? null,
+    home_team:  leg.home_team ?? null,
+    away_team:  leg.away_team ?? null,
+    game_date:  leg.game_date ?? null,
+    result:     null,
+  }));
+
+  const { error: legsErr } = await supabaseAdmin.from('parlay_legs').insert(legRows);
+  if (legsErr) {
+    // Roll back the parent pick so we don't have an orphaned row
+    await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
+    console.error('[picks] parlay_legs insert error:', legsErr);
+    return NextResponse.json({ error: legsErr.message }, { status: 500 });
+  }
+
+  // Award XP (+10 for a parlay — harder to build)
+  try {
+    const RANKS = [
+      { title: 'Degenerate', minXp: 0 }, { title: 'Square', minXp: 100 },
+      { title: 'Handicapper', minXp: 300 }, { title: 'Sharp', minXp: 700 },
+      { title: 'Steam Chaser', minXp: 1500 }, { title: 'Wiseguy', minXp: 3000 },
+      { title: 'Line Mover', minXp: 6000 }, { title: 'Syndicate', minXp: 10000 },
+      { title: 'Whale', minXp: 20000 }, { title: 'Legend', minXp: 40000 },
+    ];
+    const { data: profile } = await supabaseAdmin.from('profiles').select('xp').eq('id', userId).single();
+    const newXp = (profile?.xp || 0) + 10;
+    let rank = RANKS[0];
+    for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
+    await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', userId);
+  } catch { /* non-critical */ }
+
+  return NextResponse.json({ pick: savedPick, parlay_legs: legRows, combined_odds: combinedOdds });
 }
 
 // ── PATCH /api/picks — update a pick ─────────────────────────────────────────
