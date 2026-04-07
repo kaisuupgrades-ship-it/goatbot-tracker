@@ -731,7 +731,7 @@ export async function GET(req) {
           const probM   = result.text.match(/BetOS WIN PROBABILITY[:\s]+([^\n]{5,300})/i);
 
           // Upsert into game_analyses table
-          const { data: upserted } = await supabase.from('game_analyses').upsert(
+          const { data: upserted, error: upsertErr } = await supabase.from('game_analyses').upsert(
             [{
               sport,
               game_date:      todayStr,
@@ -760,6 +760,8 @@ export async function GET(req) {
             { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
           ).select('id').maybeSingle();
 
+          if (upsertErr) throw new Error(`DB save failed: ${upsertErr.message}`);
+
           // Write to the detailed audit log
           await supabase.from('analysis_audit_logs').insert([{
             analysis_id:     upserted?.id || null,
@@ -786,7 +788,9 @@ export async function GET(req) {
             parsed_edge:     edgeM?.[1]?.trim() || null,
             trigger_source:  triggerSource,
             run_id:          runId,
-          }]).then(({ error }) => { if (error) console.warn('[pregenerate] Audit log insert failed:', error.message); });
+          }]).then(({ error: auditErr }) => {
+            if (auditErr) console.warn('[pregenerate] Audit log insert failed:', auditErr.message);
+          });
 
           return { label: `${awayTeam}@${homeTeam} (${sport.toUpperCase()})`, mode: gameMode };
         })
