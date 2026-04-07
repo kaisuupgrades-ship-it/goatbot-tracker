@@ -102,88 +102,49 @@ function hasExtremeOdds(awayML, homeML) {
          (homeML != null && Math.abs(homeML) > 500);
 }
 
+// Preferred bookmaker order: DraftKings → FanDuel → BetMGM → first available.
+// DraftKings always offers the standard ±1.5 MLB run line and NHL puck line.
+const BOOK_PRIORITY = ['draftkings', 'fanduel', 'betmgm', 'williamhill_us', 'pointsbetus', 'bovada'];
+
+function preferredBook(bookmakers, marketKey) {
+  for (const key of BOOK_PRIORITY) {
+    const bk = bookmakers.find(b => b.key === key);
+    if (bk && bk.markets?.some(m => m.key === marketKey)) return bk;
+  }
+  return bookmakers.find(b => b.markets?.some(m => m.key === marketKey)) ?? null;
+}
+
 function bestOdds(bookmakers, outcomeName, marketKey) {
-  let best = null;
-  bookmakers.forEach(bk => {
-    const mkt = bk.markets?.find(m => m.key === marketKey);
-    const outcome = mkt?.outcomes?.find(o => o.name === outcomeName);
-    if (outcome?.price != null && (best === null || outcome.price > best)) best = outcome.price;
-  });
-  return best;
+  const bk = preferredBook(bookmakers, marketKey);
+  if (!bk) return null;
+  const mkt = bk.markets?.find(m => m.key === marketKey);
+  return mkt?.outcomes?.find(o => o.name === outcomeName)?.price ?? null;
 }
 
-// Get the market spread — both sides from the same book to prevent alt-line mixing.
-// Pass 1: standard juice (-140 to +125); Pass 2: wider (-250 to +150).
-function marketSpread(bookmakers) {
-  let best = null;
-  const juiceScore = (p1, p2) =>
-    Math.abs(Math.abs(p1) - 110) + Math.abs(Math.abs(p2) - 110);
-
-  for (const bk of bookmakers) {
-    const mkt = bk.markets?.find(m => m.key === 'spreads');
-    if (!mkt) continue;
-    const outcomes = mkt.outcomes || [];
-    if (outcomes.length < 2) continue;
-    const [o1, o2] = outcomes;
-    if (o1.price == null || o2.price == null || o1.point == null) continue;
-    if (o1.price < -140 || o1.price > 125 || o2.price < -140 || o2.price > 125) continue;
-    const s = juiceScore(o1.price, o2.price);
-    if (!best || s < best.score) {
-      best = { awayPoint: o1.point, awayPrice: o1.price, homePoint: o2.point, homePrice: o2.price, score: s };
-    }
-  }
-  if (best) return best;
-
-  for (const bk of bookmakers) {
-    const mkt = bk.markets?.find(m => m.key === 'spreads');
-    if (!mkt) continue;
-    const outcomes = mkt.outcomes || [];
-    if (outcomes.length < 2) continue;
-    const [o1, o2] = outcomes;
-    if (o1.price == null || o2.price == null || o1.point == null) continue;
-    if (o1.price < -250 || o1.price > 150 || o2.price < -250 || o2.price > 150) continue;
-    const s = juiceScore(o1.price, o2.price);
-    if (!best || s < best.score) {
-      best = { awayPoint: o1.point, awayPrice: o1.price, homePoint: o2.point, homePrice: o2.price, score: s };
-    }
-  }
-
-  return best || { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
+// Get the spread from the preferred book, matched by team name to guarantee correct direction.
+function marketSpread(bookmakers, away, home) {
+  const bk = preferredBook(bookmakers, 'spreads');
+  if (!bk) return { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
+  const mkt = bk.markets?.find(m => m.key === 'spreads');
+  if (!mkt) return { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
+  const ao = mkt.outcomes?.find(o => o.name === away);
+  const ho = mkt.outcomes?.find(o => o.name === home);
+  return {
+    awayPoint: ao?.point ?? null,
+    awayPrice: ao?.price ?? null,
+    homePoint: ho?.point ?? null,
+    homePrice: ho?.price ?? null,
+  };
 }
 
-// Best total line — highest standard-juice point value (avoids alt 0.5/1.5 lines).
 function bestTotal(bookmakers) {
-  let best = null;
-  for (const bk of bookmakers) {
-    const mkt = bk.markets?.find(m => m.key === 'totals');
-    if (!mkt) continue;
-    const over  = mkt.outcomes?.find(o => o.name === 'Over');
-    const under = mkt.outcomes?.find(o => o.name === 'Under');
-    if (!over?.price || !under?.price || over.point == null) continue;
-    if (over.price >= -140 && over.price <= 120 && under.price >= -140 && under.price <= 120) {
-      if (!best || over.point > best.line) {
-        best = { line: over.point, overPrice: over.price, underPrice: under.price };
-      }
-    }
-  }
-  if (best) return best;
-
-  for (const bk of bookmakers) {
-    const mkt = bk.markets?.find(m => m.key === 'totals');
-    const over  = mkt?.outcomes?.find(o => o.name === 'Over');
-    const under = mkt?.outcomes?.find(o => o.name === 'Under');
-    if (over?.point != null && over.point >= 3) {
-      const ovOk = over.price == null || (over.price >= -300 && over.price <= 200);
-      const unOk = under?.price == null || (under.price >= -300 && under.price <= 200);
-      if (ovOk && unOk) {
-        if (!best || over.point > best.line) {
-          best = { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
-        }
-      }
-    }
-  }
-
-  return best || { line: null, overPrice: null, underPrice: null };
+  const bk = preferredBook(bookmakers, 'totals');
+  if (!bk) return { line: null, overPrice: null, underPrice: null };
+  const mkt = bk.markets?.find(m => m.key === 'totals');
+  const over  = mkt?.outcomes?.find(o => o.name === 'Over');
+  const under = mkt?.outcomes?.find(o => o.name === 'Under');
+  if (!over?.point) return { line: null, overPrice: null, underPrice: null };
+  return { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
 }
 
 function buildUnifiedPrompt(game) {
@@ -202,7 +163,7 @@ function buildUnifiedPrompt(game) {
 
   const awayML  = bestOdds(books, away, 'h2h');
   const homeML  = bestOdds(books, home, 'h2h');
-  const spr     = marketSpread(books);
+  const spr     = marketSpread(books, away, home);
   const total   = bestTotal(books);
 
   const mlStr  = awayML != null && homeML != null ? `ML: ${away?.split(' ')?.pop() || 'TBD'} ${formatOdds(awayML)} / ${home?.split(' ')?.pop() || 'TBD'} ${formatOdds(homeML)}` : '';
@@ -230,7 +191,7 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 
   const awayML  = bestOdds(books, away, 'h2h');
   const homeML  = bestOdds(books, home, 'h2h');
-  const spr     = marketSpread(books);
+  const spr     = marketSpread(books, away, home);
   const total   = bestTotal(books);
 
   const isLive  = isGameLive(game);
