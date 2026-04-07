@@ -21,7 +21,7 @@ import PublicProfileModal from './PublicProfileModal';
 import InboxPanel           from './InboxPanel';
 import SupportChatWidget    from './SupportChatWidget';
 
-const ADMIN_EMAILS = ['kaisuupgrades@gmail.com', 'jjroh97@gmail.com'];
+const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 // ── Announcement Banner — reads from admin broadcast (settings table) ──────────
 function AnnouncementBanner() {

@@ -103,7 +103,7 @@ function TypeWriter({ texts, speed = 55, pause = 2000 }) {
 }
 
 // ── Tournament Banner ─────────────────────────────────────────────────────────
-const TOURNAMENT_END = new Date('2025-04-30T23:59:59-05:00');
+const TOURNAMENT_END = new Date('2026-04-30T23:59:59-05:00');
 
 function useTournamentCountdown() {
   const [time, setTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, ended: false });

@@ -19,7 +19,10 @@ const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANON_KEY     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // Service role client — bypasses RLS, used for the actual insert
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY || ANON_KEY);
+// Fail-closed: if SERVICE_KEY is missing, requests will get a clear error instead of silently using anon key
+const supabaseAdmin = SERVICE_KEY
+  ? createClient(SUPABASE_URL, SERVICE_KEY)
+  : null;
 
 async function getAuthUser(req) {
   const auth = req.headers.get('authorization') || '';
@@ -269,6 +272,10 @@ async function validateSpreadVsML(pick) {
 
 // ── POST /api/picks ──────────────────────────────────────────────────────────
 export async function POST(req) {
+  // Fail-closed: if service key is not configured, refuse to process picks
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Server configuration error — please contact support' }, { status: 503 });
+  }
   // ── 1. Verify the caller's identity (REQUIRED) ────────────────────────────
   //    Use the JWT from the Authorization header to get their actual user_id.
   //    This prevents a user from spoofing another user's user_id.
@@ -522,6 +529,9 @@ export async function POST(req) {
 // If the game has already started the edit is blocked — the pick stays as-is.
 // Already-graded picks (result != null) cannot be edited.
 export async function PATCH(req) {
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 503 });
+  }
   const body = await req.json().catch(() => ({}));
   const { pickId, updates, authToken } = body;
 
