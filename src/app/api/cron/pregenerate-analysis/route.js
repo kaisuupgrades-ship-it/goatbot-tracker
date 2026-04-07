@@ -786,7 +786,7 @@ export async function GET(req) {
             parsed_edge:     edgeM?.[1]?.trim() || null,
             trigger_source:  triggerSource,
             run_id:          runId,
-          }]).catch(e => console.warn('[pregenerate] Audit log insert failed:', e.message));
+          }]).then(({ error }) => { if (error) console.warn('[pregenerate] Audit log insert failed:', error.message); });
 
           return { label: `${awayTeam}@${homeTeam} (${sport.toUpperCase()})`, mode: gameMode };
         })
