@@ -955,19 +955,45 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
       )}
 
       {/* ── ODDS DISCLAIMER ── */}
-      <div style={{
-        margin: '0 1.4rem 0.75rem',
-        padding: '6px 10px',
-        borderRadius: '7px',
-        background: 'rgba(255,184,0,0.04)',
-        border: '1px solid rgba(255,184,0,0.15)',
-        display: 'flex', alignItems: 'flex-start', gap: '6px',
-      }}>
-        <span style={{ fontSize: '0.72rem', flexShrink: 0, marginTop: '1px' }}>⚠️</span>
-        <span style={{ fontSize: '0.62rem', color: 'rgba(255,200,80,0.75)', lineHeight: 1.5 }}>
-          AI-generated odds may be stale or incorrect. Always verify lines on your sportsbook (DraftKings, FanDuel, etc.) before placing any bet. BetOS analysis is for informational purposes only.
-        </span>
-      </div>
+      {(() => {
+        const isVerifiedApi = !!(prompt && prompt.includes('[VERIFIED_ODDS_API]'));
+        return (
+          <div style={{
+            margin: '0 1.4rem 0.75rem',
+            padding: '6px 10px',
+            borderRadius: '7px',
+            background: isVerifiedApi ? 'rgba(74,222,128,0.04)' : 'rgba(255,184,0,0.04)',
+            border: `1px solid ${isVerifiedApi ? 'rgba(74,222,128,0.2)' : 'rgba(255,184,0,0.15)'}`,
+            display: 'flex', alignItems: 'flex-start', gap: '6px',
+          }}>
+            {isVerifiedApi ? (
+              <>
+                <span style={{ fontSize: '0.72rem', flexShrink: 0, marginTop: '1px' }}>✅</span>
+                <span style={{ fontSize: '0.62rem', lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.35)',
+                    borderRadius: '4px', padding: '1px 6px', color: '#4ade80',
+                    fontWeight: 800, fontSize: '0.6rem', letterSpacing: '0.05em',
+                  }}>Verified API Odds</span>
+                  <span style={{ color: 'rgba(74,222,128,0.7)' }}>Lines sourced from The Odds API (live verified feed). BetOS analysis is for informational purposes only.</span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '0.72rem', flexShrink: 0, marginTop: '1px' }}>⚠️</span>
+                <span style={{ fontSize: '0.62rem', lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    background: 'rgba(255,184,0,0.15)', border: '1px solid rgba(255,184,0,0.35)',
+                    borderRadius: '4px', padding: '1px 6px', color: '#FFB800',
+                    fontWeight: 800, fontSize: '0.6rem', letterSpacing: '0.05em',
+                  }}>Web Search</span>
+                  <span style={{ color: 'rgba(255,200,80,0.75)' }}>AI-generated odds may be stale or incorrect. Always verify lines on your sportsbook before placing any bet.</span>
+                </span>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── FOOTER ── */}
       <div style={{
