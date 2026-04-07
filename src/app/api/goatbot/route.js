@@ -431,14 +431,6 @@ export async function POST(req) {
 
     // ── No cache (or stale) — run full AI analysis ────────────────────────────
 
-    // If a stale cached analysis exists (>4h old), inject it as research context for
-    // the lower fallback tiers (grok-3, Claude no-search). Tier 1/2 have live web
-    // search so they don't need it, but having the prior Opus research available
-    // means even a grok-3 no-search tier produces much better output than starting cold.
-    const staleContext = (cached && Date.now() - new Date(cached.updated_at).getTime() >= CACHE_MAX_AGE_MS)
-      ? `\n\nPRIOR BetOS ANALYSIS (generated ${Math.round((Date.now() - new Date(cached.updated_at).getTime()) / 3600000)}h ago — use as research baseline, update with current findings):\n${cached.analysis.substring(0, 2000)}`
-      : '';
-
     // ── Tier 1: Claude Opus 4.6 + live web search (90s) ──────────────────────
     if (claudeKey) {
       try {
@@ -509,7 +501,7 @@ export async function POST(req) {
         console.log('[goatbot] grok-4 error:', err.message);
       }
 
-      // ── Tier 3: grok-3 (60s) — inject prior analysis if available ───────────
+      // ── Tier 3: grok-3 (60s) ─────────────────────────────────────────────
       try {
         const { response, timedOut } = await fetchWithTimeout(
           `${XAI_BASE}/chat/completions`,
@@ -520,7 +512,7 @@ export async function POST(req) {
               model: 'grok-3',
               messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: prompt + staleContext },
+                { role: 'user', content: prompt },
               ],
               temperature: 0.7,
               max_tokens: 3000,
@@ -552,8 +544,8 @@ export async function POST(req) {
             headers: claudeHeaders,
             body: JSON.stringify({
               model: 'claude-opus-4-6',
-              system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is unavailable for this request. Base analysis on the provided odds data, training knowledge, and any prior analysis context included. Flag any facts that should be verified live.]',
-              messages: [{ role: 'user', content: prompt + staleContext }],
+              system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is unavailable for this request. Base analysis on the provided odds data and training knowledge. Flag any facts that should be verified live.]',
+              messages: [{ role: 'user', content: prompt }],
               max_tokens: 3000,
               temperature: 0.7,
             }),

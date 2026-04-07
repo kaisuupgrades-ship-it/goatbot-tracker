@@ -35,85 +35,94 @@ const SPORT_PATHS = {
 
 // ── Prompt versioning ─────────────────────────────────────────────────────────
 // Bump this when you change the system prompt so we can A/B test performance
-const PROMPT_VERSION = 'v2.1';
+const PROMPT_VERSION = 'v3.0';
 
 // Build the analysis system prompt. When hasVerifiedOdds=true (odds came from
 // The Odds API premium feed), we skip blanket "verify before betting" disclaimers
 // since those lines are already confirmed from the live feed.
 function buildAnalysisSystem(hasVerifiedOdds = false) {
-  const oddsIntegrity = hasVerifiedOdds
-    ? `ODDS INTEGRITY — non-negotiable:
-- A "Known odds context" block is provided below. Those numbers come from The Odds API — a VERIFIED premium live feed. Use them as the authoritative line. Do NOT override them.
-- If searching for additional context, ONLY cite specific numbers from named sources. Never guess or interpolate.
-- Sanity-check every number: a heavy favorite at +EV odds is a red flag (e.g. -300 team priced at -110). Flag anything suspicious with a factual note.
-- The Known odds context numbers are already verified — no "verify before betting" label needed for those. Label any supplemental web-searched odds as "(web search)".`
-    : `ODDS INTEGRITY — non-negotiable:
-- If a "Known odds context" block is provided below, those numbers come from a VERIFIED live feed — use them as the authoritative line. Do NOT override them.
-- If searching for odds, ONLY cite specific numbers from named sources. Never guess or interpolate.
-- Sanity-check every number: a heavy favorite at +EV odds is a red flag (e.g. -300 team priced at -110). Flag anything suspicious with "verify before betting."
-- Label all web-searched odds as "(web search — verify on your book)".
-- If odds are unconfirmed, write: "[Team] — [Bet Type] — odds not confirmed, verify before betting."`;
+  const oddsNote = hasVerifiedOdds
+    ? `The KNOWN ODDS block below is from The Odds API (verified premium feed). Use those exact numbers — do NOT override them. Label any supplemental web-searched odds as "(web search)".`
+    : `If a KNOWN ODDS block is provided, use those numbers as authoritative. Label all web-searched odds as "(web search — verify on your book)".`;
 
   const disclaimer = hasVerifiedOdds
     ? `✅ ODDS SOURCE: Lines provided by The Odds API (verified premium feed). Always confirm final odds on your sportsbook before placing any bet.`
     : `⚠️ ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets.`;
 
-  return `You are BetOS — an elite sharp sports betting analyst. This analysis will be cached and served to thousands of users, so it must be comprehensive, data-rich, and genuinely sharp. Treat every matchup as if a professional bettor with a $50K bankroll is relying on your output.
+  return `You are BetOS — an elite sharp sports betting analyst. This analysis will be cached and shown to users.
 
-Use live web search aggressively to gather ALL of the following before writing a single word:
+IMPORTANT: Odds and weather data are ALREADY PROVIDED below — do NOT waste web searches looking for odds.
 
-REQUIRED RESEARCH (use web search for each item):
-1. Confirmed starters/lineups for this specific date (starting pitcher, goalie, confirmed batting order changes, key INEs)
-2. Current moneyline, spread, total from at least 3 major books (DraftKings, FanDuel, BetMGM, Caesars, DraftKings)
-3. Opening line vs current line — direction and magnitude of movement
-4. Injury/availability reports confirmed by beat reporters or official team sources
-5. Recent form — last 5–10 games for each team (record, run/goal differential, any slumps)
-6. Head-to-head record this season AND historically (last 3 years at minimum)
-7. Home/away splits for each team (road record, home record, relevant stat differences)
-8. Situational edges: rest advantage, travel fatigue, back-to-back, schedule spot
-9. Weather (outdoor sports): wind speed/direction, temperature, precipitation impact on O/U
-10. Public betting percentage and sharp money signals if available (any steam moves, CLV signals)
-11. ATS record (against the spread) for both teams — season-long and recent
-12. Over/Under record for both teams — season-long and in this specific matchup type
-13. Pitcher ERA/WHIP/K-rate at home vs away; bullpen ERA last 7 days (MLB specific)
-14. Goalie save %, goals against average, last 3 starts (NHL specific)
-15. Pace of play, offensive/defensive efficiency ratings (NBA specific)
+Use web search ONLY for these 3 things (1-2 searches each, keep it fast):
+1. Confirmed starters/lineups for TODAY (starting pitcher, goalie, key scratches)
+2. Injury updates from the last 24 hours
+3. Recent team form (last 5 games record, any notable streaks)
 
----
-${oddsIntegrity}
+${oddsNote}
 
----
-Output format — follow EXACTLY (no markdown asterisks, no bullet points replaced by dashes inside sections):
+Output format — follow EXACTLY:
 
 THE PICK: [Team + Bet Type + Odds (source) + Book] — one sharp decisive recommendation
 
-ALTERNATE ANGLES: [1–2 secondary bets worth considering with odds — e.g. a same-game parlay leg, a total, or a first-half play]
+ALTERNATE ANGLES: [1–2 secondary bets with odds]
 
-EDGE BREAKDOWN: [3–4 sentences. What the market is pricing in, what you found that the market may be under/over-weighting. Cite specific stats and numbers found in your research.]
+EDGE BREAKDOWN: [3–4 sentences with specific stats and numbers]
 
 KEY FACTORS:
-1. [Starter/lineup confirmed finding with specific stats]
-2. [Recent form or H2H angle with concrete numbers]
-3. [Situational or contextual edge — rest, travel, weather, motivation]
-4. [Betting market signal — line movement, public %, steam, CLV opportunity]
+1. [Starter/lineup finding with stats]
+2. [Recent form or H2H angle with numbers]
+3. [Situational edge — rest, travel, weather]
+4. [Market signal — line movement, sharp action]
 
-LINE MOVEMENT: [Opening line → current line. Direction: sharp-driven or public-driven? Any steam?]
-
-ATS/OU TRENDS: [ATS record for each team this season and recently. O/U trend relevant to this game.]
-
-INJURY REPORT: [Any confirmed absences or questionable statuses affecting the pick, or "None reported as of search time."]
+INJURY REPORT: [Confirmed absences or "None reported"]
 
 CONFIDENCE: [LOW / MEDIUM / HIGH / ELITE]
 
 EDGE SCORE: [X/10]
 
-BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y–Z%. Based on: specific reasoning from your research.]
+BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y–Z%.]
 
-UNIT SIZING: [Recommended unit size 0.5u–3u and brief justification tied to confidence level.]
+UNIT SIZING: [0.5u–3u with brief justification]
 
 ${disclaimer}
 
-Rules: Be decisive. Cite specific numbers from your web searches. If you cannot verify something, say so — never fabricate. This analysis will be displayed to users as BetOS's official pre-game breakdown.`;
+Be decisive. Cite specific numbers. Never fabricate.`;
+}
+
+// No-search fallback system prompt — used when web search version times out.
+// All data (odds, weather) is pre-injected so AI just needs to analyze.
+function buildAnalysisSystemNoSearch() {
+  return `You are BetOS — an elite sharp sports betting analyst. This analysis will be cached and shown to users.
+
+ALL DATA IS PROVIDED BELOW — odds, matchup info, and any available context. You do NOT have web search. Analyze the provided data and produce a sharp betting analysis.
+
+Output format — follow EXACTLY:
+
+THE PICK: [Team + Bet Type + Odds (source) + Book] — one sharp decisive recommendation
+
+ALTERNATE ANGLES: [1–2 secondary bets with odds]
+
+EDGE BREAKDOWN: [3–4 sentences with specific stats and numbers from the provided data]
+
+KEY FACTORS:
+1. [Key statistical or matchup-based finding]
+2. [Form or situational angle]
+3. [Any edge from the provided odds/data]
+4. [Market signal if available from the data]
+
+INJURY REPORT: [From provided data or "Data not available — check before betting"]
+
+CONFIDENCE: [LOW / MEDIUM / HIGH / ELITE]
+
+EDGE SCORE: [X/10]
+
+BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y–Z%.]
+
+UNIT SIZING: [0.5u–3u with brief justification]
+
+⚠️ NOTE: This analysis was generated without live web search. Starters and injuries should be confirmed before betting.
+
+Be decisive. Use only the provided data. Never fabricate.`;
 }
 
 // includeAll=true: return every game on that date regardless of state (used for
@@ -220,120 +229,122 @@ If something changed: respond with "UPDATE NEEDED" on the first line, then a rev
 
 Keep response under 150 words. Do NOT repeat prior analysis. Be fast and factual.`;
 
-// Maximum games to process per sport per run. Keeps total processing within Vercel's 5-min limit.
-// With grokTimeout=120s and BATCH_SIZE=4: 2 batches × 120s = 240s + ~30s overhead = ~270s per sport.
-// 8 games = exactly 2 batches of 4, fitting safely within the 300s Vercel budget.
+// Maximum games to process per sport per run. Prevents timeout on heavy slates (MLB 15+ games).
 const MAX_GAMES_PER_SPORT = 8;
 
+// ── xAI API call helper ───────────────────────────────────────────────────────
+async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens = 2000, timeout = 120_000 } = {}) {
+  const xaiKey = process.env.XAI_API_KEY;
+  if (!xaiKey) return null;
+
+  const t0 = Date.now();
+  const body = {
+    model: 'grok-4',
+    instructions: systemPrompt,
+    input: [{ role: 'user', content: userPrompt }],
+    max_output_tokens: maxTokens,
+  };
+  if (useSearch) body.tools = [{ type: 'web_search' }];
+
+  const res = await fetch(`${XAI_BASE}/responses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeout),
+  });
+
+  if (!res.ok) {
+    const status = res.status;
+    throw new Error(`grok-4 HTTP ${status}`);
+  }
+
+  const data = await res.json();
+  const latency = Date.now() - t0;
+  const texts = (data.output || [])
+    .filter(item => item.type === 'message')
+    .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
+  const text = texts.join('\n\n').trim();
+  if (!text) return null;
+
+  return {
+    text, latency,
+    tokens_in: data.usage?.input_tokens || null,
+    tokens_out: data.usage?.output_tokens || null,
+  };
+}
+
 // ── generateAnalysis ──────────────────────────────────────────────────────────
-// mode: 'full' = complete analysis (new games)
-//       'refresh' = lightweight freshness check (existing analyses, low tokens)
+// 2-tier pipeline:
+//   Tier 1: grok-4 + web search (120s) — searches for starters/injuries/form
+//   Tier 2: grok-4 no-search (60s) — uses only pre-fetched data (odds + matchup)
 async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, mode = 'full') {
   const isRefresh = mode === 'refresh';
 
-  const prompt = isRefresh
+  const userPrompt = isRefresh
     ? `Quick freshness check — ${sport.toUpperCase()} on ${gameDate}: ${awayTeam} @ ${homeTeam}${oddsContext ? `\nCurrent odds reference: ${oddsContext.split('\n')[0]}` : ''}\n\nAny lineup changes, significant line movement, or major news in the last 4 hours?`
-    : `Generate a comprehensive BetOS sharp analysis for this ${sport.toUpperCase()} matchup on ${gameDate}:
+    : `Analyze this ${sport.toUpperCase()} matchup on ${gameDate}:
 
 MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
 DATE: ${gameDate}
-${oddsContext ? `\nKNOWN ODDS (verified live feed — use these exact numbers, do NOT override):\n${oddsContext}` : ''}
-${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE CONTEXT (use to calibrate confidence):\n${performanceContext}` : ''}
+${oddsContext ? `\nKNOWN ODDS (pre-fetched from The Odds API — use these, do NOT search for odds):\n${oddsContext}` : ''}
+${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
 
-TASK: Perform a thorough sharp analysis. Use web search to research ALL required items in your instructions before writing your output. This analysis will be cached and shown to users as BetOS's official pre-game breakdown — make it comprehensive and data-rich.
-
-Cover all output sections: THE PICK, ALTERNATE ANGLES, EDGE BREAKDOWN, KEY FACTORS (all 4), LINE MOVEMENT, ATS/OU TRENDS, INJURY REPORT, CONFIDENCE, EDGE SCORE, BetOS WIN PROBABILITY, UNIT SIZING, and the disclaimer.`;
+Search ONLY for: confirmed starters/lineups, injuries (last 24h), recent form (last 5 games). Odds are already provided above.`;
 
   const hasVerifiedOdds = !isRefresh && !!(oddsContext && oddsContext.includes('The Odds API'));
-  const systemToUse   = isRefresh ? QUICK_REFRESH_SYSTEM : buildAnalysisSystem(hasVerifiedOdds);
-  // Full: rich comprehensive analysis — 3500 tokens gives ~700–900 words which covers all
-  // required sections. This is "expensive AI once, serve many users from cache."
-  // Refresh: lightweight freshness check only (400 tokens, 30s).
-  const maxTokens     = isRefresh ? 400 : 3500;
-  // Full analyses: 120s — baseball research (starting pitchers, ERA/WHIP, bullpen, splits) requires
-  // more web search calls than other sports and was consistently timing out at 90s for MLB.
-  // Refresh: 30s (lightweight check only).
-  const grokTimeout   = isRefresh ? 30_000 : 120_000;
-  // NO Claude fallback during bulk runs. One timeout = skip, not retry-with-Claude.
-  // Claude is reserved for live user queries (goatbot route) where the UX demands a result.
 
-  const xaiKey = process.env.XAI_API_KEY;
-
-  if (xaiKey) {
-    const t0 = Date.now();
-    let res;
+  // ── Tier 1: grok-4 + web search (120s) ──────────────────────────────────
+  if (!isRefresh) {
     try {
-      res = await fetch(`${XAI_BASE}/responses`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${xaiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'grok-4',
-          instructions: systemToUse,
-          input: [{ role: 'user', content: prompt }],
-          tools: [{ type: 'web_search' }],
-          max_output_tokens: maxTokens,
-        }),
-        signal: AbortSignal.timeout(grokTimeout),
+      const systemPrompt = buildAnalysisSystem(hasVerifiedOdds);
+      const result = await callGrok(systemPrompt, userPrompt, {
+        useSearch: true, maxTokens: 2000, timeout: 120_000,
       });
+      if (result) {
+        console.log(`[pregenerate] ✅ Tier 1 (grok-4+search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
+        return {
+          text: result.text, mode, model: 'BetOS AI', model_used: 'grok-4',
+          provider: 'xai', was_fallback: false, latency_ms: result.latency,
+          tokens_in: result.tokens_in, tokens_out: result.tokens_out,
+          system_prompt: systemPrompt, user_prompt: userPrompt, prompt_version: PROMPT_VERSION,
+        };
+      }
     } catch (e) {
-      const isTimeout = e.name === 'TimeoutError' || e.name === 'AbortError';
-      const msg = isTimeout ? `grok-4 timeout (${grokTimeout / 1000}s)` : `grok-4 fetch error: ${e.message}`;
-      console.log(`[pregenerate] ${msg} for ${awayTeam}@${homeTeam}`);
-      throw new Error(msg);
+      console.log(`[pregenerate] ⚠️ Tier 1 failed for ${awayTeam}@${homeTeam}: ${e.message}`);
     }
-
-    if (!res.ok) {
-      // Log actual xAI error status so we can diagnose rate-limits vs auth vs server errors
-      let errBody = '';
-      try { errBody = await res.text(); } catch { /* ignore */ }
-      const msg = `grok-4 HTTP ${res.status}`;
-      console.warn(`[pregenerate] ${msg} for ${awayTeam}@${homeTeam}: ${errBody.slice(0, 200)}`);
-      throw new Error(msg);
-    }
-
-    const data = await res.json();
-    const latency = Date.now() - t0;
-    // Primary parse: standard Responses API format (type=message / type=output_text)
-    const texts = (data.output || [])
-      .filter(item => item.type === 'message')
-      .flatMap(msg => (msg.content || []).filter(c => c.type === 'output_text').map(c => c.text));
-    let text = texts.join('\n\n').trim();
-    // Fallback parse: handle alternative output formats (e.g. item.content[].text or item.text)
-    if (!text && data.output?.length) {
-      const anyTexts = data.output.flatMap(item => {
-        if (item.content) return item.content.filter(c => c.text).map(c => c.text);
-        if (item.text) return [item.text];
-        return [];
-      });
-      text = anyTexts.join('\n\n').trim();
-    }
-    // Last resort: OpenAI chat-completions shape
-    if (!text && data.choices?.[0]?.message?.content) {
-      text = data.choices[0].message.content.trim();
-    }
-    if (text) return {
-      text,
-      mode,
-      model: 'BetOS AI',
-      model_used: 'grok-4',
-      provider: 'xai',
-      was_fallback: false,
-      latency_ms: latency,
-      tokens_in: data.usage?.input_tokens || null,
-      tokens_out: data.usage?.output_tokens || null,
-      system_prompt: systemToUse,
-      user_prompt: prompt,
-      prompt_version: PROMPT_VERSION,
-    };
-    const msg = `grok-4 empty response`;
-    console.warn(`[pregenerate] ${msg} for ${awayTeam}@${homeTeam} — output keys: ${JSON.stringify(Object.keys(data))}, output length: ${data.output?.length}`);
-    throw new Error(msg);
   }
 
-  return null; // only reached when XAI_API_KEY is not set — no Claude fallback in bulk mode
+  // ── Tier 2: grok-4 no-search fallback (60s) ────────────────────────────
+  // Uses only the pre-fetched data (odds, matchup info). No web search needed.
+  try {
+    const noSearchSystem = isRefresh ? QUICK_REFRESH_SYSTEM : buildAnalysisSystemNoSearch();
+    const noSearchPrompt = isRefresh ? userPrompt :
+      `Analyze this ${sport.toUpperCase()} matchup using ONLY the data provided below:
+
+MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
+DATE: ${gameDate}
+${oddsContext ? `\nODDS DATA:\n${oddsContext}` : '\nNo odds data available.'}
+${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
+
+Produce a complete BetOS analysis using only this data. Note any limitations.`;
+
+    const result = await callGrok(noSearchSystem, noSearchPrompt, {
+      useSearch: false, maxTokens: isRefresh ? 400 : 1500, timeout: isRefresh ? 30_000 : 60_000,
+    });
+    if (result) {
+      console.log(`[pregenerate] ✅ Tier 2 (grok-4 no-search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
+      return {
+        text: result.text, mode, model: 'BetOS AI', model_used: 'grok-4-nosearch',
+        provider: 'xai', was_fallback: true, latency_ms: result.latency,
+        tokens_in: result.tokens_in, tokens_out: result.tokens_out,
+        system_prompt: noSearchSystem, user_prompt: noSearchPrompt, prompt_version: PROMPT_VERSION,
+      };
+    }
+  } catch (e) {
+    console.log(`[pregenerate] ❌ Tier 2 failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+  }
+
+  return null; // both tiers failed
 }
 
 export async function GET(req) {
@@ -535,17 +546,13 @@ export async function GET(req) {
       gamesToProcess.splice(MAX_GAMES_PER_SPORT);
     }
 
-    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 4, 90s timeout each, 3500 tokens, no Claude fallback)`);
+    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batches of 3, 2-tier: 120s search → 60s no-search fallback)`);
 
-    // ── Process games in PARALLEL batches of 4 ──────────────────────────────
-    // Upgraded for "expensive AI once, serve many" model:
-    //   • Grok timeout: 55s → 90s   (deep web search + 3500 tokens needs more time)
-    //   • max_output_tokens: 1600 → 3500 (comprehensive multi-section analysis)
-    //   • Batch size: 6 → 4         (fewer in parallel to avoid xAI rate limits at high tokens)
-    //   • No Claude fallback         (skip on timeout, re-runs on next cron cycle)
-    // Expected: 10 games / 4 per batch = 3 batches × 90s = ~270s ≈ 4.5 min per sport
-    // With 4-min safety cutoff: processes ~2.6 batches = 10 games safely
-    const BATCH_SIZE = 4;
+    // ── Process games in PARALLEL batches of 3 ──────────────────────────────
+    // v3.0 pipeline: grok-4+search (120s) → grok-4 no-search fallback (60s)
+    // Each game can take up to 180s worst case (both tiers), so batch of 3 keeps within limits
+    // Expected: 8 games / 3 per batch = 3 batches × ~120s = ~360s ≈ 6 min (within 5-min Vercel limit for most)
+    const BATCH_SIZE = 3;
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
       const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
 

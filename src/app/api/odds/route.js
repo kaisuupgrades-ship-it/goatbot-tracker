@@ -343,27 +343,23 @@ function sanitizeOddsConsistency(events) {
 
       if (!homeMLOut?.price || !awayMLOut?.price || !homeSprOut?.price || !awaySprOut?.price) return bk;
 
-      // Check each side: underdog getting +points should have worse odds than their ML.
-      // "Worse" = lower American price (less positive / more negative) because you're paying
-      // for run-line insurance. If spread price >= ML price for an underdog (or <= for a
-      // favorite), the data is stale/corrupt — strip the spread market.
-      // Tolerance: 5 pts to absorb minor vig differences between books.
+      // Check each side: underdog getting +points should have worse odds than their ML
       let invalid = false;
 
       // Away team check
       if (awaySprOut.point > 0) {
-        // Underdog getting +points: spread price must be worse (lower) than ML price
-        if (awaySprOut.price >= awayMLOut.price - 5) invalid = true;
+        // Underdog getting points: spread odds should be worse (more negative) than ML
+        if (awaySprOut.price > awayMLOut.price + 15) invalid = true;
       } else if (awaySprOut.point < 0) {
-        // Favorite giving -points: spread price must be better (higher) than ML price
-        if (awaySprOut.price <= awayMLOut.price + 5) invalid = true;
+        // Favorite giving points: spread odds should be better (more positive) than ML
+        if (awaySprOut.price < awayMLOut.price - 15) invalid = true;
       }
 
       // Home team check
       if (homeSprOut.point > 0) {
-        if (homeSprOut.price >= homeMLOut.price - 5) invalid = true;
+        if (homeSprOut.price > homeMLOut.price + 15) invalid = true;
       } else if (homeSprOut.point < 0) {
-        if (homeSprOut.price <= homeMLOut.price + 5) invalid = true;
+        if (homeSprOut.price < homeMLOut.price - 15) invalid = true;
       }
 
       if (invalid) {
