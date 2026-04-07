@@ -273,11 +273,44 @@ async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens 
   };
 }
 
+// grok-3 via chat/completions — fast, reliable fallback (no web search)
+async function callGrok3(systemPrompt, userPrompt, { maxTokens = 2000, timeout = 45_000 } = {}) {
+  const xaiKey = (process.env.XAI_API_KEY || '').trim();
+  if (!xaiKey) return null;
+
+  const t0 = Date.now();
+  const res = await fetch(`${XAI_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
+    body: JSON.stringify({
+      model: 'grok-3',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: maxTokens,
+      temperature: 0.7,
+    }),
+    signal: AbortSignal.timeout(timeout),
+  });
+
+  if (!res.ok) throw new Error(`grok-3 HTTP ${res.status}`);
+
+  const data = await res.json();
+  const latency = Date.now() - t0;
+  const text = data.choices?.[0]?.message?.content?.trim() || '';
+  if (!text) return null;
+
+  return {
+    text, latency,
+    tokens_in: data.usage?.prompt_tokens || null,
+    tokens_out: data.usage?.completion_tokens || null,
+  };
+}
+
 // ── generateAnalysis ──────────────────────────────────────────────────────────
-// 2-tier pipeline:
-//   Tier 1: grok-4 + web search (120s cron / 300s admin) — searches for starters/injuries/form
-//   Tier 2: grok-4 no-search (60s) — uses only pre-fetched data (odds + matchup)
-// adminMode: true = unlimited timeouts/tokens (admin panel), false = budget limits (cron)
+// Pipeline: grok-4+search (90s) → grok-4 no-search (45s) → grok-3 no-search (45s) → Claude (fallback)
+// adminMode parameter kept for API compatibility but timeouts are now uniform.
 async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, mode = 'full', adminMode = false) {
   const isRefresh = mode === 'refresh';
 
@@ -294,14 +327,26 @@ Search ONLY for: confirmed starters/lineups, injuries (last 24h), recent form (l
 
   const hasVerifiedOdds = !isRefresh && !!(oddsContext && oddsContext.includes('The Odds API'));
 
-  // ── Tier 1: grok-4 + web search (120s cron / 300s admin) ─────────────
+  // Build the no-search prompt once (reused by Tier 2, Tier 3, and Tier 4)
+  const noSearchSystem = isRefresh ? QUICK_REFRESH_SYSTEM : buildAnalysisSystemNoSearch();
+  const noSearchPrompt = isRefresh ? userPrompt :
+    `Analyze this ${sport.toUpperCase()} matchup using ONLY the data provided below:
+
+MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
+DATE: ${gameDate}
+${oddsContext ? `\nODDS DATA:\n${oddsContext}` : '\nNo odds data available.'}
+${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
+
+Produce a complete BetOS analysis using only this data. Note any limitations.`;
+
+  // ── Tier 1: grok-4 + web search (90s) ────────────────────────────────
   if (!isRefresh) {
     try {
       const systemPrompt = buildAnalysisSystem(hasVerifiedOdds);
       const result = await callGrok(systemPrompt, userPrompt, {
         useSearch: true,
-        maxTokens: adminMode ? 4000 : 2000,
-        timeout: adminMode ? 300_000 : 120_000,  // admin: 5 min per game
+        maxTokens: 2000,
+        timeout: 90_000,
       });
       if (result) {
         console.log(`[pregenerate] ✅ Tier 1 (grok-4+search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
@@ -317,24 +362,12 @@ Search ONLY for: confirmed starters/lineups, injuries (last 24h), recent form (l
     }
   }
 
-  // ── Tier 2: grok-4 no-search fallback (60s) ────────────────────────────
-  // Uses only the pre-fetched data (odds, matchup info). No web search needed.
+  // ── Tier 2: grok-4 no-search via Responses API (45s) ─────────────────
   try {
-    const noSearchSystem = isRefresh ? QUICK_REFRESH_SYSTEM : buildAnalysisSystemNoSearch();
-    const noSearchPrompt = isRefresh ? userPrompt :
-      `Analyze this ${sport.toUpperCase()} matchup using ONLY the data provided below:
-
-MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
-DATE: ${gameDate}
-${oddsContext ? `\nODDS DATA:\n${oddsContext}` : '\nNo odds data available.'}
-${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
-
-Produce a complete BetOS analysis using only this data. Note any limitations.`;
-
     const result = await callGrok(noSearchSystem, noSearchPrompt, {
       useSearch: false,
-      maxTokens: isRefresh ? 400 : (adminMode ? 3000 : 1500),
-      timeout: isRefresh ? 30_000 : (adminMode ? 180_000 : 60_000),
+      maxTokens: isRefresh ? 400 : 2000,
+      timeout: isRefresh ? 25_000 : 45_000,
     });
     if (result) {
       console.log(`[pregenerate] ✅ Tier 2 (grok-4 no-search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
@@ -346,25 +379,35 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
       };
     }
   } catch (e) {
-    console.log(`[pregenerate] ❌ Tier 2 failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+    console.log(`[pregenerate] ⚠️ Tier 2 failed for ${awayTeam}@${homeTeam}: ${e.message}`);
   }
 
-  // ── Tier 3: Claude Opus 4.6 no-search fallback ─────────────────────────
-  // Used when xAI is unavailable (bad key, outage, etc.) so pregenerate never
-  // produces 0 analyses when odds data is already pre-fetched.
+  // ── Tier 3: grok-3 chat/completions no-search (45s) — fast reliable fallback
+  // grok-3 via chat/completions is much faster than grok-4 Responses API.
+  // This is the same tier that makes goatbot reliable even when grok-4 is slow.
+  try {
+    const result = await callGrok3(noSearchSystem, noSearchPrompt, {
+      maxTokens: isRefresh ? 400 : 2000,
+      timeout: isRefresh ? 20_000 : 45_000,
+    });
+    if (result) {
+      console.log(`[pregenerate] ✅ Tier 3 (grok-3) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
+      return {
+        text: result.text, mode, model: 'BetOS AI', model_used: 'grok-3',
+        provider: 'xai', was_fallback: true, latency_ms: result.latency,
+        tokens_in: result.tokens_in, tokens_out: result.tokens_out,
+        system_prompt: noSearchSystem, user_prompt: noSearchPrompt, prompt_version: PROMPT_VERSION,
+      };
+    }
+  } catch (e) {
+    console.log(`[pregenerate] ⚠️ Tier 3 failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+  }
+
+  // ── Tier 4: Claude Opus 4.6 no-search fallback ─────────────────────────
+  // Used when xAI is entirely unavailable (bad key, outage, etc.).
   const claudeKey = (process.env.ANTHROPIC_API_KEY || '').trim();
   if (!isRefresh && claudeKey) {
     try {
-      const noSearchSystem = buildAnalysisSystemNoSearch();
-      const noSearchPrompt = `Analyze this ${sport.toUpperCase()} matchup using ONLY the data provided below:
-
-MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
-DATE: ${gameDate}
-${oddsContext ? `\nODDS DATA:\n${oddsContext}` : '\nNo odds data available.'}
-${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
-
-Produce a complete BetOS analysis using only this data. Note any limitations.`;
-
       const t0 = Date.now();
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -377,16 +420,16 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
           model: 'claude-opus-4-6',
           system: noSearchSystem,
           messages: [{ role: 'user', content: noSearchPrompt }],
-          max_tokens: adminMode ? 3000 : 1500,
+          max_tokens: 2000,
         }),
-        signal: AbortSignal.timeout(adminMode ? 120_000 : 60_000),
+        signal: AbortSignal.timeout(60_000),
       });
       if (res.ok) {
         const data = await res.json();
         const text = data.content?.find(c => c.type === 'text')?.text?.trim();
         if (text) {
           const latency = Date.now() - t0;
-          console.log(`[pregenerate] ✅ Tier 3 (claude-opus fallback) ${awayTeam}@${homeTeam}: ${latency}ms`);
+          console.log(`[pregenerate] ✅ Tier 4 (claude-opus fallback) ${awayTeam}@${homeTeam}: ${latency}ms`);
           return {
             text, mode, model: 'BetOS AI', model_used: 'claude-opus-4-6',
             provider: 'anthropic', was_fallback: true, latency_ms: latency,
@@ -396,10 +439,10 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
           };
         }
       } else {
-        console.log(`[pregenerate] ⚠️ Tier 3 Claude HTTP ${res.status} for ${awayTeam}@${homeTeam}`);
+        console.log(`[pregenerate] ⚠️ Tier 4 Claude HTTP ${res.status} for ${awayTeam}@${homeTeam}`);
       }
     } catch (e) {
-      console.log(`[pregenerate] ❌ Tier 3 Claude failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+      console.log(`[pregenerate] ❌ Tier 4 Claude failed for ${awayTeam}@${homeTeam}: ${e.message}`);
     }
   }
 
@@ -526,10 +569,10 @@ export async function GET(req) {
       }
     }
 
-    // When admin picks a specific date, include ALL game states (pre/in/post)
-    // because the games for that date may have already finished.
-    // Cron-triggered runs only include pre/in-progress games (don't waste tokens on final games).
-    const events = await fetchTodaysGames(sport, espnDate, !!dateOverride);
+    // Admin runs (manual force, per-sport, or date override) include ALL game states
+    // so the admin can generate analyses regardless of whether games are pre/in/post.
+    // Cron-triggered runs only include pre/recently-in-progress games.
+    const events = await fetchTodaysGames(sport, espnDate, isAdmin || !!dateOverride);
     if (!events.length) continue;
 
     // Determine trigger source for audit logging
@@ -602,14 +645,16 @@ export async function GET(req) {
 
     if (!gamesToProcess.length) continue;
 
-    // Cap games per sport: admin = unlimited, cron = capped to avoid timeout
-    if (!isAdmin && gamesToProcess.length > MAX_GAMES_PER_SPORT) {
-      console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} → ${MAX_GAMES_PER_SPORT} games this run`);
-      gamesToProcess.splice(MAX_GAMES_PER_SPORT);
+    // Cap games per sport to avoid timeout: admin = 12 max, cron = 8 max
+    const cap = isAdmin ? 12 : MAX_GAMES_PER_SPORT;
+    if (gamesToProcess.length > cap) {
+      console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} → ${cap} games this run (admin=${isAdmin})`);
+      gamesToProcess.splice(cap);
     }
 
-    // Admin: process 1 at a time (give each game full time), Cron: batch of 3
-    const BATCH_SIZE = isAdmin ? 1 : 3;
+    // Process 3 games at a time in parallel for both admin and cron.
+    // With 90s max per game, 3 parallel = ~90s per batch vs 270s sequential.
+    const BATCH_SIZE = 3;
     console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batch=${BATCH_SIZE}, admin=${isAdmin})`);
 
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
