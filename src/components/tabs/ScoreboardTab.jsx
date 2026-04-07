@@ -2210,6 +2210,19 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         if (!spreads && (hoOk || aoOk)) { spreads = mkt; sHome = hoOk ? ho : null; sAway = aoOk ? ao : null; }
       }
 
+      // Cross-market sanity: run/puck line odds must be directionally consistent with ML.
+      // Underdog (+points) paying for insurance → spread price must be lower than ML price.
+      // Favorite (-points) getting premium for harder cover → spread price must be higher.
+      // h2h and spreads can come from different books, so check again here.
+      if (sAway && awayH2h && sHome && homeH2h) {
+        let crossInvalid = false;
+        if (sAway.point > 0 && sAway.price >= awayH2h.price - 5) crossInvalid = true;
+        if (sAway.point < 0 && sAway.price <= awayH2h.price + 5) crossInvalid = true;
+        if (sHome.point > 0 && sHome.price >= homeH2h.price - 5) crossInvalid = true;
+        if (sHome.point < 0 && sHome.price <= homeH2h.price + 5) crossInvalid = true;
+        if (crossInvalid) { spreads = null; sHome = null; sAway = null; }
+      }
+
       // totals: prefer a book with both over+under and a realistic game total
       let totals = null, tOver = null, tUnder = null;
       for (const bk of books) {
