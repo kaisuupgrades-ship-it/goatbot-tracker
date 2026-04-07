@@ -988,6 +988,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
     >
       {/* Main row */}
       <div
+        className="game-card-header"
         onClick={() => setExpanded(prev => !prev)}
         style={{
           display: suppressHeader ? 'none' : undefined,
@@ -1034,7 +1035,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
             {broadcast && (
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.66rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }} title={broadcast}>
+              <span className="game-card-broadcast" style={{ color: 'var(--text-muted)', fontSize: '0.66rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }} title={broadcast}>
                 {truncBroadcast(broadcast, 36)}
               </span>
             )}

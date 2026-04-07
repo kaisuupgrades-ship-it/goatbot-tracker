@@ -320,12 +320,12 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
 }
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ── Shimmer skeleton ──────────────────────────────────────────────────────── */
@@ -360,7 +360,7 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
 }
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ── Pulse skeleton ────────────────────────────────────────────────────────── */
@@ -630,10 +630,44 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
   header {
     padding: 0 0.75rem !important;
   }
+
+  /* Game card: hide broadcast label to make room for + Add Pick button */
+  .game-card-broadcast { display: none !important; }
+
+  /* Game card: tighter header padding on small screens */
+  .game-card-header { padding: 0.6rem 0.75rem !important; }
 }
 
 /* ── Announcement banner ticker ─────────────────────────────────────────────── */
 @keyframes ticker-scroll {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
+}
+
+/* ── Mobile overflow guard — prevent content from escaping viewport ──────────── */
+/* Ensure the root layout never causes horizontal scroll */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Utility: wrap any bare <table> in a <div className="table-scroll"> */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ── Mobile-specific touch & layout improvements ─────────────────────────────── */
+@media (max-width: 768px) {
+  /* Pick cards — prevent any single row from overflowing */
+  .pick-ticket > * { min-width: 0; }
+
+  /* Odds game row — slightly smaller font to give team names more breathing room */
+  .odds-game-row { font-size: 0.80rem !important; }
+
+  /* Odds team name cell — truncate long city names */
+  .odds-team-cell { overflow: hidden; min-width: 0; }
+  .odds-team-city {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Leaderboard rows — prevent overflow */
+  .leaderboard-row,
+  .leaderboard-row > * { min-width: 0; }
 }

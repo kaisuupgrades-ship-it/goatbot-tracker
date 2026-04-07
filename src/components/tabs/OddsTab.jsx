@@ -298,8 +298,8 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 
         {/* Away row */}
         <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
-          <div style={{ paddingRight: '8px' }}>
-            {awayCity && <div style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{awayCity}</div>}
+          <div className="odds-team-cell" style={{ paddingRight: '8px' }}>
+            {awayCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{awayCity}</div>}
             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{awayNick}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
@@ -331,8 +331,8 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
 
         {/* Home row */}
         <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', padding: '0.28rem 0' }}>
-          <div style={{ paddingRight: '8px' }}>
-            {homeCity && <div style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{homeCity}</div>}
+          <div className="odds-team-cell" style={{ paddingRight: '8px' }}>
+            {homeCity && <div className="odds-team-city" style={{ fontSize: '0.6rem', color: '#555', lineHeight: 1, marginBottom: '1px' }}>{homeCity}</div>}
             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: extreme ? '#555' : '#ddd', lineHeight: 1.2 }}>{homeNick}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
