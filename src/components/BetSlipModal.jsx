@@ -21,6 +21,19 @@ const SPORT_BET_TYPES = {
 };
 const DEFAULT_BET_TYPES = ['Moneyline', 'Spread', 'Total (Over)', 'Total (Under)', 'Prop', 'Parlay'];
 
+// Player prop stat categories by sport
+const SPORT_PROP_STATS = {
+  nfl:   ['Passing Yards', 'Passing TDs', 'Completions', 'Rushing Yards', 'Receiving Yards', 'Receptions', 'Touchdowns', 'Interceptions', 'Sacks'],
+  nba:   ['Points', 'Assists', 'Rebounds', 'Steals', 'Blocks', 'Threes Made', 'Pts+Reb+Ast', 'Pts+Reb', 'Pts+Ast', 'Reb+Ast'],
+  mlb:   ['Strikeouts', 'Hits Allowed', 'Earned Runs', 'Walks', 'Hits', 'RBIs', 'Home Runs', 'Total Bases', 'Stolen Bases', 'Pitching Outs'],
+  nhl:   ['Goals', 'Assists', 'Points', 'Shots on Goal', 'Saves', 'Power Play Points'],
+  ncaaf: ['Passing Yards', 'Rushing Yards', 'Receiving Yards', 'Touchdowns', 'Receptions'],
+  ncaab: ['Points', 'Assists', 'Rebounds', 'Threes Made', 'Steals', 'Blocks'],
+  mls:   ['Goals', 'Shots on Target', 'Shots', 'Assists'],
+  wnba:  ['Points', 'Assists', 'Rebounds', 'Threes Made'],
+};
+const DEFAULT_PROP_STATS = ['Points', 'Yards', 'Strikeouts', 'Goals', 'Assists', 'Rebounds', 'Hits'];
+
 function fmtOdds(n) {
   if (n == null || n === '') return null;
   const num = parseInt(n);
@@ -319,6 +332,11 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [customBetType, setCustomBetType] = useState('Moneyline');
   const [customTeam,  setCustomTeam]  = useState('');
   const [customOdds,  setCustomOdds]  = useState('');
+  // Player prop fields — shown when customBetType === 'Prop'
+  const [propPlayer,    setPropPlayer]    = useState('');
+  const [propStat,      setPropStat]      = useState('');
+  const [propLine,      setPropLine]      = useState('');
+  const [propDirection, setPropDirection] = useState('over');
   const [voiceState,  setVoiceState]  = useState('idle');
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceError,  setVoiceError]  = useState('');
@@ -331,6 +349,23 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [showConfirm, setShowConfirm] = useState(false); // Contest confirmation dialog
   const [aiChecking,  setAiChecking]  = useState(false); // AI pre-save audit in progress
   const [aiCheckResult, setAiCheckResult] = useState(null); // { ok, reason } from AI
+
+  // Auto-compose customTeam from prop fields when bet type is Prop
+  useEffect(() => {
+    if (customBetType !== 'Prop') return;
+    if (propPlayer.trim() && propLine.trim()) {
+      const dir  = propDirection === 'over' ? 'Over' : 'Under';
+      const stat = propStat ? ` ${propStat}` : '';
+      setCustomTeam(`${propPlayer.trim()} ${dir} ${propLine.trim()}${stat}`);
+    }
+  }, [propPlayer, propStat, propLine, propDirection, customBetType]);
+
+  // Clear prop fields when switching away from Prop bet type
+  useEffect(() => {
+    if (customBetType !== 'Prop') {
+      setPropPlayer(''); setPropStat(''); setPropLine(''); setPropDirection('over');
+    }
+  }, [customBetType]);
 
   // Derived selected bet object
   const selectedBet = quickBets.flatMap(s => s.bets).find(b => b.id === selectedId) || null;
@@ -984,16 +1019,109 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 />
               </div>
             </div>
-            <div>
-              <label style={labelStyle}>Pick / Team / Bet Description</label>
-              <input
-                value={customTeam} onChange={e => setCustomTeam(e.target.value)}
-                placeholder="e.g. Gerrit Cole over 7.5 K's, LAD ML, Parlay: NYY + Over 8.5"
-                style={inputStyle}
-                onFocus={e => e.target.style.borderColor = 'var(--gold)'}
-                onBlur={e => e.target.style.borderColor = 'var(--border)'}
-              />
-            </div>
+            {customBetType === 'Prop' ? (
+              /* ── Structured player prop entry ── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: '8px', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.62rem', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: '8px' }}>
+                    🎯 Player Prop
+                  </div>
+                  {/* Player name */}
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={labelStyle}>Player Name</label>
+                    <input
+                      value={propPlayer}
+                      onChange={e => setPropPlayer(e.target.value)}
+                      placeholder="e.g. Josh Allen, LeBron James"
+                      style={{ ...inputStyle, fontWeight: 600 }}
+                      onFocus={e => e.target.style.borderColor = '#60a5fa'}
+                      onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                    />
+                  </div>
+                  {/* Stat + Line row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', marginBottom: '8px' }}>
+                    <div>
+                      <label style={labelStyle}>Stat</label>
+                      <select
+                        value={propStat}
+                        onChange={e => setPropStat(e.target.value)}
+                        style={{ ...inputStyle, cursor: 'pointer' }}
+                        onFocus={e => e.target.style.borderColor = '#60a5fa'}
+                        onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                      >
+                        <option value="">— Choose stat —</option>
+                        {(SPORT_PROP_STATS[sport] || DEFAULT_PROP_STATS).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Line</label>
+                      <input
+                        value={propLine}
+                        onChange={e => setPropLine(e.target.value)}
+                        placeholder="24.5"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        style={{ ...inputStyle, width: '72px', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700 }}
+                        onFocus={e => e.target.style.borderColor = '#60a5fa'}
+                        onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                      />
+                    </div>
+                  </div>
+                  {/* Over / Under toggle */}
+                  <div>
+                    <label style={labelStyle}>Direction</label>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {['over', 'under'].map(dir => (
+                        <button
+                          key={dir}
+                          type="button"
+                          onClick={() => setPropDirection(dir)}
+                          style={{
+                            flex: 1, padding: '6px 0', borderRadius: '6px', fontWeight: 700,
+                            fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit',
+                            border: `1.5px solid ${propDirection === dir
+                              ? (dir === 'over' ? 'rgba(74,222,128,0.5)' : 'rgba(248,113,113,0.5)')
+                              : 'var(--border)'}`,
+                            background: propDirection === dir
+                              ? (dir === 'over' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.1)')
+                              : 'var(--bg-elevated)',
+                            color: propDirection === dir
+                              ? (dir === 'over' ? 'var(--green)' : '#f87171')
+                              : 'var(--text-muted)',
+                            transition: 'all 0.12s',
+                          }}
+                        >
+                          {dir === 'over' ? '⬆ Over' : '⬇ Under'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Live preview of composed pick */}
+                  {propPlayer && propLine && (
+                    <div style={{ marginTop: '8px', padding: '6px 10px', background: 'rgba(96,165,250,0.06)', borderRadius: '6px', border: '1px solid rgba(96,165,250,0.15)' }}>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginRight: '6px' }}>Pick:</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 700, fontSize: '0.78rem', color: 'var(--text-primary)' }}>
+                        {propPlayer.trim()} {propDirection === 'over' ? 'Over' : 'Under'} {propLine}{propStat ? ` ${propStat}` : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label style={labelStyle}>Pick / Team / Bet Description</label>
+                <input
+                  value={customTeam} onChange={e => setCustomTeam(e.target.value)}
+                  placeholder="e.g. Gerrit Cole over 7.5 K's, LAD ML, Parlay: NYY + Over 8.5"
+                  style={inputStyle}
+                  onFocus={e => e.target.style.borderColor = 'var(--gold)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                />
+              </div>
+            )}
             <div>
               <label style={labelStyle}>Units</label>
               <UnitsChips value={units} onChange={setUnits} />
