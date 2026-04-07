@@ -71,7 +71,13 @@ export async function POST(req) {
   if (user.id !== followerId)
     return NextResponse.json({ error: 'User ID mismatch' }, { status: 403 });
 
-  const { error } = await supabase().from('follows').insert({ follower_id: followerId, following_id: followingId });
+  const db = supabase();
+
+  // Check if already following to avoid duplicates
+  const { data: existing } = await db.from('follows').select('id').eq('follower_id', followerId).eq('following_id', followingId).maybeSingle();
+  if (existing) return NextResponse.json({ success: true, already: true });
+
+  const { error } = await db.from('follows').insert({ follower_id: followerId, following_id: followingId });
   if (error && error.code !== '23505') return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }
@@ -87,7 +93,13 @@ export async function DELETE(req) {
   if (user.id !== followerId)
     return NextResponse.json({ error: 'User ID mismatch' }, { status: 403 });
 
-  const { error } = await supabase().from('follows').delete().eq('follower_id', followerId).eq('following_id', followingId);
+  const db = supabase();
+  const { error } = await db.from('follows').delete().eq('follower_id', followerId).eq('following_id', followingId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Verify deletion actually happened
+  const { data: check } = await db.from('follows').select('id').eq('follower_id', followerId).eq('following_id', followingId).maybeSingle();
+  if (check) return NextResponse.json({ error: 'Unfollow failed — record still exists' }, { status: 500 });
+
   return NextResponse.json({ success: true });
 }

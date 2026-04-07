@@ -105,23 +105,54 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
     })();
   }, [userId, contestOnly]);
 
-  // Check follow status
+  // Check follow status — fetch from DB every time modal opens
+  const [followCheckDone, setFollowCheckDone] = useState(false);
   useEffect(() => {
-    if (!currentUserId || !userId || isMe) return;
-    fetch(`/api/follow?followerId=${currentUserId}&followingId=${userId}`)
-      .then(r => r.json()).then(d => setFollowing(d.following || false)).catch(() => {});
+    if (!currentUserId || !userId || isMe) { setFollowCheckDone(true); return; }
+    setFollowCheckDone(false);
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/follow?followerId=${currentUserId}&followingId=${userId}`);
+        if (!r.ok) throw new Error(`Status ${r.status}`);
+        const d = await r.json();
+        if (!cancelled) setFollowing(!!d.following);
+      } catch (err) {
+        console.warn('[follow-check] Failed to fetch follow status:', err);
+        // Retry once after a short delay
+        try {
+          await new Promise(res => setTimeout(res, 800));
+          if (cancelled) return;
+          const r2 = await fetch(`/api/follow?followerId=${currentUserId}&followingId=${userId}`);
+          if (r2.ok) {
+            const d2 = await r2.json();
+            if (!cancelled) setFollowing(!!d2.following);
+          }
+        } catch { /* second attempt failed — leave state as-is, button will show loading */ }
+      } finally {
+        if (!cancelled) setFollowCheckDone(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [currentUserId, userId, isMe]);
 
   const toggleFollow = async () => {
     if (!currentUserId || followLoading) return;
     setFollowLoading(true);
     try {
-      await fetch('/api/follow', {
+      const res = await fetch('/api/follow', {
         method: following ? 'DELETE' : 'POST',
         headers: await authHeaders(),
         body: JSON.stringify({ followerId: currentUserId, followingId: userId }),
       });
-      setFollowing(f => !f);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFollowing(f => !f);
+      } else {
+        console.error('[follow] Server rejected:', data.error || res.status);
+      }
+    } catch (err) {
+      console.error('[follow] Network error:', err);
     } finally { setFollowLoading(false); }
   };
 
@@ -266,14 +297,15 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
             {/* Right: action buttons + close */}
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
               {!isMe && currentUserId && (
-                <button onClick={toggleFollow} disabled={followLoading} style={{
+                <button onClick={toggleFollow} disabled={followLoading || !followCheckDone} style={{
                   padding: '5px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700,
-                  cursor: followLoading ? 'default' : 'pointer',
-                  background: following ? 'rgba(74,222,128,0.12)' : 'rgba(255,184,0,0.12)',
-                  border: `1px solid ${following ? 'rgba(74,222,128,0.4)' : 'rgba(255,184,0,0.4)'}`,
-                  color: following ? '#4ade80' : 'var(--gold)', transition: 'all 0.15s',
+                  cursor: (followLoading || !followCheckDone) ? 'default' : 'pointer',
+                  background: !followCheckDone ? 'rgba(255,255,255,0.05)' : following ? 'rgba(74,222,128,0.12)' : 'rgba(255,184,0,0.12)',
+                  border: `1px solid ${!followCheckDone ? 'rgba(255,255,255,0.1)' : following ? 'rgba(74,222,128,0.4)' : 'rgba(255,184,0,0.4)'}`,
+                  color: !followCheckDone ? '#666' : following ? '#4ade80' : 'var(--gold)', transition: 'all 0.15s',
+                  opacity: followLoading ? 0.6 : 1,
                 }}>
-                  {following ? '✓ Following' : '+ Follow'}
+                  {!followCheckDone ? '…' : followLoading ? '…' : following ? '✓ Following' : '+ Follow'}
                 </button>
               )}
               {!isMe && currentUserId && onOpenInbox && (
