@@ -173,7 +173,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
             </span>
             {isMe && <span style={{ fontSize: '0.6rem', color: 'var(--gold)', fontWeight: 700, flexShrink: 0 }}>YOU</span>}
             {!isMobile && (rank_title || xp != null) && <RankBadge rankTitle={rank_title} xp={xp} size="xs" showTitle={false} />}
-            {!isMobile && <VerifiedBadge count={verified_picks} />}
+            <VerifiedBadge count={verified_picks} />
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {isMobile ? `${wins}-${losses} · ${winPct(wins, total)}` : `@${username}`}

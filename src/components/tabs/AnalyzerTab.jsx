@@ -147,8 +147,9 @@ function parseReport(text) {
   // Sanity-check: reject if the "pick" looks like just a date phrase
   if (pick && /^for\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}\/)/i.test(pick)) pick = null;
 
-  // CONFIDENCE — use robust extractor
-  const conf = extractConf(t);
+  // CONFIDENCE — use robust extractor; validate result is a known tier
+  const _conf = extractConf(t);
+  const conf = ['LOW', 'MEDIUM', 'HIGH', 'ELITE'].includes(_conf) ? _conf : null;
 
   // EDGE SCORE
   const edge = extractEdge(t);
@@ -172,7 +173,7 @@ function parseReport(text) {
       const bM = clean.match(/^[\d\-•›*]\s+(.+)/) || (clean.match(/^[A-Z]/) && !clean.match(/^[A-Z]{4,}/));
       const m  = clean.match(/^(?:[\d•\-›*]+\.?\s+)(.{10,})/);
       if (m) { factors.push(m[1].trim()); if (factors.length >= 5) break; }
-      else if (clean && !/^[A-Z\s:]{5,}$/.test(clean) && factors.length > 0 && clean.length > 5) break;
+      else if (clean && !/^[A-Z\s:]{5,}$/.test(clean) && factors.length > 0 && clean.length > 200) break;
     }
   }
   // Fallback: pull first 3 bullet/numbered lines anywhere in text
@@ -325,7 +326,7 @@ function exportReportToPDF(parsed, result, prompt, runTime) {
 
   <div style="margin-bottom:20px">
     <div class="section-title">Full Analysis</div>
-    <div class="analysis-text">${cleanText.slice(0, 8000)}</div>
+    <div class="analysis-text">${cleanText.length > 8000 ? cleanText.slice(0, 8000) + '\n\n[Analysis truncated — full text exceeds PDF export limit]' : cleanText}</div>
   </div>
 
   ${prompt ? `
