@@ -26,7 +26,10 @@ const DEMO_DATA = [
 // A WIN at -110 earns (100/110) = 0.909u. A LOSS is always -1u. PUSH = 0.
 function contestProfit(result, odds) {
   const o = parseInt(odds || 0);
-  if (result === 'WIN'  && o) return o > 0 ? parseFloat((o / 100).toFixed(3)) : parseFloat((100 / Math.abs(o)).toFixed(3));
+  if (result === 'WIN') {
+    if (!o) return 0; // odds unknown — can't calculate profit
+    return o > 0 ? parseFloat((o / 100).toFixed(3)) : parseFloat((100 / Math.abs(o)).toFixed(3));
+  }
   if (result === 'LOSS') return -1;
   if (result === 'PUSH') return 0;
   return 0;
@@ -93,8 +96,8 @@ function buildContestRows(picks, profiles) {
   // Only show players with at least one graded pick (win or loss or push)
   const activeRows = rows.filter(r => r.total_settled > 0);
 
-  // Sort: by units profit (most to least), then by win count
-  activeRows.sort((a, b) => b.units - a.units || b.wins - a.wins);
+  // Sort: by units profit, then wins, then username (stable tiebreaker)
+  activeRows.sort((a, b) => b.units - a.units || b.wins - a.wins || a.username.localeCompare(b.username));
 
   return activeRows.map((r, i) => ({ ...r, rank: i + 1 }));
 }

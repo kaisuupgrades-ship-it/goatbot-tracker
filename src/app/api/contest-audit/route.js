@@ -103,7 +103,9 @@ async function checkOddsAgainstPinnacle(pick) {
     const prices  = mlMarket.prices || [];
     const side    = isHome ? 'home' : 'away';
     const pinOdds = prices.find(p => p.designation === side)?.price;
-    if (pinOdds == null) return { found: true, game, pinnacleOdds: null };
+    if (pinOdds === null || pinOdds === undefined) {
+      return { found: true, game, pinnacleOdds: null, reason: 'Pinnacle price missing for this side — unverifiable' };
+    }
 
     const diff = Math.abs(submittedOdds - pinOdds);
     return {

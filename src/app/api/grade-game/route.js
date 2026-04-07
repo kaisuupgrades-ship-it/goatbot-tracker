@@ -26,21 +26,20 @@ export async function POST(req) {
       return NextResponse.json({ error: 'homeTeam, awayTeam, gameDate required' }, { status: 400 });
     }
 
-    // Find ALL pending picks for this date across all users
+    // Find ALL pending picks for this date across all users.
+    // Filter by sport in the query (not just in JS) to avoid loading picks from other sports.
     let query = supabase
       .from('picks')
       .select('*')
       .or('result.eq.PENDING,result.is.null')
       .eq('date', gameDate);
 
-    const { data: allPending } = await query.limit(500);
-    let picks = allPending || [];
-
-    // Filter by sport if provided
     if (sport) {
-      const sportLower = sport.toLowerCase();
-      picks = picks.filter(p => (p.sport || '').toLowerCase() === sportLower);
+      query = query.ilike('sport', sport);
     }
+
+    const { data: allPending } = await query.limit(500);
+    const picks = allPending || [];
 
     if (!picks.length) return NextResponse.json({ graded: [], count: 0 });
 

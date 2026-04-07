@@ -185,13 +185,86 @@ async function searchESPNScoreboard(path, team, espnDate, dateStr) {
       if (score > bestScore) { bestScore = score; bestEvent = evt; }
     }
 
-    if (bestScore >= 20 && bestEvent?.date) {
+    if (bestScore >= 40 && bestEvent?.date) {
       return bestEvent.date; // UTC ISO timestamp — actual game start
     }
     return null;
   } catch {
     return null;
   }
+}
+
+// ── Cross-market odds sanity check ──────────────────────────────────────────
+// For Spread/Run Line/Puck Line picks: if the team is a moneyline underdog
+// (ML positive), the spread odds should be MORE negative (worse) than the ML,
+// not better. A spread price better than the ML for an underdog is a sign of
+// data entry error or line shopping fraud.
+const SPREAD_BET_TYPES = ['spread', 'run line', 'puck line'];
+
+async function validateSpreadVsML(pick) {
+  const betTypeLower = (pick.bet_type || '').toLowerCase();
+  if (!SPREAD_BET_TYPES.some(t => betTypeLower.includes(t))) return null; // not a spread bet
+  if (!pick.odds || !pick.sport || !pick.team) return null;
+
+  const submittedOdds = parseInt(pick.odds);
+  if (isNaN(submittedOdds)) return null;
+
+  // Map pick sport to odds API cache key
+  const sportKeyMap = {
+    mlb: 'baseball_mlb', nba: 'basketball_nba', nfl: 'americanfootball_nfl',
+    nhl: 'icehockey_nhl', ncaaf: 'americanfootball_ncaaf', ncaab: 'basketball_ncaab',
+    mls: 'soccer_usa_mls',
+  };
+  const sportKey = sportKeyMap[(pick.sport || '').toLowerCase()];
+  if (!sportKey) return null;
+
+  try {
+    const { data: cached } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', `odds_cache_${sportKey}`)
+      .maybeSingle();
+    if (!cached?.value) return null;
+
+    const payload = typeof cached.value === 'string' ? JSON.parse(cached.value) : cached.value;
+    const games = payload?.data || [];
+    if (!games.length) return null;
+
+    // Find the game containing this team
+    const teamNorm = (pick.team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const game = games.find(g =>
+      (g.home_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(teamNorm) ||
+      (g.away_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(teamNorm) ||
+      teamNorm.includes((g.home_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5)) ||
+      teamNorm.includes((g.away_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5))
+    );
+    if (!game) return null;
+
+    // Find ML odds for this team from any bookmaker
+    let mlOdds = null;
+    for (const bk of (game.bookmakers || [])) {
+      const h2h = bk.markets?.find(m => m.key === 'h2h');
+      if (!h2h) continue;
+      const outcome = h2h.outcomes?.find(o =>
+        (o.name || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(teamNorm) ||
+        teamNorm.includes((o.name || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5))
+      );
+      if (outcome?.price != null) { mlOdds = parseInt(outcome.price); break; }
+    }
+    if (mlOdds == null) return null;
+
+    // If the team is an underdog on the ML (mlOdds > 0), the spread juice should
+    // be MORE negative (worse payout) than the ML, not better.
+    // e.g. Cubs ML +180 → Cubs +1.5 spread should be something like -130, not +220
+    if (mlOdds > 0 && submittedOdds > mlOdds) {
+      return {
+        error: `Spread odds validation failed: ${pick.team} is a +${mlOdds} ML underdog but the submitted spread odds (+${submittedOdds}) are better than the ML. Check your odds entry — spread odds for an underdog getting +1.5 runs should be worse (more negative) than the moneyline.`,
+        mlOdds,
+        submittedOdds,
+      };
+    }
+  } catch { /* non-fatal — don't block picks if validation fails */ }
+  return null;
 }
 
 // ── POST /api/picks ──────────────────────────────────────────────────────────
@@ -260,6 +333,15 @@ export async function POST(req) {
     // The pick stores the user's REAL bet size (e.g. hodgins 5u) for their personal tracking.
     // The contest leaderboard recalculates profit at 1u on the fly using contestProfit(result, odds)
     // without touching the stored data. "My Picks" always shows real units/profit.
+  }
+
+  // ── 4b. Cross-market odds sanity check (spread vs ML) ────────────────────
+  const spreadValidation = await validateSpreadVsML(safePayload);
+  if (spreadValidation) {
+    return NextResponse.json({
+      error: 'Cross-market odds validation failed',
+      errors: [spreadValidation.error],
+    }, { status: 422 });
   }
 
   // ── 5. Look up actual game start time from ESPN ──────────────────────────

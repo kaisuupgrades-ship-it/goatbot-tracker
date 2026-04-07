@@ -823,7 +823,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
     return sortDir === 'desc' ? bv - av : av - bv;
   });
 
-  const maxScore = sortedEntries[0]?.sharp_score || data?.leaderboard?.[0]?.sharp_score || 1;
+  const maxScore = Math.max(...sortedEntries.map(e => e.sharp_score || 0), 1);
   const entries = sortedEntries;
 
   return (

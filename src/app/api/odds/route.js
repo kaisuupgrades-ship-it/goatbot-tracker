@@ -481,19 +481,25 @@ export async function GET(req) {
   // Try The Odds API + Pinnacle in parallel (Pinnacle is free, adds sharp reference line)
   if (THE_ODDS_KEY) {
     try {
-      const [result, pinnacleGames] = await Promise.all([
+      const [result, pinnacleResult] = await Promise.allSettled([
         fetchFromTheOddsAPI(sportKey),
         fetchPinnacleLines(sportKey),   // free, no key — silently skipped if it fails
       ]);
+      if (result.status !== 'fulfilled') throw new Error(result.reason?.message || 'The Odds API failed');
+      const oddsResult = result.value;
+      const pinnacleGames = pinnacleResult.status === 'fulfilled' ? pinnacleResult.value : null;
+      const pinnacleUnavailable = pinnacleResult.status !== 'fulfilled';
+      if (pinnacleUnavailable) console.warn('[/api/odds] Pinnacle unavailable:', pinnacleResult.reason?.message);
       // Enrich each event with Pinnacle line + suspectOdds flag
-      if (result?.data) result.data = enrichWithPinnacle(result.data, pinnacleGames);
-      result.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
+      if (oddsResult?.data) oddsResult.data = enrichWithPinnacle(oddsResult.data, pinnacleGames);
+      oddsResult.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
+      oddsResult.pinnacleUnavailable = pinnacleUnavailable;
       // Only cache if we got actual data back (0 games is valid off-season, errors are not)
-      if (result?.data?.length >= 0) {
-        setMemCache(cacheKey, result);
-        await setSupabaseCache(sportKey, result);
+      if (oddsResult?.data?.length >= 0) {
+        setMemCache(cacheKey, oddsResult);
+        await setSupabaseCache(sportKey, oddsResult);
       }
-      return NextResponse.json({ ...result, cached: false });
+      return NextResponse.json({ ...oddsResult, cached: false });
     } catch (err) {
       console.warn('[/api/odds] The Odds API failed, trying legacy:', err.message);
     }
@@ -502,12 +508,17 @@ export async function GET(req) {
   // Fallback: odds-api.io (+ Pinnacle still runs in parallel)
   if (LEGACY_KEY) {
     try {
-      const [result, pinnacleGames] = await Promise.all([
+      const [legacyResult, pinnacleResult] = await Promise.allSettled([
         fetchFromLegacy(sportKey),
         fetchPinnacleLines(sportKey),
       ]);
+      if (legacyResult.status !== 'fulfilled') throw new Error(legacyResult.reason?.message || 'Legacy API failed');
+      const result = legacyResult.value;
+      const pinnacleGames = pinnacleResult.status === 'fulfilled' ? pinnacleResult.value : null;
+      if (pinnacleResult.status !== 'fulfilled') console.warn('[/api/odds] Pinnacle unavailable (legacy path):', pinnacleResult.reason?.message);
       if (result?.data) result.data = enrichWithPinnacle(result.data, pinnacleGames);
       result.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
+      result.pinnacleUnavailable = pinnacleResult.status !== 'fulfilled';
       // Only cache successful responses with actual data — never cache errors or empty fallbacks
       if (result?.data?.length > 0) {
         setMemCache(cacheKey, result);
@@ -516,7 +527,10 @@ export async function GET(req) {
       return NextResponse.json({ ...result, cached: false });
     } catch (err) {
       console.error('[/api/odds] Both odds providers failed:', err.message);
-      return NextResponse.json({ configured: true, data: [], total: 0, source: 'none', cached: false });
+      return NextResponse.json({
+        configured: true, data: [], total: 0, source: 'none', cached: false,
+        error: true, message: 'Odds data temporarily unavailable',
+      }, { status: 503 });
     }
   }
 

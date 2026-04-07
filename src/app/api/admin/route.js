@@ -368,10 +368,28 @@ export async function POST(req) {
   const body = await req.json();
   const { action, targetId, value, newEmail, newPassword, newUsername } = body;
 
-  // Session tracking is unauthenticated — any logged-in user can log their own session
+  // Session tracking — verify JWT so users can only log their own session
   if (action === 'track_session') {
     const { userId, sessionId, durationSeconds, deviceInfo } = body;
     if (!userId || !sessionId) return NextResponse.json({ ok: false });
+
+    // Verify the caller's JWT and confirm it matches the userId in the body
+    const headerAuth = req.headers.get('authorization') || '';
+    const token = headerAuth.replace(/^Bearer\s+/i, '').trim();
+    if (token) {
+      try {
+        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+        if (error || !user || user.id !== userId) {
+          return NextResponse.json({ ok: false, error: 'User ID mismatch' }, { status: 403 });
+        }
+      } catch {
+        return NextResponse.json({ ok: false, error: 'Auth verification failed' }, { status: 403 });
+      }
+    } else {
+      // No token provided — reject unauthenticated session tracking
+      return NextResponse.json({ ok: false, error: 'Authentication required' }, { status: 401 });
+    }
+
     // Get real IP from Vercel headers
     const ip = req.headers.get('x-real-ip')
       || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -495,6 +513,19 @@ export async function POST(req) {
         if (body[key] !== undefined) updates[key] = body[key];
       }
       if (!Object.keys(updates).length) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+
+      // Validate result/profit consistency
+      if (updates.result !== undefined || updates.profit !== undefined) {
+        const result = updates.result;
+        const profit = updates.profit != null ? parseFloat(updates.profit) : null;
+        if (result === 'LOSS' && profit != null && profit > 0) {
+          return NextResponse.json({ error: 'LOSS result cannot have positive profit' }, { status: 400 });
+        }
+        if (result === 'WIN' && profit != null && profit < 0) {
+          return NextResponse.json({ error: 'WIN result cannot have negative profit' }, { status: 400 });
+        }
+      }
+
       updates.admin_edited_at = new Date().toISOString();
       updates.admin_edited_by = adminEmail;
       const { error } = await supabaseAdmin.from('picks').update(updates).eq('id', targetId);
@@ -542,6 +573,17 @@ export async function POST(req) {
     if (action === 'create_user') {
       if (!newEmail || !newPassword) {
         return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+      }
+      // Check for duplicate username before creating
+      if (newUsername) {
+        const { data: existingProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('username', newUsername)
+          .maybeSingle();
+        if (existingProfile) {
+          return NextResponse.json({ error: `Username "${newUsername}" is already taken` }, { status: 409 });
+        }
       }
       // Create the auth user via service role (admin API)
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({

@@ -69,8 +69,8 @@ function calcBetStatus(pick, event) {
 
   const awayAbbr     = (away.team?.abbreviation   || '').toUpperCase();
   const homeAbbr     = (home.team?.abbreviation   || '').toUpperCase();
-  const awayLastWord = (away.team?.displayName    || '').toUpperCase().split(' ').pop();
-  const homeLastWord = (home.team?.displayName    || '').toUpperCase().split(' ').pop();
+  const awayLastWord = (away.team?.displayName    || '').toUpperCase().split(' ').pop() || '';
+  const homeLastWord = (home.team?.displayName    || '').toUpperCase().split(' ').pop() || '';
 
   const betTypeLower = (pick.bet_type || '').toLowerCase();
   const pickTeamUp   = (pick.team     || '').toUpperCase();

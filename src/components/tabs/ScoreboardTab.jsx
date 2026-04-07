@@ -1167,10 +1167,13 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 : gameState.state === 'live' ? 'rgba(255,69,96,0.22)' : 'rgba(0,177,79,0.22)'}`,
               letterSpacing: '0.04em', flexShrink: 0, fontFamily: 'IBM Plex Mono, monospace',
             }}
-              title={event._closingLine ? 'Closing line — odds at game start' : undefined}
+              title={event._closingLine ? 'Closing line — odds at game start' : event._staleOdds ? 'Odds from cache — may be up to 15 min old' : undefined}
             >
               {event._closingLine ? 'CLOSE' : gameState.state === 'live' ? 'LIVE' : (odds.provider || 'ODDS')}
             </span>
+            {event._staleOdds && !event._closingLine && (
+              <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', opacity: 0.6 }} title="Odds cached — may be up to 15 min old">🕐</span>
+            )}
             {/* Moneyline: both sides — only show when we have the full pair */}
             {odds.awayOdds != null && odds.homeOdds != null && (
               <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
@@ -1804,6 +1807,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
   const [betSlipGame, setBetSlipGame] = useState(null); // { event, sport } | null
   const [realOddsLookup, setRealOddsLookup] = useState({}); // home_team → bookmaker game data
+  const [oddsStale, setOddsStale]           = useState(false); // true when odds are served from cache
 
   // Pick → Scoreboard highlight
   const [highlightedEventId, setHighlightedEventId] = useState(null);
@@ -1993,6 +1997,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         lookup[key] = game;
       });
       setRealOddsLookup(lookup);
+      setOddsStale(!!d.cached);
     } catch { /* fail silently — real odds are a bonus */ }
   }, []);
 
@@ -2242,6 +2247,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
       return {
         ...event,
+        _staleOdds: oddsStale,
         competitions: [
           {
             ...event.competitions[0],
@@ -2251,7 +2257,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         ],
       };
     });
-  }, [games, realOddsLookup]);
+  }, [games, realOddsLookup, oddsStale]);
 
   const filteredGames = enrichedGames.filter(e => {
     const state = getGameState(e).state;

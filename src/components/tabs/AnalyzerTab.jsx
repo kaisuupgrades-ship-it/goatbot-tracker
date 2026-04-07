@@ -172,7 +172,7 @@ function parseReport(text) {
       const bM = clean.match(/^[\d\-•›*]\s+(.+)/) || (clean.match(/^[A-Z]/) && !clean.match(/^[A-Z]{4,}/));
       const m  = clean.match(/^(?:[\d•\-›*]+\.?\s+)(.{10,})/);
       if (m) { factors.push(m[1].trim()); if (factors.length >= 5) break; }
-      else if (clean && !/^[A-Z\s:]{5,}$/.test(clean) && factors.length > 0 && clean.length < 5) break;
+      else if (clean && !/^[A-Z\s:]{5,}$/.test(clean) && factors.length > 0 && clean.length > 5) break;
     }
   }
   // Fallback: pull first 3 bullet/numbered lines anywhere in text
@@ -549,7 +549,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
   const { pick, conf, edge, odds, winProb, factors, sport } = parsed;
   const confScore = conf ? confToScore(conf) : null;
   const confColor = conf ? confToColor(conf) : '#FFB800';
-  const cs = CONF_STYLES[conf] || {};
+  const cs = CONF_STYLES[conf] || CONF_STYLES['MEDIUM'];
   const ts = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
   // Edge bar chart data

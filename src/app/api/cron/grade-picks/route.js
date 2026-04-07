@@ -48,7 +48,7 @@ async function fetchPGALeaderboard() {
     const event = events.find(e => e.status?.type?.completed) || events[0];
     if (!event) return null;
     const competitors = event.competitions?.[0]?.competitors || [];
-    return {
+    const leaderboard = {
       eventName: event.name || 'PGA Event',
       completed: !!event.status?.type?.completed,
       players: competitors.map(c => ({
@@ -57,6 +57,9 @@ async function fetchPGALeaderboard() {
         tied:     c.status?.position?.displayName?.startsWith('T') || false,
       })),
     };
+    // M-9: guard against missing completed flag
+    if (leaderboard.completed === undefined) return null;
+    return leaderboard;
   } catch {
     return null;
   }
@@ -73,10 +76,18 @@ function gradeGolfPick(playerName, betType, leaderboard) {
   if (!leaderboard.completed) return null;
 
   const nameNorm = (playerName || '').toLowerCase().replace(/[^a-z]/g, '');
-  const match = leaderboard.players.find(p =>
-    (p.name || '').toLowerCase().replace(/[^a-z]/g, '').includes(nameNorm) ||
-    nameNorm.includes((p.name || '').toLowerCase().replace(/[^a-z]/g, ''))
-  );
+  // Require minimum match length to avoid ambiguous short-name collisions
+  if (nameNorm.length < 4) return null; // name too short to match reliably
+  const match = leaderboard.players.find(p => {
+    const pNorm = (p.name || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!pNorm || pNorm.length < 4) return false;
+    // Prefer exact match over partial
+    if (pNorm === nameNorm) return true;
+    // Partial: only match if overlap is substantial (at least 5 chars)
+    const shorter = Math.min(pNorm.length, nameNorm.length);
+    if (shorter < 5) return false;
+    return pNorm.includes(nameNorm) || nameNorm.includes(pNorm);
+  });
   if (!match) return 'LOSS'; // Player not in event = loss
   return match.position === 1 ? 'WIN' : 'LOSS';
 }
@@ -242,7 +253,7 @@ export async function GET(req) {
   const groups = {};
   for (const pick of regularPicks) {
     const sport = (pick.sport || '').toLowerCase();
-    const supported = SPORT_PATHS[sport] || sport === 'soccer';
+    const supported = SPORT_PATHS[sport] || sport === 'soccer' || sport === 'other';
     if (!supported) continue;
     const key = `${sport}|${pick.date}`;
     if (!groups[key]) groups[key] = [];

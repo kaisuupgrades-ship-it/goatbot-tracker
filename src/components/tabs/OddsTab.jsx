@@ -204,8 +204,8 @@ function buildUnifiedPrompt(game) {
   const spr     = marketSpread(books);
   const total   = bestTotal(books);
 
-  const mlStr  = awayML != null && homeML != null ? `ML: ${away.split(' ').pop()} ${formatOdds(awayML)} / ${home.split(' ').pop()} ${formatOdds(homeML)}` : '';
-  const sprStr = spr.awayPoint != null ? `Spread: ${away.split(' ').pop()} ${spr.awayPoint > 0 ? '+' : ''}${spr.awayPoint} (${formatOdds(spr.awayPrice)}) / ${home.split(' ').pop()} ${spr.homePoint > 0 ? '+' : ''}${spr.homePoint} (${formatOdds(spr.homePrice)})` : '';
+  const mlStr  = awayML != null && homeML != null ? `ML: ${away?.split(' ')?.pop() || 'TBD'} ${formatOdds(awayML)} / ${home?.split(' ')?.pop() || 'TBD'} ${formatOdds(homeML)}` : '';
+  const sprStr = spr.awayPoint != null ? `Spread: ${away?.split(' ')?.pop() || 'TBD'} ${spr.awayPoint > 0 ? '+' : ''}${spr.awayPoint} (${formatOdds(spr.awayPrice)}) / ${home?.split(' ')?.pop() || 'TBD'} ${spr.homePoint > 0 ? '+' : ''}${spr.homePoint} (${formatOdds(spr.homePrice)})` : '';
   const totStr = total.line != null ? `O/U: ${total.line} (O ${formatOdds(total.overPrice)} / U ${formatOdds(total.underPrice)})` : '';
   const oddsStr = [mlStr, sprStr, totStr].filter(Boolean).join(' · ');
 
@@ -233,11 +233,11 @@ function GameOddsRow({ game, expanded, onToggle, onAnalyze }) {
   );
 
   // Split "City Nickname" → city + nickname
-  const awayParts = away.split(' ');
-  const awayNick  = awayParts.pop();
+  const awayParts = (away || '').split(' ');
+  const awayNick  = awayParts.pop() || 'TBD';
   const awayCity  = awayParts.join(' ');
-  const homeParts = home.split(' ');
-  const homeNick  = homeParts.pop();
+  const homeParts = (home || '').split(' ');
+  const homeNick  = homeParts.pop() || 'TBD';
   const homeCity  = homeParts.join(' ');
 
   const dimText = '#3e3e3e';

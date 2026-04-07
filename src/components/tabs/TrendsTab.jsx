@@ -145,8 +145,8 @@ function AskAnalyst({ user }) {
     if (!userId) { setRemaining(0); return; }
     fetch(`/api/trends?action=usage&userId=${encodeURIComponent(userId)}`)
       .then(r => r.json())
-      .then(d => setRemaining(d.remaining ?? 5))
-      .catch(() => setRemaining(5));
+      .then(d => setRemaining(d.remaining ?? null))
+      .catch(() => setRemaining(null));
   }, [userId]);
 
   async function ask() {

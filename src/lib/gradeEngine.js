@@ -206,8 +206,11 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
       if (total > line)      result = isOver  ? 'WIN' : isUnder ? 'LOSS' : null;
       else if (total < line) result = isUnder ? 'WIN' : isOver  ? 'LOSS' : null;
       else                   result = 'PUSH';
+    } else {
+      // line is 0 or missing — cannot grade this total bet
+      console.warn('[gradeEngine] Total bet has no line (line=0) for pick id:', pick.id, '— skipping');
+      return null;
     }
-    // No line → can't grade; return null
   }
 
   if (!result) return null;

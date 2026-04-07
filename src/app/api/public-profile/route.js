@@ -44,7 +44,7 @@ export async function GET(req) {
   // so the record shown in the header matches what's in Pick History.
   let picksQuery = supabase
     .from('picks')
-    .select('id, team, sport, bet_type, odds, units, result, notes, created_at, audit_status, is_public, contest_id')
+    .select('id, team, sport, bet_type, odds, units, result, profit, notes, created_at, audit_status, is_public, contest_id')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(100);
@@ -63,12 +63,15 @@ export async function GET(req) {
   const profile = profileRes.data;
   const allPicks = picksRes.data || [];
 
-  // Settled vs pending
-  const settled = allPicks.filter(p => ['WIN', 'LOSS', 'PUSH'].includes(p.result));
+  // Settled vs pending — sorted by created_at desc for correct streak direction
+  const settled = allPicks
+    .filter(p => ['WIN', 'LOSS', 'PUSH'].includes(p.result))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const pending = allPicks.filter(p => !p.result || p.result === 'PENDING');
 
   // Pending picks — owner gets full details; non-owners get only sport + timestamp
   // (blurred in UI). This prevents competitors from seeing bets before game time.
+  // Both views use the same underlying pending array so counts match.
   const pendingPicks = pending.map(p => isOwner ? {
     id:         p.id,
     team:       p.team,
@@ -80,16 +83,20 @@ export async function GET(req) {
     created_at: p.created_at,
   } : {
     id:         p.id,
-    sport:      p.sport,
+    sport:      p.sport || 'Other',
     created_at: p.created_at,
   });
 
-  // Compute profit per pick + aggregate stats
+  // Use the stored profit from DB (consistent with TrackerTab and admin panel).
+  // Skip picks with null odds from profit aggregation to avoid NaN in totals.
   let totalUnits = 0, wagered = 0;
   const settledWithProfit = settled.map(p => {
-    const profit = calcProfit(p.result, p.odds || -110, p.units || 1);
+    // Read profit directly from DB; fall back to calc only if DB profit is missing AND odds exist
+    const dbProfit = p.profit != null ? parseFloat(p.profit) : null;
+    const profit = dbProfit != null ? dbProfit
+      : (p.odds != null ? calcProfit(p.result, p.odds, p.units || 1) : null);
     if (p.result !== 'PUSH') wagered += (p.units || 1);
-    totalUnits += profit;
+    if (profit != null) totalUnits += profit;
     return {
       id:           p.id,
       team:         p.team,

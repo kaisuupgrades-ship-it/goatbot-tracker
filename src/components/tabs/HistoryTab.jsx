@@ -89,7 +89,7 @@ function useLiveScores(pendingPicks, user, isDemo, onGameFinal) {
             const displayClock = comp?.status?.displayClock || '';
             const period     = comp?.status?.period || 0;
 
-            const isFinal = ['STATUS_FINAL', 'STATUS_FULL_TIME', 'STATUS_END_PERIOD'].includes(statusName);
+            const isFinal = ['STATUS_FINAL', 'STATUS_FULL_TIME'].includes(statusName);
             const isLive  = statusState === 'in';
             const gameDateStr = event.date ? event.date.split('T')[0] : todayStr;
 
@@ -1050,7 +1050,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
 
   // ── Filtering & Sorting ──────────────────────────────────────────────────
 
-  const sports = ['ALL', ...Array.from(new Set(picks.map(p => p.sport)))];
+  const sports = ['ALL', ...Array.from(new Set(picks.map(p => p.sport || 'Other'))).filter(Boolean)];
 
   const filtered = picks
     .filter(p => filterResult === 'ALL' || p.result === filterResult)

@@ -43,7 +43,7 @@ export function validateContestEntry(pick, rules = {}) {
   if (rules.allowed_bet_types?.length) {
     const pickType = (pick.bet_type || '').toLowerCase();
     const allowed  = rules.allowed_bet_types.map(t => t.toLowerCase());
-    if (!allowed.some(a => pickType.includes(a) || a.includes(pickType))) {
+    if (!allowed.some(a => pickType === a)) {
       errors.push(`Bet type "${pick.bet_type}" is not allowed. Contest accepts: ${rules.allowed_bet_types.join(', ')}.`);
     }
   }
