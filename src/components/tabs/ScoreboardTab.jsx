@@ -2238,12 +2238,14 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         homeTeamOdds: {
           ...(existingOdds.homeTeamOdds || {}),
           moneyLine: homeH2h?.price ?? existingOdds.homeTeamOdds?.moneyLine ?? null,
-          spreadLine: sHome?.price ?? existingOdds.homeTeamOdds?.spreadLine ?? null,
+          // Do NOT fall back to ESPN's spreadLine — for MLB/NHL it contains ML prices, not run/puck line juice.
+          // BetSlipModal defaults to -110 when this is null, which is far better than ESPN's stale prices.
+          spreadLine: sHome?.price ?? null,
         },
         awayTeamOdds: {
           ...(existingOdds.awayTeamOdds || {}),
           moneyLine: awayH2h?.price ?? existingOdds.awayTeamOdds?.moneyLine ?? null,
-          spreadLine: sAway?.price ?? existingOdds.awayTeamOdds?.spreadLine ?? null,
+          spreadLine: sAway?.price ?? null,
         },
         overUnder: tOver?.point ?? tUnder?.point ?? existingOdds.overUnder ?? null,
         details: sHome?.point != null
