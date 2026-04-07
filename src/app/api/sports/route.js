@@ -159,17 +159,8 @@ export async function GET(req) {
   }
 
   try {
-    // Use endpoint override if the sport has a special primary endpoint
-    const effectiveEndpoint = SPORT_ENDPOINT_OVERRIDE[sport] || endpoint;
-    let path = `${sportPath}/${effectiveEndpoint}`;
-
-    // Golf leaderboard: ESPN requires the league as a query param at the top-level
-    // path, NOT as a sub-path — correct URL is golf/leaderboard?league=pga
-    // (NOT golf/pga/leaderboard?league=pga which 404s)
-    if (sport === 'golf' && effectiveEndpoint === 'leaderboard') {
-      const golfLeague = searchParams.get('league') || 'pga';
-      path = `golf/leaderboard?league=${golfLeague}`;
-    } else if (sport === 'golf' && endpoint === 'scorecard') {
+    // ── Golf scorecard: handle BEFORE effectiveEndpoint override (which always maps golf→leaderboard)
+    if (sport === 'golf' && endpoint === 'scorecard') {
       // Per-player scorecard: try multiple ESPN endpoints
       const golfLeague = searchParams.get('league') || 'pga';
       const athleteId  = searchParams.get('athleteId');
@@ -200,10 +191,20 @@ export async function GET(req) {
         console.warn('Golf player summary fallback failed:', err.message);
       }
 
-      // Endpoint 3: Try the main leaderboard and extract this player's linescores
+      // Endpoint 3: Try the main leaderboard AND past event endpoint
       try {
-        const lb = await espnFetch(`golf/leaderboard?league=${golfLeague}`);
-        const events = lb?.events || [];
+        // Try both current leaderboard and the specific event endpoint
+        const [lb, eventData] = await Promise.allSettled([
+          espnFetch(`golf/leaderboard?league=${golfLeague}`),
+          espnFetch(`golf/${golfLeague}/leaderboard/${eventId}`, ESPN_WEB_BASE).catch(() => null),
+        ]);
+        const lbData = lb.status === 'fulfilled' ? lb.value : null;
+        const evtData = eventData.status === 'fulfilled' ? eventData.value : null;
+        // Merge: use the event-specific data if available, otherwise current leaderboard
+        const events = [
+          ...(evtData?.events || []),
+          ...(lbData?.events || []),
+        ];
         for (const evt of events) {
           if (String(evt.id) !== String(eventId)) continue;
           const competitors = evt.competitions?.[0]?.competitors || [];
@@ -241,6 +242,16 @@ export async function GET(req) {
       }
 
       return NextResponse.json({ error: 'Scorecard not available for this player/event', rounds: [] }, { status: 200 });
+    }
+
+    // Use endpoint override if the sport has a special primary endpoint
+    const effectiveEndpoint = SPORT_ENDPOINT_OVERRIDE[sport] || endpoint;
+    let path = `${sportPath}/${effectiveEndpoint}`;
+
+    // Golf leaderboard: ESPN requires the league as a query param at the top-level
+    if (sport === 'golf' && effectiveEndpoint === 'leaderboard') {
+      const golfLeague = searchParams.get('league') || 'pga';
+      path = `golf/leaderboard?league=${golfLeague}`;
     } else if (sport === 'soccer') {
       // Soccer uses a dynamic league param — e.g. ?league=eng.1 for Premier League
       const soccerLeague = searchParams.get('league') || 'usa.1';
