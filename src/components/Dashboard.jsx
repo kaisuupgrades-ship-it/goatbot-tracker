@@ -238,6 +238,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
 
   // Global refresh: re-fetch picks from Supabase + run grading
   const [globalRefreshing, setGlobalRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(null);
   async function refreshAll() {
     if (isDemo || !user?.id || globalRefreshing) return;
     setGlobalRefreshing(true);
@@ -266,7 +267,10 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           else if (pushes > 0) { playGrade(); }
         }
       });
-    } catch { /* silent */ }
+    } catch (e) {
+      setRefreshError('Grade refresh failed — please try again.');
+      setTimeout(() => setRefreshError(null), 5000);
+    }
     finally { setGlobalRefreshing(false); }
   }
 
@@ -453,6 +457,18 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         initialRecipient={inboxRecipient}
         isDemo={isDemo}
       />
+
+      {/* Grade refresh error toast */}
+      {refreshError && (
+        <div style={{
+          position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--red, #ef4444)', color: '#fff', padding: '10px 20px',
+          borderRadius: '8px', zIndex: 1000, fontSize: '0.85rem', fontWeight: 600,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3)', whiteSpace: 'nowrap',
+        }}>
+          ⚠️ {refreshError}
+        </div>
+      )}
 
       {/* Support Chat Widget — bottom left, always visible */}
       {!isDemo && <SupportChatWidget user={currentUser} />}

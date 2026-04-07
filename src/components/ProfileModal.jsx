@@ -23,8 +23,9 @@ function msToReadable(ms) {
 
 function getTimeUntilAllowed(lastChangedAt, limitMs) {
   if (!lastChangedAt) return 0;
-  const elapsed = Date.now() - new Date(lastChangedAt).getTime();
-  return Math.max(0, limitMs - elapsed);
+  const lastMs = Date.parse(lastChangedAt); // always UTC for ISO 8601 strings from Supabase
+  if (isNaN(lastMs)) return 0;
+  return Math.max(0, limitMs - (Date.now() - lastMs));
 }
 
 // ── Avatar display helpers ──────────────────────────────────────────────────

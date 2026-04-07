@@ -89,7 +89,7 @@ function buildSportBreakdown(picks) {
   picks
     .filter(p => p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH')
     .forEach(p => {
-      const s = p.sport || 'Other';
+      const s = (p.sport || 'Other').toUpperCase();
       if (!map[s]) map[s] = { sport: s, wins: 0, losses: 0, units: 0 };
       if (p.result === 'WIN')  map[s].wins++;
       if (p.result === 'LOSS') map[s].losses++;

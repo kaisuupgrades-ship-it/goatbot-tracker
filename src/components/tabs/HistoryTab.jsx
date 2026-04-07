@@ -1050,11 +1050,11 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
 
   // ── Filtering & Sorting ──────────────────────────────────────────────────
 
-  const sports = ['ALL', ...Array.from(new Set(picks.map(p => p.sport || 'Other'))).filter(Boolean)];
+  const sports = ['ALL', ...Array.from(new Set(picks.map(p => (p.sport || 'Other').toUpperCase()))).filter(Boolean)];
 
   const filtered = picks
     .filter(p => filterResult === 'ALL' || p.result === filterResult)
-    .filter(p => filterSport === 'ALL' || p.sport === filterSport)
+    .filter(p => filterSport === 'ALL' || (p.sport || 'Other').toUpperCase() === filterSport)
     .filter(p => !filterContest || p.contest_entry)
     .sort((a, b) => {
       let av = a[sortField], bv = b[sortField];
@@ -1394,7 +1394,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
                         letterSpacing: '0.07em', color: '#60a5fa',
                         background: 'rgba(96,165,250,0.1)', padding: '2px 6px', borderRadius: '4px',
-                      }}>{pick.sport}</span>
+                      }}>{pick.sport || 'Other'}</span>
                       {pick.contest_entry && (
                         <span style={{
                           fontSize: '0.62rem', color: '#FFB800',
