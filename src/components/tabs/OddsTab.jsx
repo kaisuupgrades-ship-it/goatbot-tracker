@@ -102,77 +102,49 @@ function hasExtremeOdds(awayML, homeML) {
          (homeML != null && Math.abs(homeML) > 500);
 }
 
+// Preferred bookmaker order: DraftKings → FanDuel → BetMGM → first available.
+// DraftKings always offers the standard ±1.5 MLB run line and NHL puck line.
+const BOOK_PRIORITY = ['draftkings', 'fanduel', 'betmgm', 'williamhill_us', 'pointsbetus', 'bovada'];
+
+function preferredBook(bookmakers, marketKey) {
+  for (const key of BOOK_PRIORITY) {
+    const bk = bookmakers.find(b => b.key === key);
+    if (bk && bk.markets?.some(m => m.key === marketKey)) return bk;
+  }
+  return bookmakers.find(b => b.markets?.some(m => m.key === marketKey)) ?? null;
+}
+
 function bestOdds(bookmakers, outcomeName, marketKey) {
-  let best = null;
-  bookmakers.forEach(bk => {
-    const mkt = bk.markets?.find(m => m.key === marketKey);
-    const outcome = mkt?.outcomes?.find(o => o.name === outcomeName);
-    if (outcome?.price != null && (best === null || outcome.price > best)) best = outcome.price;
-  });
-  return best;
+  const bk = preferredBook(bookmakers, marketKey);
+  if (!bk) return null;
+  const mkt = bk.markets?.find(m => m.key === marketKey);
+  return mkt?.outcomes?.find(o => o.name === outcomeName)?.price ?? null;
 }
 
-// Get the market spread — both sides from the same book to prevent alt-line mixing.
-// Uses team name matching (not array index) to avoid direction flip on run lines / puck lines.
-// Selects the book whose juice is closest to standard (-110) — handles NBA close-to-even
-// spreads AND baseball/hockey run/puck lines where prices regularly hit ±200.
+// Get the spread from the preferred book, matched by team name to guarantee correct direction.
 function marketSpread(bookmakers, away, home) {
-  let best = null;
-  const juiceScore = (p1, p2) =>
-    Math.abs(Math.abs(p1) - 110) + Math.abs(Math.abs(p2) - 110);
-
-  for (const bk of bookmakers) {
-    const mkt = bk.markets?.find(m => m.key === 'spreads');
-    if (!mkt) continue;
-    const outcomes = mkt.outcomes || [];
-    if (outcomes.length < 2) continue;
-
-    // Match by team name so the away/home assignment is always correct regardless of
-    // the order the API returns outcomes. Fall back to index only if names aren't available.
-    const ao = away ? outcomes.find(o => o.name === away) : outcomes[0];
-    const ho = home ? outcomes.find(o => o.name === home) : outcomes[1];
-    if (!ao || !ho || ao.price == null || ho.price == null || ao.point == null) continue;
-
-    // Accept any valid American moneyline price (±100 to ±500).
-    // This covers NBA near-even spreads (~-110) AND MLB run lines / NHL puck lines (up to ±350).
-    if (Math.abs(ao.price) < 100 || Math.abs(ao.price) > 500) continue;
-    if (Math.abs(ho.price) < 100 || Math.abs(ho.price) > 500) continue;
-
-    const s = juiceScore(ao.price, ho.price);
-    if (!best || s < best.score) {
-      best = { awayPoint: ao.point, awayPrice: ao.price, homePoint: ho.point, homePrice: ho.price, score: s };
-    }
-  }
-
-  return best || { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
+  const bk = preferredBook(bookmakers, 'spreads');
+  if (!bk) return { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
+  const mkt = bk.markets?.find(m => m.key === 'spreads');
+  if (!mkt) return { awayPoint: null, awayPrice: null, homePoint: null, homePrice: null };
+  const ao = mkt.outcomes?.find(o => o.name === away);
+  const ho = mkt.outcomes?.find(o => o.name === home);
+  return {
+    awayPoint: ao?.point ?? null,
+    awayPrice: ao?.price ?? null,
+    homePoint: ho?.point ?? null,
+    homePrice: ho?.price ?? null,
+  };
 }
 
-// Best total line — picks the main line by selecting the book with juice closest to
-// standard (-110). Using "closest juice" instead of "highest point" prevents Pinnacle
-// alt-line totals (e.g. 8.0 on a 6-run game) from overriding the consensus main line.
 function bestTotal(bookmakers) {
-  let best = null;
-  const juiceScore = (p1, p2) =>
-    Math.abs(Math.abs(p1) - 110) + Math.abs(Math.abs(p2) - 110);
-
-  for (const bk of bookmakers) {
-    const mkt = bk.markets?.find(m => m.key === 'totals');
-    if (!mkt) continue;
-    const over  = mkt.outcomes?.find(o => o.name === 'Over');
-    const under = mkt.outcomes?.find(o => o.name === 'Under');
-    if (!over?.price || !under?.price || over.point == null) continue;
-    // Exclude nonsensical game totals (alt lines near 0, or absurd futures-style lines)
-    if (over.point < 3) continue;
-    // Require valid American odds range
-    if (Math.abs(over.price) < 100 || Math.abs(over.price) > 400) continue;
-    if (Math.abs(under.price) < 100 || Math.abs(under.price) > 400) continue;
-    const s = juiceScore(over.price, under.price);
-    if (!best || s < best.score) {
-      best = { line: over.point, overPrice: over.price, underPrice: under.price, score: s };
-    }
-  }
-
-  return best || { line: null, overPrice: null, underPrice: null };
+  const bk = preferredBook(bookmakers, 'totals');
+  if (!bk) return { line: null, overPrice: null, underPrice: null };
+  const mkt = bk.markets?.find(m => m.key === 'totals');
+  const over  = mkt?.outcomes?.find(o => o.name === 'Over');
+  const under = mkt?.outcomes?.find(o => o.name === 'Under');
+  if (!over?.point) return { line: null, overPrice: null, underPrice: null };
+  return { line: over.point, overPrice: over.price ?? null, underPrice: under?.price ?? null };
 }
 
 function buildUnifiedPrompt(game) {

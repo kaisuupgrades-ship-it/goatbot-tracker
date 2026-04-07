@@ -2172,70 +2172,39 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         return point >= lo && point <= hi;
       }
 
-      // Scan all bookmakers to find the best available data for each market.
-      // Skip any book whose prices fail validation — prevents +2500 garbage lines.
+      // Prefer DraftKings → FanDuel → BetMGM → first available.
+      // DraftKings always has the standard ±1.5 MLB run line and NHL puck line,
+      // and matching by team name guarantees correct spread direction.
       const books = realGame.bookmakers || [];
       const sportKey2 = realGame.sport_key || '';
+      const _BOOK_PRI = ['draftkings', 'fanduel', 'betmgm', 'williamhill_us', 'pointsbetus', 'bovada'];
 
-      // h2h: prefer a book with BOTH sides and valid prices
-      let h2h = null, homeH2h = null, awayH2h = null, h2hBook = null;
-      for (const bk of books) {
-        const mkt = bk.markets?.find(m => m.key === 'h2h');
-        if (!mkt) continue;
-        const ho = mkt.outcomes?.find(o => o.name === realGame.home_team);
-        const ao = mkt.outcomes?.find(o => o.name === realGame.away_team);
-        // Require valid prices — reject any book with crazy ML like +2500
-        const hoOk = ho && validML(ho.price);
-        const aoOk = ao && validML(ao.price);
-        if (hoOk && aoOk) { h2h = mkt; homeH2h = ho; awayH2h = ao; h2hBook = bk; break; }
-        // Partial: one valid side — keep as fallback, don't break
-        if (!h2h && (hoOk || aoOk)) {
-          h2h = mkt;
-          homeH2h = hoOk ? ho : null;
-          awayH2h = aoOk ? ao : null;
-          h2hBook = bk;
+      function preferredBk(marketKey) {
+        for (const key of _BOOK_PRI) {
+          const bk = books.find(b => b.key === key);
+          if (bk && bk.markets?.some(m => m.key === marketKey)) return bk;
         }
+        return books.find(b => b.markets?.some(m => m.key === marketKey)) || null;
       }
 
-      // spreads: prefer a book with both sides and valid juice
-      let spreads = null, sHome = null, sAway = null;
-      for (const bk of books) {
-        const mkt = bk.markets?.find(m => m.key === 'spreads');
-        if (!mkt) continue;
-        const ho = mkt.outcomes?.find(o => o.name === realGame.home_team);
-        const ao = mkt.outcomes?.find(o => o.name === realGame.away_team);
-        const hoOk = ho && validSpreadJuice(ho.price);
-        const aoOk = ao && validSpreadJuice(ao.price);
-        if (hoOk && aoOk) { spreads = mkt; sHome = ho; sAway = ao; break; }
-        if (!spreads && (hoOk || aoOk)) { spreads = mkt; sHome = hoOk ? ho : null; sAway = aoOk ? ao : null; }
-      }
+      const h2hBk  = preferredBk('h2h');
+      const spdBk  = preferredBk('spreads');
+      const totBk  = preferredBk('totals');
 
-      // Cross-market sanity: run/puck line odds must be directionally consistent with ML.
-      // Underdog (+points) paying for insurance → spread price must be lower than ML price.
-      // Favorite (-points) getting premium for harder cover → spread price must be higher.
-      // h2h and spreads can come from different books, so check again here.
-      if (sAway && awayH2h && sHome && homeH2h) {
-        let crossInvalid = false;
-        if (sAway.point > 0 && sAway.price >= awayH2h.price - 5) crossInvalid = true;
-        if (sAway.point < 0 && sAway.price <= awayH2h.price + 5) crossInvalid = true;
-        if (sHome.point > 0 && sHome.price >= homeH2h.price - 5) crossInvalid = true;
-        if (sHome.point < 0 && sHome.price <= homeH2h.price + 5) crossInvalid = true;
-        if (crossInvalid) { spreads = null; sHome = null; sAway = null; }
-      }
+      const h2hMkt = h2hBk?.markets?.find(m => m.key === 'h2h');
+      const spdMkt = spdBk?.markets?.find(m => m.key === 'spreads');
+      const totMkt = totBk?.markets?.find(m => m.key === 'totals');
 
-      // totals: prefer a book with both over+under and a realistic game total
-      let totals = null, tOver = null, tUnder = null;
-      for (const bk of books) {
-        const mkt = bk.markets?.find(m => m.key === 'totals');
-        if (!mkt) continue;
-        const ov = mkt.outcomes?.find(o => o.name === 'Over');
-        const un = mkt.outcomes?.find(o => o.name === 'Under');
-        const ptOk = validTotal(ov?.point ?? un?.point, sportKey2);
-        if (ov && un && ptOk) { totals = mkt; tOver = ov; tUnder = un; break; }
-        if (!totals && ptOk && (ov || un)) { totals = mkt; tOver = ov; tUnder = un; }
-      }
+      const rawHomeH2h = h2hMkt?.outcomes?.find(o => o.name === realGame.home_team) ?? null;
+      const rawAwayH2h = h2hMkt?.outcomes?.find(o => o.name === realGame.away_team) ?? null;
+      const homeH2h = rawHomeH2h && validML(rawHomeH2h.price) ? rawHomeH2h : null;
+      const awayH2h = rawAwayH2h && validML(rawAwayH2h.price) ? rawAwayH2h : null;
+      const sHome   = spdMkt?.outcomes?.find(o => o.name === realGame.home_team) ?? null;
+      const sAway   = spdMkt?.outcomes?.find(o => o.name === realGame.away_team) ?? null;
+      const tOver   = totMkt?.outcomes?.find(o => o.name === 'Over') ?? null;
+      const tUnder  = totMkt?.outcomes?.find(o => o.name === 'Under') ?? null;
 
-      const book = h2hBook || books[0];
+      const book = h2hBk || spdBk || totBk || books[0];
 
       const existingOdds = event.competitions?.[0]?.odds?.[0] || {};
       const mergedOdds = {
