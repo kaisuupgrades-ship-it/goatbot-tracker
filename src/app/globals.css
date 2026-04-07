@@ -48,7 +48,11 @@
 /* ── Reset & Base ──────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: 16px; }
+html {
+  font-size: 16px;
+  overflow-x: hidden;
+  max-width: 100%;
+}
 
 body {
   background: var(--bg-base);
@@ -57,6 +61,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 /* Numbers always in monospace */

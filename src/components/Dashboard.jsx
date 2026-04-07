@@ -347,7 +347,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
         <ServerJobBanner />
 
         {/* Tab content — all tabs stay mounted, hidden when inactive to preserve state */}
-        <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }} className="fade-up main-content">
+        <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.5rem' }} className="fade-up main-content">
           <div style={{ display: activeTab === 'tracker'    ? 'block' : 'none' }}><TrackerTab    picks={picks} user={user} /></div>
           <div style={{ display: activeTab === 'scoreboard' ? 'block' : 'none' }}>
             <ScoreboardTab
