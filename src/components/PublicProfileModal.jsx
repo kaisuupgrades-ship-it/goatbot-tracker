@@ -84,11 +84,20 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const [loadingPeople,  setLoadingPeople]  = useState(false);
   // Nested profile drill-in (click a follower/following to view their profile)
   const [viewingEntry,   setViewingEntry]   = useState(null);
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 600);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 600);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Fetch real profile data — pass auth token so API knows if we're the owner
   useEffect(() => {
     if (!userId) { setLoadingPicks(false); return; }
-    const qs = contestOnly ? `userId=${userId}&contestOnly=true` : `userId=${userId}`;
+    // Always fetch full profile — contest stats are derived client-side so the profile
+    // looks the same no matter which leaderboard the user was clicked from
+    const qs = `userId=${userId}`;
     (async () => {
       try {
         const headers = {};
@@ -191,20 +200,39 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const streakAbs  = Math.abs(streak);
   const streakType = streak > 0 ? 'WIN' : streak < 0 ? 'LOSS' : null;
 
+  // Contest stats — derived from settled picks with pick_type === 'contest'
+  const contestPicks   = settledPicks.filter(p => p.pick_type === 'contest');
+  const hasContestData = contestPicks.length > 0;
+  const cWins   = contestPicks.filter(p => p.result === 'WIN').length;
+  const cLosses = contestPicks.filter(p => p.result === 'LOSS').length;
+  const cTotal  = cWins + cLosses;
+  const cUnits  = contestPicks.reduce((s, p) => s + (p.profit || 0), 0);
+  const cRoi    = cTotal > 0 ? (cUnits / cTotal) * 100 : 0;
+  const cWinPct = cTotal > 0 ? ((cWins / cTotal) * 100).toFixed(1) : '—';
+
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 500, display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', padding: isMobile ? '0' : '1rem' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         style={{
           background: 'var(--bg-surface)', border: '1px solid var(--border)',
-          borderRadius: '16px', width: '100%', maxWidth: '680px', maxHeight: '90vh',
+          borderRadius: isMobile ? '16px 16px 0 0' : '16px',
+          width: '100%', maxWidth: isMobile ? '100%' : '680px',
+          maxHeight: isMobile ? '92vh' : '90vh',
           overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column',
           boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
         }}
         onClick={e => e.stopPropagation()}
       >
+        {/* Mobile drag handle — visual cue to tap backdrop or use Close button */}
+        {isMobile && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }} onClick={onClose}>
+            <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.2)' }} />
+          </div>
+        )}
+
         {/* Top accent bar — contest gets animated gold, standard gets a static subtle border */}
         {contestOnly && (
           <div style={{
@@ -229,14 +257,14 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
             {/* Left: avatar + name */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div style={{ borderRadius: '50%', boxShadow: '0 0 18px rgba(255,184,0,0.22)', display: 'inline-flex' }}>
-                <UserAvatar userId={userId} avatarUrl={avatar_url || profileData?.profile?.avatar_url} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={62} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 0', minWidth: 0 }}>
+              <div style={{ borderRadius: '50%', boxShadow: '0 0 18px rgba(255,184,0,0.22)', display: 'inline-flex', flexShrink: 0 }}>
+                <UserAvatar userId={userId} avatarUrl={avatar_url || profileData?.profile?.avatar_url} avatarEmoji={avatar_emoji} displayName={display_name} username={username} size={isMobile ? 50 : 62} />
               </div>
-              <div>
-                <div style={{ fontWeight: 900, fontSize: '1.15rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 900, fontSize: isMobile ? '1rem' : '1.15rem', color: 'var(--text-primary)', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {displayName}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
@@ -294,9 +322,9 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
               </div>
             </div>
 
-            {/* Right: action buttons + close */}
+            {/* Right: on desktop show all buttons; on mobile show only close (actions move below) */}
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-              {!isMe && currentUserId && (
+              {!isMobile && !isMe && currentUserId && (
                 <button onClick={toggleFollow} disabled={followLoading || !followCheckDone} style={{
                   padding: '5px 12px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700,
                   cursor: (followLoading || !followCheckDone) ? 'default' : 'pointer',
@@ -308,7 +336,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                   {!followCheckDone ? '…' : followLoading ? '…' : following ? '✓ Following' : '+ Follow'}
                 </button>
               )}
-              {!isMe && currentUserId && onOpenInbox && (
+              {!isMobile && !isMe && currentUserId && onOpenInbox && (
                 <button
                   onClick={() => { onClose(); onOpenInbox({ id: userId, username, display_name, avatar_emoji }); }}
                   style={{
@@ -320,32 +348,106 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                   💬 Message
                 </button>
               )}
-              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', padding: '4px', lineHeight: 1 }}>✕</button>
+              {/* Close — always visible, large touch target on mobile */}
+              <button
+                onClick={onClose}
+                style={{
+                  background: isMobile ? 'rgba(255,255,255,0.08)' : 'none',
+                  border: isMobile ? '1px solid rgba(255,255,255,0.15)' : 'none',
+                  color: 'var(--text-muted)', cursor: 'pointer',
+                  fontSize: '1.2rem', lineHeight: 1, borderRadius: '8px',
+                  minWidth: '44px', minHeight: '44px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >✕</button>
             </div>
           </div>
 
-          {/* Quick stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginTop: '1rem' }}>
-            {[
-              { label: 'Record',     value: `${displayWins}-${displayLosses}`,
-                color: displayWins > displayLosses ? 'var(--green)' : displayWins < displayLosses ? 'var(--red)' : 'var(--text-primary)',
-                sub: `${displayTotal} picks` },
-              { label: 'Win %',      value: winRate === '—' ? '—' : `${winRate}%`,
-                color: parseFloat(winRate) >= 55 ? 'var(--green)' : 'var(--text-primary)' },
-              { label: 'Units',      value: `${displayUnits >= 0 ? '+' : ''}${displayUnits.toFixed(1)}u`,
-                color: displayUnits >= 0 ? 'var(--green)' : 'var(--red)' },
-              { label: 'ROI',        value: `${displayRoi >= 0 ? '+' : ''}${displayRoi.toFixed(1)}%`,
-                color: displayRoi >= 0 ? 'var(--green)' : 'var(--red)' },
-              { label: 'Sharp Score', value: displaySharp.toFixed(1),
-                color: displaySharp >= 20 ? '#FFB800' : '#4ade80' },
-            ].map(s => (
-              <div key={s.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.6rem 0.75rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>{s.label}</div>
-                <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.95rem', fontWeight: 800, color: s.color }}>{s.value}</div>
-                {s.sub && <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '1px' }}>{s.sub}</div>}
+          {/* Mobile action buttons row — shown below name on small screens */}
+          {isMobile && !isMe && currentUserId && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+              <button onClick={toggleFollow} disabled={followLoading || !followCheckDone} style={{
+                flex: 1, padding: '8px 12px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700,
+                cursor: (followLoading || !followCheckDone) ? 'default' : 'pointer',
+                background: !followCheckDone ? 'rgba(255,255,255,0.05)' : following ? 'rgba(74,222,128,0.12)' : 'rgba(255,184,0,0.12)',
+                border: `1px solid ${!followCheckDone ? 'rgba(255,255,255,0.1)' : following ? 'rgba(74,222,128,0.4)' : 'rgba(255,184,0,0.4)'}`,
+                color: !followCheckDone ? '#666' : following ? '#4ade80' : 'var(--gold)', transition: 'all 0.15s',
+                opacity: followLoading ? 0.6 : 1,
+              }}>
+                {!followCheckDone ? '…' : followLoading ? '…' : following ? '✓ Following' : '+ Follow'}
+              </button>
+              {onOpenInbox && (
+                <button
+                  onClick={() => { onClose(); onOpenInbox({ id: userId, username, display_name, avatar_emoji }); }}
+                  style={{
+                    flex: 1, padding: '8px 12px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700,
+                    background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)',
+                    color: '#60a5fa', cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  💬 Message
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Quick stats row — Overall */}
+          <div style={{ marginTop: '0.75rem' }}>
+            {hasContestData && (
+              <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px', fontWeight: 700 }}>
+                Overall
               </div>
-            ))}
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(5, 1fr)', gap: '6px' }}>
+              {[
+                { label: 'Record',     value: `${displayWins}-${displayLosses}`,
+                  color: displayWins > displayLosses ? 'var(--green)' : displayWins < displayLosses ? 'var(--red)' : 'var(--text-primary)',
+                  sub: `${displayTotal} picks` },
+                { label: 'Win %',      value: winRate === '—' ? '—' : `${winRate}%`,
+                  color: parseFloat(winRate) >= 55 ? 'var(--green)' : 'var(--text-primary)' },
+                { label: 'Units',      value: `${displayUnits >= 0 ? '+' : ''}${displayUnits.toFixed(1)}u`,
+                  color: displayUnits >= 0 ? 'var(--green)' : 'var(--red)' },
+                { label: 'ROI',        value: `${displayRoi >= 0 ? '+' : ''}${displayRoi.toFixed(1)}%`,
+                  color: displayRoi >= 0 ? 'var(--green)' : 'var(--red)' },
+                { label: 'Sharp',      value: displaySharp.toFixed(1),
+                  color: displaySharp >= 20 ? '#FFB800' : '#4ade80' },
+              ].map(s => (
+                <div key={s.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.55rem 0.5rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '3px' }}>{s.label}</div>
+                  <div style={{ fontFamily: 'IBM Plex Mono', fontSize: isMobile ? '0.82rem' : '0.93rem', fontWeight: 800, color: s.color }}>{s.value}</div>
+                  {s.sub && <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '1px' }}>{s.sub}</div>}
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* Contest stats row — only shown when user has contest picks */}
+          {hasContestData && (
+            <div style={{ marginTop: '8px' }}>
+              <div style={{ fontSize: '0.6rem', color: '#FFB800', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span>🏆 Contest</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)', gap: '6px' }}>
+                {[
+                  { label: 'Record', value: `${cWins}-${cLosses}`,
+                    color: cWins > cLosses ? 'var(--green)' : cWins < cLosses ? 'var(--red)' : 'var(--text-primary)',
+                    sub: `${cTotal} picks` },
+                  { label: 'Win %',  value: cWinPct === '—' ? '—' : `${cWinPct}%`,
+                    color: parseFloat(cWinPct) >= 55 ? 'var(--green)' : 'var(--text-primary)' },
+                  { label: 'Units',  value: `${cUnits >= 0 ? '+' : ''}${cUnits.toFixed(1)}u`,
+                    color: cUnits >= 0 ? 'var(--green)' : 'var(--red)' },
+                  { label: 'ROI',    value: `${cRoi >= 0 ? '+' : ''}${cRoi.toFixed(1)}%`,
+                    color: cRoi >= 0 ? 'var(--green)' : 'var(--red)' },
+                ].map(s => (
+                  <div key={s.label} style={{ background: 'rgba(255,184,0,0.05)', border: '1px solid rgba(255,184,0,0.2)', borderRadius: '8px', padding: '0.55rem 0.5rem', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.55rem', color: 'rgba(255,184,0,0.6)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '3px' }}>{s.label}</div>
+                    <div style={{ fontFamily: 'IBM Plex Mono', fontSize: isMobile ? '0.82rem' : '0.93rem', fontWeight: 800, color: s.color }}>{s.value}</div>
+                    {s.sub && <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '1px' }}>{s.sub}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Section tabs */}
@@ -654,19 +756,29 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '0.65rem 1.5rem', borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ padding: '0.55rem 1rem', borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
           <span style={{ fontSize: '0.7rem' }}>🔒</span>
-          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-            {contestOnly ? 'Showing contest picks only.' : isMe ? 'Your pending picks are visible only to you.' : 'Pending picks are blurred until settled.'} Only public picks are shown.
+          <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', flex: 1 }}>
+            {isMe ? 'Your pending picks are visible only to you.' : 'Pending picks are blurred until settled.'} Only public picks are shown.
           </span>
           {/* For own profile: quick inbox link */}
           {isMe && onOpenInbox && (
             <button onClick={() => { onClose(); onOpenInbox(); }} style={{
-              marginLeft: 'auto', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
+              background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)',
               borderRadius: '6px', color: '#60a5fa', fontSize: '0.7rem', fontWeight: 600,
-              padding: '3px 10px', cursor: 'pointer',
+              padding: '3px 10px', cursor: 'pointer', flexShrink: 0,
             }}>
               💬 Open Inbox
+            </button>
+          )}
+          {/* Mobile close button in footer — easy to tap */}
+          {isMobile && (
+            <button onClick={onClose} style={{
+              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600,
+              padding: '6px 14px', cursor: 'pointer', flexShrink: 0,
+            }}>
+              Close
             </button>
           )}
         </div>
