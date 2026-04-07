@@ -82,11 +82,44 @@ export function parseLineFromNotes(notes) {
 }
 
 /**
+ * Extract spread/total line embedded in the team name field.
+ * "UConn Huskies +6.5"  → 6.5
+ * "Detroit Tigers -1.5"  → -1.5
+ * "Michigan -6.5"        → -6.5
+ * "Over 8.5"             → 8.5
+ * "Cowboys +3"           → 3
+ */
+export function parseLineFromTeam(team) {
+  if (!team) return null;
+  // Match +/- number at the end or after team name: "Team Name +6.5" or "Team +3"
+  const m = team.match(/[+-]\d+(?:\.\d+)?(?:\s*$)/);
+  if (m) return parseFloat(m[0]);
+  // Match "Over/Under X.X" patterns
+  const m2 = team.match(/(?:over|under|o|u)\s*(\d+(?:\.\d+)?)/i);
+  if (m2) return parseFloat(m2[1]);
+  return null;
+}
+
+/**
+ * Strip spread/line numbers from team name for cleaner ESPN matching.
+ * "UConn Huskies +6.5" → "UConn Huskies"
+ * "Detroit Tigers -1.5" → "Detroit Tigers"
+ */
+export function stripLineFromTeam(team) {
+  if (!team) return team;
+  return team
+    .replace(/\s*[+-]\d+(?:\.\d+)?\s*$/, '')  // trailing "+6.5" or "-1.5"
+    .replace(/\s+(?:ML|ml|Ml)\s*$/, '')        // trailing "ML"
+    .trim();
+}
+
+/**
  * Does this ESPN game match the pick's game?
  * Handles normal team names AND "ILL vs UCONN" style team fields.
  */
 export function pickMatchesGame(pick, homeTeamName, awayTeamName) {
-  const teamField = pick.team || '';
+  // Strip embedded spread/line numbers before matching: "UConn Huskies +6.5" → "UConn Huskies"
+  const teamField = stripLineFromTeam(pick.team || '');
 
   if (isMatchupString(teamField)) {
     // Both sides of the matchup field need to match the ESPN game
@@ -166,11 +199,15 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
   const betType = (pick.bet_type || 'Moneyline').toLowerCase();
   const pickSide = (pick.side || '').toLowerCase(); // explicit side field
 
-  // Resolve line: stored column → parse from notes → 0
-  const line = parseFloat(pick.line ?? parseLineFromNotes(pick.notes) ?? 0);
+  // Resolve line: stored column → parse from team name → parse from notes → 0
+  const line = parseFloat(pick.line ?? parseLineFromTeam(pick.team) ?? parseLineFromNotes(pick.notes) ?? 0);
 
   const total = homeScore + awayScore;
-  const side  = determineSide(pick, homeTeamName, awayTeamName);
+
+  // For side detection, strip the line number from team name first so "UConn Huskies +6.5"
+  // matches against ESPN's "UConn Huskies" cleanly.
+  const cleanPick = { ...pick, team: stripLineFromTeam(pick.team) };
+  const side  = determineSide(cleanPick, homeTeamName, awayTeamName);
 
   let result = null;
 
@@ -353,22 +390,4 @@ export function gradePicksAgainstScoreboard(picks, scoreboard) {
       if (!pickMatchesGame(pick, homeTeamName, awayTeamName)) continue;
 
       const gradeResult = gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore);
-      if (!gradeResult) break; // game matched but couldn't grade (e.g. no line) — stop searching
-
-      results.push({
-        id:        pick.id,
-        user_id:   pick.user_id,
-        result:    gradeResult.result,
-        profit:    gradeResult.profit,
-        home_score: homeScore,
-        away_score: awayScore,
-        home_team:  homeTeamName,
-        away_team:  awayTeamName,
-        contest_entry: pick.contest_entry,
-      });
-      break; // matched — move to next pick
-    }
-  }
-
-  return results;
-}
+      if (

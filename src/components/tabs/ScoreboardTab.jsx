@@ -1038,21 +1038,22 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                 {truncBroadcast(broadcast, 36)}
               </span>
             )}
-            {/* ＋ Bet button */}
+            {/* ＋ Bet button — prominent CTA */}
             <button
               onClick={e => { e.stopPropagation(); onAddBet?.(event, sport); }}
               title="Add a bet on this game"
               style={{
-                background: 'rgba(0,212,139,0.10)', border: '1px solid rgba(0,212,139,0.25)',
-                borderRadius: '5px', cursor: 'pointer', padding: '2px 7px',
-                fontSize: '0.64rem', fontWeight: 800, lineHeight: 1.4, flexShrink: 0,
+                background: 'rgba(0,212,139,0.15)', border: '1.5px solid rgba(0,212,139,0.4)',
+                borderRadius: '6px', cursor: 'pointer', padding: '4px 12px',
+                fontSize: '0.78rem', fontWeight: 800, lineHeight: 1.4, flexShrink: 0,
                 color: 'var(--green)', fontFamily: 'inherit',
-                transition: 'all 0.12s',
+                transition: 'all 0.15s',
+                letterSpacing: '0.02em',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.2)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.5)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.10)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.25)'; }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.28)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.6)'; e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(0,212,139,0.2)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.15)'; e.currentTarget.style.borderColor = 'rgba(0,212,139,0.4)'; e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
             >
-              ＋ Bet
+              + Bet
             </button>
 
             {/* Star button */}
@@ -1231,6 +1232,26 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           </div>
         )}
       </div>
+
+      {/* ── Quick Add Pick bar — full-width bottom CTA ── */}
+      {!suppressHeader && (
+        <button
+          onClick={e => { e.stopPropagation(); onAddBet?.(event, sport); }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            width: '100%', padding: '7px 0',
+            background: 'rgba(0,212,139,0.06)', borderTop: '1px solid rgba(0,212,139,0.12)',
+            border: 'none', borderTop: '1px solid rgba(0,212,139,0.12)',
+            cursor: 'pointer', transition: 'all 0.15s',
+            color: 'var(--green)', fontSize: '0.76rem', fontWeight: 700,
+            fontFamily: 'inherit', letterSpacing: '0.02em',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.14)'; e.currentTarget.style.color = '#00f0a0'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,139,0.06)'; e.currentTarget.style.color = 'var(--green)'; }}
+        >
+          <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Add Pick
+        </button>
+      )}
 
       {/* ── Expanded panel ────────────────────────────── */}
       {isExpanded && (
@@ -2776,70 +2797,4 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                               background: 'var(--bg-elevated)', borderRadius: '7px',
                               border: '1px solid var(--border)',
                               borderLeft: `3px solid ${article.isInjury ? '#f87171' : '#E31937'}`,
-                              padding: '0.45rem 0.6rem',
-                              transition: 'background 0.12s',
-                            }}
-                              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-overlay)'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                            >
-                              {article.team && (
-                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                  {article.team}
-                                </div>
-                              )}
-                              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35, marginBottom: '2px' }}>
-                                {article.headline}
-                              </div>
-                              {article.description && (
-                                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                  {article.description}
-                                </div>
-                              )}
-                              {dateStr && (
-                                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '3px', opacity: 0.65 }}>
-                                  {ageHours < 6 ? '🔴 ' : ageHours < 24 ? '🟡 ' : ''}{dateStr}
-                                </div>
-                              )}
-                            </div>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {injuryPlayers.length === 0 && injuryArticles.length === 0 && !injuryLoading && (
-                  <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '1.4rem', marginBottom: '6px', opacity: 0.4 }}>🏥</div>
-                    <div style={{ fontSize: '0.75rem' }}>No injury data found</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-
-    {/* ── Bet Slip Modal ─────────────────────────────────────────────────── */}
-    {betSlipGame && (() => {
-      // Events are pre-enriched via enrichedGames — single source of truth, no separate merge needed
-      const { away, home } = getCompetitors(betSlipGame.event);
-      const odds = getOdds(betSlipGame.event);
-      return (
-        <BetSlipModal
-          game={{ away, home, odds, date: betSlipGame.event?.date }}
-          sport={betSlipGame.sport}
-          user={user}
-          picks={picks}
-          setPicks={setPicks}
-          isDemo={isDemo}
-          onAnalyze={onAnalyze}
-          onClose={() => setBetSlipGame(null)}
-        />
-      );
-    })()}
-    </>
-  );
-}
+           

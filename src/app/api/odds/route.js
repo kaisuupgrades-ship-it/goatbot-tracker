@@ -26,12 +26,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// L2: Supabase TTL — 15 min during off-peak, 5 min during likely game windows
+// L2: Supabase TTL — 10 min during off-peak, 2 min during likely game windows
+// With 20K plan we can afford faster refresh (~300 calls/day at 2min during 10h game window)
 function getOddsCacheTTL() {
   const hour = new Date().getUTCHours(); // UTC
   // US game windows: ~17:00–04:00 UTC (noon–midnight ET)
   const isGameWindow = hour >= 17 || hour <= 4;
-  return isGameWindow ? 5 * 60 * 1000 : 15 * 60 * 1000;
+  return isGameWindow ? 2 * 60 * 1000 : 10 * 60 * 1000;
 }
 
 async function getSupabaseCache(sportKey) {
@@ -61,7 +62,7 @@ async function setSupabaseCache(sportKey, result) {
 // L1: In-process memory cache (warm instances only — keeps latency low when
 // the same serverless instance handles back-to-back requests within 5 min)
 const memCache = new Map();
-const MEM_TTL  = 5 * 60 * 1000;
+const MEM_TTL  = 2 * 60 * 1000; // 2 min — matches L2 game-window TTL
 
 function getMemCache(key) {
   const e = memCache.get(key);
@@ -321,6 +322,62 @@ function enrichWithPinnacle(events, pinnacleGames) {
   });
 }
 
+// ── ML vs Spread sanity check ─────────────────────────────────────────────────
+// If a team is +1.5 (underdog on spread), their spread odds should be MORE negative
+// (worse payout) than their ML — because getting 1.5 points makes them more likely to cover.
+// If the spread shows BETTER odds than ML for the same direction, the data is stale/wrong.
+// Similarly for -1.5 (favorite): their spread odds should be MORE positive than ML.
+function sanitizeOddsConsistency(events) {
+  if (!Array.isArray(events)) return events;
+
+  return events.map(event => {
+    const bookmakers = event.bookmakers?.map(bk => {
+      const h2h     = bk.markets?.find(m => m.key === 'h2h');
+      const spreads = bk.markets?.find(m => m.key === 'spreads');
+      if (!h2h || !spreads) return bk;
+
+      const homeMLOut = h2h.outcomes?.find(o => o.name === event.home_team);
+      const awayMLOut = h2h.outcomes?.find(o => o.name === event.away_team);
+      const homeSprOut = spreads.outcomes?.find(o => o.name === event.home_team);
+      const awaySprOut = spreads.outcomes?.find(o => o.name === event.away_team);
+
+      if (!homeMLOut?.price || !awayMLOut?.price || !homeSprOut?.price || !awaySprOut?.price) return bk;
+
+      // Check each side: underdog getting +points should have worse odds than their ML
+      let invalid = false;
+
+      // Away team check
+      if (awaySprOut.point > 0) {
+        // Underdog getting points: spread odds should be worse (more negative) than ML
+        if (awaySprOut.price > awayMLOut.price + 15) invalid = true;
+      } else if (awaySprOut.point < 0) {
+        // Favorite giving points: spread odds should be better (more positive) than ML
+        if (awaySprOut.price < awayMLOut.price - 15) invalid = true;
+      }
+
+      // Home team check
+      if (homeSprOut.point > 0) {
+        if (homeSprOut.price > homeMLOut.price + 15) invalid = true;
+      } else if (homeSprOut.point < 0) {
+        if (homeSprOut.price < homeMLOut.price - 15) invalid = true;
+      }
+
+      if (invalid) {
+        // Remove the inconsistent spread market from this bookmaker
+        console.warn(`[odds] Inconsistent ML/spread for ${bk.title} on ${event.away_team} @ ${event.home_team}: ML=${awayMLOut.price}/${homeMLOut.price}, Spread=${awaySprOut.point}@${awaySprOut.price}/${homeSprOut.point}@${homeSprOut.price}`);
+        return {
+          ...bk,
+          markets: bk.markets.filter(m => m.key !== 'spreads'),
+          _spreadRemoved: 'inconsistent_with_ml',
+        };
+      }
+      return bk;
+    });
+
+    return { ...event, bookmakers };
+  });
+}
+
 // ── The Odds API (primary) ────────────────────────────────────────────────────
 async function fetchFromTheOddsAPI(sportKey) {
   const apiKey = SPORT_KEYS[sportKey];
@@ -455,6 +512,11 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const sportKey = (searchParams.get('sport') || 'mlb').toLowerCase();
 
+  // ?live=1 — called by ScoreboardTab when in-play games are active.
+  // Bypasses normal cache, uses a 30-second TTL matching The Odds API update frequency.
+  // This costs quota but live odds are moving fast — stale data causes logical impossibilities.
+  const isLive = searchParams.get('live') === '1';
+
   if (!THE_ODDS_KEY && !LEGACY_KEY) {
     return NextResponse.json({
       error: 'No odds API key configured',
@@ -464,20 +526,29 @@ export async function GET(req) {
     }, { status: 200 });
   }
 
-  const cacheKey = sportKey;
+  // Live path: use a separate short-TTL cache so live requests don't pollute pre-game cache
+  const cacheKey = isLive ? `${sportKey}_live` : sportKey;
+  const LIVE_TTL = 30 * 1000; // 30s — matches The Odds API live update frequency
 
-  // L1: check in-process memory cache first (fastest — zero network)
+  // L1 memory cache check
   const memHit = getMemCache(cacheKey);
-  if (memHit) return NextResponse.json({ ...memHit, cached: true });
-
-  // L2: check Supabase persistent cache (shared across all serverless instances)
-  const sbHit = await getSupabaseCache(sportKey);
-  if (sbHit) {
-    setMemCache(cacheKey, sbHit); // warm L1 for this instance
-    return NextResponse.json({ ...sbHit, cached: true });
+  if (memHit) {
+    // For live requests, respect the tighter 30s TTL within the L1 entry
+    if (!isLive || (Date.now() - (memCache.get(cacheKey)?.time || 0)) < LIVE_TTL) {
+      return NextResponse.json({ ...memHit, cached: true, liveMode: isLive });
+    }
   }
 
-  // Cache miss — fetch live data
+  // L2: Supabase persistent cache (skip for live requests — too slow for 30s window)
+  if (!isLive) {
+    const sbHit = await getSupabaseCache(sportKey);
+    if (sbHit) {
+      setMemCache(cacheKey, sbHit); // warm L1 for this instance
+      return NextResponse.json({ ...sbHit, cached: true });
+    }
+  }
+
+  // Cache miss (or live bypass) — fetch live data
   // Try The Odds API + Pinnacle in parallel (Pinnacle is free, adds sharp reference line)
   if (THE_ODDS_KEY) {
     try {
@@ -491,7 +562,10 @@ export async function GET(req) {
       const pinnacleUnavailable = pinnacleResult.status !== 'fulfilled';
       if (pinnacleUnavailable) console.warn('[/api/odds] Pinnacle unavailable:', pinnacleResult.reason?.message);
       // Enrich each event with Pinnacle line + suspectOdds flag
-      if (oddsResult?.data) oddsResult.data = enrichWithPinnacle(oddsResult.data, pinnacleGames);
+      if (oddsResult?.data) {
+        oddsResult.data = sanitizeOddsConsistency(oddsResult.data);
+        oddsResult.data = enrichWithPinnacle(oddsResult.data, pinnacleGames);
+      }
       oddsResult.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
       oddsResult.pinnacleUnavailable = pinnacleUnavailable;
       // Only cache if we got actual data back (0 games is valid off-season, errors are not)
@@ -516,10 +590,12 @@ export async function GET(req) {
       const result = legacyResult.value;
       const pinnacleGames = pinnacleResult.status === 'fulfilled' ? pinnacleResult.value : null;
       if (pinnacleResult.status !== 'fulfilled') console.warn('[/api/odds] Pinnacle unavailable (legacy path):', pinnacleResult.reason?.message);
-      if (result?.data) result.data = enrichWithPinnacle(result.data, pinnacleGames);
+      if (result?.data) {
+        result.data = sanitizeOddsConsistency(result.data);
+        result.data = enrichWithPinnacle(result.data, pinnacleGames);
+      }
       result.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
       result.pinnacleUnavailable = pinnacleResult.status !== 'fulfilled';
-      // Only cache successful responses with actual data — never cache errors or empty fallbacks
       if (result?.data?.length > 0) {
         setMemCache(cacheKey, result);
         await setSupabaseCache(sportKey, result);

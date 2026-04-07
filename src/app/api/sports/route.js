@@ -6,6 +6,10 @@ export const maxDuration = 15;
 const ESPN_BASE      = 'https://site.api.espn.com/apis/site/v2/sports';
 const ESPN_WEB_BASE  = 'https://site.web.api.espn.com/apis/v2/sports';
 
+// The Odds API (free /scores endpoint — doesn't count against quota)
+const THE_ODDS_KEY   = process.env.THE_ODDS_API_KEY;
+const THE_ODDS_BASE  = 'https://api.the-odds-api.com/v4';
+
 const SPORT_PATHS = {
   mlb:    'baseball/mlb',
   nfl:    'football/nfl',
@@ -22,6 +26,18 @@ const SPORT_PATHS = {
   golf:   'golf/pga',
 };
 
+// The Odds API sport keys (for /scores enrichment)
+const ODDS_API_SPORTS = {
+  mlb:   'baseball_mlb',
+  nfl:   'americanfootball_nfl',
+  nba:   'basketball_nba',
+  nhl:   'icehockey_nhl',
+  ncaaf: 'americanfootball_ncaaf',
+  ncaab: 'basketball_ncaab',
+  mls:   'soccer_usa_mls',
+  ufc:   'mma_mixed_martial_arts',
+};
+
 // Sports that use a non-standard endpoint (not /scoreboard)
 const SPORT_ENDPOINT_OVERRIDE = {
   golf: 'leaderboard', // PGA uses /leaderboard?league=pga, not /scoreboard
@@ -29,7 +45,7 @@ const SPORT_ENDPOINT_OVERRIDE = {
 
 // Simple in-memory cache (resets on server restart)
 const cache = new Map();
-const CACHE_TTL = 20 * 1000; // 20 seconds — fast enough for near-live scores
+const CACHE_TTL = 15 * 1000; // 15 seconds — leveraging 20K plan for faster updates
 
 function getCached(key) {
   const entry = cache.get(key);
@@ -40,6 +56,80 @@ function getCached(key) {
 
 function setCache(key, data) {
   cache.set(key, { data, time: Date.now() });
+}
+
+// ── The Odds API scores (FREE — no quota cost) ──────────────────────────────
+// Fetches live scores from The Odds API to enrich ESPN data with event_id
+// (which directly links to /api/odds events for perfect odds-to-game matching)
+const scoresCache = new Map();
+const SCORES_TTL  = 30 * 1000; // 30 seconds — matches their update frequency
+
+async function fetchOddsApiScores(sport) {
+  const sportKey = ODDS_API_SPORTS[sport];
+  if (!sportKey || !THE_ODDS_KEY) return null;
+
+  const cacheKey = `oa_scores_${sport}`;
+  const cached = scoresCache.get(cacheKey);
+  if (cached && Date.now() - cached.time < SCORES_TTL) return cached.data;
+
+  try {
+    const url = `${THE_ODDS_BASE}/sports/${sportKey}/scores/?apiKey=${THE_ODDS_KEY}&daysFrom=1`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const events = await res.json();
+    if (!Array.isArray(events)) return null;
+    scoresCache.set(cacheKey, { data: events, time: Date.now() });
+    return events;
+  } catch {
+    return null;
+  }
+}
+
+function normTeamName(name) {
+  return (name || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function teamNamesMatch(a, b) {
+  const na = normTeamName(a), nb = normTeamName(b);
+  if (na === nb) return true;
+  const wordsA = na.split(' '), wordsB = nb.split(' ');
+  const lastA = wordsA[wordsA.length - 1], lastB = wordsB[wordsB.length - 1];
+  if (lastA && lastA === lastB && lastA.length > 3) return true;
+  return (na.includes(lastB) && lastB.length > 4) || (nb.includes(lastA) && lastA.length > 4);
+}
+
+// Enrich ESPN events with The Odds API event_id + live scores
+function enrichWithOddsApiScores(espnData, oddsApiScores) {
+  if (!oddsApiScores?.length || !espnData?.events?.length) return espnData;
+
+  const enrichedEvents = espnData.events.map(ev => {
+    const comp = ev.competitions?.[0];
+    if (!comp) return ev;
+
+    const home = comp.competitors?.find(c => c.homeAway === 'home');
+    const away = comp.competitors?.find(c => c.homeAway === 'away');
+    if (!home || !away) return ev;
+
+    const homeName = home.team?.displayName || home.team?.shortDisplayName || '';
+    const awayName = away.team?.displayName || away.team?.shortDisplayName || '';
+
+    // Find matching Odds API event
+    const match = oddsApiScores.find(oa =>
+      teamNamesMatch(oa.home_team, homeName) && teamNamesMatch(oa.away_team, awayName)
+    );
+
+    if (!match) return ev;
+
+    return {
+      ...ev,
+      odds_api_event_id:  match.id,           // Links to /api/odds events
+      odds_api_completed: match.completed,
+      odds_api_scores:    match.scores || null,
+      odds_api_updated:   match.last_update || null,
+    };
+  });
+
+  return { ...espnData, events: enrichedEvents };
 }
 
 async function espnFetch(path, base = ESPN_BASE) {
@@ -157,6 +247,19 @@ export async function GET(req) {
       path = `soccer/${soccerLeague}/scoreboard`;
     } else if (endpoint === 'scoreboard' && date) {
       path += `?dates=${date}`;
+    }
+
+    // For scoreboard requests: fetch ESPN + Odds API scores in parallel
+    // Odds API scores are FREE (no quota cost) and give us event_id for odds linking
+    if (effectiveEndpoint === 'scoreboard' || effectiveEndpoint === 'leaderboard') {
+      const [espnData, oddsApiScores] = await Promise.all([
+        espnFetch(path),
+        (effectiveEndpoint === 'scoreboard') ? fetchOddsApiScores(sport) : Promise.resolve(null),
+      ]);
+
+      // Enrich ESPN data with Odds API event IDs
+      const enriched = oddsApiScores ? enrichWithOddsApiScores(espnData, oddsApiScores) : espnData;
+      return NextResponse.json({ ...enriched, _oddsApiConnected: !!oddsApiScores?.length });
     }
 
     const data = await espnFetch(path);

@@ -1117,7 +1117,15 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
           <button className="btn-ghost" onClick={() => setContestForm(!contestForm)} style={{ fontSize: '0.8rem' }}>
             ⚙️ Contest Settings
           </button>
-          <button className="btn-gold" onClick={addMode ? cancelAdd : openAddPick}>
+          <button
+            className={addMode ? 'btn-ghost' : 'btn-gold'}
+            onClick={addMode ? cancelAdd : openAddPick}
+            style={addMode ? { fontSize: '0.85rem' } : {
+              fontSize: '0.92rem', padding: '0.6rem 1.4rem',
+              background: 'linear-gradient(135deg, #00D48B 0%, #00b876 100%)',
+              color: '#000', boxShadow: '0 2px 10px rgba(0,212,139,0.3)',
+            }}
+          >
             {addMode ? '✕ Cancel' : '+ Add Pick'}
           </button>
         </div>
@@ -1127,7 +1135,24 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       {addMode === 'choose' && (
         <div style={{ marginBottom: '1.25rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
           <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', marginBottom: '1rem' }}>How do you want to add this pick?</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            {/* Pick from Scoreboard option */}
+            <button
+              onClick={() => { cancelAdd(); if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('betos-navigate', { detail: 'scoreboard' })); }}
+              style={{
+                background: 'var(--bg-elevated)', border: '1.5px solid rgba(0,212,139,0.35)', borderRadius: '10px',
+                padding: '1.1rem', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--green)'; e.currentTarget.style.background = 'rgba(0,212,139,0.06)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,212,139,0.35)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+            >
+              <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>🏟️</div>
+              <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: '0.88rem', marginBottom: '3px' }}>Pick from Games</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                Browse today's scoreboard and tap any game to add a pick with live odds.
+              </div>
+            </button>
+
             {/* Import option */}
             <button
               onClick={() => setAddMode('import')}
@@ -1141,7 +1166,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>📸</div>
               <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem', marginBottom: '3px' }}>Import Bet Slip</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                Screenshot, share link, or paste text — we'll auto-fill everything for you.
+                Screenshot, share link, or paste — we'll auto-fill everything.
               </div>
             </button>
 
@@ -1158,7 +1183,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>✏️</div>
               <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem', marginBottom: '3px' }}>Manual Entry</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                Fill in the details yourself. Defaults to 1 unit risk unless you specify otherwise.
+                Fill in the details yourself. Defaults to 1u risk.
               </div>
             </button>
           </div>
@@ -1258,7 +1283,20 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       {/* Bet Slip Cards */}
       {filtered.length === 0 ? (
         <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          No picks yet. Hit <strong style={{ color: '#FFB800' }}>+ Add Pick</strong> to log your first bet.
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🎯</div>
+          <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>No picks yet</div>
+          <div style={{ marginBottom: '1.25rem' }}>Log your first bet to start tracking your record.</div>
+          <button
+            className="btn-gold"
+            onClick={openAddPick}
+            style={{
+              fontSize: '1rem', padding: '0.75rem 2rem',
+              background: 'linear-gradient(135deg, #00D48B 0%, #00b876 100%)',
+              color: '#000', boxShadow: '0 2px 12px rgba(0,212,139,0.3)',
+            }}
+          >
+            + Add Your First Pick
+          </button>
         </div>
       ) : (
         <>
@@ -1577,35 +1615,4 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         const gameStarted = pick.commence_time && Date.now() > new Date(pick.commence_time).getTime() + 120000;
                         if (isSettled) return null; // graded — no edits
                         if (gameStarted) return (
-                          <span title="Game started — locked" style={{ fontSize: '0.65rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>🔒</span>
-                        );
-                        return (
-                          <>
-                            <button
-                              onClick={() => handleEdit(pick)}
-                              title={pick.contest_entry ? 'Edit pick (team name & notes only for contest picks)' : 'Edit pick'}
-                              style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #333', background: 'transparent', color: '#aaa', cursor: 'pointer', fontSize: '0.72rem' }}
-                            >✏️</button>
-                            {!pick.contest_entry && (
-                              <button
-                                onClick={() => handleDelete(pick.id)}
-                                disabled={deleting === pick.id}
-                                title="Delete pick"
-                                style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid #991b1b', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.72rem', opacity: deleting === pick.id ? 0.5 : 1 }}
-                              >{deleting === pick.id ? '…' : '🗑️'}</button>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
+                          <span title="Game started — locked" style={{ fontSize: '0.65rem', color: '#94a3b8', 

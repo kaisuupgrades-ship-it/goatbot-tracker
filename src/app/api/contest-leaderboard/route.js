@@ -123,13 +123,13 @@ export async function GET(req) {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Fetch all contest picks — include unaudited (null) and approved, exclude only rejected.
+    // Fetch all contest picks — use pick_type='contest' (the new 3-tier system).
+    // Include unaudited (null) and approved, exclude only rejected.
     // Also fetch commence_time so we can filter out in-game submissions at the leaderboard layer.
-    // NOTE: .neq() in Supabase excludes NULLs, so we must use .or() to include null audit_status
     let query = supabase
       .from('picks')
-      .select('user_id, result, profit, odds, created_at, audit_status, commence_time')
-      .eq('contest_entry', true)
+      .select('user_id, result, profit, odds, created_at, audit_status, commence_time, pick_type')
+      .eq('pick_type', 'contest')
       .or('audit_status.is.null,audit_status.eq.APPROVED');
 
     // Optional month filter — filter by the pick's created_at month

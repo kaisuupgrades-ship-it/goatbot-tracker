@@ -190,7 +190,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
   const router = useRouter();
   const [activeTab, setActiveTab]   = useState('tracker');
   // Shared sport selection — kept in sync between Scoreboard and Odds Board
-  const [activeSport, setActiveSport] = useState('mlb');
+  const [activeSport, setActiveSport] = useState('all');
   const [picks, setPicks]           = useState(initialPicks || []);
   const [contest, setContest]       = useState(initialContest || {
     name: 'My Picks',
@@ -225,6 +225,13 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
       return () => stopSessionTracking();
     }
   }, [user?.id, isDemo]);
+
+  // Listen for cross-tab navigation events (e.g. "Pick from Games" in HistoryTab)
+  useEffect(() => {
+    function handleNav(e) { if (e.detail) setActiveTab(e.detail); }
+    window.addEventListener('betos-navigate', handleNav);
+    return () => window.removeEventListener('betos-navigate', handleNav);
+  }, []);
 
   // Leaderboard refresh key — increment to trigger LeaderboardTab re-load
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
@@ -449,6 +456,32 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
 
       {/* Support Chat Widget — bottom left, always visible */}
       {!isDemo && <SupportChatWidget user={currentUser} />}
+
+      {/* ── Floating "Add Pick" FAB — always visible, bottom-right ── */}
+      {!isDemo && activeTab !== 'scoreboard' && activeTab !== 'featured' && (
+        <button
+          onClick={() => {
+            // Navigate to scoreboard where all games have prominent +Bet buttons
+            setActiveTab('scoreboard');
+          }}
+          title="Add a pick — go to Scoreboard"
+          style={{
+            position: 'fixed', bottom: '28px', right: '28px', zIndex: 5000,
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '14px 22px', borderRadius: '50px',
+            background: 'linear-gradient(135deg, #00D48B 0%, #00b876 100%)',
+            border: 'none', cursor: 'pointer',
+            color: '#000', fontWeight: 800, fontSize: '0.95rem',
+            fontFamily: 'inherit', letterSpacing: '0.01em',
+            boxShadow: '0 4px 20px rgba(0,212,139,0.35), 0 2px 8px rgba(0,0,0,0.3)',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.06)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(0,212,139,0.45), 0 3px 12px rgba(0,0,0,0.3)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,212,139,0.35), 0 2px 8px rgba(0,0,0,0.3)'; }}
+        >
+          <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Add Pick
+        </button>
+      )}
     </div>
   );
 }
