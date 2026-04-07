@@ -102,13 +102,13 @@ function parseAnalysisPick(analysis) {
   const conf = confMatch?.[1] || null;
 
   // Over/Under total
-  const overMatch = pickLine.match(/^Over\s+([\d.]+)\s/i);
+  const overMatch = pickLine.match(/^Over\s+([\d.]+)/i);
   if (overMatch) return { type: 'over', total: parseFloat(overMatch[1]), raw: pickLine, conf };
-  const underMatch = pickLine.match(/^Under\s+([\d.]+)\s/i);
+  const underMatch = pickLine.match(/^Under\s+([\d.]+)/i);
   if (underMatch) return { type: 'under', total: parseFloat(underMatch[1]), raw: pickLine, conf };
 
-  // Team ML
-  const mlMatch = pickLine.match(/^(.+?)\s+ML\s+([+-]?\d+)/i);
+  // Team ML — handles both "ML" abbreviation and "Moneyline" spelled out
+  const mlMatch = pickLine.match(/^(.+?)\s+(?:ML|Moneyline)\s+([+-]?\d+)/i);
   if (mlMatch) return { team: mlMatch[1].trim(), type: 'ml', line: parseInt(mlMatch[2]), raw: pickLine, conf };
 
   // Team spread (e.g., "Nets +6.5 -110")
@@ -121,7 +121,8 @@ function parseAnalysisPick(analysis) {
   }
 
   // Fallback: assume ML if team name found
-  const fallbackMatch = pickLine.match(/^([A-Z][a-zA-Z\s]+?)(?:\s+ML|\s+[+-]?\d)/i);
+  // Allow dots/apostrophes in team names (e.g. "St. Louis Cardinals", "D'Antoni")
+  const fallbackMatch = pickLine.match(/^([A-Z][a-zA-Z0-9\s.']+?)(?:\s+(?:ML|Moneyline)|\s+[+-]?\d)/i);
   if (fallbackMatch) return { team: fallbackMatch[1].trim(), type: 'ml', raw: pickLine, conf };
 
   return { type: 'unknown', raw: pickLine, conf };
@@ -187,14 +188,27 @@ function gradeAnalysisPick(pick, game, awayTeam, homeTeam) {
 }
 
 function identifyAnalysisSide(pickTeam, awayTeam, homeTeam) {
-  const p = (pickTeam || '').toLowerCase().trim();
-  const a = (awayTeam || '').toLowerCase().trim();
-  const h = (homeTeam || '').toLowerCase().trim();
-  if (h.includes(p) || p.includes(h) || h.split(' ').pop() === p.split(' ').pop()) return 'home';
-  if (a.includes(p) || p.includes(a) || a.split(' ').pop() === p.split(' ').pop()) return 'away';
+  // Strip punctuation for a cleaner comparison (handles "St. Louis" vs "St Louis")
+  const clean = s => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const p = clean(pickTeam);
+  const a = clean(awayTeam);
+  const h = clean(homeTeam);
+  if (!p) return null;
+  // Full substring match
+  if (h.includes(p) || p.includes(h)) return 'home';
+  if (a.includes(p) || p.includes(a)) return 'away';
+  // Last word match (e.g. "Cardinals" matches "St. Louis Cardinals")
   const pLast = p.split(' ').pop();
-  if (h.split(' ').some(w => w === pLast)) return 'home';
-  if (a.split(' ').some(w => w === pLast)) return 'away';
+  if (pLast && pLast.length >= 4) {
+    if (h.split(' ').includes(pLast)) return 'home';
+    if (a.split(' ').includes(pLast)) return 'away';
+  }
+  // Any significant word in the pick team matches a word in the ESPN name
+  const pWords = p.split(' ').filter(w => w.length >= 4);
+  for (const w of pWords) {
+    if (h.split(' ').includes(w)) return 'home';
+    if (a.split(' ').includes(w)) return 'away';
+  }
   return null;
 }
 
