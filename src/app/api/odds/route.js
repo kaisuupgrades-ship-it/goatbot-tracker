@@ -568,10 +568,13 @@ export async function GET(req) {
       }
       oddsResult.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
       oddsResult.pinnacleUnavailable = pinnacleUnavailable;
+      oddsResult.liveMode = isLive;
       // Only cache if we got actual data back (0 games is valid off-season, errors are not)
       if (oddsResult?.data?.length >= 0) {
         setMemCache(cacheKey, oddsResult);
-        await setSupabaseCache(sportKey, oddsResult);
+        // Live requests skip Supabase write — 30s TTL is too tight for the write overhead,
+        // and we don't want live odds polluting the shared pre-game cache
+        if (!isLive) await setSupabaseCache(sportKey, oddsResult);
       }
       return NextResponse.json({ ...oddsResult, cached: false });
     } catch (err) {

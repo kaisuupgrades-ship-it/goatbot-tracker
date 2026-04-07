@@ -616,12 +616,14 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [gameFilter, setGameFilter] = useState('upcoming');
   const [dateOffset, setDateOffset] = useState(0); // -1=yesterday, 0=today, 1=tomorrow
 
-  const load = useCallback(async (s, dateOff = dateOffset) => {
+  const load = useCallback(async (s, dateOff = dateOffset, { live = false } = {}) => {
     setLoading(true);
     setError('');
     try {
       const dateParam = dateOff !== 0 ? `&date=${getDateStr(dateOff)}` : '';
-      const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}`);
+      // Pass ?live=1 when in-play games are active — bypasses cache for ~30s fresh odds
+      const liveParam = live ? '&live=1' : '';
+      const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}${liveParam}`);
       const data = await res.json();
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.error);
@@ -645,6 +647,14 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
 
   // Reset filter + reload on sport change
   useEffect(() => { setGameFilter(dateOffset === 0 ? 'upcoming' : 'all'); load(sport, dateOffset); }, [sport, dateOffset, load]);
+
+  // Auto-refresh live odds every 45s when there are in-progress games
+  useEffect(() => {
+    const hasLive = games.some(g => isGameLive(g));
+    if (!hasLive || dateOffset !== 0) return;
+    const interval = setInterval(() => load(sport, dateOffset, { live: true }), 45_000);
+    return () => clearInterval(interval);
+  }, [games, sport, dateOffset, load]);
 
   if (!configured) return <SetupScreen />;
 
@@ -823,9 +833,14 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
           {/* Games grouped by date */}
           {(() => {
             const gamesToShow = gameFilter === 'live' ? liveGames
-                              : gameFilter === 'upcoming' ? upcomingGames
-                              : [...liveGames, ...upcomingGames];
+              : gameFilter === 'upcoming' ? upcomingGames
+              : filteredGames;
             const groups = groupByDate(gamesToShow);
+            if (gamesToShow.length === 0) return (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#3a3a3a', fontSize: '0.82rem' }}>
+                No {gameFilter === 'live' ? 'live' : gameFilter === 'upcoming' ? 'upcoming' : ''} games matching your filter.
+              </div>
+            );
             return groups.map((group, gi) => (
               <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {/* Date section header */}

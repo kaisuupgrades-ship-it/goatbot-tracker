@@ -2005,11 +2005,14 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     setNewsLoading(false);
   }, []);
 
-  // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill
-  const loadRealOdds = useCallback(async (s) => {
+  // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill.
+  // When live=true, passes ?live=1 to bypass normal cache and get fresh in-play odds (30s TTL).
+  // Live odds move fast — stale data causes logically impossible ML vs spread combinations.
+  const loadRealOdds = useCallback(async (s, { live = false } = {}) => {
     if (s === 'all' || DEDICATED_VIEW_SPORTS.has(s)) return;
     try {
-      const res = await fetch(`/api/odds?sport=${s}`);
+      const url = `/api/odds?sport=${s}${live ? '&live=1' : ''}`;
+      const res = await fetch(url);
       if (!res.ok) return;
       const d = await res.json();
       const lookup = {};
@@ -2048,8 +2051,10 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const liveCount = games.filter(e => getGameState(e).state === 'live').length;
 
   // Adaptive refresh rate: fast when live games are active, normal otherwise
-  const REFRESH_LIVE    = 20_000;  // 20s while games are in progress
-  const REFRESH_TODAY   = 45_000;  // 45s on today with no live games
+  const REFRESH_LIVE        = 20_000;  // 20s scores while games are in progress
+  const REFRESH_TODAY       = 45_000;  // 45s scores on today with no live games
+  const REFRESH_ODDS_LIVE   = 45_000;  // 45s live odds (The Odds API updates every ~30s)
+  const REFRESH_ODDS_NORMAL = 3 * 60 * 1000; // 3 min for pre-game odds
 
   useEffect(() => {
     loadGames(sport, selectedDate);
@@ -2070,21 +2075,23 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   useEffect(() => {
     if (isActive && !prevActiveRef.current) {
       // Tab just became visible — refresh scores and odds immediately
+      // If there are live games, use the live path for fresher odds
       loadGames(sport, selectedDate);
-      loadRealOdds(sport);
+      loadRealOdds(sport, { live: liveCount > 0 });
     }
     prevActiveRef.current = isActive;
-  }, [isActive, sport, selectedDate, loadGames, loadRealOdds]);
+  }, [isActive, sport, selectedDate, liveCount, loadGames, loadRealOdds]);
 
-  // Separate effect: tighten polling to 20s when live games are detected
+  // Separate effect: tighten polling when live games are detected.
+  // Scores: every 20s. Odds: every 45s using ?live=1 (30s API refresh, small buffer).
+  // This keeps odds fresh during live games — prevents logically impossible ML/spread combos.
   useEffect(() => {
     if (selectedDate !== todayStr) return;
     if (liveCount === 0) return;
 
-    // Live games detected — poll scores every 20s, odds every 3 min
-    const liveInterval  = setInterval(() => loadGames(sport, selectedDate), REFRESH_LIVE);
-    const oddsInterval  = setInterval(() => loadRealOdds(sport), 3 * 60 * 1000);
-    return () => { clearInterval(liveInterval); clearInterval(oddsInterval); };
+    const liveScoresInterval = setInterval(() => loadGames(sport, selectedDate), REFRESH_LIVE);
+    const liveOddsInterval   = setInterval(() => loadRealOdds(sport, { live: true }), REFRESH_ODDS_LIVE);
+    return () => { clearInterval(liveScoresInterval); clearInterval(liveOddsInterval); };
   }, [liveCount, sport, selectedDate, loadGames, loadRealOdds, todayStr]);
 
   // Countdown timer — shows seconds until next refresh
