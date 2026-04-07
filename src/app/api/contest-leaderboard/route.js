@@ -90,10 +90,13 @@ function buildContestRows(picks, profiles) {
     return u;
   });
 
-  // Sort: by units profit (most to least), then by win count
-  rows.sort((a, b) => b.units - a.units || b.wins - a.wins);
+  // Only show players with at least one graded pick (win or loss or push)
+  const activeRows = rows.filter(r => r.total_settled > 0);
 
-  return rows.map((r, i) => ({ ...r, rank: i + 1 }));
+  // Sort: by units profit (most to least), then by win count
+  activeRows.sort((a, b) => b.units - a.units || b.wins - a.wins);
+
+  return activeRows.map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
 export async function GET(req) {

@@ -1398,12 +1398,6 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.58rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Engine</div>
-              <div style={{ color: 'rgba(255,184,0,0.7)', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', marginTop: '1px' }}>
-                GROK-4 · LIVE SEARCH
-              </div>
-            </div>
             <div style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               padding: '4px 11px',
@@ -1534,7 +1528,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                 }
               }}
               placeholder={`"Find the sharpest edge on tonight's MLB slate"  ·  "Analyze Dodgers vs Padres, I like the under"  ·  "Best dog on the board right now"`}
-              rows={3}
+              rows={4}
               style={{
                 flex: 1,
                 background: 'transparent',
@@ -1546,6 +1540,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
                 padding: '13px 8px 13px 0',
                 lineHeight: 1.65,
                 caretColor: '#FFB800',
+                minHeight: '100px',
               }}
             />
 
