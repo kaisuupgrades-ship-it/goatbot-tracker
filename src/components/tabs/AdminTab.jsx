@@ -1826,6 +1826,7 @@ function SystemPanel({ userEmail }) {
   const [backfillRunning,  setBackfillRunning]  = useState(false);
   const [autoGradeMsg,     setAutoGradeMsg]     = useState('');
   const [autoGradeRunning, setAutoGradeRunning] = useState(false);
+  const [pregenErrorsOpen, setPregenErrorsOpen] = useState(false);
 
   async function handleBackfill() {
     if (!confirm('Backfill commence_time on all historical picks using ESPN? This looks up game start times and updates the database.')) return;
@@ -2119,13 +2120,38 @@ function SystemPanel({ userEmail }) {
 
         {/* Last run summary */}
         {pregenLog && !pregenRunning && (
-          <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.12)', borderRadius: '7px', fontSize: '0.72rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ color: '#60a5fa' }}>⏱ Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
-            <span style={{ color: '#4ade80' }}>✅ {pregenLog.generated} generated</span>
-            <span style={{ color: 'var(--text-muted)' }}>⏭ {pregenLog.skipped} skipped</span>
-            {pregenLog.errors > 0 && <span style={{ color: '#f87171' }}>⚠ {pregenLog.errors} errors</span>}
-            <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
-          </div>
+          <>
+            <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.12)', borderRadius: '7px', fontSize: '0.72rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: '#60a5fa' }}>⏱ Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
+              <span style={{ color: '#4ade80' }}>✅ {pregenLog.generated} generated</span>
+              <span style={{ color: 'var(--text-muted)' }}>⏭ {pregenLog.skipped} skipped</span>
+              {pregenLog.errors > 0 && (
+                <span
+                  onClick={() => setPregenErrorsOpen(o => !o)}
+                  style={{ color: '#f87171', cursor: 'pointer', textDecoration: 'underline dotted', userSelect: 'none' }}
+                  title="Click to see error details"
+                >
+                  ⚠ {pregenLog.errors} errors {pregenErrorsOpen ? '▲' : '▼'}
+                </span>
+              )}
+              <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
+            </div>
+            {pregenLog.errors > 0 && pregenErrorsOpen && Array.isArray(pregenLog.error_list) && (
+              <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.75rem', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.18)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                {pregenLog.error_list.map((e, i) => {
+                  const [game, ...rest] = e.split(':');
+                  const reason = rest.join(':').trim();
+                  return (
+                    <div key={i} style={{ fontSize: '0.68rem', fontFamily: 'IBM Plex Mono, monospace', display: 'flex', gap: '8px' }}>
+                      <span style={{ color: '#f87171', minWidth: '12px' }}>✗</span>
+                      <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{game.trim()}</span>
+                      <span style={{ color: '#f87171', opacity: 0.75 }}>{reason || 'unknown error'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
         {/* Live sport-by-sport progress during run */}
@@ -2185,12 +2211,32 @@ function SystemPanel({ userEmail }) {
             background: pregenResult.generated > 0 ? 'rgba(74,222,128,0.06)' : 'rgba(255,255,255,0.03)',
             border: `1px solid ${pregenResult.generated > 0 ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.07)'}`,
           }}>
-            <span style={{ color: '#4ade80', fontWeight: 700 }}>
-              ✓ Done — {pregenResult.generated} generated · {pregenResult.skipped} skipped · {Math.round((pregenResult.duration_ms || 0) / 1000)}s
-            </span>
-            {pregenResult.error_list?.length > 0 && (
-              <div style={{ color: '#f87171', marginTop: '5px', fontSize: '0.68rem' }}>
-                ⚠ {pregenResult.error_list.slice(0, 3).join(' · ')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ color: '#4ade80', fontWeight: 700 }}>
+                ✓ Done — {pregenResult.generated} generated · {pregenResult.skipped} skipped · {Math.round((pregenResult.duration_ms || 0) / 1000)}s
+              </span>
+              {pregenResult.errors > 0 && (
+                <span
+                  onClick={() => setPregenErrorsOpen(o => !o)}
+                  style={{ color: '#f87171', cursor: 'pointer', fontWeight: 700, fontSize: '0.72rem', textDecoration: 'underline dotted', userSelect: 'none' }}
+                >
+                  ⚠ {pregenResult.errors} errors {pregenErrorsOpen ? '▲' : '▼'}
+                </span>
+              )}
+            </div>
+            {pregenResult.errors > 0 && pregenErrorsOpen && Array.isArray(pregenResult.error_list) && (
+              <div style={{ marginTop: '6px', padding: '0.55rem 0.75rem', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.18)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                {pregenResult.error_list.map((e, i) => {
+                  const [game, ...rest] = e.split(':');
+                  const reason = rest.join(':').trim();
+                  return (
+                    <div key={i} style={{ fontSize: '0.68rem', fontFamily: 'IBM Plex Mono, monospace', display: 'flex', gap: '8px' }}>
+                      <span style={{ color: '#f87171', minWidth: '12px' }}>✗</span>
+                      <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{game.trim()}</span>
+                      <span style={{ color: '#f87171', opacity: 0.75 }}>{reason || 'unknown error'}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

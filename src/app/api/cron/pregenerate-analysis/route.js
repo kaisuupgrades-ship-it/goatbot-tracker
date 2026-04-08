@@ -1198,10 +1198,11 @@ export async function GET(req) {
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
       const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
 
-      // Safety cutoff: cron stops at 4 min; admin has no cutoff (Vercel maxDuration handles it)
+      // Safety cutoff: cron stops at 10 min; admin has no cutoff (Vercel maxDuration handles it).
+      // Was 4 min — too tight when MLB alone fills the budget, leaving NBA/NHL/MLS erroring.
       if (!isAdmin) {
         const elapsed = Date.now() - started;
-        if (elapsed > 240_000) { // 4 min
+        if (elapsed > 600_000) { // 10 min (maxDuration = 800s)
           console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
           for (const g of gamesToProcess.slice(i)) {
             errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
@@ -1236,7 +1237,9 @@ export async function GET(req) {
 
           // Parse structured sections from the richer v2.0 analysis output
           const pickM   = result.text.match(/THE PICK[:\s]+([^\n]{5,200})/i);
-          const confM   = result.text.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
+          // Target the BEST PLAY line's confidence — format: "Edge: X% | Confidence: Y | Edge Score:"
+          // The naive /CONFIDENCE[:\s]+/ matches the first occurrence (Spread Analysis = usually LOW).
+          const confM   = result.text.match(/Edge:\s*[\d.]+%\s*\|\s*Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i);
           const edgeM   = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
           const altM    = result.text.match(/ALTERNATE ANGLES[:\s]+([^\n]{5,300})/i);
           const lineM   = result.text.match(/LINE MOVEMENT[:\s]+([^\n]{5,300})/i);
