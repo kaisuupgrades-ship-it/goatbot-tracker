@@ -189,7 +189,15 @@ async function searchESPNScoreboard(path, team, espnDate, dateStr) {
     }
 
     if (bestScore >= 50 && bestEvent?.date) {
-      return bestEvent.date; // UTC ISO timestamp — actual game start
+      // Extract home/away team names from the best matching event
+      const bestComps = bestEvent.competitions?.[0]?.competitors || [];
+      const homeComp  = bestComps.find(c => c.homeAway === 'home');
+      const awayComp  = bestComps.find(c => c.homeAway === 'away');
+      return {
+        date:      bestEvent.date,
+        homeTeam:  homeComp?.team?.displayName || homeComp?.team?.name || null,
+        awayTeam:  awayComp?.team?.displayName || awayComp?.team?.name || null,
+      };
     }
     return null;
   } catch {
@@ -487,14 +495,24 @@ export async function POST(req) {
 
   // ── 5. Look up actual game start time from ESPN ──────────────────────────
   //    This is the only trusted source of commence_time.
+  //    Also extracts home/away team names to populate matchup context.
   //    If ESPN can't find the game, commence_time stays null (pick is unverifiable).
   let commence_time = null;
   if (safePayload.sport && safePayload.team && safePayload.date) {
-    commence_time = await lookupCommenceTime(
+    const espnInfo = await lookupCommenceTime(
       safePayload.sport,
       safePayload.team,
       safePayload.date,
     );
+    if (espnInfo) {
+      commence_time = espnInfo.date || null;
+      // Populate matchup fields from ESPN if not already set by the client
+      if (espnInfo.homeTeam && !safePayload.home_team) safePayload.home_team = espnInfo.homeTeam;
+      if (espnInfo.awayTeam && !safePayload.away_team) safePayload.away_team = espnInfo.awayTeam;
+      if (espnInfo.homeTeam && espnInfo.awayTeam && !safePayload.matchup) {
+        safePayload.matchup = `${espnInfo.awayTeam} @ ${espnInfo.homeTeam}`;
+      }
+    }
   }
 
   // ── 5b. HARD BLOCK: contest/verified picks must be submitted BEFORE game ──

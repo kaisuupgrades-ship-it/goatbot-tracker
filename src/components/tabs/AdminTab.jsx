@@ -771,7 +771,14 @@ function PicksAuditPanel({ userEmail }) {
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     <span style={{ color: '#60a5fa', background: '#0d1a2b', padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem', fontWeight: 600 }}>{p.sport}</span>
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-primary)', fontWeight: 700, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', maxWidth: '200px' }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</div>
+                    {(p.matchup || (p.home_team && p.away_team)) && (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.62rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                        {p.matchup || `${p.away_team} @ ${p.home_team}`}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{p.bet_type || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{p.units || 1}u</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'IBM Plex Mono, monospace', color: p.odds > 0 ? '#4ade80' : 'var(--text-primary)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>

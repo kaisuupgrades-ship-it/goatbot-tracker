@@ -682,7 +682,12 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                 <span style={{ fontSize: '0.9rem', flexShrink: 0 }}>{sportEmoji(p.sport)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{p.bet_type} · {p.sport}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.bet_type} · {p.sport}
+                    {(p.matchup || (p.home_team && p.away_team)) && (
+                      <span style={{ marginLeft: '4px', opacity: 0.75 }}>· {p.matchup || `${p.away_team} @ ${p.home_team}`}</span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexShrink: 0 }}>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)' }}>
@@ -1211,6 +1216,11 @@ export default function TrackerTab({ picks, user, onViewGame }) {
                         )
                       }
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', flexShrink: 0, whiteSpace: 'nowrap' }}>{p.sport} · {p.bet_type}</span>
+                      {(p.matchup || (p.home_team && p.away_team)) && (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', flexShrink: 0, whiteSpace: 'nowrap', opacity: 0.8 }}>
+                          · {p.matchup || `${p.away_team} @ ${p.home_team}`}
+                        </span>
+                      )}
                     </div>
                     {/* Units badge */}
                     <span style={{
