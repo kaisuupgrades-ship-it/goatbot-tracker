@@ -1198,14 +1198,22 @@ export async function GET(req) {
     for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
       const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
 
-      // Safety cutoff: cron stops at 10 min; admin has no cutoff (Vercel maxDuration handles it).
-      // Was 4 min — too tight when MLB alone fills the budget, leaving NBA/NHL/MLS erroring.
+      // Per-game budget check: each game gets its own 90s window.
+      // We check REMAINING Vercel time, not total elapsed — so MLB processing
+      // 8 games doesn't steal budget from NBA/NHL/MLS. A new batch starts as
+      // long as there are ≥90s left before Vercel's hard maxDuration ceiling.
+      // Batches run in parallel (Promise.allSettled), so worst-case batch time
+      // ≈ one game's budget, not BATCH_SIZE × budget.
+      //
+      // VERCEL_MAX_MS intentionally 20s inside maxDuration=800s for safety.
+      const VERCEL_MAX_MS      = 780_000;
+      const PER_GAME_BUDGET_MS =  90_000;
       if (!isAdmin) {
-        const elapsed = Date.now() - started;
-        if (elapsed > 600_000) { // 10 min (maxDuration = 800s)
-          console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
+        const remaining = VERCEL_MAX_MS - (Date.now() - started);
+        if (remaining < PER_GAME_BUDGET_MS) {
+          console.warn(`[pregenerate] Only ${Math.round(remaining / 1000)}s left — stopping ${sport} to stay within maxDuration`);
           for (const g of gamesToProcess.slice(i)) {
-            errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
+            errors.push(`${g.awayTeam}@${g.homeTeam}: vercel limit`);
           }
           break;
         }
