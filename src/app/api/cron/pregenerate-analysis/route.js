@@ -1021,9 +1021,9 @@ export async function GET(req) {
     // ── Odds API gate ─────────────────────────────────────────────────────────
     // Before hitting ESPN, verify The Odds API has active events for this sport
     // today. Prevents phantom game analyses (e.g. 24 MLS analyses on a day with
-    // zero real MLS games). Admin/manual runs bypass this gate.
+    // zero real MLS games). Applies to all runs — no edge analysis without lines.
     let oddsApiGames = [];
-    if (!isAdmin && THE_ODDS_KEY && ODDS_SPORT_KEYS[sport]) {
+    if (THE_ODDS_KEY && ODDS_SPORT_KEYS[sport]) {
       oddsApiGames = await fetchGamesFromOddsCache(sport);
       if (oddsApiGames.length === 0) {
         console.log(`[pregenerate] ⏭ ${sport.toUpperCase()}: 0 events with active odds on The Odds API — skipping sport entirely`);
@@ -1127,7 +1127,6 @@ export async function GET(req) {
 
       // Odds API game filter: skip ESPN events not on The Odds API.
       // Catches future/scheduled games ESPN returns that have no active betting market.
-      // Admin runs bypass this (oddsApiGames is [] when isAdmin, so the check is skipped).
       if (THE_ODDS_KEY && oddsApiGames.length > 0) {
         const ht = homeTeam.toLowerCase().split(' ').pop();
         const at = awayTeam.toLowerCase().split(' ').pop();
@@ -1142,17 +1141,9 @@ export async function GET(req) {
         }
       }
 
-      // Build odds context — prefer rich cached odds from The Odds API.
-      // In admin mode only, fall back to ESPN's basic spread/total if no cache available.
-      // In cron mode the per-game Odds API filter above already blocked non-odds games,
-      // so the ESPN fallback is never needed and would only risk letting phantom games through.
+      // Build odds context from The Odds API cache.
+      // No ESPN fallback — games without real Odds API odds were already filtered above.
       let oddsContext = await fetchCachedOdds(sport, homeTeam, awayTeam);
-      if (!oddsContext && isAdmin) {
-        const espnOdds = event.competitions?.[0]?.odds?.[0];
-        oddsContext = espnOdds
-          ? `Spread: ${espnOdds.details || 'N/A'} | O/U: ${espnOdds.overUnder || 'N/A'}`
-          : '';
-      }
 
       const gameTime = event.competitions?.[0]?.date
         ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
