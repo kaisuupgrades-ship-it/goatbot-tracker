@@ -875,6 +875,27 @@ export async function GET(req) {
   // Optional: override date (YYYY-MM-DD). Used by admin "Generate for Tomorrow" button.
   const dateOverride = params.get('date') || null;
 
+  // Guard B (time-based cron lock): prevent duplicate runs within 10 minutes.
+  // Admin-triggered runs (force, per-sport, or date override) always bypass the lock.
+  if (!force && !sportFilter && !dateOverride) {
+    try {
+      const { data: lockData } = await supabase
+        .from('settings').select('value').eq('key', 'cron_pregenerate_last_run').maybeSingle();
+      if (lockData?.value) {
+        const lastRun = typeof lockData.value === 'string' ? JSON.parse(lockData.value) : lockData.value;
+        const lastRunAt = lastRun?.run_at ? new Date(lastRun.run_at).getTime() : 0;
+        const msSinceRun = Date.now() - lastRunAt;
+        if (msSinceRun < 10 * 60 * 1000) {
+          const minsSince = Math.round(msSinceRun / 60000);
+          console.log(`[pregenerate] Guard B: aborting — last run was ${minsSince}min ago`);
+          return NextResponse.json({ skipped: true, reason: `Cron ran ${minsSince} minute(s) ago — minimum 10 minute gap required`, last_run: lastRun.run_at });
+        }
+      }
+    } catch (e) {
+      console.warn('[pregenerate] Guard B check failed (non-fatal):', e.message);
+    }
+  }
+
   const started = Date.now();
   // Use ET (America/New_York) for "today" so late-night cron runs don't accidentally
   // process the wrong date. When dateOverride is given (admin buttons), use it directly.
@@ -1024,8 +1045,10 @@ export async function GET(req) {
 
       let gameMode = 'full';
       if (!force) {
-        const freshCutoff   = new Date(Date.now() - 3  * 60 * 60 * 1000).toISOString();
-        const refreshCutoff = new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString();
+        // Guard A (content-based dedup): skip if a valid analysis already exists within 12h.
+        // "Valid" means the analysis doesn't contain no-odds placeholder text.
+        // If the cached analysis had no odds but odds are now available, force a full re-run.
+        const dedupCutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
         const { data: existing } = await supabase
           .from('game_analyses')
           .select('id, updated_at, analysis')
@@ -1033,24 +1056,24 @@ export async function GET(req) {
           .ilike('home_team', homeTeam).ilike('away_team', awayTeam)
           .maybeSingle();
         if (existing) {
-          if (existing.updated_at > freshCutoff) {
-            // FIX 3: If the cached analysis was generated without odds but odds are now
-            // available, force a full re-generation instead of skipping.
-            const cachedHasNoOdds = existing.analysis && (
-              existing.analysis.includes('No odds data available') ||
-              existing.analysis.includes('ODDS NOT YET AVAILABLE') ||
-              existing.analysis.includes('⚠️ NOTE: Generated without live web search')
-            );
-            if (cachedHasNoOdds && oddsContext) {
-              console.log(`[pregenerate] ♻️ Re-queuing ${awayTeam}@${homeTeam} — cached analysis had no odds, odds now available`);
-              gameMode = 'full';
-            } else {
+          const cachedHasNoOdds = existing.analysis && (
+            existing.analysis.includes('No odds data available') ||
+            existing.analysis.includes('ODDS NOT YET AVAILABLE') ||
+            existing.analysis.includes('⚠️ NOTE: Generated without live web search')
+          );
+          if (existing.updated_at > dedupCutoff) {
+            if (!cachedHasNoOdds) {
+              const ageMin = Math.round((Date.now() - new Date(existing.updated_at).getTime()) / 60000);
+              console.log(`[pregenerate] ⏭ Skipping ${awayTeam}@${homeTeam} (${sport.toUpperCase()}) — valid analysis cached ${ageMin}min ago`);
               skipped.push(`${awayTeam}@${homeTeam}`);
               return;
             }
-          } else if (existing.updated_at > refreshCutoff) {
-            gameMode = 'refresh';
+            if (cachedHasNoOdds && oddsContext) {
+              console.log(`[pregenerate] ♻️ Re-queuing ${awayTeam}@${homeTeam} — cached analysis had no odds, odds now available`);
+              // gameMode stays 'full'
+            }
           }
+          // Older than 12h → full re-analysis (gameMode already 'full')
         }
       }
       gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode });
