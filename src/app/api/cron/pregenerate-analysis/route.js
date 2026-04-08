@@ -1009,6 +1009,21 @@ export async function GET(req) {
     sportIndex++;
     await writeProgress(sport, 'running');
 
+    // ── Odds API gate ─────────────────────────────────────────────────────────
+    // Before hitting ESPN, verify The Odds API has active events for this sport
+    // today. Prevents phantom game analyses (e.g. 24 MLS analyses on a day with
+    // zero real MLS games). Uses the pre-warmed odds_cache — no extra API call.
+    let oddsApiGames = [];
+    if (THE_ODDS_KEY && ODDS_SPORT_KEYS[sport]) {
+      oddsApiGames = await fetchGamesFromOddsCache(sport);
+      if (oddsApiGames.length === 0) {
+        console.log(`[pregenerate] ⏭ ${sport.toUpperCase()}: 0 events with active odds on The Odds API — skipping sport entirely`);
+        skipped.push(`${sport}: no-odds-api-events`);
+        continue;
+      }
+      console.log(`[pregenerate] ✅ Odds API gate: ${sport.toUpperCase()} has ${oddsApiGames.length} event(s) with active odds`);
+    }
+
     // Build the self-improvement context for this sport (cached)
     if (!perfContextCache[sport]) {
       try {
@@ -1100,6 +1115,22 @@ export async function GET(req) {
       const homeTeam = homeComp.team?.displayName || homeComp.team?.name || '';
       const awayTeam = awayComp.team?.displayName || awayComp.team?.name || '';
       if (!homeTeam || !awayTeam) continue;
+
+      // Odds API game filter: skip ESPN events not on The Odds API.
+      // Catches future/scheduled games ESPN returns that have no active betting market.
+      if (THE_ODDS_KEY && oddsApiGames.length > 0) {
+        const ht = homeTeam.toLowerCase().split(' ').pop();
+        const at = awayTeam.toLowerCase().split(' ').pop();
+        const hasOdds = oddsApiGames.some(g =>
+          (g.homeTeam || '').toLowerCase().includes(ht) &&
+          (g.awayTeam || '').toLowerCase().includes(at)
+        );
+        if (!hasOdds) {
+          console.log(`[pregenerate] ⏭ ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) — no matching Odds API event, skipping`);
+          skipped.push(`${awayTeam}@${homeTeam} (no-odds-api-match)`);
+          continue;
+        }
+      }
 
       // Build odds context — prefer rich cached odds from The Odds API,
       // fall back to ESPN's basic spread/total if no cache available
