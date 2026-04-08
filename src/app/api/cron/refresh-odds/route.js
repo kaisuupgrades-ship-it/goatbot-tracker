@@ -1,16 +1,24 @@
 /**
  * /api/cron/refresh-odds — Centralized odds cache refresh
  *
- * Runs every 2 minutes (vercel.json). This is the ONLY route that calls The Odds API
+ * Runs every 15 minutes (vercel.json). This is the ONLY route that calls The Odds API
  * for full game slates. All other endpoints (odds, scoreboard, pregenerate) read from
  * the odds_cache Supabase table instead.
  *
+ * Credit budget math (The Odds API):
+ *  - 15-min cadence × 96 runs/day × 4 active sports × 2 markets = ~768 credits/day
+ *  - vs old 2-min cadence × 5 sports × 3 markets ≈ 2000-3000 credits/day
+ *  - Monthly budget: 20K credits → ~26 days at new rate (was exhausted in 2 days)
+ *  - TODO: revert to 3 markets (add totals back) after migrating to OddsPapi (unlimited)
+ *
  * Smart refresh schedule (per sport):
- *  - Live games present:     refresh every 90 sec (every cron run at 2-min cadence)
- *  - < 1 hr to first pitch:  refresh every 3 min
- *  - > 1 hr to first pitch:  refresh every 12 min
+ *  - Live games present:     refresh every 90 sec (threshold; cron fires every 15 min)
+ *  - < 1 hr to first pitch:  refresh every 3 min (threshold)
+ *  - > 1 hr to first pitch:  refresh every 25 min
  *  - All post-game:          skip entirely
+ *  - No games today:         skip (ESPN check)
  *  - Empty cache:            always refresh
+ *  - Deduplication:          skip if any game was fetched within last 10 min
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -38,7 +46,13 @@ const SPORT_KEYS = {
 // Thresholds — how old the cache can be before triggering a re-fetch
 const LIVE_TTL_MS    = 90_000;        // 90 sec for live games
 const NEAR_TTL_MS    = 3 * 60_000;    // 3 min when game < 1 hr away
-const DEFAULT_TTL_MS = 12 * 60_000;   // 12 min for regular pre-game
+const DEFAULT_TTL_MS = 25 * 60_000;   // 25 min for regular pre-game (bumped from 12 to match 15-min cron)
+// Deduplication guard — never re-fetch a sport if its cache is this fresh
+// Protects against Vercel retry storms or accidental double-fires
+const DEDUP_TTL_MS   = 10 * 60_000;  // 10 min hard floor regardless of game state
+
+// NFL in-season months (1-indexed): Sept (9) through Feb (2) — skip otherwise to save credits
+const NFL_SEASON_MONTHS = new Set([9, 10, 11, 12, 1, 2]);
 
 // ── Pinnacle (free sharp reference line) ──────────────────────────────────────
 const PINNACLE_BASE = 'https://guest.api.arcadia.pinnacle.com/0.1';
@@ -246,6 +260,38 @@ function sanitizeOddsConsistency(events) {
   });
 }
 
+// ── Games-today check (ESPN, free) ────────────────────────────────────────────
+
+const ESPN_SPORT_PATH = {
+  mlb: 'baseball/mlb',
+  nba: 'basketball/nba',
+  nhl: 'hockey/nhl',
+  nfl: 'football/nfl',
+  mls: 'soccer/usa.1',
+};
+
+/**
+ * Returns true if ESPN reports at least one game for this sport today (UTC date).
+ * Falls back to true on error so we don't accidentally suppress a real game day.
+ */
+async function hasGamesToday(sport) {
+  const path = ESPN_SPORT_PATH[sport];
+  if (!path) return true; // unknown sport — fail open
+
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${today}`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) return true; // ESPN unavailable — fail open
+    const data = await res.json();
+    const events = data?.events ?? data?.games ?? [];
+    return Array.isArray(events) && events.length > 0;
+  } catch {
+    return true; // network error — fail open
+  }
+}
+
 // ── Core fetch ────────────────────────────────────────────────────────────────
 
 async function fetchSportOdds(sport) {
@@ -255,7 +301,8 @@ async function fetchSportOdds(sport) {
   const url = new URL(`${THE_ODDS_BASE}/sports/${apiSportKey}/odds/`);
   url.searchParams.set('apiKey', THE_ODDS_KEY);
   url.searchParams.set('regions', 'us');
-  url.searchParams.set('markets', 'h2h,spreads,totals');
+  // TODO: add totals back (3rd market) after migrating to OddsPapi (unlimited credits)
+  url.searchParams.set('markets', 'h2h,spreads');
   url.searchParams.set('oddsFormat', 'american');
   // Include games up to 12 hrs in the past (live/recently started) and 2 days ahead
   const from = new Date(Date.now() - 12 * 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -368,8 +415,23 @@ export async function GET(req) {
   const results = [];
   const now = Date.now();
 
+  const currentMonth = new Date().getUTCMonth() + 1; // 1-indexed
+
   for (const sport of ACTIVE_SPORTS) {
     try {
+      // Skip NFL when out of season — no games Sept-Feb means no credits wasted
+      if (sport === 'nfl' && !NFL_SEASON_MONTHS.has(currentMonth)) {
+        results.push({ sport, action: 'skip', reason: 'NFL out of season' });
+        continue;
+      }
+
+      // Check ESPN for games today before touching The Odds API
+      const gamesExist = await hasGamesToday(sport);
+      if (!gamesExist) {
+        results.push({ sport, action: 'skip', reason: 'no games today (ESPN)' });
+        continue;
+      }
+
       const games     = await getSportCacheState(sport);
       const threshold = getRefreshThreshold(games);
 
@@ -383,6 +445,13 @@ export async function GET(req) {
         ? Math.max(...games.map(g => new Date(g.last_fetched_at).getTime()))
         : 0;
       const ageMs = now - latestFetch;
+
+      // Deduplication guard: never hit the API if cache is under 10 min old,
+      // regardless of game state — protects against Vercel retry storms
+      if (ageMs < DEDUP_TTL_MS) {
+        results.push({ sport, action: 'skip', reason: `dedup (${Math.round(ageMs / 1000)}s old, floor ${DEDUP_TTL_MS / 1000}s)` });
+        continue;
+      }
 
       if (ageMs < threshold) {
         results.push({ sport, action: 'skip', reason: `fresh (${Math.round(ageMs / 1000)}s old, threshold ${threshold / 1000}s)` });
