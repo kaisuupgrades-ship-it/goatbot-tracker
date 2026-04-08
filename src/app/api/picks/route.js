@@ -377,22 +377,18 @@ export async function POST(req) {
   delete safePayload.commence_time;   // strip — set below from ESPN
   delete safePayload.submitted_at;    // strip — set by DB trigger
 
-  // Normalize team name deterministically (no AI call needed)
-  // e.g. "Detroit" (MLB) → "Detroit Tigers", "Cubs" → "Chicago Cubs"
-  if (safePayload.team && safePayload.sport) {
-    safePayload.team = normalizeTeam(safePayload.team, safePayload.sport);
-  }
   delete safePayload.id;              // strip — never trust client-supplied id
 
-  // ── 3b. Extract and store structured line/side from team name ───────────
-  //    "UConn Huskies +6.5" → line=6.5, cleaned team for ESPN matching
-  //    This ensures the grading engine has structured data to work with.
+  // ── 3b. Extract line BEFORE team name normalization ──────────────────────
+  //    CRITICAL: must run before normalizeTeam(). The fuzzy normalizer converts
+  //    "Boston Celtics -4.5" → "Boston Celtics", stripping the spread line before
+  //    we can extract it — causing the pick to grade as PUSH instead of WIN/LOSS.
   const betTypeLower = (safePayload.bet_type || '').toLowerCase();
   const isSpreadBet = betTypeLower.includes('spread') || betTypeLower.includes('run line') || betTypeLower.includes('puck line');
   const isTotalBet  = betTypeLower.includes('over') || betTypeLower.includes('under') || betTypeLower.includes('total');
 
   if (!safePayload.line && safePayload.team) {
-    // Extract line from team name: "Cowboys +3.5" → 3.5, "UConn Huskies +6.5" → 6.5
+    // Extract line from team name: "Boston Celtics -4.5" → -4.5, "Cowboys +3.5" → 3.5
     const lineMatch = safePayload.team.match(/([+-]\d+(?:\.\d+)?)\s*$/);
     if (lineMatch) {
       safePayload.line = parseFloat(lineMatch[1]);
@@ -416,6 +412,14 @@ export async function POST(req) {
       .replace(/\s+\([+-]?\d+\)/g, '')                        // strip odds in parens like "(+150)"
       .trim();
     if (cleaned) safePayload.team = cleaned;
+  }
+
+  // Normalize team name AFTER line extraction and cleaning.
+  // Must run last — normalizeTeam's fuzzy match strips trailing numbers, so
+  // "Boston Celtics -4.5" → "Boston Celtics" would drop the line if run first.
+  // e.g. "Detroit" (MLB) → "Detroit Tigers", "Cubs" → "Chicago Cubs"
+  if (safePayload.team && safePayload.sport) {
+    safePayload.team = normalizeTeam(safePayload.team, safePayload.sport);
   }
 
   // ── 3c. Set pick_type — 'contest', 'verified', or 'personal' ───────────
