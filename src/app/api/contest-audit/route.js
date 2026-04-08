@@ -32,12 +32,17 @@ const RULES = {
   maxPicksPerDay: 1,
 };
 
-// ── Pinnacle real-time line check (free, no key) ────────────────────────────
-// Maps our sport strings to Pinnacle league IDs
-const PINNACLE_LEAGUES = {
-  MLB:   246,  NBA:   487,  NFL:  889,
-  NHL:   1456, NCAAB: 493, NCAAF: 880,
-  MLS:   2764, UFC:   906,
+// ── Odds cache line check ────────────────────────────────────────────────────
+// Maps our sport strings to odds_cache table sport keys (The Odds API format)
+const SPORT_CACHE_KEYS = {
+  MLB:   'baseball_mlb',
+  NBA:   'basketball_nba',
+  NFL:   'americanfootball_nfl',
+  NHL:   'icehockey_nhl',
+  NCAAB: 'basketball_ncaab',
+  NCAAF: 'americanfootball_ncaaf',
+  MLS:   'soccer_usa_mls',
+  UFC:   'mma_mixed_martial_arts',
 };
 
 function normName(s) {
@@ -45,17 +50,8 @@ function normName(s) {
     .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-// Pinnacle's guest API returns decimal (European) prices — convert to American for comparison
-function pinPriceToAmerican(price) {
-  if (price == null) return null;
-  if (price <= -100 || price >= 100) return price; // already American
-  if (price >= 2.0) return Math.round((price - 1) * 100);
-  if (price > 1.0)  return Math.round(-100 / (price - 1));
-  return null; // invalid decimal price
-}
-
-function teamMatches(pickTeam, pinnacleTeam) {
-  const a = normName(pickTeam), b = normName(pinnacleTeam);
+function teamMatches(pickTeam, cacheTeam) {
+  const a = normName(pickTeam), b = normName(cacheTeam);
   if (!a || !b) return false;
   if (a === b) return true;
   const wordsA = a.split(' '), wordsB = b.split(' ');
@@ -66,86 +62,92 @@ function teamMatches(pickTeam, pinnacleTeam) {
   return (a.includes(lastB) && lastB.length > 4) || (b.includes(lastA) && lastA.length > 4);
 }
 
-async function checkOddsAgainstPinnacle(pick) {
+// Map bet type to The Odds API market key
+function betTypeToMarketKey(betType) {
+  const bt = (betType || '').toLowerCase();
+  if (['spread', 'run line', 'puck line'].some(t => bt.includes(t))) return 'spreads';
+  if (['over', 'under', 'total'].some(t => bt.includes(t))) return 'totals';
+  return 'h2h'; // moneyline default
+}
+
+async function checkOddsAgainstCache(pick) {
   const sport = (pick.sport || '').toUpperCase();
-  const leagueId = PINNACLE_LEAGUES[sport];
-  if (!leagueId) return null; // sport not on Pinnacle — skip check
+  const sportKey = SPORT_CACHE_KEYS[sport];
+  if (!sportKey) return null;
 
   const submittedOdds = parseInt(pick.odds);
   if (isNaN(submittedOdds)) return null;
 
   try {
-    const headers = { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 BetOS/1.0' };
-    const [matchupsRes, marketsRes] = await Promise.all([
-      fetch(`https://guest.api.arcadia.pinnacle.com/0.1/leagues/${leagueId}/matchups`, { headers, signal: AbortSignal.timeout(5000) }),
-      fetch(`https://guest.api.arcadia.pinnacle.com/0.1/leagues/${leagueId}/markets/straight`, { headers, signal: AbortSignal.timeout(5000) }),
-    ]);
+    // Allow up to 2 hours stale — older means no data for today's games
+    const cutoff = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    const { data: rows, error } = await supabase
+      .from('odds_cache')
+      .select('game_id, home_team, away_team, odds_data')
+      .eq('sport', sportKey)
+      .gte('last_fetched_at', cutoff)
+      .order('commence_time');
 
-    if (!matchupsRes.ok || !marketsRes.ok) return null;
+    if (error || !rows?.length) return null;
 
-    const matchups = await matchupsRes.json();
-    const markets  = await marketsRes.json();
-    if (!Array.isArray(matchups) || !Array.isArray(markets)) return null;
-
-    // Build matchup map (id → home/away names)
-    const matchupMap = {};
-    for (const m of matchups) {
-      if (m.special) continue;
-      const home = m.participants?.find(p => p.alignment === 'home')?.name;
-      const away = m.participants?.find(p => p.alignment === 'away')?.name;
-      if (home && away) matchupMap[m.id] = { home, away };
-    }
-
-    // Find the game matching pick.team (check home and away)
-    const matchedGame = Object.entries(matchupMap).find(([, g]) =>
-      teamMatches(pick.team, g.home) || teamMatches(pick.team, g.away)
+    // Find game matching pick's team
+    const matchedRow = rows.find(r =>
+      teamMatches(pick.team, r.home_team) || teamMatches(pick.team, r.away_team)
     );
-    if (!matchedGame) return { found: false, reason: 'Game not found on Pinnacle (may be too early or unavailable)' };
+    if (!matchedRow) return { found: false, reason: 'Game not found in odds cache' };
 
-    const [matchupId, game] = matchedGame;
-    const isHome = teamMatches(pick.team, game.home);
+    const isHome = teamMatches(pick.team, matchedRow.home_team);
+    const marketKey = betTypeToMarketKey(pick.bet_type);
+    const bookmakers = matchedRow.odds_data?.bookmakers || [];
 
-    // Find the ML market for this game
-    const mlMarket = markets.find(m => m.matchupId === parseInt(matchupId) && m.type === 'moneyline');
-    if (!mlMarket) return { found: true, game, pinnacleOdds: null, reason: 'No ML market found on Pinnacle yet' };
+    // Collect American-format prices from all bookmakers for this team + market
+    const prices = [];
+    for (const bk of bookmakers) {
+      const market = bk.markets?.find(m => m.key === marketKey);
+      if (!market) continue;
 
-    const prices     = mlMarket.prices || [];
-    const side       = isHome ? 'home' : 'away';
-    const pinOddsRaw = prices.find(p => p.designation === side)?.price;
-    if (pinOddsRaw === null || pinOddsRaw === undefined) {
-      return { found: true, game, pinnacleOdds: null, reason: 'Pinnacle price missing for this side — flag for review' };
+      let outcome;
+      if (marketKey === 'totals') {
+        const side = (pick.bet_type || '').toLowerCase().includes('under') ? 'Under' : 'Over';
+        outcome = market.outcomes?.find(o => o.name === side);
+      } else {
+        const teamName = isHome ? matchedRow.home_team : matchedRow.away_team;
+        outcome = market.outcomes?.find(o => teamMatches(o.name, teamName));
+      }
+
+      const price = parseInt(outcome?.price);
+      if (!isNaN(price)) prices.push(price);
     }
 
-    // Pinnacle returns decimal prices — convert to American before comparing
-    const pinOdds = pinPriceToAmerican(pinOddsRaw);
-    if (pinOdds === null) {
-      return { found: true, game, pinnacleOdds: pinOddsRaw, reason: 'Pinnacle price could not be converted — flag for review' };
-    }
-
-    const diff = Math.abs(submittedOdds - pinOdds);
-    // NaN diff means Pinnacle returned a non-numeric price (e.g. decimal format not yet converted).
-    // Flag for manual review rather than silently passing.
-    if (isNaN(diff)) {
+    if (!prices.length) {
       return {
-        found: true, game, pinnacleOdds: pinOdds, submittedOdds, diff: null,
-        suspicious: true,
-        reason: `Pinnacle price format unverifiable (got ${pinOdds}) — flagging for manual review`,
+        found: true,
+        game: { home: matchedRow.home_team, away: matchedRow.away_team },
+        cacheOdds: null,
+        reason: 'No prices found in cache for this market',
       };
     }
+
+    // Use median price across all books as the reference
+    prices.sort((a, b) => a - b);
+    const cacheOdds = prices[Math.floor(prices.length / 2)];
+    const diff = Math.abs(submittedOdds - cacheOdds);
+    const suspicious = diff > 20;
+
     return {
-      found:        true,
-      game,
-      pinnacleOdds: pinOdds,
+      found: true,
+      game: { home: matchedRow.home_team, away: matchedRow.away_team },
+      cacheOdds,
+      bookCount: prices.length,
       submittedOdds,
       diff,
-      // Flag if the submitted line is >20 pts off Pinnacle's sharp number
-      suspicious:   diff > 20,
-      reason:       diff > 20
-        ? `Submitted ${submittedOdds > 0 ? '+' : ''}${submittedOdds} but Pinnacle shows ${pinOdds > 0 ? '+' : ''}${pinOdds} (${diff} pts off) — line may not be real`
+      suspicious,
+      reason: suspicious
+        ? `Submitted ${submittedOdds > 0 ? '+' : ''}${submittedOdds} but ${prices.length} book${prices.length !== 1 ? 's' : ''} show ${cacheOdds > 0 ? '+' : ''}${cacheOdds} (${diff} pts off) — line may not be real`
         : null,
     };
   } catch (err) {
-    console.warn('[contest-audit] Pinnacle check failed (non-fatal):', err.message);
+    console.warn('[contest-audit] Odds cache check failed (non-fatal):', err.message);
     return null;
   }
 }
@@ -182,27 +184,27 @@ async function aiAuditPick(pick) {
     return { status: 'REJECTED', reason: issues.join('; '), confidence: 'RULE', aiUsed: false };
   }
 
-  // Step 2: Pinnacle real-time line check (free, no AI tokens)
-  // If the submitted odds are >20 pts off from Pinnacle's sharp number, flag immediately.
-  const pinCheck = await checkOddsAgainstPinnacle(pick);
-  if (pinCheck?.suspicious) {
+  // Step 2: Odds cache line check — compare against our cached book odds (DraftKings, FanDuel, BetMGM, etc.)
+  // If the submitted odds are >20 pts off from the market consensus, flag immediately.
+  const cacheCheck = await checkOddsAgainstCache(pick);
+  if (cacheCheck?.suspicious) {
     return {
       status: 'FLAGGED',
-      reason: pinCheck.reason,
-      confidence: 'PINNACLE',
+      reason: cacheCheck.reason,
+      confidence: 'CACHE',
       aiUsed: false,
-      pinnacleOdds: pinCheck.pinnacleOdds,
-      diff: pinCheck.diff,
+      cacheOdds: cacheCheck.cacheOdds,
+      diff: cacheCheck.diff,
     };
   }
 
-  // Step 3: AI smell-test — only runs if Pinnacle couldn't find the game or confirmed odds are real
-  // Include Pinnacle context in the prompt so the AI has real market data
-  const pinContext = pinCheck?.found && pinCheck?.pinnacleOdds != null
-    ? `\nPinnacle (sharp book) has this team at ${pinCheck.pinnacleOdds > 0 ? '+' : ''}${pinCheck.pinnacleOdds} — submitted line is ${pinCheck.diff} pts off, which is within acceptable range.`
-    : pinCheck?.found === false
-    ? '\nGame not found on Pinnacle (may be early line or niche market).'
-    : '\nPinnacle check unavailable.';
+  // Step 3: AI smell-test — only runs if cache confirmed odds are real or game not found
+  // Include market context in the prompt so the AI has real book data
+  const pinContext = cacheCheck?.found && cacheCheck?.cacheOdds != null
+    ? `\nOur odds cache (${cacheCheck.bookCount} books: DraftKings, FanDuel, BetMGM, etc.) shows this team at ${cacheCheck.cacheOdds > 0 ? '+' : ''}${cacheCheck.cacheOdds} — submitted line is ${cacheCheck.diff} pts off, which is within acceptable range.`
+    : cacheCheck?.found === false
+    ? '\nGame not found in our odds cache (may be early line or niche market).'
+    : '\nOdds cache check unavailable.';
 
   try {
     const todayDate = new Date().toISOString().split('T')[0];
@@ -227,10 +229,10 @@ Respond with EXACTLY one line: APPROVED or FLAGGED followed by a brief reason.`;
     if (answer.startsWith('FLAGGED')) {
       return { status: 'FLAGGED', reason: answer.replace('FLAGGED', '').replace(/^[\s-]+/, ''), confidence: 'AI', aiUsed: true };
     }
-    return { status: 'APPROVED', reason: answer.replace('APPROVED', '').replace(/^[\s-]+/, '') || 'Passed all checks', confidence: 'AI', aiUsed: true, pinnacleOdds: pinCheck?.pinnacleOdds };
+    return { status: 'APPROVED', reason: answer.replace('APPROVED', '').replace(/^[\s-]+/, '') || 'Passed all checks', confidence: 'AI', aiUsed: true, cacheOdds: cacheCheck?.cacheOdds };
   } catch (err) {
     console.warn('[contest-audit] AI check failed, approving by rules:', err.message);
-    return { status: 'APPROVED', reason: 'Passed rule + Pinnacle checks (AI unavailable)', confidence: 'PINNACLE', aiUsed: false, pinnacleOdds: pinCheck?.pinnacleOdds };
+    return { status: 'APPROVED', reason: 'Passed rule + odds cache checks (AI unavailable)', confidence: 'CACHE', aiUsed: false, cacheOdds: cacheCheck?.cacheOdds };
   }
 }
 
