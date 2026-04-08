@@ -259,10 +259,15 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
   const odds  = parseInt(pick.odds || 0);
   const units = parseFloat(pick.units || 1);
   let profit  = null;
-  if (result === 'WIN' && odds) {
-    profit = odds > 0
-      ? parseFloat(((odds / 100) * units).toFixed(3))
-      : parseFloat(((100 / Math.abs(odds)) * units).toFixed(3));
+  if (result === 'WIN') {
+    if (odds > 0) {
+      profit = parseFloat(((odds / 100) * units).toFixed(3));
+    } else if (odds < 0) {
+      profit = parseFloat(((100 / Math.abs(odds)) * units).toFixed(3));
+    } else {
+      // No odds stored — default to 1:1 payout (treat as +100 even money)
+      profit = parseFloat(units.toFixed(3));
+    }
   } else if (result === 'LOSS') {
     profit = parseFloat((-units).toFixed(3));
   } else if (result === 'PUSH') {

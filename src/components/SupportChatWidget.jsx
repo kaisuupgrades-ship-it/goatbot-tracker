@@ -34,8 +34,52 @@ export default function SupportChatWidget({ user }) {
   const [loading,  setLoading]  = useState(false);
   const [unread,   setUnread]   = useState(0);
   const [concernLogged, setConcernLogged] = useState(false);
-  const bottomRef = useRef(null);
-  const inputRef  = useRef(null);
+  const bottomRef  = useRef(null);
+  const inputRef   = useRef(null);
+  const btnRef     = useRef(null);
+
+  // ── Draggable launcher ──────────────────────────────────────────────────────
+  const [btnPos,    setBtnPos]    = useState({ x: -1, y: -1 }); // -1 = use CSS default
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart  = useRef(null);
+
+  const clampBtn = useCallback((p) => ({
+    x: Math.max(0, Math.min(window.innerWidth  - (btnRef.current?.offsetWidth  || 48), p.x)),
+    y: Math.max(0, Math.min(window.innerHeight - (btnRef.current?.offsetHeight || 48), p.y)),
+  }), []);
+
+  const onBtnMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
+    dragStart.current = { mx: e.clientX, my: e.clientY, bx: btnPos.x, by: btnPos.y };
+    setIsDragging(true);
+    e.preventDefault();
+  }, [btnPos]);
+
+  const onBtnTouchStart = useCallback((e) => {
+    const t = e.touches[0];
+    dragStart.current = { mx: t.clientX, my: t.clientY, bx: btnPos.x, by: btnPos.y };
+    setIsDragging(true);
+  }, [btnPos]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    function onMove(e) {
+      const { clientX, clientY } = e.touches ? e.touches[0] : e;
+      const { mx, my, bx, by } = dragStart.current;
+      setBtnPos(clampBtn({ x: bx + clientX - mx, y: by + clientY - my }));
+    }
+    function onUp() { setIsDragging(false); }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [isDragging, clampBtn]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -224,33 +268,47 @@ export default function SupportChatWidget({ user }) {
         </div>
       )}
 
-      {/* ── Launcher button ── */}
-      <button
-        onClick={() => setOpen(v => !v)}
-        style={{
-          position: 'fixed', bottom: '16px', right: '16px', zIndex: 900,
-          width: '48px', height: '48px', borderRadius: '50%',
-          background: open ? 'rgba(255,184,0,0.9)' : 'rgba(255,184,0,0.15)',
-          border: `2px solid ${open ? 'rgba(255,184,0,0.6)' : 'rgba(255,184,0,0.3)'}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1.2rem', cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-          transition: 'all 0.2s',
-        }}
-        title="BetOS Support Chat"
-      >
-        {open ? '✕' : '💬'}
-        {!open && unread > 0 && (
-          <div style={{
-            position: 'absolute', top: '-4px', right: '-4px',
-            width: '18px', height: '18px', borderRadius: '50%',
-            background: '#f87171', border: '2px solid var(--bg-base)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.6rem', fontWeight: 800, color: '#fff',
-          }}>
-            {unread}
-          </div>
-        )}
-      </button>
+      {/* ── Launcher button (draggable) ── */}
+      {(() => {
+        const hasDragged = btnPos.x >= 0 && btnPos.y >= 0;
+        const posStyle = hasDragged
+          ? { left: btnPos.x, top: btnPos.y, bottom: 'auto', right: 'auto' }
+          : { bottom: '16px', right: '16px' };
+        return (
+          <button
+            ref={btnRef}
+            onClick={() => { if (!isDragging) setOpen(v => !v); }}
+            onMouseDown={onBtnMouseDown}
+            onTouchStart={onBtnTouchStart}
+            style={{
+              position: 'fixed', ...posStyle, zIndex: 900,
+              width: '48px', height: '48px', borderRadius: '50%',
+              background: open ? 'rgba(255,184,0,0.9)' : 'rgba(255,184,0,0.15)',
+              border: `2px solid ${open ? 'rgba(255,184,0,0.6)' : 'rgba(255,184,0,0.3)'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.2rem',
+              cursor: isDragging ? 'grabbing' : 'grab',
+              boxShadow: isDragging ? '0 8px 28px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.5)',
+              transition: isDragging ? 'box-shadow 0.1s' : 'all 0.2s',
+              userSelect: 'none', touchAction: 'none',
+            }}
+            title="BetOS Support Chat (drag to move)"
+          >
+            {open ? '✕' : '💬'}
+            {!open && unread > 0 && (
+              <div style={{
+                position: 'absolute', top: '-4px', right: '-4px',
+                width: '18px', height: '18px', borderRadius: '50%',
+                background: '#f87171', border: '2px solid var(--bg-base)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.6rem', fontWeight: 800, color: '#fff',
+              }}>
+                {unread}
+              </div>
+            )}
+          </button>
+        );
+      })()}
     </>
   );
 }

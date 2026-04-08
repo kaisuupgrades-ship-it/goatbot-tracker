@@ -5,6 +5,222 @@ import {
 } from 'recharts';
 import { getUserPrefs } from '@/lib/userPrefs';
 
+// ── ESPN sport path map (client-side copy for live score fetching) ─────────────
+const ESPN_SPORT_PATHS = {
+  mlb:   'baseball/mlb',
+  nfl:   'football/nfl',
+  nba:   'basketball/nba',
+  nhl:   'hockey/nhl',
+  ncaaf: 'football/college-football',
+  ncaab: 'basketball/mens-college-basketball',
+  mls:   'soccer/usa.1',
+  wnba:  'basketball/wnba',
+};
+
+/** Strip spread/line number from team field before matching */
+function stripLine(team) {
+  if (!team) return team;
+  return team.replace(/\s*[+-]\d+(?:\.\d+)?\s*$/, '').replace(/\s+(?:ML|ml)\s*$/i, '').trim();
+}
+
+/** Fuzzy team name normalizer */
+function normTeam(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** Find the game matching this pick in an ESPN events array */
+function findPickGame(pick, events) {
+  if (!events?.length) return null;
+  const teamRaw = stripLine(pick.team || pick.home_team || '');
+  const teamN = normTeam(teamRaw);
+  if (!teamN || teamN.length < 2) return null;
+
+  for (const evt of events) {
+    const comp = evt.competitions?.[0];
+    if (!comp) continue;
+    const comps = comp.competitors || [];
+    const homeC = comps.find(c => c.homeAway === 'home');
+    const awayC = comps.find(c => c.homeAway === 'away');
+    if (!homeC || !awayC) continue;
+
+    const homeNames = [
+      homeC.team?.displayName, homeC.team?.shortDisplayName,
+      homeC.team?.name, homeC.team?.abbreviation,
+    ].filter(Boolean).map(normTeam);
+    const awayNames = [
+      awayC.team?.displayName, awayC.team?.shortDisplayName,
+      awayC.team?.name, awayC.team?.abbreviation,
+    ].filter(Boolean).map(normTeam);
+
+    const allNames = [...homeNames, ...awayNames];
+    const matched = allNames.some(n => n.length >= 2 && (n.includes(teamN) || teamN.includes(n)));
+    if (!matched) continue;
+
+    const statusType  = comp.status?.type;
+    const state       = statusType?.state || '';
+    const isLive      = state === 'in';
+    const isFinal     = statusType?.completed || state === 'post';
+    const homeScore   = parseInt(homeC.score || 0);
+    const awayScore   = parseInt(awayC.score || 0);
+    const shortDetail = statusType?.shortDetail || '';
+
+    // Determine which side the pick is on (home / away / null)
+    let side = null;
+    const isOnHome = homeNames.some(n => n.length >= 2 && (n.includes(teamN) || teamN.includes(n)));
+    const isOnAway = awayNames.some(n => n.length >= 2 && (n.includes(teamN) || teamN.includes(n)));
+    if (isOnHome) side = 'home';
+    else if (isOnAway) side = 'away';
+
+    return {
+      homeAbbr:     homeC.team?.abbreviation || homeC.team?.shortDisplayName || '?',
+      awayAbbr:     awayC.team?.abbreviation || awayC.team?.shortDisplayName || '?',
+      homeScore, awayScore,
+      isLive, isFinal, side,
+      shortDetail,
+      startTime: evt.date,
+    };
+  }
+  return null;
+}
+
+/** Calculate live trend: 'WIN' | 'LOSS' | 'NEUTRAL' | null */
+function calcTrend(pick, game) {
+  if (!game || !game.isLive) return null; // only for live games
+  const betType = (pick.bet_type || 'Moneyline').toLowerCase();
+  const { homeScore, awayScore, side } = game;
+
+  if (betType.includes('over') || betType.includes('under')) {
+    const line = parseFloat(pick.line) || 0;
+    if (!line) return 'NEUTRAL';
+    const total = homeScore + awayScore;
+    const isOver = betType.includes('over');
+    if (total > line) return isOver ? 'WIN' : 'LOSS';
+    if (total < line) return isOver ? 'LOSS' : 'WIN';
+    return 'NEUTRAL';
+  }
+
+  if (!side) return 'NEUTRAL';
+  const pickedScore = side === 'home' ? homeScore : awayScore;
+  const oppScore    = side === 'home' ? awayScore : homeScore;
+
+  if (betType.includes('spread') || betType.includes('run line') || betType.includes('puck line')) {
+    const line = parseFloat(pick.line) || 0;
+    const adj  = pickedScore + line;
+    if (adj > oppScore) return 'WIN';
+    if (adj < oppScore) return 'LOSS';
+    return 'NEUTRAL';
+  }
+
+  // Moneyline
+  if (pickedScore > oppScore) return 'WIN';
+  if (pickedScore < oppScore) return 'LOSS';
+  return 'NEUTRAL';
+}
+
+// ── Live score fetching hook ──────────────────────────────────────────────────
+function useLiveScores(picks) {
+  const [scoreMap, setScoreMap] = useState({}); // key: "sport|date" → ESPN events[]
+
+  useEffect(() => {
+    if (!picks?.length) return;
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    // Fetch for pending picks (live/recent) and picks from today/yesterday without graded scores
+    const needsFetch = picks.filter(p => {
+      if (p.result && p.result !== 'PENDING' && p.graded_home_score != null) return false;
+      return p.date >= yesterday;
+    });
+    if (!needsFetch.length) return;
+
+    const sportDates = [...new Set(
+      needsFetch.map(p => `${(p.sport || '').toLowerCase()}|${p.date}`)
+    )];
+
+    let cancelled = false;
+    sportDates.forEach(async key => {
+      const [sport, date] = key.split('|');
+      const path = ESPN_SPORT_PATHS[sport];
+      if (!path || !date) return;
+      try {
+        const dateStr = date.replace(/-/g, '');
+        const res = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${dateStr}`,
+          { headers: { 'User-Agent': 'Mozilla/5.0' } }
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        setScoreMap(prev => ({ ...prev, [key]: data.events || [] }));
+      } catch { /* non-critical */ }
+    });
+
+    return () => { cancelled = true; };
+  }, [picks]);
+
+  return scoreMap;
+}
+
+// ── MiniScoreBug component ────────────────────────────────────────────────────
+function MiniScoreBug({ pick, game }) {
+  if (!game) return null;
+
+  const { homeAbbr, awayAbbr, homeScore, awayScore, isLive, isFinal, shortDetail, startTime } = game;
+
+  if (!isLive && !isFinal) {
+    // Upcoming: show game time
+    if (!startTime) return null;
+    const dt = new Date(startTime);
+    const timeStr = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+        <span>🕐</span>
+        <span>{timeStr}</span>
+      </div>
+    );
+  }
+
+  const scoreColor = (score, opp) => score > opp ? '#4ade80' : score < opp ? '#f87171' : 'var(--text-secondary)';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.65rem', fontFamily: 'IBM Plex Mono, monospace' }}>
+      {isLive && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{
+            width: '5px', height: '5px', borderRadius: '50%', background: '#f87171',
+            animation: 'pulse 1.2s ease-in-out infinite', display: 'inline-block', flexShrink: 0,
+          }} />
+          <span style={{ color: '#f87171', fontWeight: 700, fontSize: '0.6rem' }}>LIVE</span>
+        </span>
+      )}
+      {isFinal && <span style={{ color: 'var(--text-muted)', fontSize: '0.6rem', fontWeight: 700 }}>F</span>}
+      <span style={{ color: scoreColor(awayScore, homeScore), fontWeight: 700 }}>{awayAbbr}</span>
+      <span style={{ color: scoreColor(awayScore, homeScore), fontWeight: 800 }}>{awayScore}</span>
+      <span style={{ color: 'var(--text-muted)' }}>-</span>
+      <span style={{ color: scoreColor(homeScore, awayScore), fontWeight: 800 }}>{homeScore}</span>
+      <span style={{ color: scoreColor(homeScore, awayScore), fontWeight: 700 }}>{homeAbbr}</span>
+      {isLive && shortDetail && (
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.58rem', marginLeft: '2px' }}>| {shortDetail}</span>
+      )}
+    </div>
+  );
+}
+
+// ── TrendingBadge component ───────────────────────────────────────────────────
+function TrendingBadge({ trend }) {
+  if (!trend || trend === 'NEUTRAL') return null;
+  const isWin  = trend === 'WIN';
+  return (
+    <span style={{
+      padding: '1px 5px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
+      background: isWin ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+      color: isWin ? '#4ade80' : '#f87171',
+      border: `1px solid ${isWin ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
+      whiteSpace: 'nowrap',
+    }}>
+      {isWin ? '↑ WIN' : '↓ LOSS'}
+    </span>
+  );
+}
+
 // Count-up animation hook
 function useCountUp(target, duration = 800) {
   const [value, setValue] = useState(0);
@@ -789,9 +1005,10 @@ function DateRangeSelector({ range, onChange }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function TrackerTab({ picks, user }) {
+export default function TrackerTab({ picks, user, onViewGame }) {
   const { timezone } = getUserPrefs(user);
   const [dateRange, setDateRange] = useState({ start: null, end: null });
+  const liveScores = useLiveScores(picks);
 
   // Filter picks by date range
   const filteredPicks = useMemo(() => {
@@ -949,27 +1166,83 @@ export default function TrackerTab({ picks, user }) {
         <div className="surface" style={{ padding: '1.1rem 1.25rem' }}>
           <h2 style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.75rem', color: 'var(--text-primary)' }}>Recent Picks</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {[...picks].reverse().slice(0, 8).map((p) => (
-              <div key={p.id} className="surface-elevated" style={{ padding: '0.7rem 0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                  <span style={{ fontSize: '0.88rem' }}>{sportEmoji(p.sport)}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '68px' }}>{p.date}</span>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{p.team}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{p.sport} · {p.bet_type}</span>
+            {[...picks].reverse().slice(0, 8).map((p) => {
+              // Resolve live game data: prefer graded scores for settled picks, else live ESPN
+              const scoreKey = `${(p.sport || '').toLowerCase()}|${p.date}`;
+              const espnEvents = liveScores[scoreKey] || [];
+              let game = null;
+
+              if ((p.result === 'WIN' || p.result === 'LOSS' || p.result === 'PUSH')
+                  && p.graded_home_score != null && p.graded_away_score != null) {
+                // Build a synthetic "game" from graded score columns
+                const teamRaw = stripLine(p.team || '');
+                game = {
+                  homeAbbr:  p.home_team ? (p.home_team.split(' ').pop()) : 'HM',
+                  awayAbbr:  p.away_team ? (p.away_team.split(' ').pop()) : 'AW',
+                  homeScore: parseInt(p.graded_home_score),
+                  awayScore: parseInt(p.graded_away_score),
+                  isLive: false, isFinal: true, side: null, shortDetail: '',
+                };
+              } else if (espnEvents.length) {
+                game = findPickGame(p, espnEvents);
+              }
+
+              const trend = calcTrend(p, game);
+              const units = parseFloat(p.units) || 1;
+
+              return (
+                <div key={p.id} className="surface-elevated" style={{ padding: '0.7rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  {/* Top row: emoji, date, team, sport/type, units badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+                      <span style={{ fontSize: '0.88rem', flexShrink: 0 }}>{sportEmoji(p.sport)}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', flexShrink: 0 }}>{p.date}</span>
+                      {onViewGame
+                        ? (
+                          <button onClick={() => onViewGame(p)} style={{
+                            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                            fontWeight: 600, color: 'var(--gold)', fontSize: '0.88rem',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            textDecoration: 'underline dotted', textUnderlineOffset: '2px',
+                            fontFamily: 'inherit',
+                          }} title="View on Scoreboard">{p.team}</button>
+                        ) : (
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</span>
+                        )
+                      }
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', flexShrink: 0, whiteSpace: 'nowrap' }}>{p.sport} · {p.bet_type}</span>
+                    </div>
+                    {/* Units badge */}
+                    <span style={{
+                      padding: '1px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700,
+                      background: 'rgba(255,184,0,0.1)', color: 'var(--gold)',
+                      border: '1px solid rgba(255,184,0,0.2)', flexShrink: 0,
+                    }}>{units}u</span>
+                  </div>
+
+                  {/* Bottom row: scorebug + trend + odds + result + P/L */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    {/* Left: scorebug + trend */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <MiniScoreBug pick={p} game={game} />
+                      <TrendingBadge trend={trend} />
+                    </div>
+                    {/* Right: odds, result badge, P/L */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
+                      <span style={{ color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.82rem', fontFamily: 'IBM Plex Mono' }}>
+                        {parseInt(p.odds) > 0 ? '+' : ''}{p.odds}
+                      </span>
+                      <span className={`badge-${p.result?.toLowerCase() || 'pending'}`} style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
+                        {p.result || 'PENDING'}
+                      </span>
+                      <span style={{ color: parseFloat(p.profit) >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600, fontSize: '0.82rem', fontFamily: 'IBM Plex Mono', minWidth: '50px', textAlign: 'right' }}>
+                        {p.profit != null && p.profit !== '' ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '—'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.88rem', fontFamily: 'IBM Plex Mono' }}>
-                    {parseInt(p.odds) > 0 ? '+' : ''}{p.odds}
-                  </span>
-                  <span className={`badge-${p.result?.toLowerCase() || 'pending'}`} style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
-                    {p.result || 'PENDING'}
-                  </span>
-                  <span style={{ color: parseFloat(p.profit) >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600, fontSize: '0.82rem', fontFamily: 'IBM Plex Mono', minWidth: '50px', textAlign: 'right' }}>
-                    {p.profit != null && p.profit !== '' ? `${parseFloat(p.profit) >= 0 ? '+' : ''}${parseFloat(p.profit).toFixed(2)}u` : '—'}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
