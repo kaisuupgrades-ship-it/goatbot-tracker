@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 15;
 
-const THE_ODDS_KEY  = process.env.THE_ODDS_API_KEY;
+const THE_ODDS_KEY  = process.env.THE_ODDS_API_KEY?.trim();
 const THE_ODDS_BASE = 'https://api.the-odds-api.com/v4';
 
 // The Odds API sport keys
@@ -144,12 +144,19 @@ export async function GET(req) {
     url.searchParams.set('oddsFormat', 'american');
     url.searchParams.set('bookmakers', 'draftkings,fanduel,betmgm'); // top 3 books
 
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
+    const reqUrl = url.toString();
+    console.log('[/api/props] Fetching:', reqUrl.replace(THE_ODDS_KEY, '***'));
+    const res = await fetch(reqUrl, { signal: AbortSignal.timeout(10000) });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.warn('[/api/props] Odds API error:', res.status, err?.message);
-      return NextResponse.json({ props: [], categories: [], note: err?.message || `HTTP ${res.status}` });
+      const errBody = await res.json().catch(() => ({}));
+      const errMsg = errBody?.message || `HTTP ${res.status}`;
+      console.error('[/api/props] Odds API error:', res.status, errMsg, {
+        sport, sportKey, eventId,
+        keyPresent: !!THE_ODDS_KEY,
+        keyLength: THE_ODDS_KEY?.length,
+      });
+      return NextResponse.json({ props: [], categories: [], note: errMsg });
     }
 
     const data = await res.json();
@@ -224,7 +231,7 @@ export async function GET(req) {
     return NextResponse.json(result);
 
   } catch (err) {
-    console.error('[/api/props] Fetch failed:', err.message);
+    console.error('[/api/props] Fetch failed:', err.message, { sport, eventId });
     return NextResponse.json({ props: [], categories: [], note: err.message });
   }
 }
