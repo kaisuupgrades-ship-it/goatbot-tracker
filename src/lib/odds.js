@@ -50,7 +50,8 @@ export async function fetchOddsForSport(sportKey, { timeoutMs = 8000 } = {}) {
   const url = new URL(`${THE_ODDS_API_BASE}/sports/${apiSportKey}/odds/`);
   url.searchParams.set('apiKey', THE_ODDS_API_KEY);
   url.searchParams.set('regions', 'us');
-  url.searchParams.set('markets', 'h2h,spreads,totals');
+  // TODO: add totals back after migrating to OddsPapi (unlimited credits)
+  url.searchParams.set('markets', 'h2h,spreads');
   url.searchParams.set('oddsFormat', 'american');
   url.searchParams.set('daysFrom', '1'); // today only
 

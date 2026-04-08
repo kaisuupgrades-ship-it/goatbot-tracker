@@ -459,6 +459,12 @@ async function fetchInjuryData(sport, homeTeam, awayTeam) {
 // Uses the odds cache to find the The Odds API event UUID, then calls the props endpoint.
 // Returns a formatted string for injection into the AI prompt, or '' on failure.
 async function fetchPlayerProps(sport, homeTeam, awayTeam) {
+  // TODO: Re-enable after OddsPapi migration — currently disabled to save Odds API credits.
+  // Each call costs 3-5 credits per game (MLB=4, NBA=5, NHL=3 market keys).
+  // At MAX_GAMES_PER_SPORT=8 × 3 active sports × 2 cron runs/day ≈ up to 192 credits/day.
+  return '';
+
+  // eslint-disable-next-line no-unreachable
   const THE_ODDS_KEY = (process.env.THE_ODDS_API_KEY || '').trim();
   if (!THE_ODDS_KEY) return '';
 
