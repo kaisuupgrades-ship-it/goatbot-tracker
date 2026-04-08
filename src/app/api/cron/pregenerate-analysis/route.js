@@ -1116,6 +1116,16 @@ export async function GET(req) {
           );
           oddsEventCountBySport[sk] = events.length;
           console.log(`[pregenerate] Odds fallback-fetched for ${sk}: ${events.length} games`);
+        } else {
+          // API returned a non-200 error — do NOT treat as "no events".
+          // Log clearly and let the gate fall back to stale odds_cache data below.
+          const errBody = await res.json().catch(() => ({}));
+          const statusLabel = res.status === 401 ? '401 Unauthorized (invalid API key)'
+            : res.status === 403 ? '403 Forbidden (quota exhausted or key invalid)'
+            : res.status === 429 ? '429 Too Many Requests (rate limited)'
+            : `HTTP ${res.status}`;
+          console.warn(`[pregenerate] ⚠️ Odds API error for ${sk}: ${statusLabel}${errBody?.message ? ` — ${errBody.message}` : ''} — will fall back to stale odds_cache`);
+          // Leave oddsEventCountBySport[sk] unset so the gate uses cache fallback path
         }
       } catch (e) {
         console.log(`[pregenerate] Odds pre-warm failed for ${sk}:`, e.message);
@@ -1169,9 +1179,31 @@ export async function GET(req) {
     if (THE_ODDS_KEY && ODDS_SPORT_KEYS[sport]) {
       oddsApiGames = await fetchGamesFromOddsCache(sport);
       if (oddsApiGames.length === 0) {
-        console.log(`[pregenerate] ⏭ ${sport.toUpperCase()}: 0 events with active odds on The Odds API — skipping sport entirely`);
-        skipped.push(`${sport}: no-odds-api-events`);
-        continue;
+        // Fresh cache returned nothing. Before skipping, check if STALE cache data
+        // exists — if it does, the Odds API likely failed (quota/auth/network) and we
+        // should still run analyses rather than silently dropping real games.
+        const { data: staleRows } = await supabase
+          .from('odds_cache')
+          .select('home_team, away_team, commence_time, last_fetched_at')
+          .eq('sport', sport)
+          .in('game_status', ['pre', 'live'])
+          .order('last_fetched_at', { ascending: false })
+          .limit(20);
+
+        if (staleRows?.length) {
+          const ageMin = Math.round((Date.now() - new Date(staleRows[0].last_fetched_at).getTime()) / 60_000);
+          console.warn(`[pregenerate] ⚠️ ${sport.toUpperCase()}: No fresh odds in cache (Odds API likely returned an error). Found ${staleRows.length} stale game(s) aged ${ageMin}min — proceeding with analyses to avoid missing real games`);
+          oddsApiGames = staleRows.map(r => ({
+            homeTeam: r.home_team,
+            awayTeam: r.away_team,
+            gameTime: r.commence_time || '',
+          }));
+        } else {
+          // No stale data either — this is a genuine "no games today" for this sport
+          console.log(`[pregenerate] ⏭ ${sport.toUpperCase()}: 0 events in odds_cache (fresh or stale) — genuinely no games today, skipping`);
+          skipped.push(`${sport}: no-odds-api-events`);
+          continue;
+        }
       }
       console.log(`[pregenerate] ✅ Odds API gate: ${sport.toUpperCase()} has ${oddsApiGames.length} event(s) with active odds`);
     }
