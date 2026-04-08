@@ -854,6 +854,126 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
   return null; // all tiers failed
 }
 
+/**
+ * Process one game end-to-end: dedup check → odds fetch → AI analysis → DB upsert.
+ * Called by the dispatcher in single-game mode (each invocation gets its own full budget).
+ */
+async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, isAdmin, runId, triggerSource }) {
+  const label = `${awayTeam}@${homeTeam} (${sport.toUpperCase()})`;
+
+  // Guard A: skip if a valid analysis exists within 12h (unless force)
+  if (!force) {
+    const dedupCutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const { data: existing } = await supabase
+      .from('game_analyses')
+      .select('id, updated_at, analysis')
+      .eq('sport', sport).eq('game_date', gameDate)
+      .ilike('home_team', homeTeam).ilike('away_team', awayTeam)
+      .maybeSingle();
+    if (existing && existing.updated_at > dedupCutoff) {
+      const noOddsMarkers = ['No odds data available', 'ODDS NOT YET AVAILABLE', '⚠️ NOTE: Generated without live web search'];
+      const cachedHasNoOdds = existing.analysis && noOddsMarkers.some(m => existing.analysis.includes(m));
+      if (!cachedHasNoOdds) {
+        const ageMin = Math.round((Date.now() - new Date(existing.updated_at).getTime()) / 60000);
+        console.log(`[pregenerate] ⏭ ${label} — dedup skip (${ageMin}min old)`);
+        return { skipped: true, reason: 'dedup', homeTeam, awayTeam, sport };
+      }
+    }
+  }
+
+  // Odds gate: no analysis without odds lines
+  const oddsContext = await fetchCachedOdds(sport, homeTeam, awayTeam);
+  if (!oddsContext && !isAdmin) {
+    console.log(`[pregenerate] ${label} — no odds, skipping`);
+    return { skipped: true, reason: 'no-odds', homeTeam, awayTeam, sport };
+  }
+
+  // Fetch performance context, injury data, and player props in parallel
+  const [perfContext, injuryData, propsData] = await Promise.all([
+    buildPerformanceContext(sport).catch(() => ''),
+    fetchInjuryData(sport, homeTeam, awayTeam).catch(() => ''),
+    fetchPlayerProps(sport, homeTeam, awayTeam).catch(() => ''),
+  ]);
+
+  console.log(`[pregenerate] ⚡ Generating: ${label}`);
+  const t0 = Date.now();
+  const result = await generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext || '', perfContext, injuryData, propsData, 'full', isAdmin);
+  if (!result) throw new Error(`All AI tiers failed for ${label}`);
+  const latency_ms = Date.now() - t0;
+
+  // Parse structured fields from output (confM targets Best Play line to avoid Spread section mismatch)
+  const pickM = result.text.match(/THE PICK[:\s]+([^\n]{5,200})/i);
+  const confM = result.text.match(/Edge:\s*[\d.]+%\s*\|\s*Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i);
+  const edgeM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
+  const altM  = result.text.match(/ALTERNATE ANGLES[:\s]+([^\n]{5,300})/i);
+  const lineM = result.text.match(/LINE MOVEMENT[:\s]+([^\n]{5,300})/i);
+  const unitM = result.text.match(/UNIT SIZING[:\s]+([^\n]{5,200})/i);
+  const probM = result.text.match(/BetOS WIN PROBABILITY[:\s]+([^\n]{5,300})/i);
+
+  const { data: upserted, error: upsertErr } = await supabase.from('game_analyses').upsert(
+    [{
+      sport,
+      game_date:        gameDate,
+      home_team:        homeTeam,
+      away_team:        awayTeam,
+      analysis:         result.text,
+      model:            result.model,
+      provider:         result.provider,
+      was_fallback:     result.was_fallback,
+      latency_ms:       result.latency_ms,
+      tokens_in:        result.tokens_in,
+      tokens_out:       result.tokens_out,
+      prompt_version:   result.prompt_version,
+      trigger_source:   triggerSource,
+      run_id:           runId,
+      prediction_pick:  pickM?.[1]?.trim() || null,
+      prediction_conf:  confM?.[1]?.trim() || null,
+      prediction_edge:  edgeM?.[1]?.trim() || null,
+      alternate_angles: altM?.[1]?.trim() || null,
+      line_movement:    lineM?.[1]?.trim() || null,
+      unit_sizing:      unitM?.[1]?.trim() || null,
+      win_probability:  probM?.[1]?.trim() || null,
+      generated_at:     new Date().toISOString(),
+      updated_at:       new Date().toISOString(),
+    }],
+    { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
+  ).select('id').maybeSingle();
+
+  if (upsertErr) throw new Error(`DB save failed: ${upsertErr.message}`);
+
+  // Non-blocking audit log (fire-and-forget)
+  supabase.from('analysis_audit_logs').insert([{
+    analysis_id:     upserted?.id || null,
+    sport,
+    game_date:       gameDate,
+    home_team:       homeTeam,
+    away_team:       awayTeam,
+    model_requested: 'claude-opus-4-6',
+    model_used:      result.model_used,
+    provider:        result.provider,
+    was_fallback:    result.was_fallback,
+    prompt_version:  result.prompt_version,
+    system_prompt:   result.system_prompt,
+    user_prompt:     result.user_prompt,
+    odds_context:    oddsContext || null,
+    espn_game_state: 'pre',
+    raw_response:    result.text,
+    tokens_in:       result.tokens_in,
+    tokens_out:      result.tokens_out,
+    latency_ms:      result.latency_ms,
+    parsed_pick:     pickM?.[1]?.trim() || null,
+    parsed_conf:     confM?.[1]?.trim() || null,
+    parsed_edge:     edgeM?.[1]?.trim() || null,
+    trigger_source:  triggerSource,
+    run_id:          runId,
+  }]).then(({ error: auditErr }) => {
+    if (auditErr) console.warn('[pregenerate] Audit log insert failed:', auditErr.message);
+  });
+
+  console.log(`[pregenerate] ✅ ${label} done — model=${result.model_used} latency=${latency_ms}ms`);
+  return { success: true, sport, homeTeam, awayTeam, model: result.model_used, latency_ms };
+}
+
 export async function GET(req) {
   // Auth check
   const authHeader = req.headers.get('authorization');
@@ -874,6 +994,30 @@ export async function GET(req) {
   const sportFilter = params.get('sport') || null;
   // Optional: override date (YYYY-MM-DD). Used by admin "Generate for Tomorrow" button.
   const dateOverride = params.get('date') || null;
+
+  // ── Single-game mode (per-game worker invocations fired by the dispatcher) ──
+  // When homeTeam + awayTeam are in the URL, this is a dispatcher child call.
+  // Return immediately after processing — bypasses Guard B and the full sport loop.
+  const homeTeamParam = params.get('homeTeam');
+  const awayTeamParam = params.get('awayTeam');
+  if (homeTeamParam && awayTeamParam) {
+    const etFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+    try {
+      const result = await processSingleGame({
+        sport:         params.get('sport') || sportFilter || 'mlb',
+        homeTeam:      homeTeamParam,
+        awayTeam:      awayTeamParam,
+        gameDate:      params.get('gameDate') || dateOverride || etFmt.format(new Date()),
+        force,
+        isAdmin:       force || !!params.get('admin'),
+        runId:         params.get('runId') || null,
+        triggerSource: params.get('triggerSource') || 'dispatcher',
+      });
+      return NextResponse.json(result, { status: result.error ? 500 : 200 });
+    } catch (e) {
+      return NextResponse.json({ error: e.message, homeTeam: homeTeamParam, awayTeam: awayTeamParam }, { status: 500 });
+    }
+  }
 
   // Guard B (time-based cron lock): prevent duplicate runs within 10 minutes.
   // Admin-triggered runs (force, per-sport, or date override) always bypass the lock.
@@ -983,6 +1127,8 @@ export async function GET(req) {
   const refreshed = []; // lightweight quick-refresh runs
   const skipped   = [];
   const errors    = [];
+  // All games queued for dispatcher self-calls (filled during sport loop, dispatched after)
+  const allGamesToDispatch = [];
 
   // Filter to a single sport if specified (allows fast per-sport admin calls)
   const sportsToProcess = sportFilter
@@ -1011,9 +1157,6 @@ export async function GET(req) {
     } catch { /* non-critical */ }
   }
 
-  // Cache performance context per sport (one DB query per sport, not per game)
-  const perfContextCache = {};
-
   for (const [sport, _] of sportsToProcess) {
     sportIndex++;
     await writeProgress(sport, 'running');
@@ -1026,16 +1169,6 @@ export async function GET(req) {
       console.log(`[pregenerate] ${sport.toUpperCase()}: Odds API has 0 events today — skipping sport entirely`);
       skipped.push(`${sport.toUpperCase()}: no active odds`);
       continue;
-    }
-
-    // Build the self-improvement context for this sport (cached)
-    if (!perfContextCache[sport]) {
-      try {
-        perfContextCache[sport] = await buildPerformanceContext(sport);
-      } catch (e) {
-        console.warn(`[pregenerate] Performance context failed for ${sport}:`, e.message);
-        perfContextCache[sport] = '';
-      }
     }
 
     // Admin runs (manual force, per-sport, or date override) include ALL game states
@@ -1143,146 +1276,57 @@ export async function GET(req) {
 
     if (!gamesToProcess.length) continue;
 
-    // Cap games per sport to avoid timeout: admin = 12 max, cron = 8 max
+    // Cap per sport (admin = 12, cron = 8) before queuing for dispatch
     const cap = isAdmin ? 12 : MAX_GAMES_PER_SPORT;
     if (gamesToProcess.length > cap) {
-      console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} → ${cap} games this run (admin=${isAdmin})`);
+      console.log(`[pregenerate] ${sport.toUpperCase()}: capping ${gamesToProcess.length} → ${cap} games`);
       gamesToProcess.splice(cap);
     }
 
-    // Process 3 games at a time in parallel for both admin and cron.
-    // With 90s max per game, 3 parallel = ~90s per batch vs 270s sequential.
-    const BATCH_SIZE = 3;
-    console.log(`[pregenerate] ${sport.toUpperCase()}: ${gamesToProcess.length} games to process (batch=${BATCH_SIZE}, admin=${isAdmin})`);
+    // Queue all games for the parallel dispatcher — each gets its own invocation budget
+    for (const g of gamesToProcess) {
+      allGamesToDispatch.push({ sport, homeTeam: g.homeTeam, awayTeam: g.awayTeam, triggerSource });
+    }
+    console.log(`[pregenerate] ${sport.toUpperCase()}: queued ${gamesToProcess.length} game(s) for dispatch`);
+  }
 
-    for (let i = 0; i < gamesToProcess.length; i += BATCH_SIZE) {
-      const batch = gamesToProcess.slice(i, i + BATCH_SIZE);
+  // ── Dispatcher: fire one self-call per game, all in parallel ─────────────────
+  // Each child invocation runs processSingleGame() with its own full maxDuration budget
+  // instead of sharing a single function's time across all games.
+  const selfBase = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://betos.win'}/api/cron/pregenerate-analysis`;
+  const cronSecret = process.env.CRON_SECRET || '';
+  console.log(`[pregenerate] Dispatching ${allGamesToDispatch.length} game worker(s) in parallel (runId=${runId})`);
 
-      // Safety cutoff: cron stops at 4 min; admin has no cutoff (Vercel maxDuration handles it)
-      if (!isAdmin) {
-        const elapsed = Date.now() - started;
-        if (elapsed > 240_000) { // 4 min
-          console.warn(`[pregenerate] Approaching timeout at ${Math.round(elapsed/1000)}s, stopping ${sport} early`);
-          for (const g of gamesToProcess.slice(i)) {
-            errors.push(`${g.awayTeam}@${g.homeTeam}: timeout cutoff`);
-          }
-          break;
-        }
-      }
+  const dispatchResults = await Promise.allSettled(
+    allGamesToDispatch.map(({ sport, homeTeam, awayTeam, triggerSource: ts }) => {
+      const url = new URL(selfBase);
+      url.searchParams.set('sport', sport);
+      url.searchParams.set('homeTeam', homeTeam);
+      url.searchParams.set('awayTeam', awayTeam);
+      url.searchParams.set('gameDate', todayStr);
+      url.searchParams.set('runId', runId);
+      url.searchParams.set('triggerSource', ts || 'dispatcher');
+      if (force) url.searchParams.set('force', 'true');
+      return fetch(url.toString(), {
+        headers: { authorization: `Bearer ${cronSecret}` },
+        signal: AbortSignal.timeout(400_000), // 400s per game max
+      }).then(async r => {
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok && !json.skipped) throw new Error(json.error || `HTTP ${r.status}`);
+        return { sport, homeTeam, awayTeam, ...json };
+      });
+    })
+  );
 
-      // Pre-fetch ESPN injury data and player props for all games in this batch in parallel.
-      // Both run once per batch so all fallback tiers have the same enriched data.
-      const [injuryDataMap, propsDataMap] = await Promise.all([
-        Promise.all(batch.map(({ homeTeam, awayTeam }) =>
-          fetchInjuryData(sport, homeTeam, awayTeam).catch(() => '')
-        )),
-        Promise.all(batch.map(({ homeTeam, awayTeam }) =>
-          fetchPlayerProps(sport, homeTeam, awayTeam).catch(() => '')
-        )),
-      ]);
-
-      const batchResults = await Promise.allSettled(
-        batch.map(async ({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode }, batchIdx) => {
-          const label = `${awayTeam}@${homeTeam} (${sport.toUpperCase()}) [${gameMode}]`;
-          console.log(`[pregenerate] ${gameMode === 'refresh' ? '↻ Refreshing' : '⚡ Generating'}: ${label} ${gameTime}`);
-
-          const injuryData = injuryDataMap[batchIdx] || '';
-          const propsData  = propsDataMap[batchIdx]  || '';
-          if (injuryData) console.log(`[pregenerate] 🏥 Injury data fetched for ${awayTeam}@${homeTeam}`);
-          if (propsData)  console.log(`[pregenerate] 🎯 Props data fetched for ${awayTeam}@${homeTeam}`);
-
-          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], injuryData, propsData, gameMode, isAdmin);
-          if (!result) throw new Error('no AI response');
-
-          // Parse structured sections from the richer v2.0 analysis output
-          const pickM   = result.text.match(/THE PICK[:\s]+([^\n]{5,200})/i);
-          const confM   = result.text.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
-          const edgeM   = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
-          const altM    = result.text.match(/ALTERNATE ANGLES[:\s]+([^\n]{5,300})/i);
-          const lineM   = result.text.match(/LINE MOVEMENT[:\s]+([^\n]{5,300})/i);
-          const unitM   = result.text.match(/UNIT SIZING[:\s]+([^\n]{5,200})/i);
-          const probM   = result.text.match(/BetOS WIN PROBABILITY[:\s]+([^\n]{5,300})/i);
-
-          // Upsert into game_analyses table
-          const { data: upserted, error: upsertErr } = await supabase.from('game_analyses').upsert(
-            [{
-              sport,
-              game_date:      todayStr,
-              home_team:      homeTeam,
-              away_team:      awayTeam,
-              analysis:       result.text,
-              model:          result.model,
-              provider:       result.provider,
-              was_fallback:   result.was_fallback,
-              latency_ms:     result.latency_ms,
-              tokens_in:      result.tokens_in,
-              tokens_out:     result.tokens_out,
-              prompt_version: result.prompt_version,
-              trigger_source: triggerSource,
-              run_id:         runId,
-              prediction_pick: pickM?.[1]?.trim() || null,
-              prediction_conf: confM?.[1]?.trim() || null,
-              prediction_edge: edgeM?.[1]?.trim() || null,
-              alternate_angles: altM?.[1]?.trim() || null,
-              line_movement:   lineM?.[1]?.trim() || null,
-              unit_sizing:     unitM?.[1]?.trim() || null,
-              win_probability: probM?.[1]?.trim() || null,
-              generated_at:   new Date().toISOString(),
-              updated_at:     new Date().toISOString(),
-            }],
-            { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
-          ).select('id').maybeSingle();
-
-          if (upsertErr) throw new Error(`DB save failed: ${upsertErr.message}`);
-
-          // Write to the detailed audit log
-          await supabase.from('analysis_audit_logs').insert([{
-            analysis_id:     upserted?.id || null,
-            sport,
-            game_date:       todayStr,
-            home_team:       homeTeam,
-            away_team:       awayTeam,
-            model_requested: 'claude-opus-4-6',
-            model_used:      result.model_used,
-            provider:        result.provider,
-            was_fallback:    result.was_fallback,
-            prompt_version:  result.prompt_version,
-            system_prompt:   result.system_prompt,
-            user_prompt:     result.user_prompt,
-            odds_context:    oddsContext || null,
-            espn_game_state: 'pre',
-            game_time:       gameTime || null,
-            raw_response:    result.text,
-            tokens_in:       result.tokens_in,
-            tokens_out:      result.tokens_out,
-            latency_ms:      result.latency_ms,
-            parsed_pick:     pickM?.[1]?.trim() || null,
-            parsed_conf:     confM?.[1]?.trim() || null,
-            parsed_edge:     edgeM?.[1]?.trim() || null,
-            trigger_source:  triggerSource,
-            run_id:          runId,
-          }]).then(({ error: auditErr }) => {
-            if (auditErr) console.warn('[pregenerate] Audit log insert failed:', auditErr.message);
-          });
-
-          return { label: `${awayTeam}@${homeTeam} (${sport.toUpperCase()})`, mode: gameMode };
-        })
-      );
-
-      // Collect results from the parallel batch
-      for (let j = 0; j < batchResults.length; j++) {
-        const r = batchResults[j];
-        const g = batch[j];
-        if (r.status === 'fulfilled') {
-          if (r.value.mode === 'refresh') refreshed.push(r.value.label);
-          else generated.push(r.value.label);
-        } else {
-          errors.push(`${g.awayTeam}@${g.homeTeam}: ${r.reason?.message || 'unknown error'}`);
-        }
-      }
-
-      // Update progress after each batch
-      await writeProgress(sport, 'running');
+  for (let i = 0; i < dispatchResults.length; i++) {
+    const r = dispatchResults[i];
+    const g = allGamesToDispatch[i];
+    if (r.status === 'fulfilled') {
+      const v = r.value;
+      if (v.skipped) skipped.push(`${v.awayTeam || g.awayTeam}@${v.homeTeam || g.homeTeam} (${v.reason || 'skipped'})`);
+      else generated.push(`${v.awayTeam || g.awayTeam}@${v.homeTeam || g.homeTeam} (${v.sport?.toUpperCase() || g.sport?.toUpperCase()})`);
+    } else {
+      errors.push(`${g.awayTeam}@${g.homeTeam} (${g.sport?.toUpperCase()}): ${r.reason?.message || 'dispatch error'}`);
     }
   }
 
