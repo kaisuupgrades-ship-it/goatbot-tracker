@@ -266,7 +266,12 @@ async function fetchSportOdds(sport) {
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || `The Odds API HTTP ${res.status}`);
+    const detail = res.status === 401 ? 'invalid API key'
+      : res.status === 403 ? 'quota exhausted or key forbidden'
+      : res.status === 429 ? 'rate limited'
+      : res.status >= 500 ? 'server error'
+      : 'request error';
+    throw new Error(`The Odds API HTTP ${res.status} (${detail})${err?.message ? `: ${err.message}` : ''}`);
   }
 
   const events = await res.json();
@@ -396,7 +401,21 @@ export async function GET(req) {
       ]);
 
       if (oddsResult.status !== 'fulfilled') {
-        throw new Error(oddsResult.reason?.message || 'Odds API call failed');
+        const errMsg = oddsResult.reason?.message || 'Odds API call failed';
+        const isAuth    = errMsg.includes('401') || errMsg.includes('403');
+        const isRate    = errMsg.includes('429');
+        const isNetwork = errMsg.toLowerCase().includes('timeout') || errMsg.toLowerCase().includes('network') || errMsg.toLowerCase().includes('fetch');
+        if (isAuth) {
+          console.error(`[refresh-odds] ❌ ${sport}: Odds API auth/quota error — ${errMsg}. Existing cache preserved; downstream will serve stale data.`);
+        } else if (isRate) {
+          console.warn(`[refresh-odds] ⚠️ ${sport}: Odds API rate limited — ${errMsg}. Existing cache preserved.`);
+        } else if (isNetwork) {
+          console.warn(`[refresh-odds] ⚠️ ${sport}: Network/timeout error — ${errMsg}. Existing cache preserved.`);
+        } else {
+          console.error(`[refresh-odds] ❌ ${sport}: Odds API error — ${errMsg}. Existing cache preserved.`);
+        }
+        results.push({ sport, action: 'error', error: errMsg, cachePreserved: true });
+        continue;
       }
 
       let events = oddsResult.value;
