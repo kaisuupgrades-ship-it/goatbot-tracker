@@ -923,6 +923,13 @@ export async function GET(req) {
     mlb: 'baseball_mlb', nba: 'basketball_nba', nhl: 'icehockey_nhl',
     nfl: 'americanfootball_nfl', mls: 'soccer_usa_mls', wnba: 'basketball_wnba',
   };
+
+  // Track Odds API event counts per sport — used as a gate to skip sports with 0 active
+  // odds lines (prevents phantom analyses, e.g. 24 MLS games on an MLS-free day).
+  // Only populated when THE_ODDS_KEY is configured. Values: undefined = unknown (don't gate),
+  // 0 = confirmed no events, >0 = confirmed has events.
+  const oddsEventCountBySport = {};
+
   if (THE_ODDS_KEY) {
     const sportsToPrime = sportFilter ? [sportFilter] : Object.keys(ODDS_SPORT_KEYS);
     for (const sk of sportsToPrime) {
@@ -940,6 +947,7 @@ export async function GET(req) {
 
         if (freshRows?.length) {
           console.log(`[pregenerate] Odds already fresh in odds_cache for ${sk} — skipping direct API call`);
+          oddsEventCountBySport[sk] = freshRows.length; // at least 1 row exists
           continue;
         }
 
@@ -962,6 +970,7 @@ export async function GET(req) {
             [{ key: `odds_cache_${sk}`, value: JSON.stringify({ data: events, timestamp: Date.now(), source: 'the-odds-api' }) }],
             { onConflict: 'key' }
           );
+          oddsEventCountBySport[sk] = events.length;
           console.log(`[pregenerate] Odds fallback-fetched for ${sk}: ${events.length} games`);
         }
       } catch (e) {
@@ -1008,6 +1017,16 @@ export async function GET(req) {
   for (const [sport, _] of sportsToProcess) {
     sportIndex++;
     await writeProgress(sport, 'running');
+
+    // ── Odds API sport gate ───────────────────────────────────────────────────
+    // Skip sports where The Odds API confirmed 0 active events today.
+    // Prevents phantom analyses (e.g. 24 MLS analyses on MLS-free days where ESPN
+    // returns scheduled-but-not-today games). Admin/manual runs bypass this gate.
+    if (!isAdmin && THE_ODDS_KEY && oddsEventCountBySport[sport] === 0) {
+      console.log(`[pregenerate] ${sport.toUpperCase()}: Odds API has 0 events today — skipping sport entirely`);
+      skipped.push(`${sport.toUpperCase()}: no active odds`);
+      continue;
+    }
 
     // Build the self-improvement context for this sport (cached)
     if (!perfContextCache[sport]) {
@@ -1089,10 +1108,12 @@ export async function GET(req) {
       const awayTeam = awayComp.team?.displayName || awayComp.team?.name || '';
       if (!homeTeam || !awayTeam) continue;
 
-      // Build odds context — prefer rich cached odds from The Odds API,
-      // fall back to ESPN's basic spread/total if no cache available
+      // Build odds context — prefer rich cached odds from The Odds API.
+      // In admin mode only, fall back to ESPN's basic spread/total if no cache available.
+      // In cron mode, games without Odds API odds are skipped by enqueueGame (no-odds gate)
+      // so we never fall back to ESPN basic odds — that prevented phantom MLS analyses.
       let oddsContext = await fetchCachedOdds(sport, homeTeam, awayTeam);
-      if (!oddsContext) {
+      if (!oddsContext && isAdmin) {
         const espnOdds = event.competitions?.[0]?.odds?.[0];
         oddsContext = espnOdds
           ? `Spread: ${espnOdds.details || 'N/A'} | O/U: ${espnOdds.overUnder || 'N/A'}`
