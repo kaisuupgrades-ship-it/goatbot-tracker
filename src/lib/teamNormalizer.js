@@ -204,6 +204,10 @@ export function normalizeTeam(team, sport) {
  */
 export function normalizeParsedPick(parsed) {
   if (!parsed) return parsed;
+  // Handle array of picks
+  if (Array.isArray(parsed)) {
+    return parsed.map(p => normalizeParsedPick(p));
+  }
   if (parsed.team && parsed.sport) {
     parsed.team = normalizeTeam(parsed.team, parsed.sport);
   }
