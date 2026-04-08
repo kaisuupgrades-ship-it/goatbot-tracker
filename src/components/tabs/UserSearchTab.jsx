@@ -113,7 +113,7 @@ function UserCard({ entry, rank, currentUserId, onViewProfile }) {
 
   return (
     <div
-      onClick={() => onViewProfile(entry)}
+      onClick={(e) => onViewProfile(entry, e)}
       style={{
         background: 'var(--bg-surface)',
         border: `1px solid ${isYou ? 'rgba(255,184,0,0.35)' : 'var(--border)'}`,
@@ -206,6 +206,7 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
   const [viewProfile, setViewProfile] = useState(null);
+  const [viewAnchor,  setViewAnchor]  = useState(null);
   const debounceRef = useRef(null);
 
   const load = useCallback(async (overrides = {}) => {
@@ -390,7 +391,7 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
               entry={entry}
               rank={i + 1}
               currentUserId={user?.id}
-              onViewProfile={setViewProfile}
+              onViewProfile={(entry, e) => { setViewProfile(entry); setViewAnchor(e ? { x: e.clientX, y: e.clientY } : null); }}
             />
           ))}
         </div>
@@ -405,9 +406,10 @@ export default function UserSearchTab({ user, isDemo, onOpenInbox }) {
       {viewProfile && (
         <PublicProfileModal
           entry={viewProfile}
-          onClose={() => setViewProfile(null)}
+          onClose={() => { setViewProfile(null); setViewAnchor(null); }}
           onOpenInbox={onOpenInbox}
           currentUser={user}
+          anchorPos={viewAnchor}
         />
       )}
     </div>

@@ -142,7 +142,7 @@ function LeaderRow({ entry, maxScore, isMe, onViewProfile, isMobile }) {
 
   return (
     <div
-      onClick={onViewProfile}
+      onClick={(e) => onViewProfile(e)}
       style={{
         display: 'grid',
         gridTemplateColumns: isMobile ? '36px 1fr 70px 65px' : '44px 1fr 80px 90px 80px 90px 100px',
@@ -537,7 +537,7 @@ function ContestRow({ entry, isMe, onViewProfile, isMobile }) {
 
   return (
     <div
-      onClick={onViewProfile}
+      onClick={(e) => onViewProfile(e)}
       style={{
         display: 'grid',
         gridTemplateColumns: isMobile ? '28px 28px 1fr 62px 50px' : '36px 36px 1fr 70px 65px 55px 60px',
@@ -728,7 +728,7 @@ function ContestStandings({ userId, isDemo, refreshKey, onViewProfile, isMobile 
         </div>
       ) : (
         entries.map(entry => (
-          <ContestRow key={entry.user_id} entry={entry} isMe={entry.user_id === userId} onViewProfile={() => onViewProfile?.(entry)} isMobile={isMobile} />
+          <ContestRow key={entry.user_id} entry={entry} isMe={entry.user_id === userId} onViewProfile={(e) => onViewProfile?.(entry, e)} isMobile={isMobile} />
         ))
       )}
     </div>
@@ -745,6 +745,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
   const [profile, setProfile]         = useState(null);
   const [editOpen, setEditOpen]       = useState(false);
   const [viewEntry, setViewEntry]     = useState(null); // for PublicProfileModal
+  const [viewAnchor, setViewAnchor]   = useState(null); // click coordinates for PublicProfileModal
   const [sortKey, setSortKey]         = useState('sharp_score'); // 'record' | 'win_pct' | 'units' | 'roi' | 'sharp_score'
   const [sortDir, setSortDir]         = useState('desc'); // 'asc' | 'desc'
   const [searchQuery, setSearchQuery] = useState('');
@@ -863,7 +864,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
         <>
           <ContestBanner />
           <AnnouncementBanner />
-          <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} onViewProfile={(entry) => setViewEntry(entry)} isMobile={isMobile} />
+          <ContestStandings userId={userId} isDemo={isDemo} refreshKey={refreshKey} onViewProfile={(entry, e) => { setViewEntry(entry); setViewAnchor(e ? { x: e.clientX, y: e.clientY } : null); }} isMobile={isMobile} />
         </>
       )}
 
@@ -1090,7 +1091,7 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
               entry={entry}
               maxScore={maxScore}
               isMe={entry.user_id === userId}
-              onViewProfile={() => setViewEntry(entry)}
+              onViewProfile={(e) => { setViewEntry(entry); setViewAnchor({ x: e.clientX, y: e.clientY }); }}
               isMobile={isMobile}
             />
           ))}
@@ -1166,10 +1167,11 @@ export default function LeaderboardTab({ user, isDemo, refreshKey = 0, defaultSu
       {viewEntry && (
         <PublicProfileModal
           entry={viewEntry}
-          onClose={() => setViewEntry(null)}
+          onClose={() => { setViewEntry(null); setViewAnchor(null); }}
           onOpenInbox={onOpenInbox}
           currentUser={user}
           contestOnly={defaultSubTab === 'contest'}
+          anchorPos={viewAnchor}
         />
       )}
     </div>

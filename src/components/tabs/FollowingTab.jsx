@@ -34,7 +34,7 @@ function FollowedUserCard({ entry, onUnfollow, userId, onViewProfile }) {
   const roi = entry.roi ?? 0;
   return (
     <div
-      onClick={(e) => { if (e.target.closest('button')) return; onViewProfile?.(entry); }}
+      onClick={(e) => { if (e.target.closest('button')) return; onViewProfile?.(entry, e); }}
       style={{
         background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
         padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px',
@@ -111,6 +111,7 @@ export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
   const [stats,        setStats]        = useState({});
   const [loading,      setLoading]      = useState(true);
   const [viewProfile,  setViewProfile]  = useState(null);
+  const [viewAnchor,   setViewAnchor]   = useState(null);
   const userId = user?.id;
 
   useEffect(() => {
@@ -215,7 +216,7 @@ export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
               entry={{ ...u, user_id: u.id, ...(stats[u.id] || {}) }}
               onUnfollow={handleUnfollow}
               userId={userId}
-              onViewProfile={(entry) => setViewProfile(entry)}
+              onViewProfile={(entry, e) => { setViewProfile(entry); setViewAnchor(e ? { x: e.clientX, y: e.clientY } : null); }}
             />
           ))}
         </div>
@@ -224,9 +225,10 @@ export default function FollowingTab({ user, isDemo, onOpenInbox, isActive }) {
       {viewProfile && (
         <PublicProfileModal
           entry={viewProfile}
-          onClose={() => setViewProfile(null)}
+          onClose={() => { setViewProfile(null); setViewAnchor(null); }}
           onOpenInbox={onOpenInbox}
           currentUser={user}
+          anchorPos={viewAnchor}
         />
       )}
     </div>

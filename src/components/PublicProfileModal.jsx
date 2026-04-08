@@ -69,7 +69,7 @@ function UserAvatar({ userId, avatarUrl, avatarEmoji, displayName, username, siz
  *   currentUser  — logged-in user object ({ id, ... }) for Follow / Message logic
  *   contestOnly  — if true, shows only contest picks (Contest mode)
  */
-export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, currentUser, contestOnly = false }) {
+export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, currentUser, contestOnly = false, anchorPos = null }) {
   const userId        = entry.user_id || entry.id;
   const currentUserId = currentUser?.id;
   const isMe          = userId === currentUserId;
@@ -228,9 +228,28 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
   const cRoi    = cTotal > 0 ? (cUnits / cTotal) * 100 : 0;
   const cWinPct = cTotal > 0 ? ((cWins / cTotal) * 100).toFixed(1) : '—';
 
+  // When anchorPos is provided on desktop, position the card near the click coordinates
+  const anchoredCardStyle = anchorPos && !isMobile && typeof window !== 'undefined' ? (() => {
+    const CARD_W = Math.min(680, window.innerWidth - 24);
+    const MAX_H  = window.innerHeight * 0.85;
+    const MARGIN = 12;
+    let left = anchorPos.x - CARD_W / 2;
+    let top  = anchorPos.y + 16;
+    left = Math.max(MARGIN, Math.min(window.innerWidth  - CARD_W - MARGIN, left));
+    if (top + MAX_H > window.innerHeight - MARGIN) top = Math.max(MARGIN, anchorPos.y - MAX_H - 16);
+    top  = Math.max(MARGIN, top);
+    return { position: 'absolute', left, top, width: CARD_W, maxWidth: 'unset' };
+  })() : null;
+
   const modalContent = (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 500, display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', padding: isMobile ? '0' : '1rem' }}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 500,
+        ...(anchoredCardStyle
+          ? { display: 'block' }
+          : { display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', padding: isMobile ? '0' : '1rem' }
+        ),
+      }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -238,9 +257,10 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
           background: 'var(--bg-surface)', border: '1px solid var(--border)',
           borderRadius: isMobile ? '16px 16px 0 0' : '16px',
           width: '100%', maxWidth: isMobile ? '100%' : '680px',
-          maxHeight: isMobile ? '92vh' : '90vh',
+          maxHeight: isMobile ? '92vh' : '85vh',
           overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column',
           boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
+          ...(anchoredCardStyle || {}),
         }}
         onClick={e => e.stopPropagation()}
       >

@@ -128,7 +128,7 @@ function ChatBubble({ msg, isMe, isMod, isAdmin, onDelete, onMute, onBan, onProm
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => { setHovering(false); setShowMenu(false); }}
     >
-      <button onClick={() => onMentionClick?.(msg.user_id, author)}
+      <button onClick={(e) => onMentionClick?.(msg.user_id, author, e)}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}>
         <Avatar emoji={author?.avatar_emoji} size={32} />
       </button>
@@ -136,7 +136,7 @@ function ChatBubble({ msg, isMe, isMod, isAdmin, onDelete, onMute, onBan, onProm
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Name row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '2px', flexWrap: 'wrap' }}>
-          <button onClick={() => onMentionClick?.(msg.user_id, author)}
+          <button onClick={(e) => onMentionClick?.(msg.user_id, author, e)}
             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem', color: isMe ? 'var(--gold)' : 'var(--text-primary)' }}>
             {displayName}
           </button>
@@ -515,8 +515,8 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
     isAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   };
 
-  const handleMentionClick = (uid, author) => {
-    setPopover({ id: uid, username: author?.username, display_name: author?.display_name, avatar_emoji: author?.avatar_emoji });
+  const handleMentionClick = (uid, author, e) => {
+    setPopover({ id: uid, username: author?.username, display_name: author?.display_name, avatar_emoji: author?.avatar_emoji, _anchorPos: e ? { x: e.clientX, y: e.clientY } : null });
   };
 
   const grouped = messages.map((msg, i) => ({
@@ -686,6 +686,7 @@ export default function ChatRoomTab({ user, isDemo, onOpenInbox }) {
           onClose={() => setPopover(null)}
           onOpenInbox={onOpenInbox}
           currentUser={user}
+          anchorPos={popover._anchorPos}
         />
       )}
     </div>
