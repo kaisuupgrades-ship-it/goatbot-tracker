@@ -148,6 +148,188 @@ If nothing material has changed, output exactly:
 
 Keep it short. Do not rewrite the full analysis.`;
 
+const FOCUSED_FOLLOWUP_SYSTEM = `You are BetOS — a sharp AI sports analyst. You have been given a comprehensive pre-generated intelligence report for a specific game. The user is asking a focused, specific question (about a player prop, a specific line, a bet type, etc.).
+
+Your job: answer the user's SPECIFIC question using the intelligence already in the cached report. Do NOT re-analyze the whole game. Be concise and targeted.
+
+RULES:
+- Use the cached report as your primary intelligence source — it contains verified odds, injury data, and AI analysis already run with web search
+- Extract and apply any relevant data from the report (player context, team trends, injury notes, line info)
+- If the report does not cover the specific prop/player/line the user asks about, say so clearly and apply the game context from training knowledge — label it as "not in cached report"
+- Never fabricate odds. If the cached report has odds, use them. Otherwise say "verify current line on your sportsbook"
+- If freshness notes are provided, factor them into your answer
+- Be decisive — answer the specific question directly
+
+OUTPUT FORMAT:
+- Open with a direct answer to their specific question (1-2 sentences)
+- PICK: [Bet + Line + Book if available, or "verify current line"]
+- EDGE: [1-2 sentences on why, pulling from the cached intelligence]
+- CONFIDENCE: [LOW / MEDIUM / HIGH / ELITE]
+- EDGE SCORE: [X/10]
+- End every response with exactly: "⚠️ ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets."`;
+
+// Keywords that indicate the user wants a focused follow-up rather than the full cached report
+const SPECIFIC_QUERY_PATTERNS = [
+  /\bprop(s)?\b/i,
+  /\bover\s+\d/i,
+  /\bunder\s+\d/i,
+  /\b(spread|ats|against the spread)\b/i,
+  /\b(moneyline|money line|\bml\b)\b/i,
+  /\bparlay\b/i,
+  /\bplayer(s)?\b/i,
+  /\d+\.?\d*\s*(points?|pts?|goals?|runs?|yards?|assists?|rebounds?|blocks?|steals?)\b/i,
+  /\b(first half|second half|1h|2h|first quarter|q[1-4]|halftime)\b/i,
+  /\b(anytime scorer|first scorer|last scorer|first goal|first td)\b/i,
+  /\b(hits?|strikeouts?|innings?|home runs?|rbis?|walks?|ks?)\b/i,
+  /\b(three.?pointers?|3.?pointers?|threes|assists?|double.?double|triple.?double)\b/i,
+  /\b(shots? on goal|power play|penalty)\b/i,
+  /\b(corners?|yellow cards?|red cards?|offsides?)\b/i,
+  /what about\b/i,
+  /how about\b/i,
+  /\bfocus on\b/i,
+  /\bonly\s+(the|for)\b/i,
+];
+
+function isSpecificQuery(prompt) {
+  return SPECIFIC_QUERY_PATTERNS.some(pattern => pattern.test(prompt));
+}
+
+/**
+ * Check the odds_cache in the settings table to see if odds have been
+ * updated since the cached analysis was generated — a proxy for line movement.
+ * Returns a human-readable delta string or null if no update detected.
+ */
+async function getOddsDelta(cached) {
+  try {
+    const { data } = await supabase
+      .from('settings')
+      .select('value, updated_at')
+      .eq('key', `odds_cache_${cached.sport}`)
+      .single();
+
+    if (!data?.updated_at) return null;
+
+    const analysisTs = new Date(cached.updated_at).getTime();
+    const oddsTs     = new Date(data.updated_at).getTime();
+
+    if (oddsTs <= analysisTs) return null; // no newer odds data
+
+    const oddsAgeMin = Math.round((Date.now() - oddsTs) / 60000);
+    const gapMin     = Math.round((oddsTs - analysisTs) / 60000);
+
+    // Try to find this game in the odds payload to check for notable line info
+    let gameFound = '';
+    try {
+      const oddsPayload = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+      const games = oddsPayload?.games || oddsPayload?.data || (Array.isArray(oddsPayload) ? oddsPayload : null);
+      if (games) {
+        const homeLast = cached.home_team.toLowerCase().split(' ').pop();
+        const awayLast = cached.away_team.toLowerCase().split(' ').pop();
+        const match = games.find(g => {
+          const gh = (g.home_team || '').toLowerCase();
+          const ga = (g.away_team || '').toLowerCase();
+          return gh.includes(homeLast) && ga.includes(awayLast);
+        });
+        if (match) gameFound = ' Game confirmed in current odds feed.';
+      }
+    } catch { /* best-effort */ }
+
+    return `Odds cache refreshed ${gapMin} min after the analysis was generated (${oddsAgeMin} min ago).${gameFound} Lines may have shifted — verify before betting.`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run a focused follow-up answer using the cached analysis as intelligence context.
+ * Uses grok-3 (30s) then Claude Sonnet (30s) — cheaper/faster since research is done.
+ * Returns { result, model } or null if both fail.
+ */
+async function runFocusedFollowUp(cached, userQuery, oddsDelta) {
+  const ageMin = Math.round((Date.now() - new Date(cached.updated_at).getTime()) / 60000);
+
+  const focusedPrompt = `CACHED INTELLIGENCE REPORT (generated ${ageMin} minutes ago):
+Game: ${cached.away_team} @ ${cached.home_team} | ${cached.sport.toUpperCase()} | ${cached.game_date}
+
+${cached.analysis}
+
+---
+ODDS / FRESHNESS NOTE:
+${oddsDelta || 'No odds movement detected since the report was generated.'}
+
+---
+USER QUESTION: ${userQuery}
+
+Answer their specific question using the intelligence in the cached report above. Be concise and focused on their specific angle only.`;
+
+  const xaiKey    = process.env.XAI_API_KEY;
+  const claudeKey = process.env.ANTHROPIC_API_KEY;
+
+  // Tier A: grok-3 (fast, cheap, 30s)
+  if (xaiKey) {
+    try {
+      const { response, timedOut } = await fetchWithTimeout(
+        `${XAI_BASE}/chat/completions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
+          body: JSON.stringify({
+            model: 'grok-3',
+            messages: [
+              { role: 'system', content: FOCUSED_FOLLOWUP_SYSTEM },
+              { role: 'user',   content: focusedPrompt },
+            ],
+            temperature: 0.5,
+            max_tokens: 1500,
+          }),
+        },
+        30_000,
+      );
+      if (!timedOut && response?.ok) {
+        const data = await response.json();
+        const result = data.choices?.[0]?.message?.content?.trim();
+        if (result) return { result, model: 'BetOS AI (focused · grok-3)' };
+      }
+      if (timedOut) console.log('[goatbot] focused grok-3 timed out');
+      else console.log('[goatbot] focused grok-3 returned', response?.status);
+    } catch (err) {
+      console.log('[goatbot] focused grok-3 error:', err.message);
+    }
+  }
+
+  // Tier B: Claude Sonnet (30s)
+  if (claudeKey) {
+    try {
+      const { response, timedOut } = await fetchWithTimeout(
+        'https://api.anthropic.com/v1/messages',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            system: FOCUSED_FOLLOWUP_SYSTEM,
+            messages: [{ role: 'user', content: focusedPrompt }],
+            max_tokens: 1500,
+            temperature: 0.7,
+          }),
+        },
+        30_000,
+      );
+      if (!timedOut && response?.ok) {
+        const data = await response.json();
+        const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
+        if (text) return { result: text, model: 'BetOS AI (focused · sonnet)' };
+      }
+      if (timedOut) console.log('[goatbot] focused claude-sonnet timed out');
+      else console.log('[goatbot] focused claude-sonnet returned', response?.status);
+    } catch (err) {
+      console.log('[goatbot] focused claude-sonnet error:', err.message);
+    }
+  }
+
+  return null; // both failed — caller falls through to normal cache handling
+}
+
 function parseResponsesOutput(resp) {
   if (resp.output) {
     const texts = resp.output
@@ -400,11 +582,28 @@ export async function POST(req) {
       const ageMs = Date.now() - new Date(cached.updated_at).getTime();
 
       if (ageMs < CACHE_MAX_AGE_MS) {
-        console.log(`[goatbot] Cache HIT for ${cached.away_team}@${cached.home_team}, age=${Math.round(ageMs/60000)}min`);
-
         const ageLabel = ageMs < 60000
           ? 'just now'
           : `${Math.round(ageMs / 60000)} min ago`;
+
+        // ── Focused follow-up mode: user asked something specific about the game ──
+        // The hard research is already done in the cached report; apply it cheaply.
+        if (isSpecificQuery(prompt)) {
+          console.log(`[goatbot] FOCUSED FOLLOW-UP for ${cached.away_team}@${cached.home_team}, query="${prompt.substring(0, 80)}"`);
+          const oddsDelta = await getOddsDelta(cached);
+          const focused   = await runFocusedFollowUp(cached, prompt, oddsDelta);
+
+          if (focused) {
+            focused.result += `\n\n[Focused answer powered by cached BetOS intelligence (${ageLabel}) · BetOS AI]`;
+            savePromptCache(pKey, focused.result, focused.model);
+            return NextResponse.json({ result: focused.result, model: focused.model, cached: true });
+          }
+          // If focused follow-up failed, fall through to standard cache handling below
+          console.log('[goatbot] Focused follow-up failed — falling back to cached report');
+        }
+
+        // ── Generic query (or focused follow-up fallback) — serve cached report ──
+        console.log(`[goatbot] Cache HIT for ${cached.away_team}@${cached.home_team}, age=${Math.round(ageMs/60000)}min`);
 
         let result = cached.analysis;
 
