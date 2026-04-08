@@ -33,14 +33,41 @@ const SPORT_PATHS = {
   wnba: 'basketball/wnba',
 };
 
+// ── Player prop fetch constants ───────────────────────────────────────────────
+const PROP_SPORT_KEYS = {
+  mlb: 'baseball_mlb',
+  nba: 'basketball_nba',
+  nhl: 'icehockey_nhl',
+  nfl: 'americanfootball_nfl',
+};
+const PROP_MARKETS_FOR_ANALYSIS = {
+  nba: 'player_points,player_rebounds,player_assists,player_threes,player_points_rebounds_assists',
+  mlb: 'pitcher_strikeouts,batter_hits,batter_total_bases,pitcher_outs',
+  nhl: 'player_goals,player_shots_on_goal,player_blocked_shots',
+  nfl: 'player_pass_yds,player_rush_yds,player_reception_yds,player_pass_tds',
+};
+const PROP_MARKET_LABELS = {
+  player_pass_yds: 'Passing Yds', player_pass_tds: 'Passing TDs',
+  player_rush_yds: 'Rushing Yds', player_rush_tds: 'Rushing TDs',
+  player_reception_yds: 'Receiving Yds', player_receptions: 'Receptions',
+  player_points: 'Points', player_rebounds: 'Rebounds', player_assists: 'Assists',
+  player_threes: '3-Pointers Made', player_points_rebounds_assists: 'Pts+Reb+Ast',
+  player_points_rebounds: 'Pts+Reb', player_points_assists: 'Pts+Ast',
+  pitcher_strikeouts: 'Strikeouts', pitcher_outs: 'Outs Recorded',
+  batter_hits: 'Hits', batter_total_bases: 'Total Bases',
+  player_goals: 'Goals', player_shots_on_goal: 'Shots on Goal',
+  player_blocked_shots: 'Blocked Shots',
+};
+
 // ── Prompt versioning ─────────────────────────────────────────────────────────
 // Bump this when you change the system prompt so we can A/B test performance
-const PROMPT_VERSION = 'v4.0';
+const PROMPT_VERSION = 'v5.0';
 
 // Build the analysis system prompt. When hasVerifiedOdds=true (odds came from
 // The Odds API premium feed), we skip blanket "verify before betting" disclaimers
 // since those lines are already confirmed from the live feed.
-function buildAnalysisSystem(hasVerifiedOdds = false, injuryData = '') {
+// propsData=true signals that player prop lines were injected into the user message.
+function buildAnalysisSystem(hasVerifiedOdds = false, injuryData = '', propsData = '') {
   const oddsNote = hasVerifiedOdds
     ? `The KNOWN ODDS block below is from The Odds API (verified premium feed). Use those exact numbers — do NOT override them. Label any supplemental web-searched odds as "(web search)".`
     : `If a KNOWN ODDS block is provided, use those numbers as authoritative. Label all web-searched odds as "(web search — verify on your book)".`;
@@ -50,85 +77,175 @@ function buildAnalysisSystem(hasVerifiedOdds = false, injuryData = '') {
     : `⚠️ ODDS DISCLAIMER: Lines sourced via AI web search. Always verify current odds on your sportsbook before placing any bets.`;
 
   const injuryNote = injuryData
-    ? `\nESPN INJURY DATA IS ALREADY PROVIDED in the user message — use it for the INJURY REPORT section. Use web search to find additional injury updates or confirm GTD statuses.`
+    ? `\nESPN INJURY DATA IS ALREADY PROVIDED in the user message — use it for the INJURY IMPACT section. Use web search to confirm GTD statuses and catch any updates from the last 24h.`
     : '';
 
-  return `You are BetOS — an elite sharp sports betting analyst. This analysis will be cached and shown to users.
+  const propsNote = propsData
+    ? `\nPLAYER PROP LINES ARE PROVIDED in the user message — analyze the top 2-3 highest-edge props in the PLAYER PROPS ANALYSIS section.`
+    : `\nNo player prop lines provided — write "Not available" in the PLAYER PROPS ANALYSIS section.`;
 
-IMPORTANT: Odds and weather data are ALREADY PROVIDED below — do NOT waste web searches looking for odds.${injuryNote}
+  return `You are BetOS — an elite sharp sports betting intelligence system. This analysis is CACHED FOUNDATIONAL INTELLIGENCE that downstream user queries will reference. Build it like a dossier, not a quick take.
 
-Use web search ONLY for these 3 things (1-2 searches each, keep it fast):
+IMPORTANT: Odds and weather data are ALREADY PROVIDED below — do NOT waste web searches looking for odds.${injuryNote}${propsNote}
+
+Use web search ONLY for (1-2 searches each, stay efficient):
 1. Confirmed starters/lineups for TODAY (starting pitcher, goalie, key scratches)
-2. Injury updates from the last 24 hours (supplement the ESPN data already provided)
-3. Recent team form (last 5 games record, any notable streaks)
+2. Injury updates from the last 24 hours beyond what ESPN data already provides
+3. Recent team form (last 5 games record, notable streaks, situational spots)
 
 ${oddsNote}
 
-Output format — follow EXACTLY:
+━━━ SPORT-SPECIFIC ANALYSIS CHECKLISTS ━━━
+MLB: Starting pitcher pitch mix vs opponent handedness splits; bullpen usage last 3 days + save situations; park factors (run environment, HR park factor); weather (wind direction/speed, temperature effects on ball flight).
+NBA: Pace differential (possessions/game both teams); back-to-back / rest days; key player on/off court splits; playoff seeding implications or load management risk.
+NHL: Starting goalie confirmed + save% (season + last 10); expected goals for/against (xGF%); power play % vs penalty kill %; line matchups and physical style clashes.
+Soccer/MLS: xG/xGA per 90 both teams; rotation risk (cup/European competition schedule); home/away form splits; key player availability (suspensions, fitness).
 
-THE PICK: [Team + Bet Type + Odds (source) + Book] — one sharp decisive recommendation
+━━━ FAIR VALUE FRAMEWORK ━━━
+For each bet type you analyze, follow this process:
+1. Estimate TRUE win probability based on all available data (NOT derived from posted lines)
+2. Convert to fair odds implied by that true probability
+3. Compare to best posted market odds
+4. Calculate EDGE % = (true_prob − implied_prob_from_posted_line) × 100
+5. Only recommend bets where edge ≥ 3%
 
-ALTERNATE ANGLES: [1–2 secondary bets with odds]
+━━━ DISCIPLINE RULES ━━━
+TREND DISCIPLINE: Never cite a trend (e.g. "team is 8-2 ATS at home") without identifying a causal mechanism. Correlation without causation is noise.
+MEDIA BIAS GUARD: Heavy public/media attention = more efficient market. Discount public narratives; look for contrarian value.
+EV OPTIMIZATION: A +130 underdog with 8% edge beats a -300 favorite with 2% edge every time. Prioritize edge size over outcome certainty.
 
-EDGE BREAKDOWN: [3–4 sentences with specific stats and numbers]
+━━━ OUTPUT FORMAT — FOLLOW EXACTLY, IN THIS ORDER ━━━
 
-KEY FACTORS:
-1. [Starter/lineup finding with stats]
-2. [Recent form or H2H angle with numbers]
-3. [Situational edge — rest, travel, weather]
-4. [Market signal — line movement, sharp action]
+=== DATA FRESHNESS ===
+Injury data: [source + recency]. Starter confirmation: [confirmed / unconfirmed / web-searched]. Odds source: [The Odds API / web search + timestamp if known].
 
-INJURY REPORT: [Confirmed absences or "None reported"]
+=== MATCHUP ANALYSIS ===
+[Deep sport-specific analysis using the checklist above. Minimum 4-6 specific data points with numbers — pace, splits, pitching matchup, goalie stats, xG, etc.]
 
-CONFIDENCE: [LOW / MEDIUM / HIGH / ELITE]
+=== SITUATIONAL FACTORS ===
+[Rest advantage/disadvantage. Travel. Motivation (playoff push, elimination, revenge game). Venue factors. Schedule spots (back-to-back, post-travel, long homestand, lookahead spot).]
 
-EDGE SCORE: [X/10]
+=== INJURY IMPACT ===
+[Both teams. Schematic impact — how does losing this player change their system or scoring output? Not just names and statuses.]
 
-BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y–Z%.]
+=== SPREAD ANALYSIS ===
+Fair spread: [X]. Posted: [X]. Edge: [X%]. Lean: [team / pass]. Confidence: [LOW/MEDIUM/HIGH/ELITE]. Reasoning: [2-3 sentences with specific stats].
 
-UNIT SIZING: [0.5u–3u with brief justification]
+=== MONEYLINE ANALYSIS ===
+Fair win probability: [X%] [team]. Fair odds: [X]. Best posted odds: [X @ book]. Edge: [X%]. Lean: [team / pass]. Confidence: [LOW/MEDIUM/HIGH/ELITE].
+
+=== TOTAL ANALYSIS ===
+Fair total: [X]. Posted: [X]. Edge: [X%]. Lean: [OVER/UNDER/pass]. Confidence: [LOW/MEDIUM/HIGH/ELITE]. Reasoning: [2-3 sentences with pace, scoring environment, pitcher/goalie matchup data].
+
+=== PLAYER PROPS ANALYSIS ===
+[Top 2-3 highest-edge props from the provided lines, each with: player name, stat type, line, lean (Over/Under), edge%, 1-sentence reasoning. If no prop lines provided: "Not available."]
+
+=== BEST PLAY ===
+THE PICK: [Team/Total/Player + Bet Type + Odds (source) + Book]
+Edge: [X%] | Confidence: [LOW/MEDIUM/HIGH/ELITE] | Edge Score: [X/10]
+BetOS Win Probability: Market implied [X%] → BetOS adjusted [Y-Z%]
+Unit Sizing: [0.5u–3u] — [brief justification based on edge and confidence]
+
+=== ALTERNATE ANGLES ===
+1. [Secondary play — bet type, odds, 1-sentence edge justification]
+2. [Secondary play — bet type, odds, 1-sentence edge justification]
+
+=== KEY INTELLIGENCE (FOR DOWNSTREAM QUERIES) ===
+• [Most important matchup dynamic or team-specific fact]
+• [Confirmed starter / key player status + relevant stats]
+• [Injury schematic impact on offense or defense]
+• [Market signal — line movement, sharp action, steam moves if found]
+• [Situational edge or trap game indicator]
+• [Weather or venue factor if relevant to scoring]
+• [Historical H2H or system angle with causal mechanism, not just record]
+
+=== RED FLAGS ===
+[List any concerns: unconfirmed GTD players, line movement against your lean, heavy public side, edge < 3%, motivational mismatch. If none significant: "No significant red flags."]
 
 ${disclaimer}
 
-Be decisive. Cite specific numbers. Never fabricate.`;
+Be decisive. Cite specific numbers. Never fabricate stats. Build the intelligence layer — not just the pick.`;
 }
 
 // No-search fallback system prompt — used when web search version times out.
-// All data (odds, weather, ESPN injuries) is pre-injected so AI just needs to analyze.
-function buildAnalysisSystemNoSearch(injuryData = '') {
+// All data (odds, weather, ESPN injuries, props) is pre-injected so AI just needs to analyze.
+function buildAnalysisSystemNoSearch(injuryData = '', propsData = '') {
   const injuryNote = injuryData
-    ? `✅ NOTE: This analysis includes real ESPN injury data provided in the user message. Starters should still be confirmed before betting.`
-    : `⚠️ NOTE: This analysis was generated without live web search. Starters and injuries should be confirmed before betting.`;
+    ? `✅ ESPN injury data is provided in the user message. Use it for the INJURY IMPACT section.`
+    : `⚠️ No live injury data available — flag unconfirmed starters as a red flag.`;
 
-  return `You are BetOS — an elite sharp sports betting analyst. This analysis will be cached and shown to users.
+  const propsNote = propsData
+    ? `Player prop lines are provided in the user message — analyze the top 2-3 highest-edge props in the PLAYER PROPS ANALYSIS section.`
+    : `No player prop lines provided — write "Not available" in the PLAYER PROPS ANALYSIS section.`;
 
-ALL DATA IS PROVIDED BELOW — odds, matchup info, ESPN injury report, and any available context. You do NOT have web search. Analyze the provided data and produce a sharp betting analysis.
+  return `You are BetOS — an elite sharp sports betting intelligence system. This analysis is CACHED FOUNDATIONAL INTELLIGENCE that downstream user queries will reference. Build it like a dossier.
 
-Output format — follow EXACTLY:
+ALL DATA IS PROVIDED BELOW — odds, matchup info, ESPN injury report, player prop lines, and any available context. You do NOT have web search. Analyze every piece of provided data deeply.
 
-THE PICK: [Team + Bet Type + Odds (source) + Book] — one sharp decisive recommendation
+${injuryNote} ${propsNote}
 
-ALTERNATE ANGLES: [1–2 secondary bets with odds]
+━━━ SPORT-SPECIFIC ANALYSIS CHECKLISTS ━━━
+MLB: SP pitch tendencies vs lineup handedness; bullpen depth and recent workload; park factors; weather impact on ball flight.
+NBA: Pace differential (possessions/game); rest/back-to-back disadvantage; on/off splits for stars; playoff seeding implications.
+NHL: Goalie save% (season + last 10 games); xGF%; PP% vs PK% matchup; line style clash.
+Soccer/MLS: xG/xGA rates per 90; rotation risk from schedule; home/away form splits; key player fitness.
 
-EDGE BREAKDOWN: [3–4 sentences with specific stats and numbers from the provided data]
+━━━ FAIR VALUE FRAMEWORK ━━━
+For each bet type: estimate true win probability from provided data → convert to fair odds → compare to posted → calculate edge%. Only recommend bets where edge ≥ 3%.
 
-KEY FACTORS:
-1. [Key statistical or matchup-based finding]
-2. [Form or situational angle]
-3. [Any edge from the provided odds/data]
-4. [Market signal if available from the data]
+━━━ DISCIPLINE RULES ━━━
+TREND DISCIPLINE: Never cite a trend without a causal mechanism — correlation is not edge.
+MEDIA BIAS GUARD: Heavy public attention = more efficient market, less value available.
+EV OPTIMIZATION: High edge at longer odds beats low edge at short odds every time.
 
-INJURY REPORT: [From the ESPN injury data provided, or "None reported"]
+━━━ OUTPUT FORMAT — FOLLOW EXACTLY, IN THIS ORDER ━━━
 
-CONFIDENCE: [LOW / MEDIUM / HIGH / ELITE]
+=== DATA FRESHNESS ===
+Injury data: [from ESPN provided / not available]. Starter confirmation: [from provided data / unconfirmed — flag below]. Odds source: [The Odds API cache / ESPN fallback].
 
-EDGE SCORE: [X/10]
+=== MATCHUP ANALYSIS ===
+[Deep sport-specific analysis using the checklist above. Minimum 4-6 specific data points with numbers from the provided data.]
 
-BetOS WIN PROBABILITY: [Market implied: X%. BetOS adjusted: Y–Z%.]
+=== SITUATIONAL FACTORS ===
+[Rest advantage/disadvantage. Travel. Motivation (playoff push, elimination, revenge game). Venue factors. Schedule spots — derive from available data.]
 
-UNIT SIZING: [0.5u–3u with brief justification]
+=== INJURY IMPACT ===
+[Both teams. Schematic impact — how does this absence change their system or scoring output? Use the provided ESPN injury data.]
 
-${injuryNote}
+=== SPREAD ANALYSIS ===
+Fair spread: [X]. Posted: [X]. Edge: [X%]. Lean: [team / pass]. Confidence: [LOW/MEDIUM/HIGH/ELITE]. Reasoning: [2-3 sentences].
+
+=== MONEYLINE ANALYSIS ===
+Fair win probability: [X%]. Fair odds: [X]. Best posted odds: [X]. Edge: [X%]. Lean: [team / pass]. Confidence: [LOW/MEDIUM/HIGH/ELITE].
+
+=== TOTAL ANALYSIS ===
+Fair total: [X]. Posted: [X]. Edge: [X%]. Lean: [OVER/UNDER/pass]. Confidence: [LOW/MEDIUM/HIGH/ELITE]. Reasoning: [2-3 sentences with pace, scoring environment data].
+
+=== PLAYER PROPS ANALYSIS ===
+[Top 2-3 highest-edge props from the provided lines, each with: player name, stat type, line, lean (Over/Under), edge%, 1-sentence reasoning. If not available: "Not available."]
+
+=== BEST PLAY ===
+THE PICK: [Team/Total/Player + Bet Type + Odds (source) + Book]
+Edge: [X%] | Confidence: [LOW/MEDIUM/HIGH/ELITE] | Edge Score: [X/10]
+BetOS Win Probability: Market implied [X%] → BetOS adjusted [Y-Z%]
+Unit Sizing: [0.5u–3u] — [brief justification]
+
+=== ALTERNATE ANGLES ===
+1. [Secondary play — bet type, odds, 1-sentence edge justification]
+2. [Secondary play — bet type, odds, 1-sentence edge justification]
+
+=== KEY INTELLIGENCE (FOR DOWNSTREAM QUERIES) ===
+• [Key matchup dynamic or team-specific fact]
+• [Starter / key player status + relevant stats from provided data]
+• [Injury schematic impact]
+• [Market or odds signal from the provided lines]
+• [Situational factor — rest, travel, schedule spot]
+• [Additional high-value data point for follow-up queries]
+
+=== RED FLAGS ===
+[List concerns: unconfirmed starters (no web search available), thin edges, limited data, conflicting signals. If none: "No significant red flags."]
+
+⚠️ NOTE: Generated without live web search. ${injuryData ? 'ESPN injury data included.' : 'No injury data available.'} Confirm starters and line moves before betting.
 
 Be decisive. Use only the provided data. Never fabricate.`;
 }
@@ -303,6 +420,101 @@ async function fetchInjuryData(sport, homeTeam, awayTeam) {
   }
 }
 
+// Fetch player prop lines from The Odds API for the matching game.
+// Uses the odds cache to find the The Odds API event UUID, then calls the props endpoint.
+// Returns a formatted string for injection into the AI prompt, or '' on failure.
+async function fetchPlayerProps(sport, homeTeam, awayTeam) {
+  const THE_ODDS_KEY = (process.env.THE_ODDS_API_KEY || '').trim();
+  if (!THE_ODDS_KEY) return '';
+
+  const sportKey = PROP_SPORT_KEYS[sport];
+  const markets  = PROP_MARKETS_FOR_ANALYSIS[sport];
+  if (!sportKey || !markets) return '';
+
+  try {
+    // Step 1: find The Odds API event ID from the pre-warmed odds cache
+    const { data: setting } = await supabase
+      .from('settings').select('value').eq('key', `odds_cache_${sport}`).maybeSingle();
+    if (!setting?.value) return '';
+
+    const parsed = typeof setting.value === 'string' ? JSON.parse(setting.value) : setting.value;
+    const odds = parsed.data || parsed;
+    if (!Array.isArray(odds)) return '';
+
+    const ht = homeTeam.toLowerCase();
+    const at = awayTeam.toLowerCase();
+    const game = odds.find(g =>
+      g.home_team?.toLowerCase().includes(ht.split(' ').pop()) &&
+      g.away_team?.toLowerCase().includes(at.split(' ').pop())
+    );
+    if (!game?.id) return '';
+
+    // Step 2: fetch props from The Odds API events endpoint
+    const url = new URL(`https://api.the-odds-api.com/v4/sports/${sportKey}/events/${game.id}/odds`);
+    url.searchParams.set('apiKey', THE_ODDS_KEY);
+    url.searchParams.set('regions', 'us');
+    url.searchParams.set('markets', markets);
+    url.searchParams.set('oddsFormat', 'american');
+    url.searchParams.set('bookmakers', 'draftkings,fanduel,betmgm');
+
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return '';
+
+    const data = await res.json();
+    const bookmakers = data?.bookmakers || [];
+    if (!bookmakers.length) return '';
+
+    // Step 3: collect best lines — DraftKings > FanDuel > BetMGM
+    const propMap = new Map();
+    const BOOK_PRIORITY = ['draftkings', 'fanduel', 'betmgm'];
+    for (const bookKey of [...BOOK_PRIORITY].reverse()) {
+      const bk = bookmakers.find(b => b.key === bookKey);
+      if (!bk) continue;
+      for (const mkt of bk.markets || []) {
+        const byPlayer = new Map();
+        for (const outcome of mkt.outcomes || []) {
+          const player = outcome.description || outcome.name;
+          const dir    = outcome.name?.toLowerCase();
+          const line   = outcome.point;
+          const price  = outcome.price;
+          if (!player || line == null || price == null) continue;
+          if (!byPlayer.has(player)) byPlayer.set(player, { player, line, overOdds: null, underOdds: null });
+          const entry = byPlayer.get(player);
+          entry.line = line;
+          if (dir === 'over')  entry.overOdds  = price;
+          if (dir === 'under') entry.underOdds = price;
+        }
+        for (const [, d] of byPlayer) {
+          propMap.set(`${mkt.key}:${d.player}`, { marketKey: mkt.key, ...d });
+        }
+      }
+    }
+    if (!propMap.size) return '';
+
+    // Step 4: format into readable text for AI prompt
+    const byMarket = new Map();
+    for (const [, p] of propMap) {
+      if (!byMarket.has(p.marketKey)) byMarket.set(p.marketKey, []);
+      byMarket.get(p.marketKey).push(p);
+    }
+
+    const lines = ['PLAYER PROPS (The Odds API — DraftKings/FanDuel/BetMGM):'];
+    for (const [mk, players] of byMarket) {
+      const label = PROP_MARKET_LABELS[mk] || mk;
+      lines.push(`${label}:`);
+      for (const p of players.sort((a, b) => a.player.localeCompare(b.player))) {
+        const over  = p.overOdds  != null ? `O ${p.line} (${p.overOdds  > 0 ? '+' : ''}${p.overOdds})`  : '';
+        const under = p.underOdds != null ? `U ${p.line} (${p.underOdds > 0 ? '+' : ''}${p.underOdds})` : '';
+        lines.push(`  ${p.player}: ${[over, under].filter(Boolean).join(' / ')}`);
+      }
+    }
+    return lines.join('\n');
+  } catch (e) {
+    console.log(`[pregenerate] props fetch failed for ${awayTeam}@${homeTeam}:`, e.message);
+    return '';
+  }
+}
+
 // ── Quick-refresh system prompt (used when a fresh analysis already exists) ───
 // Lightweight: web search only, no full re-analysis, cheap on tokens.
 const QUICK_REFRESH_SYSTEM = `You are BetOS — a sharp sports analyst performing a quick data refresh on a pre-existing analysis. Do NOT re-write the full analysis. Only check for recent changes that would materially affect the pick.
@@ -457,12 +669,13 @@ async function callClaude(systemPrompt, userPrompt, { maxTokens = 2000, timeout 
 }
 
 // ── generateAnalysis ──────────────────────────────────────────────────────────
-// Pipeline: Claude Opus+search (90s) → grok-4+search (90s) → grok-4 no-search (45s) → grok-3 no-search (45s)
+// Pipeline: Claude Opus+search (240s) → grok-4+search (150s) → grok-4 no-search (45s) → grok-3 no-search (45s)
 // adminMode parameter kept for API compatibility but timeouts are now uniform.
-async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, injuryData = '', mode = 'full', adminMode = false) {
+async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, injuryData = '', propsData = '', mode = 'full', adminMode = false) {
   const isRefresh = mode === 'refresh';
 
   const injurySection = injuryData ? `\n${injuryData}` : '';
+  const propsSection  = propsData  ? `\n\n${propsData}` : '';
 
   const userPrompt = isRefresh
     ? `Quick freshness check — ${sport.toUpperCase()} on ${gameDate}: ${awayTeam} @ ${homeTeam}${oddsContext ? `\nCurrent odds reference: ${oddsContext.split('\n')[0]}` : ''}\n\nAny lineup changes, significant line movement, or major news in the last 4 hours?`
@@ -471,6 +684,7 @@ async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext
 MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
 DATE: ${gameDate}
 ${oddsContext ? `\nKNOWN ODDS (pre-fetched from The Odds API — use these, do NOT search for odds):\n${oddsContext}` : ''}
+${propsSection}
 ${injurySection}
 ${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
 
@@ -479,26 +693,27 @@ Search ONLY for: confirmed starters/lineups, any injury updates beyond the ESPN 
   const hasVerifiedOdds = !isRefresh && !!(oddsContext && oddsContext.includes('The Odds API'));
 
   // Build the no-search prompt once (reused by Tier 3 and Tier 4)
-  const noSearchSystem = isRefresh ? QUICK_REFRESH_SYSTEM : buildAnalysisSystemNoSearch(injuryData);
+  const noSearchSystem = isRefresh ? QUICK_REFRESH_SYSTEM : buildAnalysisSystemNoSearch(injuryData, propsData);
   const noSearchPrompt = isRefresh ? userPrompt :
     `Analyze this ${sport.toUpperCase()} matchup using ONLY the data provided below:
 
 MATCHUP: ${awayTeam} (Away) @ ${homeTeam} (Home)
 DATE: ${gameDate}
 ${oddsContext ? `\nODDS DATA:\n${oddsContext}` : '\nNo odds data available.'}
+${propsSection}
 ${injurySection}
 ${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
 
 Produce a complete BetOS analysis using only this data. Note any limitations.`;
 
-  // ── Tier 1: Claude Opus 4.6 + web search (90s) ───────────────────────
+  // ── Tier 1: Claude Opus 4.6 + web search (240s) ──────────────────────
   // Primary — mirrors Tier 1 in goatbot/route.js. Proven reliable under batch load.
   if (!isRefresh) {
     try {
-      const systemPrompt = buildAnalysisSystem(hasVerifiedOdds, injuryData);
+      const systemPrompt = buildAnalysisSystem(hasVerifiedOdds, injuryData, propsData);
       const result = await callClaude(systemPrompt, userPrompt, {
         maxTokens: 2000,
-        timeout: 90_000,
+        timeout: 240_000,
       });
       if (result) {
         console.log(`[pregenerate] ✅ Tier 1 (claude-opus+search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
@@ -514,14 +729,14 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
     }
   }
 
-  // ── Tier 2: grok-4 + web search (90s) ────────────────────────────────
+  // ── Tier 2: grok-4 + web search (150s) ───────────────────────────────
   if (!isRefresh) {
     try {
-      const systemPrompt = buildAnalysisSystem(hasVerifiedOdds, injuryData);
+      const systemPrompt = buildAnalysisSystem(hasVerifiedOdds, injuryData, propsData);
       const result = await callGrok(systemPrompt, userPrompt, {
         useSearch: true,
         maxTokens: 2000,
-        timeout: 90_000,
+        timeout: 150_000,
       });
       if (result) {
         console.log(`[pregenerate] ✅ Tier 2 (grok-4+search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
@@ -805,13 +1020,16 @@ export async function GET(req) {
         }
       }
 
-      // Pre-fetch ESPN injury data for all games in this batch in parallel.
-      // This runs once per batch (not per tier), giving all fallback tiers real injury data.
-      const injuryDataMap = await Promise.all(
-        batch.map(({ homeTeam, awayTeam }) =>
+      // Pre-fetch ESPN injury data and player props for all games in this batch in parallel.
+      // Both run once per batch so all fallback tiers have the same enriched data.
+      const [injuryDataMap, propsDataMap] = await Promise.all([
+        Promise.all(batch.map(({ homeTeam, awayTeam }) =>
           fetchInjuryData(sport, homeTeam, awayTeam).catch(() => '')
-        )
-      );
+        )),
+        Promise.all(batch.map(({ homeTeam, awayTeam }) =>
+          fetchPlayerProps(sport, homeTeam, awayTeam).catch(() => '')
+        )),
+      ]);
 
       const batchResults = await Promise.allSettled(
         batch.map(async ({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode }, batchIdx) => {
@@ -819,9 +1037,11 @@ export async function GET(req) {
           console.log(`[pregenerate] ${gameMode === 'refresh' ? '↻ Refreshing' : '⚡ Generating'}: ${label} ${gameTime}`);
 
           const injuryData = injuryDataMap[batchIdx] || '';
+          const propsData  = propsDataMap[batchIdx]  || '';
           if (injuryData) console.log(`[pregenerate] 🏥 Injury data fetched for ${awayTeam}@${homeTeam}`);
+          if (propsData)  console.log(`[pregenerate] 🎯 Props data fetched for ${awayTeam}@${homeTeam}`);
 
-          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], injuryData, gameMode, isAdmin);
+          const result = await generateAnalysis(sport, homeTeam, awayTeam, todayStr, oddsContext, perfContextCache[sport], injuryData, propsData, gameMode, isAdmin);
           if (!result) throw new Error('no AI response');
 
           // Parse structured sections from the richer v2.0 analysis output
