@@ -379,8 +379,8 @@ export async function POST(req) {
 
   delete safePayload.id;              // strip — never trust client-supplied id
 
-  // ── 3b. Extract and store structured line/side from team name ───────────
-  //    MUST run BEFORE normalizeTeam() — the fuzzy normalizer strips trailing
+  // ── 3b. Extract line BEFORE team name normalization ──────────────────────
+  //    MUST run before normalizeTeam() — the fuzzy normalizer strips trailing
   //    line numbers ("Boston Celtics -4.5" → "Boston Celtics") which would
   //    cause line extraction to find nothing and grade the pick as a PUSH.
   const betTypeLower = (safePayload.bet_type || '').toLowerCase();
@@ -388,7 +388,7 @@ export async function POST(req) {
   const isTotalBet  = betTypeLower.includes('over') || betTypeLower.includes('under') || betTypeLower.includes('total');
 
   if (!safePayload.line && safePayload.team) {
-    // Extract line from team name: "Cowboys +3.5" → 3.5, "Boston Celtics -4.5" → -4.5
+    // Extract line from team name: "Boston Celtics -4.5" → -4.5, "Cowboys +3.5" → 3.5
     const lineMatch = safePayload.team.match(/([+-]\d+(?:\.\d+)?)\s*$/);
     if (lineMatch) {
       safePayload.line = parseFloat(lineMatch[1]);
