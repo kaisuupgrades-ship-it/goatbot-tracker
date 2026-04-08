@@ -120,11 +120,20 @@ function cleanTeamForLookup(team) {
     .trim();
 }
 
-async function lookupCommenceTime(sport, team, dateStr) {
+async function lookupCommenceTime(sport, team, dateStr, clientMatchup) {
   const sportKey = normalizeSport(sport);
   if (!sportKey) return null;
 
-  const cleaned = cleanTeamForLookup(team);
+  // For total picks the team field is "Over 7.5" / "Under 6" — not a real team name.
+  // Use the client-sent matchup string to extract a searchable team name instead.
+  const isTotalTeam = /^(over|under)\s+[\d.]+$/i.test((team || '').trim());
+  let cleaned = isTotalTeam ? null : cleanTeamForLookup(team);
+  if (isTotalTeam && clientMatchup) {
+    // clientMatchup is like "NYY @ BOS" — pull out the first token as the search term
+    const parts = clientMatchup.split(/\s*[@vs]+\s*/i).filter(Boolean);
+    cleaned = parts[0]?.trim() || null;
+  }
+
   const espnDate = dateStr?.replace(/-/g, '');
 
   // Build list of ESPN paths to try
@@ -137,17 +146,52 @@ async function lookupCommenceTime(sport, team, dateStr) {
     }
   }
 
-  for (const path of paths) {
-    const result = await searchESPNScoreboard(path, cleaned, espnDate, dateStr);
-    if (result) return result;
-  }
-
-  // Last resort: try with the original (uncleaned) team name in case cleaning was too aggressive
-  if (cleaned !== team) {
+  if (cleaned) {
     for (const path of paths) {
-      const result = await searchESPNScoreboard(path, team, espnDate, dateStr);
+      const result = await searchESPNScoreboard(path, cleaned, espnDate, dateStr);
       if (result) return result;
     }
+
+    // Last resort: try with the original (uncleaned) team name in case cleaning was too aggressive
+    if (cleaned !== team && !isTotalTeam) {
+      for (const path of paths) {
+        const result = await searchESPNScoreboard(path, team, espnDate, dateStr);
+        if (result) return result;
+      }
+    }
+  }
+
+  // Fallback: search odds cache by team name when ESPN doesn't find the game
+  if (!isTotalTeam && cleaned && supabaseAdmin) {
+    try {
+      const sportKeyMap = {
+        MLB: 'mlb', NBA: 'nba', NFL: 'nfl', NHL: 'nhl',
+        NCAAB: 'ncaab', NCAAF: 'ncaaf', MLS: 'mls',
+      };
+      const oddsKey = sportKeyMap[sportKey];
+      if (oddsKey) {
+        const { data: cached } = await supabaseAdmin
+          .from('settings').select('value').eq('key', `odds_cache_${oddsKey}`).maybeSingle();
+        if (cached?.value) {
+          const payload = typeof cached.value === 'string' ? JSON.parse(cached.value) : cached.value;
+          const games = payload?.data || [];
+          const teamNorm = cleaned.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const game = games.find(g =>
+            (g.home_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(teamNorm) ||
+            (g.away_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(teamNorm) ||
+            teamNorm.includes((g.home_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5)) ||
+            teamNorm.includes((g.away_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5))
+          );
+          if (game?.home_team && game?.away_team) {
+            return {
+              date:      game.commence_time || null,
+              homeTeam:  game.home_team,
+              awayTeam:  game.away_team,
+            };
+          }
+        }
+      }
+    } catch { /* non-fatal */ }
   }
 
   return null;
@@ -503,6 +547,7 @@ export async function POST(req) {
       safePayload.sport,
       safePayload.team,
       safePayload.date,
+      safePayload.matchup,
     );
     if (espnInfo) {
       commence_time = espnInfo.date || null;
