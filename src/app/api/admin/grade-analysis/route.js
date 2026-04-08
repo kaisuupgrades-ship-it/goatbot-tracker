@@ -10,10 +10,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 10;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const _serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = _serviceKey
+  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, _serviceKey)
+  : null;
 
 // ── POST: grade a single analysis ────────────────────────────────────────────
 export async function POST(req) {

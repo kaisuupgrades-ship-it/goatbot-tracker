@@ -120,34 +120,84 @@ function cleanTeamForLookup(team) {
     .trim();
 }
 
-async function lookupCommenceTime(sport, team, dateStr) {
+async function lookupGameInfo(sport, team, dateStr, clientMatchup) {
   const sportKey = normalizeSport(sport);
   if (!sportKey) return null;
 
-  const cleaned = cleanTeamForLookup(team);
-  const espnDate = dateStr?.replace(/-/g, '');
+  // For total picks the team field is "Over 7.5" / "Under 6" — not a real team name.
+  // Use the client-sent matchup string to extract a searchable team name instead.
+  const isTotalTeam = /^(over|under)\s+[\d.]+$/i.test((team || '').trim());
+  let searchName = isTotalTeam ? null : cleanTeamForLookup(team);
+  if (isTotalTeam && clientMatchup) {
+    // clientMatchup is like "NYY @ BOS" — pull out the first token as the search term
+    const parts = clientMatchup.split(/\s*[@vs]+\s*/i).filter(Boolean);
+    searchName = parts[0]?.trim() || null;
+  }
 
-  // Build list of ESPN paths to try
+  const espnDate = dateStr?.replace(/-/g, '');
   const paths = [];
   if (ESPN_ENDPOINTS[sportKey]) paths.push(ESPN_ENDPOINTS[sportKey]);
-  // For generic "Soccer", also try all major leagues
   if (sportKey === 'SOCCER') {
     for (const p of SOCCER_FALLBACK_LEAGUES) {
       if (!paths.includes(p)) paths.push(p);
     }
   }
 
-  for (const path of paths) {
-    const result = await searchESPNScoreboard(path, cleaned, espnDate, dateStr);
-    if (result) return result;
+  if (searchName) {
+    for (const path of paths) {
+      const result = await searchESPNScoreboard(path, searchName, espnDate, dateStr);
+      if (result) {
+        const matchup = result.home_team && result.away_team
+          ? `${result.away_team} @ ${result.home_team}` : null;
+        return { ...result, matchup };
+      }
+    }
+
+    // Last resort: try with the original (uncleaned) name in case cleaning was too aggressive
+    if (searchName !== team && !isTotalTeam) {
+      for (const path of paths) {
+        const result = await searchESPNScoreboard(path, team, espnDate, dateStr);
+        if (result) {
+          const matchup = result.home_team && result.away_team
+            ? `${result.away_team} @ ${result.home_team}` : null;
+          return { ...result, matchup };
+        }
+      }
+    }
   }
 
-  // Last resort: try with the original (uncleaned) team name in case cleaning was too aggressive
-  if (cleaned !== team) {
-    for (const path of paths) {
-      const result = await searchESPNScoreboard(path, team, espnDate, dateStr);
-      if (result) return result;
-    }
+  // Fallback: try to find the game in odds cache by team name
+  if (!isTotalTeam && searchName && supabaseAdmin) {
+    try {
+      const sportKeyMap = {
+        MLB: 'mlb', NBA: 'nba', NFL: 'nfl', NHL: 'nhl',
+        NCAAB: 'ncaab', NCAAF: 'ncaaf', MLS: 'mls',
+      };
+      const oddsKey = sportKeyMap[sportKey];
+      if (oddsKey) {
+        const { data: cached } = await supabaseAdmin
+          .from('settings').select('value').eq('key', `odds_cache_${oddsKey}`).maybeSingle();
+        if (cached?.value) {
+          const payload = typeof cached.value === 'string' ? JSON.parse(cached.value) : cached.value;
+          const games = payload?.data || [];
+          const teamNorm = searchName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const game = games.find(g =>
+            (g.home_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(teamNorm) ||
+            (g.away_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(teamNorm) ||
+            teamNorm.includes((g.home_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5)) ||
+            teamNorm.includes((g.away_team || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5))
+          );
+          if (game?.home_team && game?.away_team) {
+            return {
+              commence_time: game.commence_time || null,
+              home_team: game.home_team,
+              away_team: game.away_team,
+              matchup: `${game.away_team} @ ${game.home_team}`,
+            };
+          }
+        }
+      }
+    } catch { /* non-fatal */ }
   }
 
   return null;
@@ -189,7 +239,14 @@ async function searchESPNScoreboard(path, team, espnDate, dateStr) {
     }
 
     if (bestScore >= 50 && bestEvent?.date) {
-      return bestEvent.date; // UTC ISO timestamp — actual game start
+      const comps = bestEvent.competitions?.[0]?.competitors || [];
+      const homeComp = comps.find(c => c.homeAway === 'home');
+      const awayComp = comps.find(c => c.homeAway === 'away');
+      return {
+        commence_time: bestEvent.date,
+        home_team: homeComp?.team?.displayName || homeComp?.team?.name || '',
+        away_team: awayComp?.team?.displayName || awayComp?.team?.name || '',
+      };
     }
     return null;
   } catch {
@@ -485,16 +542,26 @@ export async function POST(req) {
     }
   }
 
-  // ── 5. Look up actual game start time from ESPN ──────────────────────────
+  // ── 5. Look up actual game start time + team context from ESPN ───────────
   //    This is the only trusted source of commence_time.
-  //    If ESPN can't find the game, commence_time stays null (pick is unverifiable).
+  //    Also extract home_team, away_team, matchup for grading and display.
   let commence_time = null;
+  let espnHomeTeam = null;
+  let espnAwayTeam = null;
+  let espnMatchup = null;
   if (safePayload.sport && safePayload.team && safePayload.date) {
-    commence_time = await lookupCommenceTime(
+    const gameInfo = await lookupGameInfo(
       safePayload.sport,
       safePayload.team,
       safePayload.date,
+      safePayload.matchup,
     );
+    if (gameInfo) {
+      commence_time = gameInfo.commence_time;
+      espnHomeTeam  = gameInfo.home_team  || null;
+      espnAwayTeam  = gameInfo.away_team  || null;
+      espnMatchup   = gameInfo.matchup    || null;
+    }
   }
 
   // ── 5b. HARD BLOCK: contest/verified picks must be submitted BEFORE game ──
@@ -529,9 +596,19 @@ export async function POST(req) {
   }
 
   // ── 6. Insert via service role (trusted) ─────────────────────────────────
+  // Populate home_team / away_team / matchup from ESPN data (overrides any client-sent values).
+  // For totals, ESPN may not match — fall back to client matchup (abbreviation format).
+  const insertPayload = {
+    ...safePayload,
+    commence_time,
+    home_team: espnHomeTeam || safePayload.home_team || null,
+    away_team: espnAwayTeam || safePayload.away_team || null,
+    matchup:   espnMatchup  || safePayload.matchup   || null,
+  };
+
   const { data, error } = await supabaseAdmin
     .from('picks')
-    .insert([{ ...safePayload, commence_time }])
+    .insert([insertPayload])
     .select()
     .single();
 

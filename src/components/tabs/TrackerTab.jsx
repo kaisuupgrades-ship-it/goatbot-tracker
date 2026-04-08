@@ -682,7 +682,12 @@ function PickCalendar({ picks, dateRange, onRangeChange, timezone }) {
                 <span style={{ fontSize: '0.9rem', flexShrink: 0 }}>{sportEmoji(p.sport)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{p.bet_type} · {p.sport}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
+                    {p.bet_type} · {p.sport}
+                    {(p.matchup || (p.home_team && p.away_team)) && (
+                      <span style={{ marginLeft: '4px' }}>· {p.matchup || `${p.away_team} @ ${p.home_team}`}</span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexShrink: 0 }}>
                   <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: parseInt(p.odds) > 0 ? 'var(--green)' : 'var(--text-secondary)' }}>
@@ -1210,7 +1215,12 @@ export default function TrackerTab({ picks, user, onViewGame }) {
                           <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.team}</span>
                         )
                       }
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', flexShrink: 0, whiteSpace: 'nowrap' }}>{p.sport} · {p.bet_type}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        {p.sport} · {p.bet_type}
+                        {(p.matchup || (p.home_team && p.away_team)) && (
+                          <span style={{ marginLeft: '4px' }}>· {p.matchup || `${p.away_team} @ ${p.home_team}`}</span>
+                        )}
+                      </span>
                     </div>
                     {/* Units badge */}
                     <span style={{

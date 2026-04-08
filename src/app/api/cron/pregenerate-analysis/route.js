@@ -875,6 +875,24 @@ export async function GET(req) {
   // Optional: override date (YYYY-MM-DD). Used by admin "Generate for Tomorrow" button.
   const dateOverride = params.get('date') || null;
 
+  // ── Time-based lock: prevent duplicate runs within 10 minutes ────────────
+  // Admin-forced runs and per-sport or date-override calls are always allowed through.
+  if (!force && !sportFilter && !dateOverride) {
+    try {
+      const { data: lastRun } = await supabase
+        .from('settings').select('value').eq('key', 'cron_pregenerate_last_run').maybeSingle();
+      if (lastRun?.value) {
+        const parsed = typeof lastRun.value === 'string' ? JSON.parse(lastRun.value) : lastRun.value;
+        const lastRunAt = parsed?.run_at ? new Date(parsed.run_at).getTime() : 0;
+        const elapsed = Date.now() - lastRunAt;
+        if (elapsed < 10 * 60 * 1000) {
+          console.log(`[pregenerate-analysis] Skipping — last run was ${Math.round(elapsed / 60000)}m ago (lock: 10m)`);
+          return NextResponse.json({ skipped: true, reason: `Last run ${Math.round(elapsed / 60000)}m ago — 10m lock active` });
+        }
+      }
+    } catch { /* non-fatal — don't block run if lock check fails */ }
+  }
+
   const started = Date.now();
   // Use ET (America/New_York) for "today" so late-night cron runs don't accidentally
   // process the wrong date. When dateOverride is given (admin buttons), use it directly.
@@ -1024,7 +1042,9 @@ export async function GET(req) {
 
       let gameMode = 'full';
       if (!force) {
-        const freshCutoff   = new Date(Date.now() - 3  * 60 * 60 * 1000).toISOString();
+        // Content-based dedup guard: skip if a quality analysis was generated in the last 12h.
+        // A quality analysis is one that was generated WITH odds (no "No odds data available" text).
+        const freshCutoff   = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
         const refreshCutoff = new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString();
         const { data: existing } = await supabase
           .from('game_analyses')
@@ -1033,18 +1053,18 @@ export async function GET(req) {
           .ilike('home_team', homeTeam).ilike('away_team', awayTeam)
           .maybeSingle();
         if (existing) {
+          // Check if the cached analysis was generated without odds — if so, re-generate
+          const cachedHasNoOdds = existing.analysis && (
+            existing.analysis.includes('No odds data available') ||
+            existing.analysis.includes('ODDS NOT YET AVAILABLE') ||
+            existing.analysis.includes('⚠️ NOTE: Generated without live web search')
+          );
           if (existing.updated_at > freshCutoff) {
-            // FIX 3: If the cached analysis was generated without odds but odds are now
-            // available, force a full re-generation instead of skipping.
-            const cachedHasNoOdds = existing.analysis && (
-              existing.analysis.includes('No odds data available') ||
-              existing.analysis.includes('ODDS NOT YET AVAILABLE') ||
-              existing.analysis.includes('⚠️ NOTE: Generated without live web search')
-            );
             if (cachedHasNoOdds && oddsContext) {
               console.log(`[pregenerate] ♻️ Re-queuing ${awayTeam}@${homeTeam} — cached analysis had no odds, odds now available`);
               gameMode = 'full';
-            } else {
+            } else if (!cachedHasNoOdds) {
+              // Fresh quality analysis — skip entirely (12h dedup window)
               skipped.push(`${awayTeam}@${homeTeam}`);
               return;
             }
