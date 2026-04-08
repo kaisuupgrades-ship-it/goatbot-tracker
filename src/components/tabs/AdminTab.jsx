@@ -1655,6 +1655,7 @@ function CronPanel({ userEmail }) {
   const [loading, setLoading]   = useState(true);
   const [running, setRunning]   = useState({});
   const [runResults, setRunResults] = useState({});
+  const [expandedErrors, setExpandedErrors] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1757,9 +1758,31 @@ function CronPanel({ userEmail }) {
                     {lastRun.graded   != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.graded} graded</span>}
                     {lastRun.edges    != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.edges} edges</span>}
                     {lastRun.generated != null && <span style={{ color: '#4ade80' }}>✓ {lastRun.generated} games</span>}
-                    {lastRun.errors   != null && lastRun.errors > 0 && <span style={{ color: '#f87171', marginLeft: '8px' }}>⚠ {lastRun.errors} errors</span>}
-                    {lastRun.error    && <span style={{ color: '#f87171' }}>✗ {String(lastRun.error).slice(0, 60)}</span>}
+                    {lastRun.errors != null && lastRun.errors > 0 && (
+                      <button
+                        onClick={() => setExpandedErrors(s => ({ ...s, [job.key]: !s[job.key] }))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.73rem', padding: '0 0 0 8px' }}
+                      >
+                        ⚠ {lastRun.errors} errors {expandedErrors[job.key] ? '▲' : '▼'}
+                      </button>
+                    )}
+                    {lastRun.error && <span style={{ color: '#f87171' }}>✗ {String(lastRun.error).slice(0, 60)}</span>}
                   </div>
+                  {expandedErrors[job.key] && lastRun.error_list?.length > 0 && (
+                    <div style={{ marginTop: '6px', padding: '7px 10px', background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      {lastRun.error_list.map((err, i) => {
+                        const colonIdx = err.indexOf(': ');
+                        const game = colonIdx >= 0 ? err.slice(0, colonIdx) : err;
+                        const reason = colonIdx >= 0 ? err.slice(colonIdx + 2) : '';
+                        return (
+                          <div key={i} style={{ fontSize: '0.64rem', fontFamily: 'IBM Plex Mono, monospace', display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+                            <span style={{ color: '#f87171' }}>{game}</span>
+                            {reason && <span style={{ color: '#888' }}>— {reason}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1820,6 +1843,7 @@ function SystemPanel({ userEmail }) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [expandedAnalysis, setExpandedAnalysis] = useState(null); // id of expanded row
+  const [pregenErrorsExpanded, setPregenErrorsExpanded] = useState(false);
   const [gradingId,        setGradingId]        = useState(null); // id currently being saved
   const [aiRecord,         setAiRecord]         = useState(null); // { wins, losses, pushes, winPct, byConf, bySport }
   const [backfillMsg,      setBackfillMsg]      = useState('');
@@ -2119,12 +2143,36 @@ function SystemPanel({ userEmail }) {
 
         {/* Last run summary */}
         {pregenLog && !pregenRunning && (
-          <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.12)', borderRadius: '7px', fontSize: '0.72rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ color: '#60a5fa' }}>⏱ Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
-            <span style={{ color: '#4ade80' }}>✅ {pregenLog.generated} generated</span>
-            <span style={{ color: 'var(--text-muted)' }}>⏭ {pregenLog.skipped} skipped</span>
-            {pregenLog.errors > 0 && <span style={{ color: '#f87171' }}>⚠ {pregenLog.errors} errors</span>}
-            <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
+          <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.85rem', background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.12)', borderRadius: '7px', fontSize: '0.72rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: '#60a5fa' }}>⏱ Last: <strong>{new Date(pregenLog.run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong></span>
+              <span style={{ color: '#4ade80' }}>✅ {pregenLog.generated} generated</span>
+              <span style={{ color: 'var(--text-muted)' }}>⏭ {pregenLog.skipped} skipped</span>
+              {pregenLog.errors > 0 && (
+                <button
+                  onClick={() => setPregenErrorsExpanded(v => !v)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: '0.72rem', padding: 0 }}
+                >
+                  ⚠ {pregenLog.errors} errors {pregenErrorsExpanded ? '▲' : '▼'}
+                </button>
+              )}
+              <span style={{ color: 'var(--text-muted)' }}>⏳ {Math.round((pregenLog.duration_ms || 0) / 1000)}s</span>
+            </div>
+            {pregenErrorsExpanded && pregenLog.error_list?.length > 0 && (
+              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                {pregenLog.error_list.map((err, i) => {
+                  const colonIdx = err.indexOf(': ');
+                  const game = colonIdx >= 0 ? err.slice(0, colonIdx) : err;
+                  const reason = colonIdx >= 0 ? err.slice(colonIdx + 2) : '';
+                  return (
+                    <div key={i} style={{ fontSize: '0.64rem', fontFamily: 'IBM Plex Mono, monospace', display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+                      <span style={{ color: '#f87171' }}>{game}</span>
+                      {reason && <span style={{ color: '#888' }}>— {reason}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -2189,8 +2237,19 @@ function SystemPanel({ userEmail }) {
               ✓ Done — {pregenResult.generated} generated · {pregenResult.skipped} skipped · {Math.round((pregenResult.duration_ms || 0) / 1000)}s
             </span>
             {pregenResult.error_list?.length > 0 && (
-              <div style={{ color: '#f87171', marginTop: '5px', fontSize: '0.68rem' }}>
-                ⚠ {pregenResult.error_list.slice(0, 3).join(' · ')}
+              <div style={{ marginTop: '7px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <div style={{ color: '#f87171', fontSize: '0.68rem', fontWeight: 700 }}>⚠ {pregenResult.error_list.length} failed:</div>
+                {pregenResult.error_list.map((err, i) => {
+                  const colonIdx = err.indexOf(': ');
+                  const game = colonIdx >= 0 ? err.slice(0, colonIdx) : err;
+                  const reason = colonIdx >= 0 ? err.slice(colonIdx + 2) : '';
+                  return (
+                    <div key={i} style={{ fontSize: '0.63rem', fontFamily: 'IBM Plex Mono, monospace', display: 'flex', gap: '8px', alignItems: 'baseline', paddingLeft: '8px' }}>
+                      <span style={{ color: '#f87171' }}>{game}</span>
+                      {reason && <span style={{ color: '#888' }}>— {reason}</span>}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
