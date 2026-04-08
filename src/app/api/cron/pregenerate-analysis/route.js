@@ -1019,6 +1019,18 @@ export async function GET(req) {
       }
     }
 
+    // ── Odds API checkpoint ───────────────────────────────────────────────────
+    // Before fetching ESPN data or generating any AI analysis for this sport,
+    // verify The Odds API has active events with odds. Skips off-season sports
+    // and prevents wasting AI tokens when no bookmaker lines exist.
+    const oddsEventsList = await fetchGamesFromOddsCache(sport);
+    if (!oddsEventsList.length) {
+      console.log(`[pregenerate] ${sport.toUpperCase()}: Odds API checkpoint — no active events with odds, skipping sport`);
+      skipped.push(`${sport} (no-active-odds)`);
+      continue;
+    }
+    console.log(`[pregenerate] ${sport.toUpperCase()}: Odds API checkpoint passed — ${oddsEventsList.length} event(s) with odds`);
+
     // Admin runs (manual force, per-sport, or date override) include ALL game states
     // so the admin can generate analyses regardless of whether games are pre/in/post.
     // Cron-triggered runs only include pre/recently-in-progress games.
@@ -1102,6 +1114,21 @@ export async function GET(req) {
       const gameTime = event.competitions?.[0]?.date
         ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
         : '';
+
+      // Cross-reference: only analyze games present in BOTH ESPN and The Odds API.
+      // Prevents wasting AI tokens on games that have no bookmaker lines yet.
+      const htLast = homeTeam.toLowerCase().split(' ').pop();
+      const atLast = awayTeam.toLowerCase().split(' ').pop();
+      const inOddsApi = oddsEventsList.some(r => {
+        const rh = (r.homeTeam || '').toLowerCase();
+        const ra = (r.awayTeam || '').toLowerCase();
+        return rh.includes(htLast) && ra.includes(atLast);
+      });
+      if (!inOddsApi) {
+        console.log(`[pregenerate] Skipping ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) — not in Odds API`);
+        skipped.push(`${awayTeam}@${homeTeam} (not-in-odds-api)`);
+        continue;
+      }
 
       await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime);
     }
