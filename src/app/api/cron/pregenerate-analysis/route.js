@@ -596,6 +596,12 @@ async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens 
   const data = await res.json();
   const latency = Date.now() - t0;
 
+  // Log unexpected stop reasons so we can diagnose tier failures
+  const stopReason = data.stop_reason || data.choices?.[0]?.finish_reason || 'unknown';
+  if (stopReason !== 'end_turn' && stopReason !== 'unknown') {
+    console.warn(`[pregenerate] callGrok: stop_reason="${stopReason}" — content types: [${(data.output||[]).flatMap(i=>(i.content||[i])).map(c=>c.type).join(',')}]`);
+  }
+
   // Robust parsing — handles multiple xAI output format variations
   let text = '';
   const output = data.output || [];
@@ -689,6 +695,13 @@ async function callClaude(systemPrompt, userPrompt, { maxTokens = 2000, timeout 
 
   const data = await res.json();
   const latency = Date.now() - t0;
+
+  // Log unexpected stop reasons so we can diagnose tier failures
+  const claudeStopReason = data.stop_reason || 'unknown';
+  if (claudeStopReason !== 'end_turn') {
+    console.warn(`[pregenerate] callClaude: stop_reason="${claudeStopReason}" — content types: [${(data.content||[]).map(c=>c.type).join(',')}]`);
+  }
+
   const text = (data.content || [])
     .filter(block => block.type === 'text')
     .map(block => block.text)
@@ -744,6 +757,7 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
   // ── Tier 1: Claude Opus 4.6 + web search (240s) ──────────────────────
   // Primary — mirrors Tier 1 in goatbot/route.js. Proven reliable under batch load.
   if (!isRefresh) {
+    console.log(`[pregenerate] 🔵 Tier 1 (claude-opus+search) attempting: ${awayTeam}@${homeTeam}`);
     try {
       const systemPrompt = buildAnalysisSystem(hasVerifiedOdds, injuryData, propsData);
       const result = await callClaude(systemPrompt, userPrompt, {
@@ -759,13 +773,16 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
           system_prompt: systemPrompt, user_prompt: userPrompt, prompt_version: PROMPT_VERSION,
         };
       }
+      console.log(`[pregenerate] ⚠️ Tier 1 (claude-opus+search) returned null (no text blocks — check stop_reason above) for ${awayTeam}@${homeTeam}`);
     } catch (e) {
-      console.log(`[pregenerate] ⚠️ Tier 1 (claude-opus+search) failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+      console.log(`[pregenerate] ⚠️ Tier 1 (claude-opus+search) threw for ${awayTeam}@${homeTeam}: ${e.message}`);
     }
+    console.log(`[pregenerate] → Falling to Tier 2 (grok-4+search) for ${awayTeam}@${homeTeam}`);
   }
 
   // ── Tier 2: grok-4 + web search (150s) ───────────────────────────────
   if (!isRefresh) {
+    console.log(`[pregenerate] 🔵 Tier 2 (grok-4+search) attempting: ${awayTeam}@${homeTeam}`);
     try {
       const systemPrompt = buildAnalysisSystem(hasVerifiedOdds, injuryData, propsData);
       const result = await callGrok(systemPrompt, userPrompt, {
@@ -782,12 +799,15 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
           system_prompt: systemPrompt, user_prompt: userPrompt, prompt_version: PROMPT_VERSION,
         };
       }
+      console.log(`[pregenerate] ⚠️ Tier 2 (grok-4+search) returned null for ${awayTeam}@${homeTeam}`);
     } catch (e) {
-      console.log(`[pregenerate] ⚠️ Tier 2 (grok-4+search) failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+      console.log(`[pregenerate] ⚠️ Tier 2 (grok-4+search) threw for ${awayTeam}@${homeTeam}: ${e.message}`);
     }
+    console.log(`[pregenerate] → Falling to Tier 3 (grok-4 no-search) for ${awayTeam}@${homeTeam}`);
   }
 
   // ── Tier 3: grok-4 no-search via Responses API (45s) ─────────────────
+  console.log(`[pregenerate] 🔵 Tier 3 (grok-4 no-search) attempting: ${awayTeam}@${homeTeam}`);
   try {
     const result = await callGrok(noSearchSystem, noSearchPrompt, {
       useSearch: false,
@@ -803,12 +823,15 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
         system_prompt: noSearchSystem, user_prompt: noSearchPrompt, prompt_version: PROMPT_VERSION,
       };
     }
+    console.log(`[pregenerate] ⚠️ Tier 3 (grok-4 no-search) returned null for ${awayTeam}@${homeTeam}`);
   } catch (e) {
-    console.log(`[pregenerate] ⚠️ Tier 3 (grok-4 no-search) failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+    console.log(`[pregenerate] ⚠️ Tier 3 (grok-4 no-search) threw for ${awayTeam}@${homeTeam}: ${e.message}`);
   }
+  console.log(`[pregenerate] → Falling to Tier 4 (grok-3) for ${awayTeam}@${homeTeam}`);
 
   // ── Tier 4: grok-3 chat/completions no-search (45s) ──────────────────
   // Fast reliable fallback — much faster than grok-4 Responses API.
+  console.log(`[pregenerate] 🔵 Tier 4 (grok-3) attempting: ${awayTeam}@${homeTeam}`);
   try {
     const result = await callGrok3(noSearchSystem, noSearchPrompt, {
       maxTokens: isRefresh ? 400 : 2000,
@@ -823,8 +846,9 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
         system_prompt: noSearchSystem, user_prompt: noSearchPrompt, prompt_version: PROMPT_VERSION,
       };
     }
+    console.log(`[pregenerate] ⚠️ Tier 4 (grok-3) returned null for ${awayTeam}@${homeTeam}`);
   } catch (e) {
-    console.log(`[pregenerate] ⚠️ Tier 4 (grok-3) failed for ${awayTeam}@${homeTeam}: ${e.message}`);
+    console.log(`[pregenerate] ⚠️ Tier 4 (grok-3) threw for ${awayTeam}@${homeTeam}: ${e.message}`);
   }
 
   return null; // all tiers failed
@@ -991,19 +1015,42 @@ export async function GET(req) {
 
     // Helper: apply freshness check and push game onto the queue (or skip if fresh)
     const enqueueGame = async (homeTeam, awayTeam, oddsContext, gameTime) => {
+      // FIX 2: Skip games with no odds data — no value in AI analyzing without lines
+      if (!oddsContext) {
+        console.log(`[pregenerate] Skipping ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) — no odds available yet`);
+        skipped.push(`${awayTeam}@${homeTeam} (no-odds)`);
+        return;
+      }
+
       let gameMode = 'full';
       if (!force) {
         const freshCutoff   = new Date(Date.now() - 3  * 60 * 60 * 1000).toISOString();
         const refreshCutoff = new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString();
         const { data: existing } = await supabase
           .from('game_analyses')
-          .select('id, updated_at')
+          .select('id, updated_at, analysis')
           .eq('sport', sport).eq('game_date', todayStr)
           .ilike('home_team', homeTeam).ilike('away_team', awayTeam)
           .maybeSingle();
         if (existing) {
-          if (existing.updated_at > freshCutoff) { skipped.push(`${awayTeam}@${homeTeam}`); return; }
-          if (existing.updated_at > refreshCutoff) { gameMode = 'refresh'; }
+          if (existing.updated_at > freshCutoff) {
+            // FIX 3: If the cached analysis was generated without odds but odds are now
+            // available, force a full re-generation instead of skipping.
+            const cachedHasNoOdds = existing.analysis && (
+              existing.analysis.includes('No odds data available') ||
+              existing.analysis.includes('ODDS NOT YET AVAILABLE') ||
+              existing.analysis.includes('⚠️ NOTE: Generated without live web search')
+            );
+            if (cachedHasNoOdds && oddsContext) {
+              console.log(`[pregenerate] ♻️ Re-queuing ${awayTeam}@${homeTeam} — cached analysis had no odds, odds now available`);
+              gameMode = 'full';
+            } else {
+              skipped.push(`${awayTeam}@${homeTeam}`);
+              return;
+            }
+          } else if (existing.updated_at > refreshCutoff) {
+            gameMode = 'refresh';
+          }
         }
       }
       gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode });

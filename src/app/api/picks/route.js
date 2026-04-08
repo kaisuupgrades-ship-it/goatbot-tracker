@@ -352,6 +352,20 @@ export async function POST(req) {
     }
   }
 
+  // ── 3b-ii. Clean team name — strip bet descriptions users sometimes paste in ──
+  // e.g. "St. Louis Cardinals Moneyline -135" → "St. Louis Cardinals"
+  // e.g. "Yankees -1.5" → "Yankees" (line already stored in safePayload.line above)
+  // For total picks the team field is "Over 8.5" / "Under 8.5" — leave those as-is.
+  if (safePayload.team && !isTotalBet) {
+    const cleaned = safePayload.team
+      .replace(/\s+(Moneyline|Money Line|ML)\b/gi, '')       // strip "Moneyline" / "ML"
+      .replace(/\s+(Run Line|Puck Line|Spread)\b/gi, '')      // strip spread-type labels
+      .replace(/\s+[+-]\d+(?:\.\d+)?\s*$/g, '')              // strip trailing line/odds numbers
+      .replace(/\s+\([+-]?\d+\)/g, '')                        // strip odds in parens like "(+150)"
+      .trim();
+    if (cleaned) safePayload.team = cleaned;
+  }
+
   // ── 3c. Set pick_type — 'contest', 'verified', or 'personal' ───────────
   //    pick_type determines which leaderboards the pick feeds into.
   //    Contest = 1u normalized on contest board. Verified = Sharp Board with real units.
