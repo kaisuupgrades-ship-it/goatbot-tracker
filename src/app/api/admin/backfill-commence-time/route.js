@@ -23,7 +23,9 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANON_KEY     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY || ANON_KEY);
+const supabaseAdmin = (SUPABASE_URL && (SERVICE_KEY || ANON_KEY))
+  ? createClient(SUPABASE_URL, SERVICE_KEY || ANON_KEY)
+  : null;
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 

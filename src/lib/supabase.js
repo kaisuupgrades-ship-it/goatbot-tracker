@@ -101,7 +101,7 @@ export async function addPick(pick) {
     if (!res.ok) {
       return { data: null, error: { message: json.errors?.[0] || json.error || 'Save failed' } };
     }
-    return { data: json.pick, error: null };
+    return { data: json.pick, verification: json.verification || null, error: null };
   } catch (err) {
     return { data: null, error: { message: err.message || 'Network error' } };
   }

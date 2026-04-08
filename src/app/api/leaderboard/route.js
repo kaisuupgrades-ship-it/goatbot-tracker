@@ -57,17 +57,11 @@ export async function GET(req) {
     if (error) throw error;
 
     // Apply filter projection and rank
-    let projected = applyFilter(data || [], filter);
-
-    // Graceful fallback: if the user requested 'verified' but NO users have verified picks,
-    // automatically fall back to 'all' so the leaderboard isn't empty.
-    // This prevents the "No public handicappers yet" issue when commence_time hasn't
-    // been backfilled yet or ESPN lookup is failing.
-    let actualFilter = filter;
-    if (filter === 'verified' && projected.length === 0 && (data || []).length > 0) {
-      projected = applyFilter(data || [], 'all');
-      actualFilter = 'all_fallback'; // signal to the UI that we fell back
-    }
+    // NOTE: No fallback to 'all' when 'verified' is empty — the Sharp Board must only
+    // show verified picks. An empty leaderboard is the correct result when no verified
+    // picks exist yet, not a reason to show unverified data.
+    const projected = applyFilter(data || [], filter);
+    const actualFilter = filter;
 
     const ranked = projected.map((row, i) => ({ ...row, rank: i + 1 }));
 

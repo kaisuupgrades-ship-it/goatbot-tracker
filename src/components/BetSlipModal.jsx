@@ -323,11 +323,11 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [units,       setUnits]       = useState('1');
   const [book,        setBook]        = useState('DraftKings');
   const [notes,       setNotes]       = useState('');
-  // 3-tier pick type: 'personal' | 'verified' | 'contest'
-  const [pickType,    setPickType]    = useState('personal');
-  const isContest = pickType === 'contest';
-  const [contestResult, setContestResult] = useState(null); // result from verify-pick API
+  // Contest opt-in toggle — verification (verified vs personal) is decided server-side
+  const [contestEntry, setContestEntry] = useState(false);
+  const [contestResult, setContestResult] = useState(null); // pre-check from verify-pick API
   const [verifying,   setVerifying]   = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null); // set after save
 
   // Custom bet section
   const [showCustom,  setShowCustom]  = useState(false);
@@ -357,8 +357,6 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [saveError,   setSaveError]   = useState('');
   const [mounted,     setMounted]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false); // Contest confirmation dialog
-  const [aiChecking,  setAiChecking]  = useState(false); // AI pre-save audit in progress
-  const [aiCheckResult, setAiCheckResult] = useState(null); // { ok, reason } from AI
 
   // Mount flag for portal rendering (avoids SSR mismatch)
   useEffect(() => { setMounted(true); }, []);
@@ -401,45 +399,18 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     setSaveError('');
   }
 
-  // ── When pick type changes → run eligibility check for contest/verified ─────
-  async function handlePickTypeChange(newType) {
-    setPickType(newType);
-    setContestResult(null);
-    if (newType === 'personal') return;
-
-    const teamValue = selectedBet ? selectedBet.team : customTeam.trim();
-    const betTypeValue = selectedBet ? selectedBet.bet_type : customBetType;
-    const oddsValue = selectedBet ? oddsVal : customOdds;
-    if (!teamValue || !oddsValue) return;
-
-    setVerifying(true);
-    try {
-      const res = await fetch('/api/verify-pick', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pick: { team: teamValue, bet_type: betTypeValue, odds: oddsValue, units: parseFloat(units) || 1, date: gameDate },
-          userId: user?.id,
-          contestEntry: newType === 'contest',
-          pickType: newType,
-        }),
-      });
-      const data = await res.json();
-      setContestResult(data);
-    } catch {
-      setContestResult({ eligible: false, issues: ['Could not verify — check connection.'] });
-    }
-    setVerifying(false);
-  }
-
-  // ── Re-run contest check when key values change (if contest is on) ──────────
+  // ── Re-run contest eligibility check when contest toggle is on ───────────────
+  // This checks contest RULES (odds range, bet type, units, daily limit) client-side
+  // so the user sees feedback before submitting. Verification (verified vs personal)
+  // is determined server-side after save.
   useEffect(() => {
-    if (!isContest) return;
+    if (!contestEntry) { setContestResult(null); return; }
     const teamValue = selectedBet ? selectedBet.team : customTeam.trim();
     const oddsValue = selectedBet ? oddsVal : customOdds;
     if (!teamValue || !oddsValue) return;
 
     const t = setTimeout(async () => {
+      setVerifying(true);
       try {
         const res = await fetch('/api/verify-pick', {
           method: 'POST',
@@ -452,11 +423,14 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
         });
         const data = await res.json();
         setContestResult(data);
-      } catch {}
+      } catch {
+        setContestResult({ eligible: false, issues: ['Could not check eligibility — check connection.'] });
+      }
+      setVerifying(false);
     }, 600);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [oddsVal, customOdds, selectedId, customTeam, units, isContest]);
+  }, [oddsVal, customOdds, selectedId, customTeam, units, contestEntry]);
 
   // ── Voice / AI parse for custom section ────────────────────────────────────
   const applyParsed = useCallback((parsed) => {
@@ -594,42 +568,18 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     if (!oddsValue || isNaN(oddsNum)) { setSaveError('Enter valid American odds (e.g. -110 or +133).'); return; }
 
     // Contest picks: show confirmation dialog first (if not already confirmed)
-    if (isContest && contestResult?.eligible && !showConfirm) {
+    if (contestEntry && contestResult?.eligible && !showConfirm) {
       setShowConfirm(true);
       return;
     }
 
-    // Not contest, or ineligible → save directly as personal pick
     await executeSave(teamValue, betTypeValue, oddsNum);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBet, oddsVal, customTeam, customBetType, customOdds, isContest, contestResult, showConfirm, units, notes, book, user?.id, gameDate, sport, isDemo, picks, setPicks, onClose, awayAbbr, homeAbbr]);
+  }, [selectedBet, oddsVal, customTeam, customBetType, customOdds, contestEntry, contestResult, showConfirm, units, notes, book, user?.id, gameDate, sport, isDemo, picks, setPicks, onClose, awayAbbr, homeAbbr]);
 
-  // Called after user confirms the contest dialog (or for personal picks directly)
+  // Called after user confirms the contest dialog (or for non-contest picks directly)
   const executeSave = useCallback(async (teamValue, betTypeValue, oddsNum) => {
-    setSaving(true); setSaveError(''); setShowConfirm(false); setAiCheckResult(null);
-
-    // For contest picks: run AI pre-save audit to catch invalid picks instantly
-    let finalContestEntry = isContest && (contestResult?.eligible !== false);
-    if (finalContestEntry && !isDemo) {
-      setAiChecking(true);
-      try {
-        const auditRes = await fetch('/api/contest-audit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'pre-check',
-            pick: { team: teamValue, bet_type: betTypeValue, odds: oddsNum, units: parseFloat(units) || 1, sport, date: gameDate },
-          }),
-        });
-        const auditData = await auditRes.json();
-        if (auditData.status === 'REJECTED') {
-          // AI flagged it as invalid — save as personal only, user can resubmit
-          finalContestEntry = false;
-          setAiCheckResult({ ok: false, reason: auditData.reason || 'AI flagged this pick as invalid.' });
-        }
-      } catch { /* AI check failed — allow save as contest, admin will audit */ }
-      setAiChecking(false);
-    }
+    setSaving(true); setSaveError(''); setShowConfirm(false); setVerificationResult(null);
 
     const payload = {
       user_id:       user?.id || 'demo',
@@ -644,8 +594,9 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       notes:         notes.trim() || null,
       book:          book,
       matchup:       `${awayAbbr} @ ${homeAbbr}`,
-      contest_entry: finalContestEntry,
-      pick_type:     finalContestEntry ? 'contest' : pickType,
+      // Server decides pick_type (verified vs personal) automatically.
+      // We only communicate the user's contest intent.
+      contest_entry: contestEntry && (contestResult?.eligible !== false),
     };
 
     try {
@@ -653,13 +604,14 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
         const updated = [...(picks || []), { ...payload, id: demoId() }];
         setPicks(updated);
         saveDemoPicks(updated);
+        setSaved(true);
+        setTimeout(onClose, 1100);
       } else {
-        const { data, error } = await addPick(payload);
+        const { data, error, verification } = await addPick(payload);
         if (error) throw new Error(error.message || 'Save failed');
-        // Always update local state — use returned record if available, else optimistically
-        // use the payload so the pick appears immediately even if Supabase SELECT returns null
         const newPick = data || { ...payload, id: `pending_${Date.now()}` };
         setPicks(prev => [...prev, newPick]);
+
         // Background auto-analysis (fire-and-forget, non-blocking)
         if (newPick.id && !newPick.id.startsWith('pending_')) {
           fetch('/api/auto-analyze', {
@@ -672,26 +624,25 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             }),
           }).catch(() => {});
         }
-      }
 
-      if (aiCheckResult && !aiCheckResult.ok) {
-        // Show rejection message briefly before closing
-        setSaveError(`Contest pick rejected by AI: "${aiCheckResult.reason}" — saved as personal pick. You may resubmit a new contest pick.`);
-        setSaving(false);
-        setTimeout(onClose, 4000);
-      } else {
-        setSaved(true);
-        setTimeout(onClose, 1100);
+        // Show verification result if unverified or if contest was denied
+        if (verification && (verification.status === 'unverified' || (contestEntry && !verification.contest_eligible))) {
+          setVerificationResult(verification);
+          setSaving(false);
+          // Close after user has a chance to read the feedback
+          setTimeout(onClose, 5000);
+        } else {
+          setSaved(true);
+          setTimeout(onClose, 1100);
+        }
       }
     } catch (e) {
       setSaveError(e.message || 'Save failed. Try again.');
       setSaving(false);
     }
-    // Note: setSaving(false) is intentional here as a safety net for any
-    // code paths that don't explicitly clear it above
     setSaving(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isContest, contestResult, isDemo, units, notes, book, user?.id, gameDate, sport, picks, setPicks, onClose, awayAbbr, homeAbbr, aiCheckResult]);
+  }, [contestEntry, contestResult, isDemo, units, notes, book, user?.id, gameDate, sport, picks, setPicks, onClose, awayAbbr, homeAbbr]);
 
   // ── Input styles ──────────────────────────────────────────────────────────
   const inputStyle = {
@@ -871,44 +822,55 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               />
             </div>
 
-            {/* ── 3-Tier Pick Type Selector ── */}
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {[
-                { key: 'personal', emoji: '📝', label: 'Personal', desc: 'Dashboard only — no restrictions', color: 'var(--text-muted)', bg: 'var(--bg-elevated)', border: 'var(--border)' },
-                { key: 'verified', emoji: '✅', label: 'Verified', desc: 'Sharp Board — must be pre-game', color: '#4ade80', bg: 'rgba(74,222,128,0.06)', border: 'rgba(74,222,128,0.25)' },
-                { key: 'contest', emoji: '🏆', label: 'Contest', desc: '1u scored — locked & audited', color: 'var(--gold)', bg: 'rgba(255,184,0,0.08)', border: 'rgba(255,184,0,0.3)' },
-              ].map(tier => {
-                const active = pickType === tier.key;
-                return (
-                  <button
-                    key={tier.key}
-                    onClick={() => handlePickTypeChange(tier.key)}
-                    style={{
-                      flex: 1, padding: '0.6rem 0.5rem', borderRadius: '8px', cursor: 'pointer',
-                      background: active ? tier.bg : 'var(--bg-elevated)',
-                      border: `1.5px solid ${active ? tier.border : 'var(--border)'}`,
-                      transition: 'all 0.15s', textAlign: 'center', fontFamily: 'inherit',
-                      boxShadow: active ? `0 0 10px ${tier.border}` : 'none',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.1rem', marginBottom: '3px' }}>{tier.emoji}</div>
-                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: active ? tier.color : 'var(--text-secondary)' }}>
-                      {tier.label}
+            {/* ── Contest Entry Toggle ── */}
+            {/* Verification (verified vs personal) is automatic — user only opts into contest */}
+            <div>
+              <button
+                onClick={() => { setContestEntry(v => !v); setContestResult(null); }}
+                style={{
+                  width: '100%', padding: '0.6rem 0.9rem',
+                  borderRadius: '8px', cursor: 'pointer',
+                  background: contestEntry ? 'rgba(255,184,0,0.08)' : 'var(--bg-elevated)',
+                  border: `1.5px solid ${contestEntry ? 'rgba(255,184,0,0.4)' : 'var(--border)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  fontFamily: 'inherit', transition: 'all 0.15s',
+                  boxShadow: contestEntry ? '0 0 10px rgba(255,184,0,0.15)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1rem' }}>🏆</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: contestEntry ? 'var(--gold)' : 'var(--text-secondary)' }}>
+                      Enter in Contest
                     </div>
-                    <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
-                      {tier.desc}
+                    <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
+                      Scored 1u · locked · auto-verified
                     </div>
-                  </button>
-                );
-              })}
-              {verifying && <PulsingDots />}
+                  </div>
+                </div>
+                <div style={{
+                  width: '36px', height: '20px', borderRadius: '10px',
+                  background: contestEntry ? 'var(--gold)' : 'var(--bg-overlay)',
+                  border: `1px solid ${contestEntry ? 'var(--gold)' : 'var(--border)'}`,
+                  position: 'relative', transition: 'all 0.2s', flexShrink: 0,
+                }}>
+                  <div style={{
+                    width: '14px', height: '14px', borderRadius: '50%',
+                    background: contestEntry ? '#000' : 'var(--text-muted)',
+                    position: 'absolute', top: '2px',
+                    left: contestEntry ? '19px' : '2px',
+                    transition: 'left 0.2s',
+                  }} />
+                </div>
+              </button>
+              {verifying && <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}><PulsingDots /><span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Checking eligibility…</span></div>}
             </div>
 
             {/* Contest eligibility result */}
-            {isContest && contestResult && <ContestBadge result={contestResult} />}
+            {contestEntry && contestResult && <ContestBadge result={contestResult} />}
 
             {/* 1u cap notice — shown when contest is on and user picked > 1 unit */}
-            {isContest && parseFloat(units) > 1 && (
+            {contestEntry && parseFloat(units) > 1 && (
               <div style={{
                 display: 'flex', alignItems: 'flex-start', gap: '8px',
                 padding: '0.5rem 0.75rem', borderRadius: '7px',
@@ -1400,18 +1362,42 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
           </div>
         )}
 
-        {/* ── AI checking overlay ──────────────────────────────────────────── */}
-        {aiChecking && (
+        {/* ── Verification result (shown after save if unverified or contest denied) ── */}
+        {verificationResult && (
           <div style={{
             margin: '0 1.1rem 0.5rem',
-            padding: '0.6rem 0.85rem',
-            background: 'rgba(96,165,250,0.06)',
-            border: '1px solid rgba(96,165,250,0.2)',
-            borderRadius: '8px',
-            fontSize: '0.75rem', color: '#60a5fa',
-            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '0.75rem 0.9rem',
+            background: verificationResult.status === 'verified' ? 'rgba(74,222,128,0.07)' : 'rgba(255,184,0,0.07)',
+            border: `1px solid ${verificationResult.status === 'verified' ? 'rgba(74,222,128,0.25)' : 'rgba(255,184,0,0.3)'}`,
+            borderRadius: '9px', fontSize: '0.75rem',
           }}>
-            <PulsingDots /> AI is verifying your pick before locking it in…
+            {verificationResult.status === 'unverified' ? (
+              <>
+                <div style={{ fontWeight: 700, color: '#FFB800', marginBottom: '5px' }}>
+                  Pick saved as personal — could not be verified
+                </div>
+                {verificationResult.reasons?.map((r, i) => (
+                  <div key={i} style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>• {r}</div>
+                ))}
+                {contestEntry && verificationResult.contest_reasons?.length > 0 && (
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,184,0,0.2)' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-muted)', marginBottom: '3px' }}>Contest not entered:</div>
+                    {verificationResult.contest_reasons.map((r, i) => (
+                      <div key={i} style={{ color: 'var(--text-muted)', marginTop: '2px' }}>• {r}</div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : contestEntry && !verificationResult.contest_eligible ? (
+              <>
+                <div style={{ fontWeight: 700, color: '#4ade80', marginBottom: '5px' }}>
+                  Pick verified — not entered in contest
+                </div>
+                {verificationResult.contest_reasons?.map((r, i) => (
+                  <div key={i} style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>• {r}</div>
+                ))}
+              </>
+            ) : null}
           </div>
         )}
 
@@ -1442,29 +1428,27 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             ) : (
               <button
                 onClick={handleSave}
-                disabled={saving || aiChecking || !hasSelection || showConfirm}
+                disabled={saving || !hasSelection || showConfirm}
                 style={{
-                  background: saving || aiChecking || !hasSelection
+                  background: saving || !hasSelection
                     ? 'var(--bg-overlay)'
                     : 'linear-gradient(135deg, #FFB800 0%, #FF9500 100%)',
-                  color: saving || aiChecking || !hasSelection ? 'var(--text-muted)' : '#0a0a0a',
+                  color: saving || !hasSelection ? 'var(--text-muted)' : '#0a0a0a',
                   border: 'none', borderRadius: '8px', padding: '0.5rem 1.4rem',
                   fontSize: '0.88rem', fontWeight: 800,
-                  cursor: saving || aiChecking || !hasSelection || showConfirm ? 'not-allowed' : 'pointer',
+                  cursor: saving || !hasSelection || showConfirm ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit',
-                  boxShadow: saving || aiChecking || !hasSelection ? 'none' : '0 2px 12px rgba(255,184,0,0.35)',
+                  boxShadow: saving || !hasSelection ? 'none' : '0 2px 12px rgba(255,184,0,0.35)',
                   transition: 'all 0.15s',
                   display: 'flex', alignItems: 'center', gap: '6px',
                   opacity: !hasSelection || showConfirm ? 0.5 : 1,
                 }}
               >
-                {saving || aiChecking
+                {saving
                   ? '⟳ Saving…'
-                  : isContest && contestResult?.eligible
+                  : contestEntry && contestResult?.eligible
                     ? '🏆 Save Contest Pick'
-                    : pickType === 'verified'
-                      ? '✅ Save Verified Pick'
-                      : '💾 Save Bet'}
+                    : '💾 Save Pick'}
               </button>
             )}
           </div>

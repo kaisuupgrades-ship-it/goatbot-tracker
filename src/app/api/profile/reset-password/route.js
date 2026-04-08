@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+const _svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseAdmin = (process.env.NEXT_PUBLIC_SUPABASE_URL && _svcKey)
+  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, _svcKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  : null;
 
 async function getUser(req) {
   const auth = req.headers.get('authorization') || '';

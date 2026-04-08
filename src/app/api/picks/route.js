@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeTeam } from '@/lib/teamNormalizer';
+import { CONTEST_RULES, validateContestEligibility } from '@/lib/contestRules';
 
 export const maxDuration = 20;
 
@@ -35,45 +36,7 @@ async function getAuthUser(req) {
   } catch { return null; }
 }
 
-// ── Contest hard rules (enforced server-side) ────────────────────────────────
-const CONTEST_RULES = {
-  minOdds: -145,
-  maxOdds: 400,
-  maxUnits: 5,
-  maxPicksPerDay: 1,
-  allowedBetTypes: [
-    'Moneyline', 'Spread', 'Run Line', 'Puck Line',
-    'Total (Over)', 'Total (Under)',
-    'F5 Moneyline', 'F5 Total (Over)', 'F5 Total (Under)',
-    '1H Spread', '1H Total (Over)', '1H Total (Under)',
-  ],
-  blockedBetTypes: ['Parlay', 'Prop', 'Futures', 'Other'],
-};
-
-function validateContestRules(pick) {
-  const errors = [];
-  const odds = parseInt(pick.odds);
-
-  if (isNaN(odds)) errors.push('Invalid odds.');
-  else {
-    if (odds < CONTEST_RULES.minOdds)
-      errors.push(`Odds ${odds} too juicy. Contest minimum is ${CONTEST_RULES.minOdds}.`);
-    if (odds > CONTEST_RULES.maxOdds)
-      errors.push(`Odds +${odds} too long. Contest maximum is +${CONTEST_RULES.maxOdds}.`);
-  }
-
-  const units = parseFloat(pick.units || 1);
-  if (units > CONTEST_RULES.maxUnits)
-    errors.push(`${units}u exceeds the ${CONTEST_RULES.maxUnits}u max.`);
-
-  if (CONTEST_RULES.blockedBetTypes.includes(pick.bet_type))
-    errors.push(`"${pick.bet_type}" is not allowed in contest (straight bets only).`);
-
-  if (!pick.team?.trim()) errors.push('No team/pick specified.');
-  if (!pick.date)          errors.push('No game date specified.');
-
-  return errors;
-}
+// CONTEST_RULES and validateContestEligibility are imported from @/lib/contestRules
 
 // ── ESPN game lookup (same logic as /api/verify-game) ───────────────────────
 const ESPN_ENDPOINTS = {
@@ -270,6 +233,188 @@ async function validateSpreadVsML(pick) {
   return null;
 }
 
+// ── Verification Engine ──────────────────────────────────────────────────────
+// Maps pick sport string → The Odds API cache key used in settings table
+const SPORT_TO_ODDS_KEY = {
+  MLB:   'baseball_mlb',          NBA:  'basketball_nba',
+  NFL:   'americanfootball_nfl',  NHL:  'icehockey_nhl',
+  NCAAF: 'americanfootball_ncaaf', NCAAB: 'basketball_ncaab',
+  MLS:   'soccer_usa_mls',        WNBA: 'basketball_wnba',
+};
+
+// Maps bet_type label → odds API market key
+function betTypeToMarketKey(betType) {
+  const t = (betType || '').toLowerCase();
+  if (t.includes('moneyline') || t === 'f5 moneyline' || t === 'draw') return 'h2h';
+  if (t.includes('spread') || t.includes('run line') || t.includes('puck line')) return 'spreads';
+  if (t.includes('over') || t.includes('under') || t.includes('total')) return 'totals';
+  return null; // props, parlays, exotics — not verifiable via odds_cache
+}
+
+function normStr(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function teamsMatch(a, b) {
+  const na = normStr(a), nb = normStr(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  // Last-word mascot match (e.g. "yankees" in "newyorkyankees")
+  if (na.length >= 4 && nb.length >= 4) {
+    const lastA = na.slice(-Math.min(7, na.length));
+    const lastB = nb.slice(-Math.min(7, nb.length));
+    if (lastA === lastB && lastA.length >= 4) return true;
+  }
+  return false;
+}
+
+// Find game in odds_cache settings key matching a team norm string
+async function findGameInOddsCache(teamNorm, oddsKey) {
+  try {
+    const { data: row } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', `odds_cache_${oddsKey}`)
+      .maybeSingle();
+    if (!row?.value) return null;
+    const payload = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+    const games = payload?.data || [];
+    return games.find(g =>
+      teamsMatch(g.home_team, teamNorm) || teamsMatch(g.away_team, teamNorm)
+    ) || null;
+  } catch { return null; }
+}
+
+// Check submitted odds + line against all bookmakers. Returns { found, medianOdds, marketLine, oddsDiff, lineDiff }
+function checkOddsAndLine(game, marketKey, sideNorm, submittedOdds, submittedLine) {
+  const prices = [];
+  let marketLine = null;
+  const isTotals = marketKey === 'totals';
+
+  for (const bk of (game.bookmakers || [])) {
+    const market = bk.markets?.find(m => m.key === marketKey);
+    if (!market) continue;
+    for (const outcome of (market.outcomes || [])) {
+      let matches = false;
+      if (isTotals) {
+        // sideNorm is 'over' or 'under'
+        matches = normStr(outcome.name) === sideNorm;
+      } else {
+        matches = teamsMatch(outcome.name, sideNorm);
+      }
+      if (matches && outcome.price != null) {
+        const price = parseInt(outcome.price);
+        if (!isNaN(price)) prices.push(price);
+        if (outcome.point != null && marketLine == null) marketLine = parseFloat(outcome.point);
+      }
+    }
+  }
+
+  if (prices.length === 0) return { found: false };
+
+  prices.sort((a, b) => a - b);
+  const mid = Math.floor(prices.length / 2);
+  const medianOdds = prices.length % 2 === 0
+    ? Math.round((prices[mid - 1] + prices[mid]) / 2)
+    : prices[mid];
+
+  const oddsDiff = Math.abs(submittedOdds - medianOdds);
+  const lineDiff = (submittedLine != null && marketLine != null)
+    ? Math.abs(Math.abs(submittedLine) - Math.abs(marketLine))
+    : null;
+
+  return { found: true, medianOdds, marketLine, oddsDiff, lineDiff };
+}
+
+/**
+ * Main auto-verification engine. Runs after ESPN commence_time lookup.
+ * Returns { verified: bool, reasons: string[], marketOdds, marketLine, isLive }
+ */
+async function runVerificationEngine(pick, commenceTime) {
+  const reasons = [];
+  const now = new Date();
+
+  // 1. Game must exist in ESPN (require commence_time)
+  if (!commenceTime) {
+    reasons.push('Game not found in ESPN — could not confirm timing or game existence');
+    return { verified: false, reasons };
+  }
+
+  const gameStart = new Date(commenceTime);
+  const GRACE_MS  = 2 * 60 * 1000; // 2-minute grace
+  const isPregame = now.getTime() <= gameStart.getTime() + GRACE_MS;
+
+  // 2. Look up game in odds_cache
+  const oddsKey  = SPORT_TO_ODDS_KEY[(pick.sport || '').toUpperCase()];
+  // Strip any line suffix from team name before matching (e.g. "Cowboys +3.5" → "Cowboys")
+  const cleanedTeam = (pick.team || '').replace(/\s*[+-]\d+(?:\.\d+)?\s*$/, '');
+  const teamNorm = normStr(cleanedTeam);
+  let oddsGame = null;
+  if (oddsKey && teamNorm) {
+    oddsGame = await findGameInOddsCache(teamNorm, oddsKey);
+  }
+
+  // 3. Timing check
+  if (!isPregame) {
+    if (!oddsGame) {
+      // Game started and is no longer in the live odds feed → no live bets
+      const minsLate = Math.round((now.getTime() - gameStart.getTime()) / 60000);
+      reasons.push(`Game started ${minsLate} minute${minsLate !== 1 ? 's' : ''} ago and is no longer accepting bets`);
+      return { verified: false, reasons };
+    }
+    // Game has started but is still in odds_cache — live bet, allow verification to continue
+  }
+
+  // 4. Game must exist in odds_cache
+  if (!oddsGame) {
+    reasons.push('Game not found in odds cache — odds not yet available or sport not supported');
+    return { verified: false, reasons };
+  }
+
+  // 5. Map bet_type to market
+  const marketKey = betTypeToMarketKey(pick.bet_type);
+  if (!marketKey) {
+    reasons.push(`"${pick.bet_type}" cannot be automatically verified — only ML, spread, and totals are supported`);
+    return { verified: false, reasons };
+  }
+
+  // For totals pick direction comes from the bet_type label
+  let sideNorm = teamNorm;
+  if (marketKey === 'totals') {
+    sideNorm = (pick.bet_type || '').toLowerCase().includes('over') ? 'over' : 'under';
+  }
+
+  const submittedOdds = parseInt(pick.odds);
+  const submittedLine = pick.line ?? null;
+  const oddsCheck = checkOddsAndLine(oddsGame, marketKey, sideNorm, submittedOdds, submittedLine);
+
+  if (!oddsCheck.found) {
+    reasons.push(`Could not match "${pick.team}" to any bookmaker in the ${marketKey} market`);
+    return { verified: false, reasons };
+  }
+
+  // 6. Odds within 20 points of median across bookmakers
+  if (oddsCheck.oddsDiff > 20) {
+    const sub = submittedOdds > 0 ? `+${submittedOdds}` : `${submittedOdds}`;
+    const mkt = oddsCheck.medianOdds > 0 ? `+${oddsCheck.medianOdds}` : `${oddsCheck.medianOdds}`;
+    reasons.push(`Odds differ from market by ${oddsCheck.oddsDiff} points (submitted: ${sub}, market median: ${mkt})`);
+  }
+
+  // 7. Line within 0.5 of market (spreads/totals only)
+  if (oddsCheck.lineDiff !== null && oddsCheck.lineDiff > 0.5) {
+    reasons.push(`Line differs from market by ${oddsCheck.lineDiff.toFixed(1)} (submitted: ${submittedLine}, market: ${oddsCheck.marketLine})`);
+  }
+
+  return {
+    verified:    reasons.length === 0,
+    reasons,
+    marketOdds:  oddsCheck.medianOdds ?? null,
+    marketLine:  oddsCheck.marketLine ?? null,
+    isLive:      !isPregame,
+  };
+}
+
 // ── Parlay odds helpers ───────────────────────────────────────────────────────
 function americanToDecimal(american) {
   const n = parseInt(american);
@@ -366,123 +511,21 @@ export async function POST(req) {
     if (cleaned) safePayload.team = cleaned;
   }
 
-  // ── 3c. Set pick_type — 'contest', 'verified', or 'personal' ───────────
-  //    pick_type determines which leaderboards the pick feeds into.
-  //    Contest = 1u normalized on contest board. Verified = Sharp Board with real units.
-  //    Personal = dashboard only, no restrictions.
-  if (safePayload.contest_entry || safePayload.pick_type === 'contest') {
-    safePayload.pick_type = 'contest';
-    safePayload.contest_entry = true;  // keep backward compat
-  } else if (safePayload.pick_type === 'verified') {
-    safePayload.pick_type = 'verified';
-  } else {
-    safePayload.pick_type = safePayload.pick_type || 'personal';
-  }
+  // ── 3c. Record contest intent — server will set pick_type automatically ─
+  //    Users opt into contest; the verification engine decides verified vs personal.
+  //    Strip any client-supplied pick_type — the server is authoritative.
+  const wantsContest = !!(safePayload.contest_entry || pick.pick_type === 'contest');
+  delete safePayload.pick_type;    // server sets this below after verification
+  safePayload.contest_entry = false; // will be set true only if contest passes
 
-  // ── 4. Contest/Verified server-side validation ─────────────────────────
-  if (safePayload.pick_type === 'contest') {
-    const errors = validateContestRules(safePayload);
-    if (errors.length > 0) {
-      return NextResponse.json({ error: 'Contest validation failed', errors }, { status: 422 });
-    }
-
-    // Check daily limit — REJECTED picks don't count
-    if (safePayload.date) {
-      const { data: existing } = await supabaseAdmin
-        .from('picks')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('contest_entry', true)
-        .eq('date', safePayload.date)
-        .neq('audit_status', 'REJECTED');
-
-      if ((existing?.length || 0) >= CONTEST_RULES.maxPicksPerDay) {
-        return NextResponse.json({
-          error: 'Daily contest limit reached',
-          errors: [`You already have a contest pick for ${safePayload.date}. One play per day — no exceptions.`],
-        }, { status: 422 });
-      }
-    }
-
-    // NOTE: We do NOT override units or profit here.
-    // The pick stores the user's REAL bet size (e.g. hodgins 5u) for their personal tracking.
-    // The contest leaderboard recalculates profit at 1u on the fly using contestProfit(result, odds)
-    // without touching the stored data. "My Picks" always shows real units/profit.
-  }
-
-  // ── 4b. Cross-market odds sanity check (spread vs ML) ────────────────────
+  // ── 4. Cross-market odds sanity check (spread vs ML) — kept as hard block ─
+  //    A spread price better than the ML for an underdog is a data entry error.
   const spreadValidation = await validateSpreadVsML(safePayload);
   if (spreadValidation) {
     return NextResponse.json({
       error: 'Cross-market odds validation failed',
       errors: [spreadValidation.error],
     }, { status: 422 });
-  }
-
-  // ── 4c. Odds sign validation for contest/verified picks ────────────────
-  //    Cross-reference submitted odds against cached Odds API data.
-  //    If user submits +350 but market shows -350, flag it.
-  //    This prevents accidental sign errors that massively inflate profits.
-  if ((safePayload.pick_type === 'contest' || safePayload.pick_type === 'verified') && safePayload.odds && safePayload.team) {
-    try {
-      const oddsApiSport = {
-        MLB: 'mlb', NBA: 'nba', NFL: 'nfl', NHL: 'nhl',
-        NCAAB: 'ncaab', NCAAF: 'ncaaf', MLS: 'mls',
-      }[(safePayload.sport || '').toUpperCase()];
-      if (oddsApiSport) {
-        const oddsRes = await fetch(`${SUPABASE_URL.replace('.supabase.co', '.supabase.co')}/rest/v1/settings?key=eq.odds_cache_${oddsApiSport}&select=value`, {
-          headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
-        });
-        const oddsRows = await oddsRes.json().catch(() => []);
-        if (oddsRows?.[0]?.value) {
-          const cached = typeof oddsRows[0].value === 'string' ? JSON.parse(oddsRows[0].value) : oddsRows[0].value;
-          const events = cached?.data || [];
-          // Find the matching game
-          const cleanTeam = (safePayload.team || '').replace(/\s*[+-]\d+(?:\.\d+)?\s*$/, '').toLowerCase();
-          for (const ev of events) {
-            const home = (ev.home_team || '').toLowerCase();
-            const away = (ev.away_team || '').toLowerCase();
-            if (home.includes(cleanTeam) || away.includes(cleanTeam) || cleanTeam.includes(home.split(' ').pop()) || cleanTeam.includes(away.split(' ').pop())) {
-              // Found the game — check if odds sign is correct
-              const bestBook = ev.bookmakers?.find(b => b.key === 'fanduel') || ev.bookmakers?.find(b => b.key === 'draftkings') || ev.bookmakers?.[0];
-              const h2h = bestBook?.markets?.find(m => m.key === 'h2h');
-              if (h2h?.outcomes) {
-                const submittedOdds = parseInt(safePayload.odds);
-                // Find the team the user bet on
-                const matchedOutcome = h2h.outcomes.find(o =>
-                  o.name.toLowerCase().includes(cleanTeam) || cleanTeam.includes(o.name.toLowerCase().split(' ').pop())
-                );
-                if (matchedOutcome) {
-                  const marketOdds = matchedOutcome.price;
-                  // Check for sign mismatch (user says + but market says -, or vice versa)
-                  if ((submittedOdds > 0 && marketOdds < -150) || (submittedOdds < -150 && marketOdds > 0)) {
-                    return NextResponse.json({
-                      error: 'Odds sign mismatch detected',
-                      errors: [
-                        `You entered ${submittedOdds > 0 ? '+' : ''}${submittedOdds} but the market has ${matchedOutcome.name} at ${marketOdds > 0 ? '+' : ''}${marketOdds}. Did you mean ${marketOdds > 0 ? '+' : ''}${marketOdds}?`,
-                        'Please double-check your odds and resubmit.',
-                      ],
-                      marketOdds,
-                      submittedOdds,
-                    }, { status: 422 });
-                  }
-                  // Check for wildly different magnitude (>100 pts off)
-                  if (Math.abs(submittedOdds - marketOdds) > 100) {
-                    // Don't hard-block, but flag for audit
-                    safePayload.audit_status = 'FLAGGED';
-                    safePayload.audit_reason = `Odds discrepancy: submitted ${submittedOdds}, market shows ${marketOdds} for ${matchedOutcome.name}`;
-                  }
-                }
-              }
-              break;
-            }
-          }
-        }
-      }
-    } catch (err) {
-      // Odds validation is non-fatal — don't block picks if cache lookup fails
-      console.warn('[picks] Odds validation failed:', err.message);
-    }
   }
 
   // ── 5. Look up actual game start time from ESPN ──────────────────────────
@@ -497,36 +540,46 @@ export async function POST(req) {
     );
   }
 
-  // ── 5b. HARD BLOCK: contest/verified picks must be submitted BEFORE game ──
-  //    This is the definitive integrity check. We just fetched the real game
-  //    start from ESPN — if the clock has already passed it, the pick is dead.
-  //    Contest picks = hard block. Verified picks = downgrade to personal.
-  //    Personal picks = no timing restrictions (user's own tracking).
-  if ((safePayload.pick_type === 'contest' || safePayload.pick_type === 'verified') && commence_time) {
-    const submittedAt = new Date();
-    const gameStart   = new Date(commence_time);
-    const GRACE_MS    = 2 * 60 * 1000; // 2-minute grace window
+  // ── 5b. Auto-verification engine ─────────────────────────────────────────
+  //    Checks: timing, game in odds_cache, odds within 20pt of median, line within 0.5.
+  //    The result drives pick_type — no client override allowed.
+  const verificationResult = await runVerificationEngine(safePayload, commence_time);
 
-    if (submittedAt.getTime() > gameStart.getTime() + GRACE_MS) {
-      const startedAgo = Math.round((submittedAt - gameStart) / 60000);
-
-      if (safePayload.pick_type === 'contest') {
-        // Contest = hard block, no in-game picks allowed
-        return NextResponse.json({
-          error: 'Game already started',
-          errors: [
-            `This game started ${startedAgo} minute${startedAgo !== 1 ? 's' : ''} ago — contest picks must be submitted before game time.`,
-            'You can still log it as a personal pick.',
-          ],
-          commence_time,
-          submitted_at: submittedAt.toISOString(),
-        }, { status: 422 });
-      } else {
-        // Verified → downgrade to personal (live bets can still be tracked, just not verified)
-        safePayload.pick_type = 'personal';
-      }
+  // ── 5c. If contest was requested, validate contest rules on top of verification
+  let contestValidation = { eligible: false, reasons: [] };
+  if (wantsContest && verificationResult.verified) {
+    // Check daily contest limit (REJECTED picks don't count)
+    let dailyCount = 0;
+    if (safePayload.date) {
+      const { data: existing } = await supabaseAdmin
+        .from('picks')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('contest_entry', true)
+        .eq('date', safePayload.date)
+        .neq('audit_status', 'REJECTED');
+      dailyCount = existing?.length || 0;
     }
+    contestValidation = validateContestEligibility(safePayload, dailyCount);
+  } else if (wantsContest && !verificationResult.verified) {
+    contestValidation.reasons = ['Pick must pass verification before it can enter the contest'];
   }
+
+  // ── 5d. Set pick_type and verification columns based on results ──────────
+  if (verificationResult.verified) {
+    if (wantsContest && contestValidation.eligible) {
+      safePayload.pick_type    = 'contest';
+      safePayload.contest_entry = true;
+    } else {
+      safePayload.pick_type    = 'verified';
+    }
+  } else {
+    safePayload.pick_type    = 'personal';
+    safePayload.contest_entry = false;
+  }
+  safePayload.verification_status  = verificationResult.verified ? 'verified' : 'unverified';
+  safePayload.verification_reasons = verificationResult.reasons?.length > 0
+    ? verificationResult.reasons : null;
 
   // ── 6. Insert via service role (trusted) ─────────────────────────────────
   const { data, error } = await supabaseAdmin
@@ -556,7 +609,16 @@ export async function POST(req) {
     await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', userId);
   } catch { /* non-critical */ }
 
-  return NextResponse.json({ pick: data, commence_time_found: !!commence_time });
+  return NextResponse.json({
+    pick: data,
+    commence_time_found: !!commence_time,
+    verification: {
+      status:          verificationResult.verified ? 'verified' : 'unverified',
+      reasons:         verificationResult.reasons  || [],
+      contest_eligible: wantsContest && verificationResult.verified && contestValidation.eligible,
+      contest_reasons:  wantsContest ? (contestValidation.reasons || []) : [],
+    },
+  });
 }
 
 // ── handleParlayPost — parlay submission ──────────────────────────────────────

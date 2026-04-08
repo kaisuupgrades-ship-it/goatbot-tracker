@@ -18,7 +18,7 @@ export const maxDuration = 800; // 13+ min — admin runs need full time per gam
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';

@@ -1192,7 +1192,7 @@ export default function TrackerTab({ picks, user, onViewGame }) {
 
               return (
                 <div key={p.id} className="surface-elevated" style={{ padding: '0.7rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  {/* Top row: emoji, date, team, sport/type, units badge */}
+                  {/* Top row: emoji, date, team, sport/type, badges */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
                       <span style={{ fontSize: '0.88rem', flexShrink: 0 }}>{sportEmoji(p.sport)}</span>
@@ -1212,12 +1212,31 @@ export default function TrackerTab({ picks, user, onViewGame }) {
                       }
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', flexShrink: 0, whiteSpace: 'nowrap' }}>{p.sport} · {p.bet_type}</span>
                     </div>
-                    {/* Units badge */}
-                    <span style={{
-                      padding: '1px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700,
-                      background: 'rgba(255,184,0,0.1)', color: 'var(--gold)',
-                      border: '1px solid rgba(255,184,0,0.2)', flexShrink: 0,
-                    }}>{units}u</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                      {/* Verification badge */}
+                      {p.pick_type === 'contest' && (
+                        <span title="Contest pick — verified & scored" style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '2px',
+                          padding: '1px 5px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 700,
+                          background: 'rgba(255,184,0,0.15)', color: 'var(--gold)',
+                          border: '1px solid rgba(255,184,0,0.3)',
+                        }}>🛡 🏆</span>
+                      )}
+                      {p.pick_type === 'verified' && (
+                        <span title="Verified pick — pre-game, odds confirmed" style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '2px',
+                          padding: '1px 5px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 700,
+                          background: 'rgba(74,222,128,0.1)', color: '#4ade80',
+                          border: '1px solid rgba(74,222,128,0.25)',
+                        }}>🛡</span>
+                      )}
+                      {/* Units badge */}
+                      <span style={{
+                        padding: '1px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700,
+                        background: 'rgba(255,184,0,0.1)', color: 'var(--gold)',
+                        border: '1px solid rgba(255,184,0,0.2)',
+                      }}>{units}u</span>
+                    </div>
                   </div>
 
                   {/* Bottom row: scorebug + trend + odds + result + P/L */}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callAI } from '@/lib/ai';
+import { CONTEST_RULES } from '@/lib/contestRules';
 
 export const maxDuration = 60;
 
@@ -24,12 +25,13 @@ async function getAdminUser(req) {
   } catch { return null; }
 }
 
+// Use shared contest rules — imported from @/lib/contestRules
 const RULES = {
-  minOdds: -145,
-  maxOdds: 400,
-  excludedBetTypes: ['Parlay', 'Prop', 'Futures', 'Other'],
-  maxUnits: 5,
-  maxPicksPerDay: 1,
+  minOdds:         CONTEST_RULES.minOdds,
+  maxOdds:         CONTEST_RULES.maxOdds,
+  excludedBetTypes: CONTEST_RULES.blockedBetTypes,
+  maxUnits:        CONTEST_RULES.maxUnits,
+  maxPicksPerDay:  CONTEST_RULES.maxPicksPerDay,
 };
 
 // ── Pinnacle real-time line check (free, no key) ────────────────────────────
