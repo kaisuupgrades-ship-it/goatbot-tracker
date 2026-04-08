@@ -800,55 +800,6 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               No lines available — use Custom Bet below
             </div>
           )}
-
-          {/* ── Have a question about this line? → GoatBot ───────────── */}
-          {onAnalyze && (
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                const awayFmt = odds?.awayOdds != null ? (odds.awayOdds > 0 ? `+${odds.awayOdds}` : `${odds.awayOdds}`) : null;
-                const homeFmt = odds?.homeOdds != null ? (odds.homeOdds > 0 ? `+${odds.homeOdds}` : `${odds.homeOdds}`) : null;
-                const totalFmt = odds?.total != null ? `${odds.total}` : null;
-                const lineName = sport === 'nhl' ? 'Puck Line' : sport === 'mlb' ? 'Run Line' : 'Spread';
-
-                let prompt;
-                if (selectedBet?.bet_type?.includes('Total')) {
-                  prompt = `The total for ${awayName} @ ${homeName} is set at ${totalFmt}. The ${selectedBet.label} is priced at ${fmtOdds(parseInt(oddsVal)) || fmtOdds(selectedBet.odds)}. Why is this total set here? Is the ${selectedBet.label} the right side? Analyze pace, defense, pitching/goaltending matchup, weather if outdoor, and recent scoring trends.`;
-                } else if (selectedBet?.bet_type === 'Moneyline') {
-                  const underdogSide = parseInt(oddsVal) > 0 ? selectedBet.label : (selectedBet.label === awayAbbr ? homeAbbr : awayAbbr);
-                  prompt = `${awayName} @ ${homeName} — ${awayAbbr} is ${awayFmt ?? 'N/A'} ML and ${homeAbbr} is ${homeFmt ?? 'N/A'}. I'm looking at ${selectedBet.label} at ${fmtOdds(parseInt(oddsVal)) || fmtOdds(selectedBet.odds)}. Is there value here? Analyze recent form, head-to-head, injuries, and any sharp-money signals.`;
-                } else if (selectedBet) {
-                  prompt = `${awayName} @ ${homeName} — Analyze the ${selectedBet.bet_type} bet on ${selectedBet.label} at ${selectedBet.sublabel} (${fmtOdds(selectedBet.odds)}). Is there value taking this side? Check ATS trends, injuries, and any relevant matchup angles.`;
-                } else {
-                  prompt = `Break down the betting lines for ${awayName} @ ${homeName}${sport ? ` (${SPORT_LABELS[sport] || sport.toUpperCase()})` : ''}: ML ${awayAbbr} ${awayFmt ?? '?'} / ${homeAbbr} ${homeFmt ?? '?'}${effectiveSpreadData ? `, ${lineName} ±${Math.abs(effectiveSpreadData.awayLine)}` : ''}${totalFmt ? `, Total ${totalFmt}` : ''}. Which market has the best value tonight and why?`;
-                }
-                onAnalyze(prompt);
-                onClose();
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.click(); }}
-              style={{
-                cursor: 'pointer', marginTop: '0.5rem',
-                background: 'rgba(255,184,0,0.04)',
-                border: '1px solid rgba(255,184,0,0.15)',
-                borderRadius: '8px', padding: '0.55rem 0.8rem',
-                display: 'flex', alignItems: 'center', gap: '10px',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.09)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.35)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,184,0,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,184,0,0.15)'; }}
-            >
-              <span style={{ fontSize: '1rem', flexShrink: 0 }}>🤔</span>
-              <div>
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--gold)' }}>
-                  {selectedBet ? `Why is this ${selectedBet.bet_type?.toLowerCase()} line set here?` : 'Have a question about these lines?'}
-                </div>
-                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                  Ask GoatBot — opens Analyzer with this game pre-loaded →
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ── Inline Details Panel (shown when a quick bet is selected) ───── */}
