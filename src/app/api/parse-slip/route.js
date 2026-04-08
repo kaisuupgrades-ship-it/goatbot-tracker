@@ -6,23 +6,35 @@ export const maxDuration = 60;
 const XAI_BASE       = 'https://api.x.ai/v1';
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
 
-const EXTRACT_PROMPT = `You are parsing a sports betting slip or verbal bet input. Extract all bet details and return ONLY valid JSON (no markdown, no code fences, no extra text).
+const EXTRACT_PROMPT = `You are parsing a sports betting slip image or text. Extract ALL bets visible and return ONLY valid JSON (no markdown, no code fences, no extra text).
 
-Return this exact structure:
+ALWAYS return this exact structure — even for a single pick, use the array format:
 {
-  "team": "FULL official team name or full player name (see rules below)",
-  "sport": "MLB|NBA|NFL|NHL|NCAAF|NCAAB|Soccer|UFC|Other",
-  "bet_type": "Moneyline|Spread|Run Line|Puck Line|Total (Over)|Total (Under)|Prop|Parlay|Other",
-  "odds": <American odds as integer, e.g. -110 or 105. REQUIRED. For parlays, this is the combined payout odds.>,
-  "units": <wager size as decimal number. Parse '2u', '2 units', '2 unit', 'two units' as 2. Parse '0.5u', 'half unit' as 0.5. If not mentioned use null.>,
-  "book": "sportsbook name or null",
-  "matchup": "Away Team vs Home Team or null",
-  "date": "YYYY-MM-DD or null",
-  "notes": "brief one-line description of the bet including key details like spread/total line",
-  "parlay_legs": null
+  "picks": [
+    {
+      "team": "FULL official team name or full player name (see rules below)",
+      "sport": "MLB|NBA|NFL|NHL|NCAAF|NCAAB|Soccer|UFC|Other",
+      "bet_type": "Moneyline|Spread|Run Line|Puck Line|Total (Over)|Total (Under)|Prop|Parlay|Other",
+      "line": <spread or total line number as signed decimal (e.g. -3.5, +7, 217.5), null for Moneyline/Prop>,
+      "odds": <American odds as integer, e.g. -110 or 105. REQUIRED. For parlays, this is the combined payout odds.>,
+      "units": <wager size as decimal number. Parse '2u', '2 units', '2 unit', 'two units' as 2. Parse '0.5u', 'half unit' as 0.5. If not mentioned use null.>,
+      "book": "sportsbook name or null",
+      "matchup": "Away Team vs Home Team or null",
+      "date": "YYYY-MM-DD or null",
+      "notes": "brief one-line description of the bet",
+      "parlay_legs": null
+    }
+  ]
 }
 
-PARLAY RULE: When bet_type is "Parlay", populate "parlay_legs" with an array of individual legs:
+MULTIPLE PICKS: If the slip shows multiple separate bets (e.g. 3 individual game picks), extract EACH as a separate entry in the "picks" array. Scan the entire image carefully for all rows/bets.
+
+LINE RULES:
+- Spread/Run Line/Puck Line: line is the point spread as signed decimal (e.g. -3.5, +7, -1.5)
+- Total (Over)/(Under): line is the total points number (e.g. 217.5, 8.5)
+- Moneyline/Prop: line is null
+
+PARLAY RULE: A single parlay bet is ONE entry in "picks" with bet_type "Parlay". Populate "parlay_legs":
 "parlay_legs": [
   {
     "team": "FULL official team name or selection (e.g. 'Over 8.5')",
@@ -46,7 +58,8 @@ TEAM NAME RULES (most important):
   - "LA" (NBA context) → "Los Angeles Lakers" or "Los Angeles Clippers" (use matchup context)
 - For individual sport bets (golf, tennis, boxing, MMA non-UFC): use the full player name (e.g. "Ludvig Aberg", "Scottie Scheffler")
 - For UFC: use the full fighter name (e.g. "Jon Jones", "Conor McGregor")
-- For parlays: put the full parlay description in "team" field (e.g. "5 Pick Parlay (Detroit Tigers ML, Cubs ML, ...)")
+- For totals: "Over 8.5" or "Under 217.5" as the team name
+- For parlays: brief description in "team" field (e.g. "3-Leg Parlay")
 
 BET TYPE RULES:
 - 'money line', 'ML', 'moneyline' → 'Moneyline'
@@ -89,7 +102,7 @@ async function parseImage(imageBase64, mimeType) {
             ],
           }],
           temperature: 0.1,
-          max_tokens: 500,
+          max_tokens: 1500,
         }),
       });
       if (res.ok) {
@@ -113,7 +126,7 @@ async function parseImage(imageBase64, mimeType) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 500,
+        max_tokens: 1500,
         temperature: 0,
         messages: [{
           role: 'user',
@@ -173,7 +186,7 @@ async function parseText(text) {
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.1,
-          max_tokens: 500,
+          max_tokens: 1500,
         }),
       });
       if (res.ok) {
@@ -198,7 +211,7 @@ async function parseText(text) {
         model: 'claude-sonnet-4-5',
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
-        max_tokens: 500,
+        max_tokens: 1500,
         temperature: 0,
       }),
     });
@@ -267,11 +280,23 @@ export async function POST(req) {
     const cleaned = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
 
     try {
-      const parsed = JSON.parse(cleaned);
-      // Deterministic post-processing: normalize team name to full official name
-      // e.g. "Detroit" (MLB) → "Detroit Tigers", "Cubs" → "Chicago Cubs"
-      normalizeParsedPick(parsed);
-      return NextResponse.json({ parsed });
+      const json = JSON.parse(cleaned);
+
+      // Normalize to picks array: handle { picks: [...] }, plain array, or legacy single-pick object
+      let picks;
+      if (Array.isArray(json.picks)) {
+        picks = json.picks;
+      } else if (Array.isArray(json)) {
+        picks = json;
+      } else {
+        // Legacy single-pick format — wrap in array
+        picks = [json];
+      }
+
+      // Deterministic post-processing: normalize each pick's team name
+      picks = picks.map(p => normalizeParsedPick(p));
+
+      return NextResponse.json({ picks });
     } catch {
       return NextResponse.json({ error: 'Could not parse bet slip. Try pasting the text manually.', raw }, { status: 422 });
     }

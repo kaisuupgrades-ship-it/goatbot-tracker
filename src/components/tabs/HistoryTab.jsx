@@ -217,22 +217,25 @@ function fileToBase64(file) {
   });
 }
 
-function SlipImport({ onFilled, onSubmitParlay }) {
-  const [mode, setMode]           = useState('image'); // 'image' | 'url' | 'text'
-  const [file, setFile]           = useState(null);
-  const [url, setUrl]             = useState('');
-  const [text, setText]           = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
-  const [parsed, setParsed]       = useState(null);
-  const [open, setOpen]           = useState(false);
+function SlipImport({ onFilled, onSubmitParlay, onSaveMultiple }) {
+  const [mode, setMode]               = useState('image'); // 'image' | 'url' | 'text'
+  const [file, setFile]               = useState(null);
+  const [url, setUrl]                 = useState('');
+  const [text, setText]               = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState('');
+  const [parsedPicks, setParsedPicks] = useState(null); // array of picks or null
+  const [open, setOpen]               = useState(false);
   const [parlaySubmitting, setParlaySubmitting] = useState(false);
-  const fileRef                   = useRef();
+  const [saveAllLoading, setSaveAllLoading]     = useState(false);
+  const fileRef                       = useRef();
+
+  function resetParsed() { setParsedPicks(null); }
 
   async function handleParse() {
     setLoading(true);
     setError('');
-    setParsed(null);
+    setParsedPicks(null);
     try {
       let body;
       if (mode === 'image') {
@@ -254,7 +257,13 @@ function SlipImport({ onFilled, onSubmitParlay }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Parse failed');
-      setParsed(data.parsed);
+
+      // API returns { picks: [...] } — always an array
+      const picks = Array.isArray(data.picks) ? data.picks
+        : data.parsed ? [data.parsed]  // backward compat
+        : [];
+      if (!picks.length) throw new Error('No picks detected in the slip');
+      setParsedPicks(picks);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -262,50 +271,56 @@ function SlipImport({ onFilled, onSubmitParlay }) {
     }
   }
 
-  function handleUse() {
-    if (!parsed) return;
-    onFilled({
-      date: parsed.date || new Date().toISOString().split('T')[0],
-      sport: parsed.sport || 'MLB',
-      team: parsed.team || '',
-      bet_type: parsed.bet_type || 'Moneyline',
-      matchup: parsed.matchup || '',
-      odds: parsed.odds?.toString() || '',
-      book: parsed.book || 'FanDuel',
-      result: 'PENDING',
-      profit: '',
-      notes: parsed.notes || '',
+  function removePick(index) {
+    setParsedPicks(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length ? next : null;
     });
-    setParsed(null);
-    setFile(null);
-    setUrl('');
-    setText('');
+  }
+
+  function handleUse() {
+    if (!parsedPicks?.length) return;
+    const p = parsedPicks[0];
+    onFilled({
+      date:     p.date     || new Date().toISOString().split('T')[0],
+      sport:    p.sport    || 'MLB',
+      team:     p.team     || '',
+      bet_type: p.bet_type || 'Moneyline',
+      matchup:  p.matchup  || '',
+      odds:     p.odds?.toString() || '',
+      book:     p.book     || 'FanDuel',
+      result:   'PENDING',
+      profit:   '',
+      notes:    p.notes    || '',
+    });
+    setParsedPicks(null);
+    setFile(null); setUrl(''); setText('');
     setOpen(false);
   }
 
   async function handleSubmitParlay() {
-    if (!parsed?.parlay_legs?.length || !onSubmitParlay) return;
+    if (!parsedPicks?.length || !onSubmitParlay) return;
+    const parsed = parsedPicks[0];
+    if (!parsed?.parlay_legs?.length) return;
     setParlaySubmitting(true);
     setError('');
     try {
       const legs = parsed.parlay_legs.map(l => ({
-        team:      l.team || '',
-        sport:     l.sport || parsed.sport || 'Other',
+        team:      l.team     || '',
+        sport:     l.sport    || parsed.sport || 'Other',
         bet_type:  l.bet_type || 'Moneyline',
-        line:      l.line ?? null,
-        odds:      l.odds ?? 0,
+        line:      l.line     ?? null,
+        odds:      l.odds     ?? 0,
         game_date: parsed.date || null,
       }));
       await onSubmitParlay({
         units: parsed.units ?? 1,
-        book:  parsed.book ?? null,
-        date:  parsed.date ?? null,
+        book:  parsed.book  ?? null,
+        date:  parsed.date  ?? null,
         notes: parsed.notes ?? null,
       }, legs);
-      setParsed(null);
-      setFile(null);
-      setUrl('');
-      setText('');
+      setParsedPicks(null);
+      setFile(null); setUrl(''); setText('');
       setOpen(false);
     } catch (e) {
       setError(e.message || 'Parlay submit failed');
@@ -314,11 +329,31 @@ function SlipImport({ onFilled, onSubmitParlay }) {
     }
   }
 
+  async function handleSaveAll() {
+    if (!parsedPicks?.length || !onSaveMultiple) return;
+    setSaveAllLoading(true);
+    setError('');
+    try {
+      await onSaveMultiple(parsedPicks);
+      setParsedPicks(null);
+      setFile(null); setUrl(''); setText('');
+      setOpen(false);
+    } catch (e) {
+      setError(e.message || 'Save failed');
+    } finally {
+      setSaveAllLoading(false);
+    }
+  }
+
   const MODES = [
     { id: 'image', label: '📸 Screenshot' },
     { id: 'url',   label: '🔗 Share Link' },
     { id: 'text',  label: '📋 Paste Text' },
   ];
+
+  const firstPick = parsedPicks?.[0];
+  const isMulti   = parsedPicks && parsedPicks.length > 1;
+  const isParlay  = !isMulti && firstPick?.bet_type === 'Parlay' && firstPick?.parlay_legs?.length >= 2;
 
   return (
     <div className="surface" style={{ marginBottom: '1.25rem', overflow: 'hidden' }}>
@@ -345,7 +380,7 @@ function SlipImport({ onFilled, onSubmitParlay }) {
             {MODES.map(m => (
               <button
                 key={m.id}
-                onClick={() => { setMode(m.id); setParsed(null); setError(''); }}
+                onClick={() => { setMode(m.id); resetParsed(); setError(''); }}
                 style={{
                   padding: '5px 12px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer',
                   border: `1px solid ${mode === m.id ? 'var(--gold)' : 'var(--border)'}`,
@@ -371,7 +406,7 @@ function SlipImport({ onFilled, onSubmitParlay }) {
               }}
             >
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={e => { setFile(e.target.files[0]); setParsed(null); }} />
+                onChange={e => { setFile(e.target.files[0]); resetParsed(); }} />
               {file
                 ? <p style={{ color: 'var(--gold)', fontSize: '0.85rem', fontWeight: 600 }}>✓ {file.name}</p>
                 : <>
@@ -438,54 +473,104 @@ function SlipImport({ onFilled, onSubmitParlay }) {
           )}
 
           {/* Preview */}
-          {parsed && (
+          {parsedPicks && parsedPicks.length > 0 && (
             <div style={{ marginTop: '1rem', background: 'var(--bg-elevated)', border: '1px solid var(--gold)', borderRadius: '8px', padding: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-                <span style={{ color: 'var(--gold)', fontWeight: 700, fontSize: '0.85rem' }}>✓ Parsed Successfully</span>
+                <span style={{ color: 'var(--gold)', fontWeight: 700, fontSize: '0.85rem' }}>
+                  {isMulti ? `✓ ${parsedPicks.length} Picks Found — Review & Confirm` : '✓ Parsed Successfully'}
+                </span>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {/* Show "Submit as Parlay" if parse detected structured legs */}
-                  {parsed.bet_type === 'Parlay' && parsed.parlay_legs?.length >= 2 && onSubmitParlay && (
+                  {/* Parlay: submit all legs as one parlay pick */}
+                  {isParlay && onSubmitParlay && (
                     <button
                       className="btn"
                       onClick={handleSubmitParlay}
                       disabled={parlaySubmitting}
                       style={{
                         fontSize: '0.78rem', padding: '4px 12px',
-                        background: 'rgba(168,85,247,0.15)',
-                        border: '1px solid rgba(168,85,247,0.4)',
-                        color: '#c084fc',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontWeight: 700,
+                        background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)',
+                        color: '#c084fc', borderRadius: '6px', cursor: 'pointer', fontWeight: 700,
                       }}
                     >
-                      {parlaySubmitting ? 'Submitting…' : `🎰 Submit ${parsed.parlay_legs.length}-Leg Parlay`}
+                      {parlaySubmitting ? 'Submitting…' : `🎰 Submit ${firstPick.parlay_legs.length}-Leg Parlay`}
                     </button>
                   )}
-                  <button className="btn btn-primary" onClick={handleUse} style={{ fontSize: '0.78rem', padding: '4px 12px' }}>
-                    Fill Form →
-                  </button>
+                  {/* Single non-parlay: fill the form */}
+                  {!isMulti && !isParlay && (
+                    <button className="btn btn-primary" onClick={handleUse} style={{ fontSize: '0.78rem', padding: '4px 12px' }}>
+                      Fill Form →
+                    </button>
+                  )}
+                  {/* Multiple picks: save all at once */}
+                  {isMulti && onSaveMultiple && (
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleSaveAll}
+                      disabled={saveAllLoading}
+                      style={{ fontSize: '0.78rem', padding: '4px 12px' }}
+                    >
+                      {saveAllLoading ? 'Saving…' : `Save ${parsedPicks.length} Picks`}
+                    </button>
+                  )}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', fontSize: '0.8rem' }}>
-                {[
-                  ['Team / Pick', parsed.team],
-                  ['Sport', parsed.sport],
-                  ['Bet Type', parsed.bet_type],
-                  ['Odds', parsed.odds ? `${parsed.odds > 0 ? '+' : ''}${parsed.odds}` : null],
-                  ['Book', parsed.book],
-                  ['Date', parsed.date],
-                ].filter(([, v]) => v).map(([label, value]) => (
-                  <div key={label}>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{value}</div>
+
+              {/* Multi-pick review list */}
+              {isMulti ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {parsedPicks.map((p, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '7px 10px', borderRadius: '6px',
+                      background: 'var(--bg-overlay)', border: '1px solid var(--border)',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.team || '—'}
+                          {p.line != null ? ` ${p.line > 0 ? '+' : ''}${p.line}` : ''}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          {p.sport} · {p.bet_type}
+                          {p.odds ? ` · ${p.odds > 0 ? '+' : ''}${p.odds}` : ''}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removePick(i)}
+                        title="Remove this pick"
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: 'var(--text-muted)', fontSize: '1.1rem', padding: '2px 5px',
+                          lineHeight: 1, flexShrink: 0,
+                        }}
+                      >×</button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Single pick detail grid */
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', fontSize: '0.8rem' }}>
+                    {[
+                      ['Team / Pick', firstPick.team],
+                      ['Sport',       firstPick.sport],
+                      ['Bet Type',    firstPick.bet_type],
+                      ['Line',        firstPick.line != null ? `${firstPick.line > 0 ? '+' : ''}${firstPick.line}` : null],
+                      ['Odds',        firstPick.odds ? `${firstPick.odds > 0 ? '+' : ''}${firstPick.odds}` : null],
+                      ['Book',        firstPick.book],
+                      ['Date',        firstPick.date],
+                    ].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
+                      <div key={label}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
+                        <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{value}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              {parsed.matchup && (
-                <div style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  {parsed.matchup}
-                </div>
+                  {firstPick.matchup && (
+                    <div style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      {firstPick.matchup}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1116,6 +1201,55 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  async function handleSaveMultiple(picksArray) {
+    if (!picksArray?.length || !user?.id) return;
+    const { supabase: sb } = await import('@/lib/supabase').then(m => ({ supabase: m.supabase })).catch(() => ({}));
+    const session = sb ? (await sb.auth.getSession())?.data?.session : null;
+    const authToken = session?.access_token || null;
+    const today = new Date().toISOString().split('T')[0];
+    const errors = [];
+
+    for (const p of picksArray) {
+      const payload = {
+        ...EMPTY_FORM,
+        date:     p.date     || today,
+        sport:    p.sport    || 'MLB',
+        team:     p.team     || '',
+        bet_type: p.bet_type || 'Moneyline',
+        line:     p.line     ?? null,
+        matchup:  p.matchup  || '',
+        odds:     parseInt(p.odds) || 0,
+        book:     p.book     || 'FanDuel',
+        notes:    p.notes    || '',
+        result:   'PENDING',
+        profit:   null,
+        user_id:  user.id,
+      };
+      try {
+        const res = await fetch('/api/picks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({ pick: payload }),
+        });
+        const result = await res.json();
+        if (res.ok && result.pick) {
+          setPicks(prev => [...prev, result.pick]);
+        } else {
+          errors.push(`${p.team || 'Pick'}: ${result.error || 'Failed to save'}`);
+        }
+      } catch (err) {
+        errors.push(`${p.team || 'Pick'}: ${err.message}`);
+      }
+    }
+
+    if (errors.length) {
+      throw new Error(errors.join('\n'));
+    }
+  }
+
   // ── Filtering & Sorting ──────────────────────────────────────────────────
 
   const sports = ['ALL', ...Array.from(new Set(picks.map(p => (p.sport || 'Other').toUpperCase()))).filter(Boolean)];
@@ -1267,6 +1401,10 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               const { data, error } = await submitParlay(pick, legs);
               if (error) throw new Error(error.message);
               if (data) setPicks(prev => [data, ...prev]);
+            }}
+            onSaveMultiple={async (picks) => {
+              await handleSaveMultiple(picks);
+              setAddMode(null);
             }}
           />
         </div>
