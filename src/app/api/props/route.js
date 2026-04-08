@@ -1,9 +1,41 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 15;
 
 const THE_ODDS_KEY  = process.env.THE_ODDS_API_KEY?.trim();
 const THE_ODDS_BASE = 'https://api.the-odds-api.com/v4';
+
+// Supabase shared props cache — prevents multiple cold Vercel instances from each
+// burning 5-14 credits for the same game's props within a short window.
+// Keyed by props_cache_{sport}_{eventId} in the settings table. TTL: 15 minutes.
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+const SUPABASE_PROPS_TTL = 15 * 60_000; // 15 min
+
+async function getPropsCache(sport, eventId) {
+  try {
+    const { data } = await supabase
+      .from('settings')
+      .select('value, updated_at')
+      .eq('key', `props_cache_${sport}_${eventId}`)
+      .single();
+    if (!data?.value) return null;
+    if (Date.now() - new Date(data.updated_at).getTime() > SUPABASE_PROPS_TTL) return null;
+    return typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+  } catch { return null; }
+}
+
+async function setPropsCache(sport, eventId, result) {
+  try {
+    await supabase.from('settings').upsert(
+      [{ key: `props_cache_${sport}_${eventId}`, value: JSON.stringify(result) }],
+      { onConflict: 'key' }
+    );
+  } catch { /* cache write failure is non-fatal */ }
+}
 
 // The Odds API sport keys
 const SPORT_KEYS = {
@@ -128,8 +160,18 @@ export async function GET(req) {
   }
 
   const cacheKey = `props_${sport}_${eventId}`;
+
+  // L1: in-process memory cache (warm instances only)
   const cached = getCached(cacheKey);
-  if (cached) return NextResponse.json(cached);
+  if (cached) return NextResponse.json({ ...cached, cached: true });
+
+  // L2: Supabase shared cache — shared across all Vercel instances (15-min TTL)
+  // Prevents cold-start duplicate calls: each market key = 1 credit, NFL = 14 credits/call
+  const sbCached = await getPropsCache(sport, eventId);
+  if (sbCached) {
+    setCache(cacheKey, sbCached); // warm L1 for this instance
+    return NextResponse.json({ ...sbCached, cached: true });
+  }
 
   const groups = SPORT_PROP_MARKETS[sport] || [];
   // Flatten all market keys for this sport into a single comma-separated string
@@ -227,8 +269,9 @@ export async function GET(req) {
     })).filter(g => g.markets.length > 0);
 
     const result = { categories, total: propMap.size, eventId, sport };
-    setCache(cacheKey, result);
-    return NextResponse.json(result);
+    setCache(cacheKey, result);                          // L1: warm this instance
+    setPropsCache(sport, eventId, result);               // L2: write shared Supabase cache
+    return NextResponse.json({ ...result, cached: false });
 
   } catch (err) {
     console.error('[/api/props] Fetch failed:', err.message, { sport, eventId });

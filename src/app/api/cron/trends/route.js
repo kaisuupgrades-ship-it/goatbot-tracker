@@ -36,39 +36,73 @@ const SPORT_MAP = {
   nfl: { sport: 'football',   league: 'nfl', emoji: '🏈' },
 };
 
-// ── Fetch today's games (Odds API → ESPN fallback) ────────────────────────────
+// ── Fetch today's games (odds_cache table → ESPN fallback, 0 Odds API credits) ──
 async function fetchTodaysGames() {
   const today    = new Date().toISOString().split('T')[0].replace(/-/g, '');
   const gameList = [];
 
-  // Try The Odds API shared lib first
+  // Primary: read from the odds_cache table populated by the refresh-odds cron.
+  // This costs 0 Odds API credits (was 12 credits via fetchOddsForSports).
+  // Cutoff: accept rows fetched within the last hour so stale data isn't used.
+  const cacheCutoff = new Date(Date.now() - 60 * 60_000).toISOString();
   try {
-    const { fetchOddsForSports, buildOddsLookup } = await import('@/lib/odds');
-    const oddsMap = await fetchOddsForSports(['mlb', 'nba', 'nhl', 'nfl']);
-    for (const [sp, games] of Object.entries(oddsMap)) {
-      for (const g of games.slice(0, 14)) {
+    for (const [sp, info] of Object.entries(SPORT_MAP)) {
+      const { data: rows, error } = await supabase
+        .from('odds_cache')
+        .select('home_team, away_team, commence_time, game_status, odds_data')
+        .eq('sport', sp)
+        .in('game_status', ['pre', 'live'])
+        .gte('last_fetched_at', cacheCutoff)
+        .order('commence_time')
+        .limit(14);
+
+      if (error || !rows?.length) continue;
+
+      for (const row of rows) {
+        const bookmakers = row.odds_data?.bookmakers || [];
+        const book = bookmakers.find(b => b.key === 'fanduel')
+                  || bookmakers.find(b => b.key === 'draftkings')
+                  || bookmakers[0];
+
+        const h2h    = book?.markets?.find(m => m.key === 'h2h');
+        const spreads = book?.markets?.find(m => m.key === 'spreads');
+        const totals  = book?.markets?.find(m => m.key === 'totals');
+
+        const mlHome = h2h?.outcomes?.find(o => o.name === row.home_team)?.price ?? null;
+        const mlAway = h2h?.outcomes?.find(o => o.name === row.away_team)?.price ?? null;
+        const sHome  = spreads?.outcomes?.find(o => o.name === row.home_team);
+        const ov     = totals?.outcomes?.find(o => o.name === 'Over');
+        const un     = totals?.outcomes?.find(o => o.name === 'Under');
+
+        const homeAbbr = row.home_team.split(' ').pop();
+        const awayAbbr = row.away_team.split(' ').pop();
+
         gameList.push({
           sport:    sp.toUpperCase(),
-          emoji:    g.emoji || SPORT_MAP[sp]?.emoji || '🏆',
-          matchup:  g.matchup,
-          home:     g.home,
-          away:     g.away,
-          mlHome:   g.mlHome,
-          mlAway:   g.mlAway,
-          spread:   g.spreadHomePoint != null
-            ? `${g.home.split(' ').pop()} ${g.spreadHomePoint >= 0 ? '+' : ''}${g.spreadHomePoint}`
+          emoji:    info.emoji,
+          matchup:  `${awayAbbr} @ ${homeAbbr}`,
+          home:     row.home_team,
+          away:     row.away_team,
+          mlHome,
+          mlAway,
+          spread:   sHome?.point != null
+            ? `${homeAbbr} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
             : null,
-          total:     g.total,
-          overOdds:  g.overOdds,
-          underOdds: g.underOdds,
-          status:    g.status || 'Scheduled',
-          oddsSource: 'the-odds-api',
+          total:     ov?.point     ?? null,
+          overOdds:  ov?.price     ?? null,
+          underOdds: un?.price     ?? null,
+          status:    row.game_status === 'live' ? 'In Progress' : 'Scheduled',
+          oddsSource: 'odds_cache',
         });
       }
     }
-    if (gameList.length > 0) return gameList;
+    if (gameList.length > 0) {
+      console.log(`[cron/trends] Loaded ${gameList.length} games from odds_cache (0 API credits)`);
+      return gameList;
+    }
+    console.warn('[cron/trends] odds_cache empty or stale — falling back to ESPN');
   } catch (err) {
-    console.warn('[cron/trends] Odds API failed, using ESPN fallback:', err.message);
+    console.warn('[cron/trends] odds_cache read failed, using ESPN fallback:', err.message);
   }
 
   // ESPN fallback
