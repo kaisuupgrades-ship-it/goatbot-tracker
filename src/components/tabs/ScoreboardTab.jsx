@@ -21,9 +21,14 @@ export function useStarredGames() {
 
   useEffect(() => {
     loadFromStorage();
-    // React to changes made by other browser tabs
+    // React to changes made by other browser tabs.
+    // e.key is null for localStorage.clear(), a string for specific key changes,
+    // and undefined for synthetic new Event('storage') dispatches (e.g. from GolfLeaderboard).
+    // Only reload for legitimate cross-tab updates — NOT synthetic events — to avoid
+    // an infinite loop where GolfLeaderboard's syncStarredGolferStats fires a storage
+    // event that re-triggers ScoreboardTab re-render → TournamentCard render → syncStarredGolferStats again.
     function onStorage(e) {
-      if (!e.key || e.key === STARRED_KEY) loadFromStorage();
+      if (e.key === null || e.key === STARRED_KEY) loadFromStorage();
     }
     window.addEventListener('storage', onStorage);
     // Custom event handles same-page updates (storage event doesn't fire within same page)

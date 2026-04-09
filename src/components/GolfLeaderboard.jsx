@@ -824,6 +824,14 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
   // Players — competitors array inside competitions[0]
   const rawPlayers = comp.competitors || event.competitors || event.leaderboard || [];
 
+  // Sync starred golfer stats (position/score) whenever fresh data arrives from ESPN.
+  // This must be in a useEffect — NOT inline in JSX — to avoid a render-time side effect
+  // that dispatches a storage event, which would re-trigger ScoreboardTab's useStarredGames
+  // listener and cause an infinite re-render loop crashing the browser tab.
+  useEffect(() => {
+    syncStarredGolferStats(rawPlayers, name);
+  }, [rawPlayers, name]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Sort by numeric position (handles ties like "T2" → 2, "CUT" → 999)
   function parsePos(pos) {
     if (!pos || pos === '—' || pos === 'CUT') return 9999;
@@ -968,8 +976,7 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
                 ))}
               </div>
 
-              {/* Player rows — sync starred stats on every render with fresh data */}
-              {(() => { syncStarredGolferStats(players, name); return null; })()}
+              {/* Player rows */}
               {filtered.slice(0, 60).map((player, i) => (
                 <PlayerRow
                   key={player.id || player.athlete?.id || i}
