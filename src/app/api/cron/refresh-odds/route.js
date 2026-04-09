@@ -6,15 +6,17 @@
  * the odds_cache Supabase table instead.
  *
  * Credit budget math (The Odds API):
- *  - 15-min cadence × 96 runs/day × 4 active sports × 2 markets = ~768 credits/day
- *  - vs old 2-min cadence × 5 sports × 3 markets ≈ 2000-3000 credits/day
- *  - Monthly budget: 20K credits → ~26 days at new rate (was exhausted in 2 days)
+ *  - Active hours: 8am–midnight ET (16h) × 4 fetches/hr × 4 sports × 2 markets = ~512 credits/day
+ *  - Off-peak skip: midnight–8am ET saves ~32% (was ~768/day without time throttle)
+ *  - Monthly budget: 20K credits → ~39 days at current rate
  *  - TODO: revert to 3 markets (add totals back) after migrating to OddsPapi (unlimited)
  *
  * Smart refresh schedule (per sport):
- *  - Live games present:     refresh every 90 sec (threshold; cron fires every 15 min)
- *  - < 1 hr to first pitch:  refresh every 3 min (threshold)
- *  - > 1 hr to first pitch:  refresh every 25 min
+ *  - Pre-match only:         commenceTimeFrom = now - 5min (live odds paused — v2 feature)
+ *  - Off-peak (0–8am ET):    skip entirely (return early)
+ *  - Shoulder (8–11am ET,    use 45-min TTL instead of 25-min
+ *    10pm–midnight ET):
+ *  - Peak (11am–10pm ET):    DEFAULT_TTL = 25 min
  *  - All post-game:          skip entirely
  *  - No games today:         skip (ESPN check)
  *  - Empty cache:            always refresh
@@ -44,9 +46,11 @@ const SPORT_KEYS = {
 };
 
 // Thresholds — how old the cache can be before triggering a re-fetch
-const LIVE_TTL_MS    = 90_000;        // 90 sec for live games
-const NEAR_TTL_MS    = 3 * 60_000;    // 3 min when game < 1 hr away
-const DEFAULT_TTL_MS = 25 * 60_000;   // 25 min for regular pre-game (bumped from 12 to match 15-min cron)
+// TODO: LIVE_TTL_MS and NEAR_TTL_MS are effectively dormant while pre-match-only mode
+// is active (commenceTimeFrom = now - 5min). Re-enable when live in-play odds come back (v2).
+const LIVE_TTL_MS    = 90_000;        // 90 sec for live games (dormant — see above)
+const NEAR_TTL_MS    = 3 * 60_000;    // 3 min when game < 1 hr away (dormant — see above)
+const DEFAULT_TTL_MS = 25 * 60_000;   // 25 min for pre-game peak hours
 // Deduplication guard — never re-fetch a sport if its cache is this fresh
 // Protects against Vercel retry storms or accidental double-fires
 const DEDUP_TTL_MS   = 10 * 60_000;  // 10 min hard floor regardless of game state
@@ -304,8 +308,10 @@ async function fetchSportOdds(sport) {
   // TODO: add totals back (3rd market) after migrating to OddsPapi (unlimited credits)
   url.searchParams.set('markets', 'h2h,spreads');
   url.searchParams.set('oddsFormat', 'american');
-  // Include games up to 12 hrs in the past (live/recently started) and 2 days ahead
-  const from = new Date(Date.now() - 12 * 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  // Pre-match only — live in-play odds are paused (v2 feature). A 5-min lookback buffer
+  // catches games whose commence_time just ticked past now without missing their final pre-match line.
+  // TODO: restore commenceTimeFrom to now - 12h when live in-play odds are re-enabled.
+  const from = new Date(Date.now() - 5 * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   const to   = new Date(Date.now() + 2 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   url.searchParams.set('commenceTimeFrom', from);
   url.searchParams.set('commenceTimeTo',   to);
@@ -353,7 +359,8 @@ async function getSportCacheState(sport) {
 
 // Returns threshold ms (cache must be older than this to trigger refresh),
 // or null meaning "all games are done, skip this sport".
-function getRefreshThreshold(games) {
+// defaultTtl can be overridden by the caller for time-of-day throttling.
+function getRefreshThreshold(games, defaultTtl = DEFAULT_TTL_MS) {
   if (!games.length) return 0; // empty cache → always refresh
 
   const now = Date.now();
@@ -369,7 +376,7 @@ function getRefreshThreshold(games) {
     if (ms > 0 && ms < minMsToStart) minMsToStart = ms;
   }
 
-  return minMsToStart < 3600_000 ? NEAR_TTL_MS : DEFAULT_TTL_MS;
+  return minMsToStart < 3600_000 ? NEAR_TTL_MS : defaultTtl;
 }
 
 // ── Upsert enriched games into odds_cache ─────────────────────────────────────
@@ -417,6 +424,27 @@ export async function GET(req) {
     return NextResponse.json({ error: 'THE_ODDS_API_KEY not configured' }, { status: 503 });
   }
 
+  // ── Time-of-day throttle (US Eastern) ────────────────────────────────────────
+  // Vercel Intl is fully timezone-aware; this handles EDT/EST transitions automatically.
+  // TODO: revisit thresholds when live odds are re-enabled and/or API plan upgraded to $119/mo tier.
+  const etHour = parseInt(
+    new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false })
+  );
+
+  // Off-peak: midnight–8am ET — US users are asleep; skip entirely (~32% credit savings)
+  if (etHour < 8) {
+    console.log(`[refresh-odds] Off-peak ET (${etHour}:xx) — skipping refresh to save credits`);
+    return NextResponse.json({ ok: true, skipped: true, reason: 'off-peak-ET', etHour });
+  }
+
+  // Shoulder: 8–11am ET and 10pm–midnight ET — lighter traffic; use 45-min TTL
+  // Peak:     11am–10pm ET — keep DEFAULT_TTL_MS (25 min)
+  const isShoulderHour = etHour < 11 || etHour >= 22;
+  const effectiveDefaultTtl = isShoulderHour ? 45 * 60_000 : DEFAULT_TTL_MS;
+  if (isShoulderHour) {
+    console.log(`[refresh-odds] Shoulder ET (${etHour}:xx) — using 45-min TTL`);
+  }
+
   const results = [];
   const now = Date.now();
 
@@ -438,7 +466,7 @@ export async function GET(req) {
       }
 
       const games     = await getSportCacheState(sport);
-      const threshold = getRefreshThreshold(games);
+      const threshold = getRefreshThreshold(games, effectiveDefaultTtl);
 
       if (threshold === null) {
         results.push({ sport, action: 'skip', reason: 'all post-game' });
