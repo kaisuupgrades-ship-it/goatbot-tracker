@@ -630,22 +630,36 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   const starredIdStr = starredList.map(g => g.id).sort().join(',');
   const featuredEvents = useMemo(() => {
     const starredIds = new Set(starredList.map(g => g.id));
-    // Fallback: match by away@home abbreviation pair (handles ID changes after starring)
+    // Fallback 1: match by stored awayAbbr@homeAbbr (new data)
     const starredMatchups = new Set(
       starredList
         .filter(g => g.awayAbbr && g.homeAbbr)
         .map(g => `${g.awayAbbr}@${g.homeAbbr}`.toLowerCase())
     );
+    // Fallback 2: match by awayName/homeName (old data without abbreviations)
+    const starredNamePairs = starredList
+      .filter(g => g.awayName && g.homeName)
+      .map(g => ({ away: g.awayName.toLowerCase(), home: g.homeName.toLowerCase() }));
+
     return sortAllSportsEvents(
       Object.entries(liveData).flatMap(([sport, events]) =>
         events
           .filter(e => {
             if (starredIds.has(e.id)) return true;
             const comp = e.competitions?.[0]?.competitors || [];
-            const away = comp.find(c => c.homeAway === 'away') || comp[0] || {};
-            const home = comp.find(c => c.homeAway === 'home') || comp[1] || {};
-            const matchup = `${away.team?.abbreviation || ''}@${home.team?.abbreviation || ''}`.toLowerCase();
-            return matchup.length > 2 && starredMatchups.has(matchup);
+            const awayC = comp.find(c => c.homeAway === 'away') || comp[0] || {};
+            const homeC = comp.find(c => c.homeAway === 'home') || comp[1] || {};
+            const awayAbbr = (awayC.team?.abbreviation || '').toLowerCase();
+            const homeAbbr = (homeC.team?.abbreviation || '').toLowerCase();
+            const matchup = `${awayAbbr}@${homeAbbr}`;
+            if (matchup.length > 2 && starredMatchups.has(matchup)) return true;
+            // Name-based fallback for old starred data
+            const awayDisplay = (awayC.team?.displayName || awayC.team?.name || '').toLowerCase();
+            const homeDisplay = (homeC.team?.displayName || homeC.team?.name || '').toLowerCase();
+            return awayDisplay && homeDisplay && starredNamePairs.some(p =>
+              (awayDisplay.includes(p.away) || p.away.includes(awayAbbr)) &&
+              (homeDisplay.includes(p.home) || p.home.includes(homeAbbr))
+            );
           })
           .map(e => ({ ...e, _sport: sport }))
       )

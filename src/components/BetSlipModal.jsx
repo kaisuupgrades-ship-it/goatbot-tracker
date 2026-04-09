@@ -379,9 +379,13 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     }
   }, [propPlayer, propStat, propLine, propDirection, customBetType]);
 
-  // Clear prop fields when switching away from Prop bet type
+  // Clear prop fields only when user manually switches AWAY from Prop type
+  // (not on initial mount — use prevBetTypeRef to track transitions)
+  const prevBetTypeRef = useRef(customBetType);
   useEffect(() => {
-    if (customBetType !== 'Prop') {
+    const prev = prevBetTypeRef.current;
+    prevBetTypeRef.current = customBetType;
+    if (prev === 'Prop' && customBetType !== 'Prop') {
       setPropPlayer(''); setPropStat(''); setPropLine(''); setPropDirection('over');
     }
   }, [customBetType]);
