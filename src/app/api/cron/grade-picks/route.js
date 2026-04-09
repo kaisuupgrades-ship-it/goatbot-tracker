@@ -137,7 +137,7 @@ function findAnalysisGame(events, awayTeam, homeTeam) {
     const comp = evt.competitions?.[0];
     if (!comp) continue;
     const status = comp.status?.type?.name;
-    if (!['STATUS_FINAL', 'STATUS_FULL_TIME'].includes(status)) continue;
+    if (!(status?.startsWith('STATUS_FINAL') || status === 'STATUS_FULL_TIME')) continue;
 
     const competitors = comp.competitors || [];
     const homeC = competitors.find(c => c.homeAway === 'home');
@@ -269,7 +269,13 @@ export async function GET(req) {
     const sport = (pick.sport || '').toLowerCase();
     const supported = SPORT_PATHS[sport] || sport === 'soccer' || sport === 'other';
     if (!supported) continue;
-    const key = `${sport}|${pick.date}`;
+    // Use the actual game date (from commence_time) so we fetch the right ESPN scoreboard.
+    // pick.date is the submission date — if a user added the pick the night before,
+    // pick.date would be yesterday and the game wouldn't appear in that day's scoreboard.
+    const gameDate = pick.commence_time
+      ? new Date(pick.commence_time).toISOString().slice(0, 10)
+      : pick.date;
+    const key = `${sport}|${gameDate}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(pick);
   }
