@@ -148,6 +148,31 @@ async function parseImage(imageBase64, mimeType) {
   throw new Error('No vision API available — configure XAI_API_KEY or ANTHROPIC_API_KEY');
 }
 
+// ── Parsed pick validation ─────────────────────────────────────────────────────
+// Guards against malformed AI output flowing directly into the DB.
+function validateParsedPick(pick) {
+  if (!pick || typeof pick !== 'object') return { valid: false, reason: 'pick is not an object' };
+  if (!pick.team || typeof pick.team !== 'string' || !pick.team.trim()) {
+    return { valid: false, reason: 'missing team' };
+  }
+  if (!pick.bet_type || typeof pick.bet_type !== 'string') {
+    return { valid: false, reason: 'missing bet_type' };
+  }
+  const isParlay = pick.bet_type.toLowerCase() === 'parlay';
+  if (isParlay) {
+    if (!Array.isArray(pick.parlay_legs) || pick.parlay_legs.length === 0) {
+      return { valid: false, reason: 'parlay has no legs' };
+    }
+    for (let i = 0; i < pick.parlay_legs.length; i++) {
+      const leg = pick.parlay_legs[i];
+      if (!leg || !leg.team || typeof leg.team !== 'string' || !leg.team.trim()) {
+        return { valid: false, reason: `parlay leg ${i + 1} missing team` };
+      }
+    }
+  }
+  return { valid: true };
+}
+
 // ── SSRF Protection: validate URLs before fetching ────────────────────────────
 function isSafeUrl(urlStr) {
   try {
@@ -296,31 +321,24 @@ export async function POST(req) {
       // Deterministic post-processing: normalize each pick's team name
       picks = picks.map(p => normalizeParsedPick(p));
 
-      // Validate each pick — require team and bet_type; parlays need non-empty legs with teams
+      // Validate each pick — reject malformed AI output before it reaches the DB
       const validPicks = [];
-      for (const p of picks) {
-        if (!p.team || typeof p.team !== 'string' || !p.team.trim()) {
-          console.warn('[parse-slip] dropping pick missing team field:', JSON.stringify(p));
-          continue;
+      const rejectedReasons = [];
+      for (const pick of picks) {
+        const { valid, reason } = validateParsedPick(pick);
+        if (valid) {
+          validPicks.push(pick);
+        } else {
+          rejectedReasons.push(reason);
+          console.warn('[parse-slip] Rejected pick:', reason, pick);
         }
-        if (!p.bet_type || typeof p.bet_type !== 'string' || !p.bet_type.trim()) {
-          console.warn('[parse-slip] dropping pick missing bet_type field:', JSON.stringify(p));
-          continue;
-        }
-        if ((p.bet_type || '').toLowerCase() === 'parlay') {
-          if (!Array.isArray(p.parlay_legs) || p.parlay_legs.length === 0) {
-            console.warn('[parse-slip] dropping parlay pick with no legs:', JSON.stringify(p));
-            continue;
-          }
-          const legsValid = p.parlay_legs.every(
-            leg => leg.team && typeof leg.team === 'string' && leg.team.trim()
-          );
-          if (!legsValid) {
-            console.warn('[parse-slip] dropping parlay pick with leg(s) missing team:', JSON.stringify(p));
-            continue;
-          }
-        }
-        validPicks.push(p);
+      }
+
+      if (validPicks.length === 0) {
+        return NextResponse.json(
+          { error: `Could not parse a valid pick. Issues: ${rejectedReasons.join('; ')}. Try pasting the text manually.` },
+          { status: 422 }
+        );
       }
 
       return NextResponse.json({ picks: validPicks });

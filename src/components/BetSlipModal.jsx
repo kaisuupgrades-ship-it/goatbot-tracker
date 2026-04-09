@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { addPick } from '@/lib/supabase';
 import { saveDemoPicks, demoId } from '@/lib/demoData';
 import { useVoiceInput } from '@/components/VoiceInput';
+import { validML } from '@/lib/odds';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BOOKS = ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'ESPN Bet', 'Hard Rock', 'PointsBet', 'Bet365', 'Pinnacle', 'Other'];
@@ -559,6 +560,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     if (!teamValue) { setSaveError('Select or enter a pick.'); return; }
     const oddsNum = parseInt(oddsValue);
     if (!oddsValue || isNaN(oddsNum)) { setSaveError('Enter valid American odds (e.g. -110 or +133).'); return; }
+    if (!validML(oddsNum)) { setSaveError(`Odds ${oddsNum > 0 ? '+' : ''}${oddsNum} look off — valid range is -1500 to +1500. Double-check before submitting.`); return; }
 
     // Contest picks: show confirmation dialog first (if not already confirmed)
     if (isContest && contestResult?.eligible && !showConfirm) {

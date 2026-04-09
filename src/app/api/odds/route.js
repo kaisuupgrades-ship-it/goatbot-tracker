@@ -18,6 +18,7 @@
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { teamsMatch } from '@/lib/teamNormalizer';
 
 export const maxDuration = 15;
 
@@ -82,6 +83,7 @@ async function getOddsCacheTable(sport) {
       home_team:     row.home_team,
       away_team:     row.away_team,
       commence_time: row.commence_time,
+      sport_key:     SPORT_KEYS[sport] || sport,  // needed by ScoreboardTab validTotal()
       sport_title:   row.odds_data?.sport_title  || '',
       bookmakers:    row.odds_data?.bookmakers    || [],
       pinnacle:      row.odds_data?.pinnacle      || null,
@@ -184,25 +186,6 @@ function pinPriceToAmerican(price) {
   return null; // invalid
 }
 
-function normTeam(name) {
-  return (name || '')
-    .toLowerCase()
-    .replace(/\b(the|a|an|fc|sc|city|united|sporting)\b/g, '')
-    .replace(/[^a-z0-9 ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function teamsMatch(a, b) {
-  const na = normTeam(a), nb = normTeam(b);
-  if (na === nb) return true;
-  const wordsA = na.split(' '), wordsB = nb.split(' ');
-  // Last word is usually the mascot — strongest signal
-  const lastA = wordsA[wordsA.length - 1], lastB = wordsB[wordsB.length - 1];
-  if (lastA && lastA === lastB && lastA.length > 3) return true;
-  // Also check if one name contains the other's last word (e.g. "LA Lakers" vs "Los Angeles Lakers")
-  return (na.includes(lastB) && lastB.length > 4) || (nb.includes(lastA) && lastA.length > 4);
-}
 
 async function fetchPinnacleLines(sportKey) {
   const leagueId = PINNACLE_LEAGUE_IDS[sportKey];

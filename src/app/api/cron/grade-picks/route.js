@@ -2,19 +2,23 @@
 // Vercel Cron: grades PENDING picks for ALL users during game hours.
 //
 // Schedule (vercel.json):
-//   every 5 min, 17-23 UTC  →  noon-midnight ET (main evening window)
-//   every 5 min, 0-8 UTC    →  midnight-4am ET  (late west coast games)
+//   every 5 min, 15-23 UTC  →  11am-7pm ET  (afternoon + evening games)
+//   every 5 min, 0-9 UTC    →  8pm-5am ET   (late west coast + overnight)
+//   every 5 min, 10-14 UTC  →  6am-10am ET  (closes the early morning gap)
 //
 // Key fixes:
 //  - Catches result=null picks as well as result='PENDING'
 //  - Looks back 7 days (not just yesterday) so old stuck picks get graded
 //  - Uses shared gradeEngine so logic is identical across all grading paths
 //  - Batches ESPN calls per sport+date — one fetch per group across all users
+//  - Parlays graded via gradeParlay (handles multi-sport legs independently)
+//  - Postponed/cancelled games void picks (PUSH) per standard sportsbook practice
 import { NextResponse }   from 'next/server';
 import { createClient }   from '@supabase/supabase-js';
 import {
   fetchESPNScoreboard,
   gradePicksAgainstScoreboard,
+  gradeParlay,
   SPORT_PATHS,
   SOCCER_FALLBACK_PATHS,
 } from '@/lib/gradeEngine';
@@ -259,9 +263,22 @@ export async function GET(req) {
     return NextResponse.json(summary);
   }
 
-  // Separate out "other" sport picks for golf grading; everything else goes through ESPN
-  const otherPicks = picks.filter(p => (p.sport || '').toLowerCase() === 'other');
-  const regularPicks = picks.filter(p => (p.sport || '').toLowerCase() !== 'other');
+  // Separate picks by grading path:
+  //   parlayPicks  → gradeParlay (multi-sport, needs DB leg lookup)
+  //   otherPicks   → golf PGA grading path
+  //   regularPicks → ESPN scoreboard grading
+  const parlayPicks  = picks.filter(p =>
+    p.is_parlay || (p.sport || '').toUpperCase() === 'PARLAY' || (p.bet_type || '').toLowerCase() === 'parlay'
+  );
+  const otherPicks   = picks.filter(p =>
+    !p.is_parlay && (p.sport || '').toLowerCase() === 'other' && (p.bet_type || '').toLowerCase() !== 'parlay'
+  );
+  const regularPicks = picks.filter(p =>
+    !p.is_parlay &&
+    (p.sport || '').toUpperCase() !== 'PARLAY' &&
+    (p.bet_type || '').toLowerCase() !== 'parlay' &&
+    (p.sport || '').toLowerCase() !== 'other'
+  );
 
   // Group regular picks by sport + date to batch ESPN calls
   const groups = {};
@@ -294,7 +311,7 @@ export async function GET(req) {
     const scoreboard = scoreboardCache[key];
     if (!scoreboard?.events) { skippedCount += groupPicks.length; continue; }
 
-    const graded = gradePicksAgainstScoreboard(groupPicks, scoreboard);
+    const graded = await gradePicksAgainstScoreboard(groupPicks, scoreboard, supabase);
     skippedCount += groupPicks.length - graded.length;
 
     for (const g of graded) {
@@ -315,6 +332,34 @@ export async function GET(req) {
         gradedCount++;
         affectedUsers.add(g.user_id);
       }
+    }
+  }
+
+  // ── Phase 1c: Grade parlay picks ─────────────────────────────────────────
+  // Parlays span multiple sports/games — gradeParlay fetches each leg's
+  // scoreboard independently and grades each leg, then combines results.
+  for (const pick of parlayPicks) {
+    try {
+      const parlayResult = await gradeParlay(pick, supabase);
+      if (!parlayResult) { skippedCount++; continue; }
+
+      const { error: updateErr } = await supabase
+        .from('picks')
+        .update({
+          result:    parlayResult.result,
+          profit:    parlayResult.profit,
+          graded_at: new Date().toISOString(),
+        })
+        .eq('id', pick.id)
+        .or('result.is.null,result.eq.PENDING');
+
+      if (!updateErr) {
+        gradedCount++;
+        affectedUsers.add(pick.user_id);
+      }
+    } catch (parlayErr) {
+      console.error('[cron/grade-picks] Error grading parlay', pick.id, ':', parlayErr.message);
+      skippedCount++;
     }
   }
 
