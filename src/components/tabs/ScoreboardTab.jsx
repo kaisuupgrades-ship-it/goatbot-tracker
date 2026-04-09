@@ -2183,8 +2183,32 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
 
   // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill
   const loadRealOdds = useCallback(async (s) => {
-    if (s === 'all' || DEDICATED_VIEW_SPORTS.has(s)) return;
+    if (DEDICATED_VIEW_SPORTS.has(s)) return;
     try {
+      if (s === 'all') {
+        // Combined view: fetch odds for every standard sport in parallel and merge into one lookup.
+        // The /api/odds endpoint reads from the 15-min Supabase cache first, so this burns zero API credits.
+        const results = await Promise.allSettled(
+          ALL_SPORTS_KEYS.map(key =>
+            fetch(`/api/odds?sport=${key}`)
+              .then(r => r.ok ? r.json() : { data: [], cached: false })
+          )
+        );
+        const lookup = {};
+        let anyStale = false;
+        for (const r of results) {
+          if (r.status !== 'fulfilled') continue;
+          const { data = [], cached = false } = r.value;
+          if (cached) anyStale = true;
+          data.forEach(game => {
+            const key = (game.home_team || '').toLowerCase().replace(/\s+/g, '_');
+            lookup[key] = game;
+          });
+        }
+        setRealOddsLookup(lookup);
+        setOddsStale(anyStale);
+        return;
+      }
       const url = `/api/odds?sport=${s}`;
       const res = await fetch(url);
       if (!res.ok) return;
@@ -2656,6 +2680,36 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               ? parlayLegs.length > 0 ? `Building (${parlayLegs.length} leg${parlayLegs.length !== 1 ? 's' : ''})` : 'Building Parlay…'
               : 'Build Parlay'}
           </button>
+
+          {/* ── Parlay running odds calculator ── */}
+          {parlayMode && parlayLegs.length > 0 && (() => {
+            const combo = calcParlayOdds(parlayLegs);
+            const decOdds = parlayLegs.reduce((acc, l) => {
+              const n = parseInt(l.odds);
+              if (isNaN(n) || n === 0) return acc;
+              return acc * (n > 0 ? n / 100 + 1 : 100 / Math.abs(n) + 1);
+            }, 1);
+            const profit100 = Math.round((decOdds - 1) * 100);
+            return (
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0,
+                fontSize: '0.72rem', color: '#c084fc', fontFamily: 'IBM Plex Mono, monospace',
+                background: 'rgba(168,85,247,0.08)',
+                border: '1px solid rgba(168,85,247,0.25)',
+                borderRadius: '10px',
+                padding: '3px 9px',
+                whiteSpace: 'nowrap',
+              }}>
+                <span style={{ fontWeight: 800 }}>
+                  {combo > 0 ? '+' : ''}{combo}
+                </span>
+                <span style={{ color: '#718096' }}>·</span>
+                <span style={{ color: '#4ade80', fontWeight: 700 }}>
+                  $100→${100 + profit100}
+                </span>
+              </span>
+            );
+          })()}
 
           <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginLeft: '4px' }}>
             {sortedFilteredGames.length} game{sortedFilteredGames.length !== 1 ? 's' : ''}
