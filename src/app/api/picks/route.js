@@ -323,20 +323,6 @@ async function validateSpreadVsML(pick) {
   return null;
 }
 
-// ── Parlay odds helpers ───────────────────────────────────────────────────────
-// Returns null if any leg has null/invalid odds — can't price an incomplete parlay.
-function calcParlayOdds(legs) {
-  if (!legs?.length) return null;
-  let combined = 1;
-  for (const leg of legs) {
-    const n = parseInt(leg.odds);
-    if (isNaN(n) || n === 0) return null; // unknown leg → can't calculate
-    combined *= n > 0 ? n / 100 + 1 : 100 / Math.abs(n) + 1;
-  }
-  if (combined <= 1) return -10000;
-  if (combined >= 2) return Math.round((combined - 1) * 100);
-  return Math.round(-100 / (combined - 1));
-}
 
 // ── POST /api/picks ──────────────────────────────────────────────────────────
 export async function POST(req) {

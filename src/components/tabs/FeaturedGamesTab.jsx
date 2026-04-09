@@ -630,10 +630,23 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   const starredIdStr = starredList.map(g => g.id).sort().join(',');
   const featuredEvents = useMemo(() => {
     const starredIds = new Set(starredList.map(g => g.id));
+    // Fallback: match by away@home abbreviation pair (handles ID changes after starring)
+    const starredMatchups = new Set(
+      starredList
+        .filter(g => g.awayAbbr && g.homeAbbr)
+        .map(g => `${g.awayAbbr}@${g.homeAbbr}`.toLowerCase())
+    );
     return sortAllSportsEvents(
       Object.entries(liveData).flatMap(([sport, events]) =>
         events
-          .filter(e => starredIds.has(e.id))
+          .filter(e => {
+            if (starredIds.has(e.id)) return true;
+            const comp = e.competitions?.[0]?.competitors || [];
+            const away = comp.find(c => c.homeAway === 'away') || comp[0] || {};
+            const home = comp.find(c => c.homeAway === 'home') || comp[1] || {};
+            const matchup = `${away.team?.abbreviation || ''}@${home.team?.abbreviation || ''}`.toLowerCase();
+            return matchup.length > 2 && starredMatchups.has(matchup);
+          })
           .map(e => ({ ...e, _sport: sport }))
       )
     );
@@ -999,8 +1012,10 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
         const rawOdds = ev?.competitions?.[0]?.odds?.[0];
         let odds = null;
         if (rawOdds) {
-          let homeOdds = rawOdds.homeTeamOdds?.moneyLine ?? rawOdds.homeTeamOdds?.current?.moneyLine ?? null;
-          let awayOdds = rawOdds.awayTeamOdds?.moneyLine ?? rawOdds.awayTeamOdds?.current?.moneyLine ?? null;
+          let homeOdds = rawOdds._homeML ?? rawOdds.homeTeamOdds?.moneyLine ?? rawOdds.homeTeamOdds?.current?.moneyLine ?? null;
+          let awayOdds = rawOdds._awayML ?? rawOdds.awayTeamOdds?.moneyLine ?? rawOdds.awayTeamOdds?.current?.moneyLine ?? null;
+          if (homeOdds === 0) homeOdds = null;
+          if (awayOdds === 0) awayOdds = null;
           if ((!homeOdds || !awayOdds) && rawOdds.details) {
             const m = rawOdds.details.match(/([A-Z]+)\s*([-+]?\d+)/);
             if (m) {

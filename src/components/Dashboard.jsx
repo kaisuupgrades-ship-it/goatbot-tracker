@@ -113,6 +113,7 @@ function ServerJobBanner() {
   const [stuck, setStuck]     = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const retryCount = React.useRef(0);
+  const hasSeenRunning = React.useRef(false);
   const MAX_RETRIES = 60; // 60 × 5s = 5 min
 
   useEffect(() => {
@@ -120,18 +121,24 @@ function ServerJobBanner() {
     let active = true;
     async function poll() {
       if (retryCount.current >= MAX_RETRIES) {
-        setStuck(true);
+        // Only mark stuck if we actually saw a running job; otherwise just stop
+        if (hasSeenRunning.current) setStuck(true);
         return;
       }
       retryCount.current += 1;
       try {
         const res  = await fetch('/api/settings?key=pregenerate_progress');
         const data = await res.json();
-        if (!data.value || !active) return;
+        if (!active) return;
+        if (!data.value) {
+          // No job data at all — stop polling, nothing to show
+          return;
+        }
         const progress = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
         const age = Date.now() - new Date(progress.started_at).getTime();
 
         if (progress.status === 'running' && age < 360000) {
+          hasSeenRunning.current = true;
           setJob(progress);
           setDone(false);
         } else if (progress.status === 'done' && age < 30000) {
@@ -140,7 +147,12 @@ function ServerJobBanner() {
           setDone(true);
           setTimeout(() => { if (active) setJob(null); }, 8000);
         } else {
-          setJob(null);
+          // Stale data — only show stuck if we previously saw it running
+          if (hasSeenRunning.current && age < 360000) {
+            // Was running recently but now stale — let normal retry logic handle it
+          } else {
+            setJob(null);
+          }
         }
       } catch {}
     }

@@ -329,16 +329,16 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [contestResult, setContestResult] = useState(null); // result from verify-pick API
   const [verifying,   setVerifying]   = useState(false);
 
-  // Custom bet section
-  const [showCustom,  setShowCustom]  = useState(false);
-  const [customBetType, setCustomBetType] = useState('Moneyline');
+  // Custom bet section — initialize directly from propPrefill to avoid conflicting effects
+  const [showCustom,  setShowCustom]  = useState(!!propPrefill);
+  const [customBetType, setCustomBetType] = useState(propPrefill ? 'Prop' : 'Moneyline');
   const [customTeam,  setCustomTeam]  = useState('');
-  const [customOdds,  setCustomOdds]  = useState('');
+  const [customOdds,  setCustomOdds]  = useState(propPrefill?.odds || '');
   // Player prop fields — shown when customBetType === 'Prop'
-  const [propPlayer,    setPropPlayer]    = useState('');
-  const [propStat,      setPropStat]      = useState('');
-  const [propLine,      setPropLine]      = useState('');
-  const [propDirection, setPropDirection] = useState('over');
+  const [propPlayer,    setPropPlayer]    = useState(propPrefill?.player || '');
+  const [propStat,      setPropStat]      = useState(propPrefill?.stat || '');
+  const [propLine,      setPropLine]      = useState(propPrefill?.line || '');
+  const [propDirection, setPropDirection] = useState(propPrefill?.direction || 'over');
 
   const [voiceState,  setVoiceState]  = useState('idle');
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -364,18 +364,10 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   }, []);
 
   // Pre-fill prop fields when opened from Prop Builder
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // State is initialized directly from propPrefill above (avoids conflicting effects)
   useEffect(() => {
-    if (!propPrefill) return;
-    setShowCustom(true);
-    setSelectedId(null);
-    setCustomBetType('Prop');
-    setPropPlayer(propPrefill.player || '');
-    setPropStat(propPrefill.stat || '');
-    setPropLine(propPrefill.line || '');
-    setPropDirection(propPrefill.direction || 'over');
-    setCustomOdds(propPrefill.odds || '');
-  }, []); // run once on mount
+    if (propPrefill) setSelectedId(null);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-compose customTeam from prop fields when bet type is Prop
   useEffect(() => {
@@ -737,7 +729,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
         </div>
 
         {/* ── Quick-Select Grid ───────────────────────────────────────────── */}
-        <div style={{ padding: '0.85rem 1.1rem 0' }}>
+        {!propPrefill && <div style={{ padding: '0.85rem 1.1rem 0' }}>
           <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
             Select your bet
           </div>
@@ -768,7 +760,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               No lines available — use Custom Bet below
             </div>
           )}
-        </div>
+        </div>}
 
         {/* ── Inline Details Panel (shown when a quick bet is selected) ───── */}
         {selectedBet && (
