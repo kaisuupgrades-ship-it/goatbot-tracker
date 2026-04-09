@@ -2381,12 +2381,20 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
       const sportKey2 = SPORT_KEY_MAP[sport] || realGame.sport_key || '';
 
       // h2h: prefer a book with BOTH sides and valid prices
+      // Use fuzzy last-word match as fallback — handles "Columbus Blue Jackets" vs "Blue Jackets" etc.
+      function findOutcome(outcomes, teamName) {
+        if (!teamName || !outcomes) return null;
+        const exact = outcomes.find(o => o.name === teamName);
+        if (exact) return exact;
+        const lastWord = teamName.split(' ').pop().toLowerCase();
+        return outcomes.find(o => o.name?.split(' ').pop().toLowerCase() === lastWord) || null;
+      }
       let h2h = null, homeH2h = null, awayH2h = null, h2hBook = null;
       for (const bk of books) {
         const mkt = bk.markets?.find(m => m.key === 'h2h');
         if (!mkt) continue;
-        const ho = mkt.outcomes?.find(o => o.name === realGame.home_team);
-        const ao = mkt.outcomes?.find(o => o.name === realGame.away_team);
+        const ho = findOutcome(mkt.outcomes, realGame.home_team);
+        const ao = findOutcome(mkt.outcomes, realGame.away_team);
         // Require valid prices — reject any book with crazy ML like +2500
         const hoOk = ho && validML(ho.price);
         const aoOk = ao && validML(ao.price);

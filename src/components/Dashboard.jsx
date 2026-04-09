@@ -107,12 +107,16 @@ function AnnouncementBanner() {
 // tab switches, page refreshes, etc. The server writes progress as it goes.
 const BANNER_MAX_RETRIES = 60; // 60 × 5s = 5 min max polling window
 
+const STUCK_DISMISS_KEY = 'betos_pregenerate_stuck_dismissed';
+
 function ServerJobBanner() {
   const [job, setJob]         = useState(null);
   const [done, setDone]       = useState(false);
   const [stuck, setStuck]     = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  const retryCount = React.useRef(0);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return !!sessionStorage.getItem(STUCK_DISMISS_KEY); } catch { return false; }
+  });
+  const retryCount     = React.useRef(0);
   const hasSeenRunning = React.useRef(false);
   const MAX_RETRIES = 60; // 60 × 5s = 5 min
 
@@ -120,6 +124,7 @@ function ServerJobBanner() {
     if (dismissed) return;
     let active = true;
     async function poll() {
+      // Only declare stuck when we've actually seen a running job that never completed
       if (retryCount.current >= MAX_RETRIES) {
         // Only mark stuck if we actually saw a running job; otherwise just stop
         if (hasSeenRunning.current) setStuck(true);
@@ -141,6 +146,11 @@ function ServerJobBanner() {
           hasSeenRunning.current = true;
           setJob(progress);
           setDone(false);
+        } else if (progress.status === 'running' && age >= 360000) {
+          // Job has been "running" for >6 min — it's stuck; show the warning immediately
+          hasSeenRunning.current = true;
+          setStuck(true);
+          setJob(null);
         } else if (progress.status === 'done' && age < 30000) {
           // Show "done" briefly then fade out
           setJob(progress);
@@ -181,7 +191,7 @@ function ServerJobBanner() {
           Job may be stuck — pre-generation has been running for over 5 min.
         </span>
         <button
-          onClick={() => setDismissed(true)}
+          onClick={() => { try { sessionStorage.setItem(STUCK_DISMISS_KEY, '1'); } catch {} setDismissed(true); }}
           style={{
             background: 'none', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '4px',
             color: 'rgba(251,191,36,0.7)', fontSize: '0.72rem', fontWeight: 600,

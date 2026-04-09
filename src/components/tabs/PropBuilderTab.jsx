@@ -201,11 +201,29 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
     setShownPlayers(prev => ({ ...prev, [key]: Math.min((prev[key] || 5) + 10, total) }));
   }
 
+  // Extract any available odds from the ESPN event so BetSlipModal can show ML buttons
+  const rawOdds = event?.competitions?.[0]?.odds?.[0];
+  let gameOdds = null;
+  if (rawOdds) {
+    let homeOdds = rawOdds.homeTeamOdds?.moneyLine ?? rawOdds.homeTeamOdds?.current?.moneyLine ?? null;
+    let awayOdds = rawOdds.awayTeamOdds?.moneyLine ?? rawOdds.awayTeamOdds?.current?.moneyLine ?? null;
+    if (homeOdds === 0) homeOdds = null;
+    if (awayOdds === 0) awayOdds = null;
+    gameOdds = {
+      homeOdds, awayOdds,
+      spread:          rawOdds.details || null,
+      total:           rawOdds.overUnder ?? null,
+      overOdds:        rawOdds.overOdds  ?? null,
+      underOdds:       rawOdds.underOdds ?? null,
+      homeSpreadOdds:  rawOdds.homeTeamOdds?.spreadLine ?? null,
+      awaySpreadOdds:  rawOdds.awayTeamOdds?.spreadLine ?? null,
+    };
+  }
   // Build minimal game object BetSlipModal expects
   const game = {
     away: { team: { displayName: awayName, name: awayName, abbreviation: awayAbbr, logo: awayLogo } },
     home: { team: { displayName: homeName, name: homeName, abbreviation: homeAbbr, logo: homeLogo } },
-    odds: null,
+    odds: gameOdds,
     date: event.date,
   };
 

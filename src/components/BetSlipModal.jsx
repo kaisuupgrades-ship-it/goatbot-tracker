@@ -329,7 +329,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [contestResult, setContestResult] = useState(null); // result from verify-pick API
   const [verifying,   setVerifying]   = useState(false);
 
-  // Custom bet section — initialize directly from propPrefill to avoid conflicting effects
+  // Custom bet section — open straight to Prop mode when launched from Prop Builder
   const [showCustom,  setShowCustom]  = useState(!!propPrefill);
   const [customBetType, setCustomBetType] = useState(propPrefill ? 'Prop' : 'Moneyline');
   const [customTeam,  setCustomTeam]  = useState('');
