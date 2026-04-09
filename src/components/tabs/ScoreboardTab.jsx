@@ -2151,10 +2151,10 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   }, []);
 
   // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill
-  const loadRealOdds = useCallback(async (s, { live = false } = {}) => {
+  const loadRealOdds = useCallback(async (s) => {
     if (s === 'all' || DEDICATED_VIEW_SPORTS.has(s)) return;
     try {
-      const url = `/api/odds?sport=${s}${live ? '&live=1' : ''}`;
+      const url = `/api/odds?sport=${s}`;
       const res = await fetch(url);
       if (!res.ok) return;
       const d = await res.json();
@@ -2194,10 +2194,8 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
   const liveCount = games.filter(e => getGameState(e).state === 'live').length;
 
   // Adaptive refresh rate: fast when live games are active, normal otherwise
-  const REFRESH_LIVE       = 20_000;       // 20s scores while games are in progress
-  const REFRESH_TODAY      = 45_000;       // 45s on today with no live games
-  const REFRESH_ODDS_LIVE  = 45_000;       // 45s live odds
-  const REFRESH_ODDS_NORMAL = 3 * 60_000;  // 3 min pre-game odds
+  const REFRESH_LIVE  = 20_000;  // 20s scores while games are in progress
+  const REFRESH_TODAY = 45_000;  // 45s on today with no live games
 
   useEffect(() => {
     loadGames(sport, selectedDate);
@@ -2219,21 +2217,20 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     if (isActive && !prevActiveRef.current) {
       // Tab just became visible — refresh scores and odds immediately
       loadGames(sport, selectedDate);
-      loadRealOdds(sport, { live: liveCount > 0 });
+      loadRealOdds(sport);
     }
     prevActiveRef.current = isActive;
   }, [isActive, sport, selectedDate, loadGames, loadRealOdds]);
 
-  // Separate effect: tighten polling to 20s when live games are detected
+  // Separate effect: tighten score polling to 20s when live games are detected
   useEffect(() => {
     if (selectedDate !== todayStr) return;
     if (liveCount === 0) return;
 
-    // Live games detected — poll scores every 20s, odds every 45s with live fast-path
-    const liveInterval  = setInterval(() => loadGames(sport, selectedDate), REFRESH_LIVE);
-    const oddsInterval  = setInterval(() => loadRealOdds(sport, { live: true }), REFRESH_ODDS_LIVE);
-    return () => { clearInterval(liveInterval); clearInterval(oddsInterval); };
-  }, [liveCount, sport, selectedDate, loadGames, loadRealOdds, todayStr]);
+    // Live games detected — poll scores every 20s (odds served from cache, no live bypass)
+    const liveInterval = setInterval(() => loadGames(sport, selectedDate), REFRESH_LIVE);
+    return () => clearInterval(liveInterval);
+  }, [liveCount, sport, selectedDate, loadGames, todayStr]);
 
   // Countdown timer — shows seconds until next refresh
   useEffect(() => {

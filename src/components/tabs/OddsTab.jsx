@@ -603,14 +603,12 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
   const [dateOffset, setDateOffset] = useState(0); // -1=yesterday, 0=today, 1=tomorrow
   const [cachedAt, setCachedAt]     = useState(null); // ISO string when odds came from cache
 
-  const load = useCallback(async (s, dateOff = dateOffset, { live = false } = {}) => {
+  const load = useCallback(async (s, dateOff = dateOffset) => {
     setLoading(true);
     setError('');
     try {
       const dateParam = dateOff !== 0 ? `&date=${getDateStr(dateOff)}` : '';
-      // Pass ?live=1 when in-play games are active — bypasses cache for ~30s fresh odds
-      const liveParam = live ? '&live=1' : '';
-      const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}${liveParam}`);
+      const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}`);
       const data = await res.json();
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.message || (typeof data.error === 'string' ? data.error : 'Odds data temporarily unavailable'));
@@ -637,14 +635,6 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
 
   // Reset filter + reload on sport change
   useEffect(() => { setGameFilter(dateOffset === 0 ? 'upcoming' : 'all'); load(sport, dateOffset); }, [sport, dateOffset, load]);
-
-  // Auto-refresh live odds every 45s when there are in-progress games
-  useEffect(() => {
-    const hasLive = games.some(g => isGameLive(g));
-    if (!hasLive || dateOffset !== 0) return;
-    const interval = setInterval(() => load(sport, dateOffset, { live: true }), 45_000);
-    return () => clearInterval(interval);
-  }, [games, sport, dateOffset, load]);
 
   if (!configured) return <SetupScreen />;
 
