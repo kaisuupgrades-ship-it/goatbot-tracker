@@ -2596,7 +2596,6 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
           {[
             { id: 'all',      label: 'All' },
-            { id: 'live',     label: liveCount > 0 ? `● LIVE (${liveCount})` : 'Live' },
             { id: 'upcoming', label: 'Upcoming' },
             { id: 'final',    label: 'Final' },
             { id: 'starred',  label: `★ Starred${Object.keys(starred).length > 0 ? ` (${Object.keys(starred).length})` : ''}` },

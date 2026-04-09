@@ -537,7 +537,7 @@ export default function PublicProfileModal({ entry = {}, onClose, onOpenInbox, c
                           border: '1px solid rgba(96,165,250,0.3)',
                           minWidth: '28px', textAlign: 'center',
                         }}>
-                          LIVE
+                          PENDING
                         </span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>

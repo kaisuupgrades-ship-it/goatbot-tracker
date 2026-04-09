@@ -659,7 +659,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                 BetOS PICK REPORT
               </div>
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.62rem', marginTop: '1px', letterSpacing: '0.04em' }}>
-                Live Intel · {ts}{runTime ? ` · ${runTime}s runtime` : ''}
+                BetOS Intel · {ts}{runTime ? ` · ${runTime}s runtime` : ''}
                 {sport && <span style={{ marginLeft: '6px', color: 'rgba(255,184,0,0.5)', fontWeight: 700 }}>· {sport}</span>}
               </div>
             </div>
@@ -758,7 +758,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
               {pick}
             </div>
             {odds && (
-              <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Line</span>
                 <span style={{
                   fontFamily: 'IBM Plex Mono', fontSize: '0.88rem', fontWeight: 800,
@@ -766,6 +766,11 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                   background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '6px', padding: '2px 10px',
                 }}>{/^[+-]/.test(odds) ? odds : (parseInt(odds) > 0 ? `+${odds}` : odds)}</span>
+                {sport && !['MLB','NBA','NFL','NHL','NCAAF','NCAAB','MLS','WNBA'].includes(sport.toUpperCase()) && (
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', opacity: 0.85 }}>
+                    ⚠️ Odds sourced from web — verify before betting
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -976,7 +981,7 @@ function GoatPickCard({ result, model, prompt, runTime, user, isDemo }) {
                     borderRadius: '4px', padding: '1px 6px', color: '#4ade80',
                     fontWeight: 800, fontSize: '0.6rem', letterSpacing: '0.05em',
                   }}>Verified API Odds</span>
-                  <span style={{ color: 'rgba(74,222,128,0.7)' }}>Lines sourced from The Odds API (live verified feed). BetOS analysis is for informational purposes only.</span>
+                  <span style={{ color: 'rgba(74,222,128,0.7)' }}>Lines sourced from The Odds API (verified feed). BetOS analysis is for informational purposes only.</span>
                 </span>
               </>
             ) : (
@@ -1154,7 +1159,7 @@ function getReports() {
 }
 
 const LOAD_STEPS = [
-  'Connecting to live data feeds...',
+  'Connecting to data feeds...',
   'Scanning sportsbooks for line movement...',
   'Identifying sharp money signals...',
   'Running edge model vs closing line...',
@@ -1883,9 +1888,9 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '1rem' }}>📡</span>
             <div>
-              <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.85rem' }}>Live Sports Intel</div>
+              <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.85rem' }}>Sports Intel</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginTop: '1px' }}>
-                Fresh news, injuries, line movement via live search
+                Fresh news, injuries, line movement via web search
               </div>
             </div>
           </div>
@@ -2568,7 +2573,7 @@ function BettingInsights({ picks }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: 'betos',   label: '🎯 BetOS Live',        desc: 'Real-time AI pick analysis + live web search' },
+  { id: 'betos',   label: '🎯 BetOS',              desc: 'AI pick analysis + web search' },
   { id: 'filter',    label: '📊 Filter Analysis',        desc: 'ROI breakdown by sport, odds range, bet type' },
   { id: 'insights',  label: '🧠 AI Insights',           desc: 'Personalized coaching — leaks, edges, and habits from your pick history' },
 ];

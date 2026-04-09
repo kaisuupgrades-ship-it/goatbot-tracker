@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { addPick, updatePick, deletePick, fetchParlayLegs, submitParlay } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
@@ -1252,9 +1252,12 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
 
   // ── Filtering & Sorting ──────────────────────────────────────────────────
 
-  const sports = ['ALL', ...Array.from(new Set(picks.map(p => (p.sport || 'Other').toUpperCase()))).filter(Boolean)];
+  const sports = useMemo(
+    () => ['ALL', ...Array.from(new Set(picks.map(p => (p.sport || 'Other').toUpperCase()))).filter(Boolean)],
+    [picks]
+  );
 
-  const filtered = picks
+  const filtered = useMemo(() => picks
     .filter(p => filterResult === 'ALL' || p.result === filterResult)
     .filter(p => filterSport === 'ALL' || (p.sport || 'Other').toUpperCase() === filterSport)
     .filter(p => !filterContest || p.contest_entry)
@@ -1265,7 +1268,9 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
       if (av < bv) return sortDir === 'asc' ? -1 : 1;
       if (av > bv) return sortDir === 'asc' ? 1 : -1;
       return 0;
-    });
+    }),
+    [picks, filterResult, filterSport, filterContest, sortField, sortDir]
+  );
 
   function toggleSort(field) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');

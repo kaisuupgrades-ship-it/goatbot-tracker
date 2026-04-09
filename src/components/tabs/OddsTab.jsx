@@ -560,7 +560,7 @@ function SetupScreen() {
       <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📈</div>
       <h2 style={{ fontWeight: 800, color: '#f0f0f0', marginBottom: '0.5rem' }}>Odds Board</h2>
       <p style={{ color: '#666', marginBottom: '1.5rem', lineHeight: 1.7, fontSize: '0.9rem' }}>
-        Pull live lines from FanDuel, DraftKings, and more — all in one place, updated every 3 minutes.
+        Pull lines from FanDuel, DraftKings, and more — all in one place, updated every 3 minutes.
       </p>
       <div className="card" style={{ padding: '1.5rem', textAlign: 'left', marginBottom: '1rem' }}>
         <p style={{ color: '#FFB800', fontWeight: 700, marginBottom: '0.8rem', fontSize: '0.85rem' }}>⚡ Quick Setup (2 min)</p>
@@ -622,9 +622,7 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
 
       setGameFilter(prev => {
         const hasUpcoming = games.some(g => !isGameLive(g));
-        const hasLive     = games.some(g => isGameLive(g));
-        if (prev === 'upcoming' && !hasUpcoming && hasLive) return 'live';
-        if (prev === 'live' && hasUpcoming) return 'upcoming';
+        if (prev === 'upcoming' && !hasUpcoming) return 'all';
         return prev;
       });
     } catch (e) {
@@ -653,7 +651,6 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
     .sort((a, b) => new Date(a.commence_time) - new Date(b.commence_time));
 
   const filtered = gameFilter === 'upcoming' ? upcomingGames
-                 : gameFilter === 'live'     ? liveGames
                  : [...liveGames, ...upcomingGames];
 
   return (
@@ -710,27 +707,17 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
         <div style={{ display: 'flex', gap: '3px' }}>
           {[
             { key: 'upcoming', label: `Pre-game${upcomingGames.length ? ` (${upcomingGames.length})` : ''}` },
-            { key: 'live',     label: `Live${liveGames.length ? ` (${liveGames.length})` : ''}` },
             { key: 'all',      label: 'All' },
           ].map(f => (
             <button key={f.key} onClick={() => setGameFilter(f.key)}
               style={{
                 padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit',
                 fontSize: '0.74rem', fontWeight: gameFilter === f.key ? 700 : 400,
-                border: `1px solid ${gameFilter === f.key
-                  ? f.key === 'live' ? 'rgba(255,69,96,0.45)' : 'rgba(255,184,0,0.45)'
-                  : '#1e1e1e'}`,
-                background: gameFilter === f.key
-                  ? f.key === 'live' ? 'rgba(255,69,96,0.08)' : 'rgba(255,184,0,0.06)'
-                  : 'transparent',
-                color: gameFilter === f.key
-                  ? f.key === 'live' ? '#FF4560' : '#FFB800'
-                  : '#555',
+                border: `1px solid ${gameFilter === f.key ? 'rgba(255,184,0,0.45)' : '#1e1e1e'}`,
+                background: gameFilter === f.key ? 'rgba(255,184,0,0.06)' : 'transparent',
+                color: gameFilter === f.key ? '#FFB800' : '#555',
                 transition: 'all 0.1s',
               }}>
-              {f.key === 'live' && gameFilter === f.key && (
-                <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#FF4560', marginRight: '5px', verticalAlign: 'middle' }} />
-              )}
               {f.label}
             </button>
           ))}

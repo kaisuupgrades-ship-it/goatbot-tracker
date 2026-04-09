@@ -643,7 +643,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '3px 0 0' }}>
             {starredList.length > 0
-              ? `${starredList.length} starred game${starredList.length !== 1 ? 's' : ''} · live scores + bet tracking`
+              ? `${starredList.length} starred game${starredList.length !== 1 ? 's' : ''} · scores + bet tracking`
               : 'Star games from the Scoreboard to track them here'}
           </p>
         </div>
@@ -859,7 +859,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
         }}>
           <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>📅</div>
           <div style={{ color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px' }}>
-            No live data for your starred games today
+            No data for your starred games today
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.6 }}>
             Your {starredList.length} starred game{starredList.length !== 1 ? 's' : ''} may not be scheduled today, or ESPN hasn't posted lines yet.

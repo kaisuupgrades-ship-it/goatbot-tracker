@@ -214,10 +214,10 @@ function ServerJobBanner() {
 
 const TAB_META = {
   tracker:    { label: 'My Picks',     sub: 'Track your picks and ROI' },
-  scoreboard: { label: 'Scoreboard',   sub: 'Live scores across all sports' },
-  odds:       { label: 'Odds Board',   sub: 'Compare lines across books in real time' },
+  scoreboard: { label: 'Scoreboard',   sub: 'Scores across all sports' },
+  odds:       { label: 'Odds Board',   sub: 'Compare lines across books' },
   history:    { label: 'Pick History', sub: 'Log, edit, and analyze every bet' },
-  analyzer:    { label: 'Analyzer',     sub: 'BetOS live analysis + sharp tools' },
+  analyzer:    { label: 'Analyzer',     sub: 'BetOS analysis + sharp tools' },
   leaderboard: { label: 'Contest',      sub: 'Monthly contest standings & verified picks' },
   sharpboard:  { label: 'Sharp Board',  sub: 'All-time public handicapper rankings' },
   usersearch:  { label: 'User Search',  sub: 'Find and follow the sharpest bettors in the community' },
