@@ -82,6 +82,7 @@ async function getOddsCacheTable(sport) {
       home_team:     row.home_team,
       away_team:     row.away_team,
       commence_time: row.commence_time,
+      sport_key:     SPORT_KEYS[sport] || sport,  // needed by ScoreboardTab validTotal()
       sport_title:   row.odds_data?.sport_title  || '',
       bookmakers:    row.odds_data?.bookmakers    || [],
       pinnacle:      row.odds_data?.pinnacle      || null,

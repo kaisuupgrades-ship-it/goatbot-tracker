@@ -186,12 +186,20 @@ function getOdds(event) {
   if (!odds) return null;
 
   // ── Moneyline ─────────────────────────────────────────────────────────────
-  let homeOdds = odds.homeTeamOdds?.moneyLine
-    || odds.homeTeamOdds?.current?.moneyLine
-    || null;
-  let awayOdds = odds.awayTeamOdds?.moneyLine
-    || odds.awayTeamOdds?.current?.moneyLine
-    || null;
+  // Prefer enriched _homeML/_awayML fields (from The Odds API enrichment).
+  // Fall back to ESPN's homeTeamOdds.moneyLine (works for MLB/NHL; NBA/NFL rarely populated).
+  // Use ?? not || so a legitimate value of 0 isn't silently treated as missing.
+  let homeOdds = odds._homeML
+    ?? odds.homeTeamOdds?.moneyLine
+    ?? odds.homeTeamOdds?.current?.moneyLine
+    ?? null;
+  let awayOdds = odds._awayML
+    ?? odds.awayTeamOdds?.moneyLine
+    ?? odds.awayTeamOdds?.current?.moneyLine
+    ?? null;
+  // Convert 0 (ESPN's "no odds" sentinel) to null so downstream null-checks work correctly
+  if (homeOdds === 0) homeOdds = null;
+  if (awayOdds === 0) awayOdds = null;
 
   // Fallback: ESPN details = "LAD -314" for MLB/NHL where -NNN IS the ML price
   if ((!homeOdds || !awayOdds) && odds.details) {
@@ -2418,6 +2426,10 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         details: sHome?.point != null
           ? `${(realGame.home_team || '').split(' ').pop()} ${sHome.point >= 0 ? '+' : ''}${sHome.point}`
           : existingOdds.details ?? null,
+        // Enriched ML prices — stored as dedicated fields so they are never confused
+        // with ESPN's homeTeamOdds.moneyLine (which is absent for NBA/NFL and sometimes 0).
+        _homeML: homeH2h?.price ?? null,
+        _awayML: awayH2h?.price ?? null,
         // Enriched over/under prices (ESPN doesn't expose these in a standard field)
         _overOdds:       tOver?.price  ?? null,
         _underOdds:      tUnder?.price ?? null,
