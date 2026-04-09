@@ -14,7 +14,7 @@
  *  - TODO: revert to 3 markets (add totals back) after migrating to OddsPapi (unlimited)
  *
  * Smart refresh schedule (per sport):
- *  - Pre-match only:           commenceTimeFrom = now - 5min (live odds not supported)
+ *  - Pre-match only:           commenceTimeFrom = now - 5min (live in-play odds not supported)
  *  - Off-peak (0–8am ET):      skip entirely (return early)
  *  - Shoulder (8–11am,         proximity TTLs ×1.8
  *    10pm–midnight ET):
@@ -52,7 +52,7 @@ const SPORT_KEYS = {
   mls: 'soccer_usa_mls',
 };
 
-// Live odds not supported — pre-match only
+// Live odds not supported — pre-match only.
 
 // Proximity-based TTL for pre-match games — lines barely move far out, sharps
 // bet heavily in the final hour. Tighter TTL only when it actually matters.
@@ -326,8 +326,8 @@ async function fetchSportOdds(sport) {
   // TODO: add totals back (3rd market) after migrating to OddsPapi (unlimited credits)
   url.searchParams.set('markets', 'h2h,spreads');
   url.searchParams.set('oddsFormat', 'american');
-  // Pre-match only. A 5-min lookback buffer catches games whose commence_time just ticked
-  // past now without missing their final pre-match line.
+  // Pre-match only — live in-play odds are not supported. A 5-min lookback buffer
+  // catches games whose commence_time just ticked past now without missing their final pre-match line.
   const from = new Date(Date.now() -  5 *   60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   const to   = new Date(Date.now() + 48 * 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z'); // 48h — no value in caching lines further out
   url.searchParams.set('commenceTimeFrom', from);
@@ -349,11 +349,10 @@ async function fetchSportOdds(sport) {
   return events;
 }
 
-// Derive game status from commence_time.
-// Live odds not supported — games are either upcoming (pre) or finished (post).
+// Derive game status from commence_time. Pre-match only — no live state.
 function deriveStatus(commenceTime) {
   const start = new Date(commenceTime).getTime();
-  return start > Date.now() + 2 * 60_000 ? 'pre' : 'post';
+  return start > Date.now() ? 'pre' : 'post';
 }
 
 // ── Smart scheduling ──────────────────────────────────────────────────────────
@@ -440,7 +439,6 @@ export async function GET(req) {
 
   // ── Time-of-day throttle (US Eastern) ────────────────────────────────────────
   // Vercel Intl is fully timezone-aware; this handles EDT/EST transitions automatically.
-  // TODO: revisit thresholds when live odds are re-enabled and/or API plan upgraded to $119/mo tier.
   const etHour = parseInt(
     new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false })
   );

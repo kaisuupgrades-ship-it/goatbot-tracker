@@ -426,9 +426,10 @@ async function fetchFromTheOddsAPI(sportKey) {
   const url = new URL(`${THE_ODDS_BASE}/sports/${theOddsSportKey}/odds/`);
   url.searchParams.set('apiKey', THE_ODDS_KEY);
   url.searchParams.set('regions', 'us');
-  url.searchParams.set('markets', 'h2h,spreads,totals');
+  // TODO: add totals back after migrating to OddsPapi (unlimited credits)
+  url.searchParams.set('markets', 'h2h,spreads');
   url.searchParams.set('oddsFormat', 'american');
-  // Pre-match only — commenceTimeFrom = 5 min ago (small buffer), 48 h window ahead
+  // Pre-match only — live in-play odds not supported.
   const from = new Date(Date.now() -  5 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   const to   = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   url.searchParams.set('commenceTimeFrom', from);
@@ -560,6 +561,9 @@ export async function GET(req) {
     }, { status: 200 });
   }
 
+  const cacheKey = sportKey;
+
+
   // L1 memory cache check
   const memHit = getMemCache(sportKey);
   if (memHit) {
@@ -569,14 +573,14 @@ export async function GET(req) {
   // L2: odds_cache table — populated by /api/cron/refresh-odds (primary shared cache)
   const tableHit = await getOddsCacheTable(sportKey);
   if (tableHit) {
-    setMemCache(sportKey, tableHit);
+    setMemCache(cacheKey, tableHit);
     return NextResponse.json({ ...tableHit, cached: true });
   }
 
   // L3: settings table — legacy Supabase cache
   const sbHit = await getSupabaseCache(sportKey);
   if (sbHit) {
-    setMemCache(sportKey, sbHit); // warm L1 for this instance
+    setMemCache(cacheKey, sbHit); // warm L1 for this instance
     return NextResponse.json({ ...sbHit, cached: true });
   }
 
@@ -602,7 +606,7 @@ export async function GET(req) {
       oddsResult.pinnacleUnavailable = pinnacleUnavailable;
       // Only cache if we got actual data back (0 games is valid off-season, errors are not)
       if (oddsResult?.data?.length >= 0) {
-        setMemCache(sportKey, oddsResult);
+        setMemCache(cacheKey, oddsResult);
         await setSupabaseCache(sportKey, oddsResult);
       }
       return NextResponse.json({ ...oddsResult, cached: false });
