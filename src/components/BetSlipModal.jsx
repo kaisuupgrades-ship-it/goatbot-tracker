@@ -323,9 +323,8 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [units,       setUnits]       = useState('1');
   const [book,        setBook]        = useState('DraftKings');
   const [notes,       setNotes]       = useState('');
-  // 3-tier pick type: 'personal' | 'verified' | 'contest'
-  const [pickType,    setPickType]    = useState('personal');
-  const isContest = pickType === 'contest';
+  // Contest entry toggle (checkbox replaces old 3-tier Personal/Verified/Contest selector)
+  const [isContest,   setIsContest]   = useState(false);
   const [contestResult, setContestResult] = useState(null); // result from verify-pick API
   const [verifying,   setVerifying]   = useState(false);
 
@@ -362,6 +361,12 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
   // Mount flag for portal rendering (avoids SSR mismatch)
   useEffect(() => { setMounted(true); }, []);
+
+  // Lock body scroll while modal is open (prevents page scrolling behind modal)
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
 
   // Auto-compose customTeam from prop fields when bet type is Prop
   useEffect(() => {
@@ -401,11 +406,11 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     setSaveError('');
   }
 
-  // ── When pick type changes → run eligibility check for contest/verified ─────
-  async function handlePickTypeChange(newType) {
-    setPickType(newType);
+  // ── When contest checkbox changes → run eligibility check ───────────────────
+  async function handleContestToggle(checked) {
+    setIsContest(checked);
     setContestResult(null);
-    if (newType === 'personal') return;
+    if (!checked) return;
 
     const teamValue = selectedBet ? selectedBet.team : customTeam.trim();
     const betTypeValue = selectedBet ? selectedBet.bet_type : customBetType;
@@ -420,8 +425,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
         body: JSON.stringify({
           pick: { team: teamValue, bet_type: betTypeValue, odds: oddsValue, units: parseFloat(units) || 1, date: gameDate },
           userId: user?.id,
-          contestEntry: newType === 'contest',
-          pickType: newType,
+          contestEntry: true,
         }),
       });
       const data = await res.json();
@@ -645,7 +649,6 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       book:          book,
       matchup:       `${awayAbbr} @ ${homeAbbr}`,
       contest_entry: finalContestEntry,
-      pick_type:     finalContestEntry ? 'contest' : pickType,
     };
 
     try {
@@ -871,36 +874,19 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               />
             </div>
 
-            {/* ── 3-Tier Pick Type Selector ── */}
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {[
-                { key: 'personal', emoji: '📝', label: 'Personal', desc: 'Dashboard only — no restrictions', color: 'var(--text-muted)', bg: 'var(--bg-elevated)', border: 'var(--border)' },
-                { key: 'verified', emoji: '✅', label: 'Verified', desc: 'Sharp Board — must be pre-game', color: '#4ade80', bg: 'rgba(74,222,128,0.06)', border: 'rgba(74,222,128,0.25)' },
-                { key: 'contest', emoji: '🏆', label: 'Contest', desc: '1u scored — locked & audited', color: 'var(--gold)', bg: 'rgba(255,184,0,0.08)', border: 'rgba(255,184,0,0.3)' },
-              ].map(tier => {
-                const active = pickType === tier.key;
-                return (
-                  <button
-                    key={tier.key}
-                    onClick={() => handlePickTypeChange(tier.key)}
-                    style={{
-                      flex: 1, padding: '0.6rem 0.5rem', borderRadius: '8px', cursor: 'pointer',
-                      background: active ? tier.bg : 'var(--bg-elevated)',
-                      border: `1.5px solid ${active ? tier.border : 'var(--border)'}`,
-                      transition: 'all 0.15s', textAlign: 'center', fontFamily: 'inherit',
-                      boxShadow: active ? `0 0 10px ${tier.border}` : 'none',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.1rem', marginBottom: '3px' }}>{tier.emoji}</div>
-                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: active ? tier.color : 'var(--text-secondary)' }}>
-                      {tier.label}
-                    </div>
-                    <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
-                      {tier.desc}
-                    </div>
-                  </button>
-                );
-              })}
+            {/* ── Contest checkbox ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={isContest}
+                  onChange={e => handleContestToggle(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--gold)' }}
+                />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>
+                  🏆 Submit to contest?
+                </span>
+              </label>
               {verifying && <PulsingDots />}
             </div>
 
@@ -1293,36 +1279,19 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
               />
             </div>
 
-            {/* ── 3-Tier Pick Type Selector (custom section) ── */}
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {[
-                { key: 'personal', emoji: '📝', label: 'Personal', desc: 'Dashboard only — no restrictions', color: 'var(--text-muted)', bg: 'var(--bg-elevated)', border: 'var(--border)' },
-                { key: 'verified', emoji: '✅', label: 'Verified', desc: 'Sharp Board — must be pre-game', color: '#4ade80', bg: 'rgba(74,222,128,0.06)', border: 'rgba(74,222,128,0.25)' },
-                { key: 'contest', emoji: '🏆', label: 'Contest', desc: '1u scored — locked & audited', color: 'var(--gold)', bg: 'rgba(255,184,0,0.08)', border: 'rgba(255,184,0,0.3)' },
-              ].map(tier => {
-                const active = pickType === tier.key;
-                return (
-                  <button
-                    key={tier.key}
-                    onClick={() => handlePickTypeChange(tier.key)}
-                    style={{
-                      flex: 1, padding: '0.6rem 0.5rem', borderRadius: '8px', cursor: 'pointer',
-                      background: active ? tier.bg : 'var(--bg-elevated)',
-                      border: `1.5px solid ${active ? tier.border : 'var(--border)'}`,
-                      transition: 'all 0.15s', textAlign: 'center', fontFamily: 'inherit',
-                      boxShadow: active ? `0 0 10px ${tier.border}` : 'none',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.1rem', marginBottom: '3px' }}>{tier.emoji}</div>
-                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: active ? tier.color : 'var(--text-secondary)' }}>
-                      {tier.label}
-                    </div>
-                    <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
-                      {tier.desc}
-                    </div>
-                  </button>
-                );
-              })}
+            {/* ── Contest checkbox (custom section) ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={isContest}
+                  onChange={e => handleContestToggle(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--gold)' }}
+                />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: isContest ? 'var(--gold)' : 'var(--text-secondary)' }}>
+                  🏆 Submit to contest?
+                </span>
+              </label>
               {verifying && <PulsingDots />}
             </div>
 
@@ -1458,13 +1427,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                   opacity: !hasSelection || showConfirm ? 0.5 : 1,
                 }}
               >
-                {saving || aiChecking
-                  ? '⟳ Saving…'
-                  : isContest && contestResult?.eligible
-                    ? '🏆 Save Contest Pick'
-                    : pickType === 'verified'
-                      ? '✅ Save Verified Pick'
-                      : '💾 Save Bet'}
+                {saving || aiChecking ? '⟳ Saving…' : '💾 Save Pick'}
               </button>
             )}
           </div>

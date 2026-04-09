@@ -712,7 +712,6 @@ async function handleParlayPost(req, user, pick, legs) {
     notes:                 pick?.notes ?? legs.map(l => `${l.team} ${l.bet_type}`).join(' / '),
     result:                'PENDING',
     contest_entry:         false,          // parlays are never contest picks
-    pick_type:             'personal',
     is_parlay:             true,
     parlay_leg_count:      legCount,
     parlay_combined_odds:  combinedOdds,

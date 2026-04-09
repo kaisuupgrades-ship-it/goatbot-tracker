@@ -44,3 +44,8 @@ EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE picks ADD COLUMN graded_away_score integer;
 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Drop old pick_type check constraint (was limited to 'personal'/'verified'/'contest').
+-- pick_type now stores the bet category ('moneyline'/'spread'/'total'/'prop') assigned
+-- server-side in /api/picks/route.js. Drop is idempotent if constraint doesn't exist.
+ALTER TABLE picks DROP CONSTRAINT IF EXISTS picks_pick_type_check;
