@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GameCard, sortAllSportsEvents, useStarredGames } from './ScoreboardTab';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -591,13 +591,23 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   }, [fetchAll, interval]);
 
   // ── My Golfers: read starred golfers from localStorage ───────────────────
-  const [starredGolfers, setStarredGolfers] = useState({});
+  // Lazy initialization reads localStorage on the first render so My Golfers
+  // appears immediately on mount — no flash of empty state while waiting for
+  // the useEffect to fire.
+  const [starredGolfers, setStarredGolfers] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}');
+    } catch { return {}; }
+  });
   useEffect(() => {
     // Track last raw string so we only call setStarredGolfers when the data
     // actually changed. Without this, JSON.parse always produces a new object
     // reference → React always sees a state change → unnecessary re-render every
     // time ANY storage event fires (including GolfLeaderboard's 3-min stat sync).
-    let lastRaw = '{}';
+    // Seed lastRaw from localStorage so the guard is in sync with the lazy
+    // initial state — prevents a spurious setStarredGolfers call on mount when
+    // the data hasn't changed since the lazy initializer read it.
+    let lastRaw = (() => { try { return localStorage.getItem('betos_starred_golfers') || '{}'; } catch { return '{}'; } })();
     function syncGolfers() {
       try {
         const raw = localStorage.getItem('betos_starred_golfers') || '{}';
@@ -607,21 +617,27 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
         }
       } catch {}
     }
-    syncGolfers();
+    // Register the listener — don't call syncGolfers() here because the lazy
+    // initializer already loaded the data; the listener handles future changes.
     window.addEventListener('storage', syncGolfers);
     return () => window.removeEventListener('storage', syncGolfers);
   }, []);
 
   // ── Build sorted featured event list ─────────────────────────────────────
-  const starredIds = new Set(starredList.map(g => g.id));
-
-  const featuredEvents = sortAllSportsEvents(
-    Object.entries(liveData).flatMap(([sport, events]) =>
-      events
-        .filter(e => starredIds.has(e.id))
-        .map(e => ({ ...e, _sport: sport }))
-    )
-  );
+  // Memoized so the 1-second countdown timer (setCountdown) doesn't produce
+  // new event object references on every tick, which would force ScoreBug and
+  // GameCard to re-render even when game data hasn't changed.
+  const starredIdStr = starredList.map(g => g.id).sort().join(',');
+  const featuredEvents = useMemo(() => {
+    const starredIds = new Set(starredList.map(g => g.id));
+    return sortAllSportsEvents(
+      Object.entries(liveData).flatMap(([sport, events]) =>
+        events
+          .filter(e => starredIds.has(e.id))
+          .map(e => ({ ...e, _sport: sport }))
+      )
+    );
+  }, [liveData, starredIdStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Expand state for live ScoreBug cards ─────────────────────────────────
   const [expandedIds, setExpandedIds] = useState(new Set());

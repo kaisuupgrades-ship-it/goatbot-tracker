@@ -40,14 +40,30 @@ function syncStarredGolferStats(players, tournamentName) {
     const id = p.id || p.athlete?.id;
     if (!id || !starred[id]) continue;
     const stats = p.statistics || [];
+    const newPosition = p.status?.position?.displayName || '—';
+    const newToPar    = stats[0]?.displayValue ?? p.score?.displayValue ?? '—';
+    const newThru     = String(p.status?.thru ?? stats[1]?.displayValue ?? '—');
+    const newToday    = stats[2]?.displayValue ?? '—';
+    const newTournament = tournamentName || starred[id].tournament;
+
+    // Only write if something actually changed — avoids spurious storage events that
+    // cause FeaturedGamesTab to re-render even when no data changed.
+    const cur = starred[id];
+    if (
+      cur.position === newPosition &&
+      cur.toPar === newToPar &&
+      cur.thru === newThru &&
+      cur.today === newToday &&
+      cur.tournament === newTournament
+    ) continue;
+
     starred[id] = {
-      ...starred[id],
-      tournament: tournamentName || starred[id].tournament,
-      position:  p.status?.position?.displayName || '—',
-      toPar:     stats[0]?.displayValue ?? p.score?.displayValue ?? '—',
-      thru:      p.status?.thru ?? stats[1]?.displayValue ?? '—',
-      today:     stats[2]?.displayValue ?? '—',
-      updatedAt: new Date().toISOString(),
+      ...cur,
+      tournament: newTournament,
+      position:   newPosition,
+      toPar:      newToPar,
+      thru:       newThru,
+      today:      newToday,
     };
     changed = true;
   }
@@ -828,9 +844,14 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
   // This must be in a useEffect — NOT inline in JSX — to avoid a render-time side effect
   // that dispatches a storage event, which would re-trigger ScoreboardTab's useStarredGames
   // listener and cause an infinite re-render loop crashing the browser tab.
+  //
+  // We deliberately serialize rawPlayers to a JSON string as the dep key. The rawPlayers
+  // array is a new reference on every render (inline || chain), so using it directly would
+  // run the effect on every render. The JSON string only changes when player data changes.
+  const rawPlayersKey = JSON.stringify(rawPlayers);
   useEffect(() => {
     syncStarredGolferStats(rawPlayers, name);
-  }, [rawPlayers, name]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rawPlayersKey, name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sort by numeric position (handles ties like "T2" → 2, "CUT" → 999)
   function parsePos(pos) {
