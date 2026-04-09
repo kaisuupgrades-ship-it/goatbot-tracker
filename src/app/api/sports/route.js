@@ -94,8 +94,8 @@ function teamNamesMatch(a, b) {
   if (na === nb) return true;
   const wordsA = na.split(' '), wordsB = nb.split(' ');
   const lastA = wordsA[wordsA.length - 1], lastB = wordsB[wordsB.length - 1];
-  if (lastA && lastA === lastB && lastA.length > 3) return true;
-  return (na.includes(lastB) && lastB.length > 4) || (nb.includes(lastA) && lastA.length > 4);
+  if (lastA && lastA === lastB && lastA.length >= 3) return true;
+  return (na.includes(lastB) && lastB.length >= 3) || (nb.includes(lastA) && lastA.length >= 3);
 }
 
 // Enrich ESPN events with The Odds API event_id + live scores

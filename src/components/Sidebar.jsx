@@ -212,8 +212,7 @@ function StarredCount() {
     }
     load();
     window.addEventListener('storage', load);
-    const t = setInterval(load, 500);
-    return () => { window.removeEventListener('storage', load); clearInterval(t); };
+    return () => { window.removeEventListener('storage', load); };
   }, []);
   if (!count) return null;
   return (

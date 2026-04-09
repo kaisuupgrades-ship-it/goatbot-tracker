@@ -513,7 +513,11 @@ export async function POST(req) {
         });
         const oddsRows = await oddsRes.json().catch(() => []);
         if (oddsRows?.[0]?.value) {
-          const cached = typeof oddsRows[0].value === 'string' ? JSON.parse(oddsRows[0].value) : oddsRows[0].value;
+          let cached;
+          try {
+            cached = typeof oddsRows[0].value === 'string' ? JSON.parse(oddsRows[0].value) : oddsRows[0].value;
+          } catch { cached = null; }
+          if (!cached) { cached = null; }
           const events = cached?.data || [];
           // Find the matching game
           const cleanTeam = (safePayload.team || '').replace(/\s*[+-]\d+(?:\.\d+)?\s*$/, '').toLowerCase();
@@ -688,9 +692,12 @@ async function handleParlayPost(req, user, pick, legs) {
     if (!leg.team?.trim())    return NextResponse.json({ error: `Leg ${i + 1}: team is required` }, { status: 422 });
     if (!leg.sport?.trim())   return NextResponse.json({ error: `Leg ${i + 1}: sport is required` }, { status: 422 });
     if (!leg.bet_type?.trim()) return NextResponse.json({ error: `Leg ${i + 1}: bet_type is required` }, { status: 422 });
-    const o = parseInt(leg.odds);
-    if (isNaN(o) || o === 0 || Math.abs(o) < 100) {
-      return NextResponse.json({ error: `Leg ${i + 1}: invalid odds (${leg.odds})` }, { status: 422 });
+    // Allow null odds (individual leg odds may not be available from screenshots)
+    if (leg.odds != null) {
+      const o = parseInt(leg.odds);
+      if (isNaN(o) || o === 0 || Math.abs(o) < 100) {
+        return NextResponse.json({ error: `Leg ${i + 1}: invalid odds (${leg.odds})` }, { status: 422 });
+      }
     }
   }
 
@@ -737,7 +744,7 @@ async function handleParlayPost(req, user, pick, legs) {
     sport:      (leg.sport || '').toUpperCase().trim(),
     bet_type:   (leg.bet_type || '').trim(),
     line:       leg.line != null ? parseFloat(leg.line) : null,
-    odds:       parseInt(leg.odds),
+    odds:       leg.odds != null ? parseInt(leg.odds) : null,
     game_id:    leg.game_id  ?? null,
     home_team:  leg.home_team ?? null,
     away_team:  leg.away_team ?? null,
@@ -748,7 +755,8 @@ async function handleParlayPost(req, user, pick, legs) {
   const { error: legsErr } = await supabaseAdmin.from('parlay_legs').insert(legRows);
   if (legsErr) {
     // Roll back the parent pick so we don't have an orphaned row
-    await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
+    const { error: rollbackErr } = await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
+    if (rollbackErr) console.error('[picks] parlay rollback failed:', rollbackErr);
     console.error('[picks] parlay_legs insert error:', legsErr);
     return NextResponse.json({ error: legsErr.message }, { status: 500 });
   }

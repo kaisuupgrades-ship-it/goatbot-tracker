@@ -239,7 +239,8 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
   // Resolve line: stored column → parse from team name → parse from notes → null
   // Must produce null (not NaN) when nothing resolves — the spread/total guards check isNaN(line).
   const _rawLine = pick.line ?? parseLineFromTeam(pick.team) ?? parseLineFromNotes(pick.notes) ?? null;
-  const line = _rawLine !== null ? parseFloat(_rawLine) : null;
+  const _parsedLine = _rawLine !== null ? parseFloat(_rawLine) : null;
+  const line = (_parsedLine !== null && !isNaN(_parsedLine)) ? _parsedLine : null;
 
   const total = homeScore + awayScore;
 
@@ -440,7 +441,7 @@ export function gradePicksAgainstScoreboard(picks, scoreboard) {
       if (!pickMatchesGame(pick, homeTeamName, awayTeamName)) continue;
 
       const gradeResult = gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore);
-      if (!gradeResult) break; // game matched but couldn't grade (e.g. no line) — stop searching
+      if (!gradeResult) continue; // game matched but couldn't grade (e.g. no line) — try next game
 
       results.push({
         id:        pick.id,

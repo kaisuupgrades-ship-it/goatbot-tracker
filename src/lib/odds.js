@@ -193,13 +193,10 @@ function extractOdds(ev, sportKey) {
   const spreadAway      = sAway?.price ?? null;
   const spreadAwayPoint = sAway?.point ?? null;
 
-  // Total (game total — pick the standard line close to -110)
-  const totalOutcomes = totals?.outcomes || [];
-  const over  = totalOutcomes.find(o => o.name === 'Over');
-  const under = totalOutcomes.find(o => o.name === 'Under');
-  const total    = over?.point ?? null;
-  const overOdds  = over?.price  ?? null;
-  const underOdds = under?.price ?? null;
+  // Totals are disabled at the API level — fields are kept in the return shape for compatibility
+  // but always resolve to null. Re-enable by passing markets=totals to The Odds API fetch.
+  const total = null, overOdds = null, underOdds = null;
+  void totals; // suppress unused-variable lint warning
 
   const homeAbbr = ev.home_team.split(' ').pop();
   const awayAbbr = ev.away_team.split(' ').pop();

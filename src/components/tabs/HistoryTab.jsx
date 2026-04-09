@@ -310,7 +310,7 @@ function SlipImport({ onFilled, onSubmitParlay, onSaveMultiple }) {
         sport:     l.sport    || parsed.sport || 'Other',
         bet_type:  l.bet_type || 'Moneyline',
         line:      l.line     ?? null,
-        odds:      l.odds     ?? 0,
+        odds:      l.odds     ?? null,
         game_date: parsed.date || null,
       }));
       await onSubmitParlay({
@@ -1767,7 +1767,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                     <div style={{ padding: '0 13px', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{
                         fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '1.05rem',
-                        color: live.liveStatus === 'WINNING' ? '#4ade80' : live.liveStatus === 'LOSING' ? '#f87171' : '#94a3b8',
+                        color: live?.liveStatus === 'WINNING' ? '#4ade80' : live?.liveStatus === 'LOSING' ? '#f87171' : '#94a3b8',
                         letterSpacing: '-0.02em',
                       }}>
                         {live.awayAbbr} {live.awayScore} – {live.homeScore} {live.homeAbbr}

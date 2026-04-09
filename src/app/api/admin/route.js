@@ -755,7 +755,8 @@ export async function POST(req) {
       ];
       let rank = RANKS[0];
       for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
-      await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', targetUserId);
+      const { error: xpErr } = await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', targetUserId);
+      if (xpErr) return NextResponse.json({ error: xpErr.message }, { status: 500 });
       return NextResponse.json({ ok: true, newXp, rank: rank.title });
     }
 

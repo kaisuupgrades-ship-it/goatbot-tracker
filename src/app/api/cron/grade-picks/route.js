@@ -432,7 +432,7 @@ export async function GET(req) {
             })
             .eq('analysis_id', row.id)
             .is('prediction_result', null);
-        } catch { /* non-critical */ }
+        } catch (auditErr) { console.warn('[cron/grade-picks] audit log update failed:', auditErr.message); }
       }
     }
   } catch (aiErr) {
@@ -471,7 +471,7 @@ export async function GET(req) {
   try {
     await supabase.from('settings')
       .upsert([{ key: 'cron_grade_last_run', value: JSON.stringify(summary) }], { onConflict: 'key' });
-  } catch { /* non-critical */ }
+  } catch (settingsErr) { console.warn('[cron/grade-picks] failed to persist run stats:', settingsErr.message); }
 
   return NextResponse.json(summary);
 }

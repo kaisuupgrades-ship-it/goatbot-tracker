@@ -315,29 +315,35 @@ export async function PATCH(req) {
       const mins = Math.min(Math.max(parseInt(durationMinutes || 30), 1), 10080); // 1 min – 1 week
       const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
       // Remove any existing mute first
-      await supabase.from('chat_mutes').delete().eq('user_id', targetUserId);
-      await supabase.from('chat_mutes').insert([{
+      const { error: delMuteErr } = await supabase.from('chat_mutes').delete().eq('user_id', targetUserId);
+      if (delMuteErr) throw delMuteErr;
+      const { error: insMuteErr } = await supabase.from('chat_mutes').insert([{
         user_id: targetUserId, muted_by: user.id, reason: reason || null, expires_at: expiresAt,
       }]);
+      if (insMuteErr) throw insMuteErr;
       return NextResponse.json({ ok: true, expiresAt });
     }
 
     if (action === 'unmute') {
-      await supabase.from('chat_mutes').delete().eq('user_id', targetUserId);
+      const { error: unmuteErr } = await supabase.from('chat_mutes').delete().eq('user_id', targetUserId);
+      if (unmuteErr) throw unmuteErr;
       return NextResponse.json({ ok: true });
     }
 
     if (action === 'ban') {
       // Deactivate existing bans, then insert new one
-      await supabase.from('chat_bans').update({ active: false }).eq('user_id', targetUserId);
-      await supabase.from('chat_bans').insert([{
+      const { error: deactivateErr } = await supabase.from('chat_bans').update({ active: false }).eq('user_id', targetUserId);
+      if (deactivateErr) throw deactivateErr;
+      const { error: banErr } = await supabase.from('chat_bans').insert([{
         user_id: targetUserId, banned_by: user.id, reason: reason || null, active: true,
       }]);
+      if (banErr) throw banErr;
       return NextResponse.json({ ok: true });
     }
 
     if (action === 'unban') {
-      await supabase.from('chat_bans').update({ active: false }).eq('user_id', targetUserId);
+      const { error: unbanErr } = await supabase.from('chat_bans').update({ active: false }).eq('user_id', targetUserId);
+      if (unbanErr) throw unbanErr;
       return NextResponse.json({ ok: true });
     }
 

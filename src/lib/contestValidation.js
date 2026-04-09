@@ -54,7 +54,7 @@ export function validateContestEntry(pick, rules = {}) {
   }
 
   // ── Odds range ──────────────────────────────────────────────────────────────
-  const odds = parseInt(pick.odds);
+  const odds = parseFloat(pick.odds);
   if (rules.require_odds && (!pick.odds || isNaN(odds))) {
     errors.push('Odds are required for contest entries.');
   }
