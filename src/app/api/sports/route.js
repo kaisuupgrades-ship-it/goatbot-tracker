@@ -4,8 +4,10 @@ import { teamsMatch } from '@/lib/teamNormalizer';
 export const maxDuration = 15;
 
 // ESPN unofficial API — free, no key needed
-const ESPN_BASE      = 'https://site.api.espn.com/apis/site/v2/sports';
-const ESPN_WEB_BASE  = 'https://site.web.api.espn.com/apis/v2/sports';
+const ESPN_BASE          = 'https://site.api.espn.com/apis/site/v2/sports';
+const ESPN_WEB_BASE      = 'https://site.web.api.espn.com/apis/v2/sports';
+// site.web.api uses /apis/site/v2 for most endpoints (playersummary, etc.)
+const ESPN_WEB_SITE_BASE = 'https://site.web.api.espn.com/apis/site/v2/sports';
 
 // The Odds API (free /scores endpoint — doesn't count against quota)
 const THE_ODDS_KEY   = process.env.THE_ODDS_API_KEY;
@@ -217,16 +219,20 @@ export async function GET(req) {
       }
 
       // Endpoint 2b: site.web.api competitor detail
-      try {
-        const data = await espnFetch(
-          `golf/${golfLeague}/leaderboard/${eventId}/playersummary?player=${athleteId}`,
-          ESPN_WEB_BASE
-        );
-        if (data?.rounds?.length || data?.player?.rounds?.length) {
-          return NextResponse.json(data);
+      // ESPN playersummary endpoint lives under /apis/site/v2 (not /apis/v2)
+      // Try both athlete= and player= param names — ESPN has been inconsistent
+      for (const param of ['athlete', 'player']) {
+        try {
+          const data = await espnFetch(
+            `golf/${golfLeague}/leaderboard/${eventId}/playersummary?${param}=${athleteId}`,
+            ESPN_WEB_SITE_BASE
+          );
+          if (data?.rounds?.length || data?.player?.rounds?.length) {
+            return NextResponse.json(data);
+          }
+        } catch (err) {
+          console.warn(`Golf player summary (${param}=) failed:`, err.message);
         }
-      } catch (err) {
-        console.warn('Golf player summary fallback failed:', err.message);
       }
 
       // Endpoint 3: Pull from the main leaderboard — always succeeds when an event is active.
