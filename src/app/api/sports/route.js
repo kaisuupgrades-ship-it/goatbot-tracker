@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { teamsMatch } from '@/lib/teamNormalizer';
 
 export const maxDuration = 15;
 
@@ -85,18 +86,6 @@ async function fetchOddsApiScores(sport) {
   }
 }
 
-function normTeamName(name) {
-  return (name || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function teamNamesMatch(a, b) {
-  const na = normTeamName(a), nb = normTeamName(b);
-  if (na === nb) return true;
-  const wordsA = na.split(' '), wordsB = nb.split(' ');
-  const lastA = wordsA[wordsA.length - 1], lastB = wordsB[wordsB.length - 1];
-  if (lastA && lastA === lastB && lastA.length >= 3) return true;
-  return (na.includes(lastB) && lastB.length >= 3) || (nb.includes(lastA) && lastA.length >= 3);
-}
 
 // Enrich ESPN events with The Odds API event_id + live scores
 function enrichWithOddsApiScores(espnData, oddsApiScores) {
@@ -115,7 +104,7 @@ function enrichWithOddsApiScores(espnData, oddsApiScores) {
 
     // Find matching Odds API event
     const match = oddsApiScores.find(oa =>
-      teamNamesMatch(oa.home_team, homeName) && teamNamesMatch(oa.away_team, awayName)
+      teamsMatch(oa.home_team, homeName) && teamsMatch(oa.away_team, awayName)
     );
 
     if (!match) return ev;
@@ -281,7 +270,7 @@ export async function GET(req) {
         console.warn('Golf leaderboard fallback failed:', err.message);
       }
 
-      return NextResponse.json({ error: 'Scorecard not available for this player/event', rounds: [] }, { status: 200 });
+      return NextResponse.json({ error: 'Scorecard not available for this player/event', rounds: [] }, { status: 404 });
     }
 
     // Use endpoint override if the sport has a special primary endpoint

@@ -8,6 +8,7 @@ import GolfLeaderboard from '@/components/GolfLeaderboard';
 import TennisScoreboard from '@/components/TennisScoreboard';
 import SoccerScoreboard from '@/components/SoccerScoreboard';
 import { submitParlay } from '@/lib/supabase';
+import { validML, validSpreadJuice, validTotal, SPORT_KEY_MAP } from '@/lib/odds';
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
@@ -2325,28 +2326,6 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           );
       if (!realGame) return event;
 
-      // ── Price validation helpers ───────────────────────────────────────────
-      // Real game-level ML odds are always between -1500 and +1500.
-      // Anything outside that range is a futures price, alt-market, or data error.
-      // Spread juice is always between -300 and +300.
-      // Game totals (baseball 6–14, hockey 4–8, basketball 180–240, football 35–60).
-      function validML(price) {
-        return price != null && Math.abs(price) >= 100 && Math.abs(price) <= 1500;
-      }
-      function validSpreadJuice(price) {
-        return price != null && Math.abs(price) >= 100 && Math.abs(price) <= 300;
-      }
-      function validTotal(point, sport) {
-        if (point == null) return false;
-        const ranges = {
-          baseball_mlb: [5, 16], basketball_nba: [170, 260], icehockey_nhl: [3, 10],
-          americanfootball_nfl: [30, 70], americanfootball_ncaaf: [25, 85],
-          basketball_ncaab: [100, 180],
-        };
-        const [lo, hi] = ranges[sport] || [1, 300];
-        return point >= lo && point <= hi;
-      }
-
       // Scan bookmakers with DraftKings priority to find the best available data.
       // Skip any book whose prices fail validation — prevents +2500 garbage lines.
       const BOOK_PRIORITY = ['draftkings', 'fanduel', 'betmgm'];
@@ -2358,7 +2337,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         const bRank = bIdx >= 0 ? bIdx : BOOK_PRIORITY.length;
         return aRank - bRank;
       });
-      const sportKey2 = realGame.sport_key || '';
+      const sportKey2 = SPORT_KEY_MAP[sport] || realGame.sport_key || '';
 
       // h2h: prefer a book with BOTH sides and valid prices
       let h2h = null, homeH2h = null, awayH2h = null, h2hBook = null;

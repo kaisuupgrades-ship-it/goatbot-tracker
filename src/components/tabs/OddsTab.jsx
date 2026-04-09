@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { validSpreadJuice } from '@/lib/odds';
 
 const SPORTS = [
   { key: 'mlb',   label: 'MLB',   emoji: '⚾' },
@@ -135,8 +136,8 @@ function marketSpread(bookmakers, awayTeam, homeTeam) {
     const homeOut = outcomes.find(o => o.name === homeTeam);
     if (!awayOut || !homeOut) continue;
     if (awayOut.price == null || homeOut.price == null || awayOut.point == null) continue;
-    // Reject wildly invalid prices (beyond ±500)
-    if (Math.abs(awayOut.price) > 500 || Math.abs(homeOut.price) > 500) continue;
+    // Reject prices outside standard spread juice range (±300)
+    if (!validSpreadJuice(awayOut.price) || !validSpreadJuice(homeOut.price)) continue;
     return {
       awayPoint: awayOut.point, awayPrice: awayOut.price,
       homePoint: homeOut.point, homePrice: homeOut.price,
@@ -153,8 +154,8 @@ function bestTotal(bookmakers) {
     const over  = mkt.outcomes?.find(o => o.name === 'Over');
     const under = mkt.outcomes?.find(o => o.name === 'Under');
     if (!over || over.point == null) continue;
-    // Reject wildly invalid prices
-    if (over.price != null && Math.abs(over.price) > 500) continue;
+    // Reject prices outside standard juice range (±300)
+    if (over.price != null && !validSpreadJuice(over.price)) continue;
     return {
       line: over.point,
       overPrice: over.price ?? null,
