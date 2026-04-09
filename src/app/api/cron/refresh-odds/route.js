@@ -14,7 +14,7 @@
  *  - TODO: revert to 3 markets (add totals back) after migrating to OddsPapi (unlimited)
  *
  * Smart refresh schedule (per sport):
- *  - Pre-match only:           commenceTimeFrom = now - 5min (live odds paused — v2 feature)
+ *  - Pre-match only:           commenceTimeFrom = now - 5min (live odds not supported)
  *  - Off-peak (0–8am ET):      skip entirely (return early)
  *  - Shoulder (8–11am,         proximity TTLs ×1.8
  *    10pm–midnight ET):
@@ -52,9 +52,7 @@ const SPORT_KEYS = {
   mls: 'soccer_usa_mls',
 };
 
-// TODO: LIVE_TTL_MS dormant while pre-match-only mode is active (commenceTimeFrom = now - 5min).
-// Re-enable (and restore 12h lookback) when live in-play odds come back (v2).
-const LIVE_TTL_MS  = 90_000; // 90 sec for live games (dormant)
+// Live odds not supported — pre-match only
 
 // Proximity-based TTL for pre-match games — lines barely move far out, sharps
 // bet heavily in the final hour. Tighter TTL only when it actually matters.
@@ -328,9 +326,8 @@ async function fetchSportOdds(sport) {
   // TODO: add totals back (3rd market) after migrating to OddsPapi (unlimited credits)
   url.searchParams.set('markets', 'h2h,spreads');
   url.searchParams.set('oddsFormat', 'american');
-  // Pre-match only — live in-play odds are paused (v2 feature). A 5-min lookback buffer
-  // catches games whose commence_time just ticked past now without missing their final pre-match line.
-  // TODO: restore commenceTimeFrom to now - 12h when live in-play odds are re-enabled.
+  // Pre-match only. A 5-min lookback buffer catches games whose commence_time just ticked
+  // past now without missing their final pre-match line.
   const from = new Date(Date.now() -  5 *   60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   const to   = new Date(Date.now() + 48 * 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z'); // 48h — no value in caching lines further out
   url.searchParams.set('commenceTimeFrom', from);
@@ -352,15 +349,11 @@ async function fetchSportOdds(sport) {
   return events;
 }
 
-// Derive game status from commence_time (The Odds API main endpoint doesn't flag live state)
-// Games are typically: MLB ~3hr, NBA ~2.5hr, NHL ~2.5hr, NFL ~3.5hr, MLS ~2hr
-// Using 5hr window to safely cover all sports + overtime
+// Derive game status from commence_time.
+// Live odds not supported — games are either upcoming (pre) or finished (post).
 function deriveStatus(commenceTime) {
-  const now   = Date.now();
   const start = new Date(commenceTime).getTime();
-  if (start > now + 2 * 60_000) return 'pre';    // hasn't started (2-min buffer)
-  if (start > now - 5 * 3600_000) return 'live';  // started < 5 hrs ago = probably live
-  return 'post';
+  return start > Date.now() + 2 * 60_000 ? 'pre' : 'post';
 }
 
 // ── Smart scheduling ──────────────────────────────────────────────────────────
@@ -386,9 +379,6 @@ function getRefreshThreshold(games, shoulderMultiplier = 1) {
   if (!games.length) return 0; // empty cache → always refresh
 
   const now = Date.now();
-  const hasLive = games.some(g => g.game_status === 'live');
-  if (hasLive) return LIVE_TTL_MS; // dormant in pre-match-only mode
-
   const preGames = games.filter(g => g.game_status === 'pre');
   if (!preGames.length) return null; // all post — skip
 
