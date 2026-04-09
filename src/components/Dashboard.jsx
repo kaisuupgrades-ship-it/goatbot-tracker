@@ -15,6 +15,7 @@ import UserSearchTab     from './tabs/UserSearchTab';
 import FollowingTab      from './tabs/FollowingTab';
 import ChatRoomTab       from './tabs/ChatRoomTab';
 import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
+import PropBuilderTab   from './tabs/PropBuilderTab';
 import AdminTab          from './tabs/AdminTab';
 import ProfileModal      from './ProfileModal';
 import PublicProfileModal from './PublicProfileModal';
@@ -223,6 +224,7 @@ const TAB_META = {
   following:   { label: 'Following',    sub: 'Cappers you follow — all-time stats' },
   chatroom:    { label: 'Chat Room',    sub: 'Community chat — discuss picks & sharp action' },
   featured:     { label: 'Featured Games',  sub: 'Your starred games & quick BetOS access' },
+  props:        { label: 'Prop Builder',    sub: 'Browse player props across today\'s games' },
   admin:        { label: '🛡 Admin Panel',  sub: 'User management, analytics & system settings' },
 };
 
@@ -505,6 +507,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
                 setActiveTab('analyzer');
               }}
             />
+          </div>
+          <div style={{ display: activeTab === 'props' ? 'block' : 'none' }}>
+            <PropBuilderTab user={user} picks={picks} setPicks={setPicks} isDemo={isDemo} />
           </div>
           {ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
             <div style={{ display: activeTab === 'admin' ? 'block' : 'none' }}>

@@ -206,7 +206,7 @@ function ContestBadge({ result }) {
 }
 
 // ── Main BetSlipModal ──────────────────────────────────────────────────────────
-export default function BetSlipModal({ game, sport, user, picks, setPicks, isDemo, onClose, onAnalyze, eventId }) {
+export default function BetSlipModal({ game, sport, user, picks, setPicks, isDemo, onClose, onAnalyze, propPrefill }) {
   const { away, home, odds, date } = game;
   const awayName  = away.team?.displayName || away.team?.name || 'Away';
   const homeName  = home.team?.displayName || home.team?.name || 'Home';
@@ -338,12 +338,6 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [propStat,      setPropStat]      = useState('');
   const [propLine,      setPropLine]      = useState('');
   const [propDirection, setPropDirection] = useState('over');
-  // Live player props from The Odds API
-  const [liveProps,       setLiveProps]       = useState(null);   // { categories: [...] }
-  const [propsLoading,    setPropsLoading]    = useState(false);
-  const [propsError,      setPropsError]      = useState('');
-  const [activePropCat,   setActivePropCat]   = useState(0);      // active category index
-  const [showPropsPanel,  setShowPropsPanel]  = useState(false);  // collapsed by default
 
   const [voiceState,  setVoiceState]  = useState('idle');
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -367,6 +361,20 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, []);
+
+  // Pre-fill prop fields when opened from Prop Builder
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!propPrefill) return;
+    setShowCustom(true);
+    setSelectedId(null);
+    setCustomBetType('Prop');
+    setPropPlayer(propPrefill.player || '');
+    setPropStat(propPrefill.stat || '');
+    setPropLine(propPrefill.line || '');
+    setPropDirection(propPrefill.direction || 'over');
+    setCustomOdds(propPrefill.odds || '');
+  }, []); // run once on mount
 
   // Auto-compose customTeam from prop fields when bet type is Prop
   useEffect(() => {
@@ -515,51 +523,6 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     if (voiceState === 'parsing') return;
     setVoiceTranscript(''); setVoiceError(''); partialRef.current = '';
     setVoiceState('listening'); start();
-  }
-
-  // ── Fetch live player props when modal opens ────────────────────────────────
-  useEffect(() => {
-    if (!eventId || !sport || !['nfl','nba','mlb','nhl','ncaaf','ncaab'].includes(sport)) return;
-    let cancelled = false;
-    setPropsLoading(true);
-    setPropsError('');
-    fetch(`/api/props?sport=${sport}&eventId=${encodeURIComponent(eventId)}`)
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled) return;
-        if (data.categories && data.categories.length > 0) {
-          setLiveProps(data);
-          setShowPropsPanel(true); // auto-expand when props are available
-        } else {
-          setLiveProps(null);
-          if (data.note) setPropsError(data.note);
-        }
-      })
-      .catch(err => {
-        if (!cancelled) setPropsError(err.message || 'Could not load props');
-      })
-      .finally(() => { if (!cancelled) setPropsLoading(false); });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, sport]);
-
-  // ── Helper: click a live prop button to pre-fill custom form ───────────────
-  function selectLiveProp(player, marketLabel, direction) {
-    const odds = direction === 'over' ? player.overOdds : player.underOdds;
-    setSelectedId(null);
-    setShowCustom(true);
-    setCustomBetType('Prop');
-    setPropPlayer(player.player);
-    setPropStat(marketLabel);
-    setPropLine(String(player.line));
-    setPropDirection(direction);
-    setCustomOdds(odds != null ? String(odds) : '');
-    setContestResult(null);
-    // Scroll the custom form into view after a tick
-    setTimeout(() => {
-      const el = document.getElementById('betslip-custom-section');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
   }
 
   // ── Escape key ─────────────────────────────────────────────────────────────
@@ -910,145 +873,24 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
           </div>
         )}
 
-        {/* ── Live Player Props Panel ──────────────────────────────────────── */}
-        {(propsLoading || liveProps || propsError) && (
-          <div style={{ padding: '0.75rem 1.1rem 0' }}>
-            {/* Accordion toggle */}
-            <button
-              onClick={() => setShowPropsPanel(v => !v)}
-              style={{
-                width: '100%', padding: '0.55rem 0.9rem',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: showPropsPanel ? 'rgba(96,165,250,0.08)' : 'var(--bg-elevated)',
-                border: `1px solid ${showPropsPanel ? 'rgba(96,165,250,0.3)' : 'var(--border)'}`,
-                borderRadius: '9px', cursor: 'pointer', fontFamily: 'inherit',
-                color: showPropsPanel ? '#60a5fa' : 'var(--text-muted)',
-                fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s',
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                🎯 Player Props
-                {propsLoading && <PulsingDots color="#60a5fa" />}
-                {liveProps && !propsLoading && (
-                  <span style={{ fontSize: '0.6rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(96,165,250,0.15)', color: '#60a5fa', fontWeight: 700 }}>
-                    {liveProps.total} props
-                  </span>
-                )}
-              </span>
-              <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', display: 'inline-block', transform: showPropsPanel ? 'rotate(180deg)' : 'none' }}>▼</span>
-            </button>
-
-            {/* Expanded panel */}
-            {showPropsPanel && (
-              <div style={{ marginTop: '6px' }}>
-                {propsError && !liveProps && (
-                  <div style={{ padding: '0.6rem 0.8rem', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    Props unavailable: {propsError}
-                  </div>
-                )}
-
-                {liveProps?.categories && (
-                  <>
-                    {/* Category tabs */}
-                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                      {liveProps.categories.map((cat, idx) => (
-                        <button
-                          key={cat.label}
-                          onClick={() => setActivePropCat(idx)}
-                          style={{
-                            padding: '3px 10px', borderRadius: '20px', cursor: 'pointer',
-                            fontSize: '0.68rem', fontWeight: 700, fontFamily: 'inherit',
-                            border: activePropCat === idx ? '1px solid rgba(96,165,250,0.5)' : '1px solid var(--border)',
-                            background: activePropCat === idx ? 'rgba(96,165,250,0.15)' : 'var(--bg-elevated)',
-                            color: activePropCat === idx ? '#60a5fa' : 'var(--text-muted)',
-                            transition: 'all 0.12s',
-                          }}
-                        >{cat.label}</button>
-                      ))}
-                    </div>
-
-                    {/* Markets in active category */}
-                    {liveProps.categories[activePropCat]?.markets.map(market => (
-                      <div key={market.key} style={{ marginBottom: '10px' }}>
-                        <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'rgba(96,165,250,0.6)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '5px' }}>
-                          {market.label}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {market.players.map(player => (
-                            <div key={player.player} style={{
-                              display: 'grid', gridTemplateColumns: '1fr auto auto',
-                              alignItems: 'center', gap: '6px',
-                              padding: '5px 8px', borderRadius: '7px',
-                              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                            }}>
-                              {/* Player name + line */}
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {player.player}
-                                </div>
-                                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>
-                                  {player.line}
-                                </div>
-                              </div>
-                              {/* Over button */}
-                              {player.overOdds != null && (
-                                <button
-                                  onClick={() => selectLiveProp(player, market.label, 'over')}
-                                  title={`Over ${player.line} ${player.overOdds > 0 ? '+' : ''}${player.overOdds}`}
-                                  style={{
-                                    padding: '3px 8px', borderRadius: '5px', cursor: 'pointer',
-                                    border: '1px solid rgba(74,222,128,0.3)',
-                                    background: 'rgba(74,222,128,0.07)',
-                                    fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800,
-                                    fontSize: '0.68rem', lineHeight: 1.3,
-                                    color: '#4ade80',
-                                    transition: 'all 0.12s',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.18)'; e.currentTarget.style.borderColor = 'rgba(74,222,128,0.6)'; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; e.currentTarget.style.borderColor = 'rgba(74,222,128,0.3)'; }}
-                                >
-                                  <div style={{ fontSize: '0.56rem', fontWeight: 600, color: 'rgba(74,222,128,0.7)', letterSpacing: '0.05em' }}>OVER</div>
-                                  {player.overOdds > 0 ? `+${player.overOdds}` : player.overOdds}
-                                </button>
-                              )}
-                              {/* Under button */}
-                              {player.underOdds != null && (
-                                <button
-                                  onClick={() => selectLiveProp(player, market.label, 'under')}
-                                  title={`Under ${player.line} ${player.underOdds > 0 ? '+' : ''}${player.underOdds}`}
-                                  style={{
-                                    padding: '3px 8px', borderRadius: '5px', cursor: 'pointer',
-                                    border: '1px solid rgba(248,113,113,0.3)',
-                                    background: 'rgba(248,113,113,0.06)',
-                                    fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800,
-                                    fontSize: '0.68rem', lineHeight: 1.3,
-                                    color: '#f87171',
-                                    transition: 'all 0.12s',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.16)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.6)'; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.06)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)'; }}
-                                >
-                                  <div style={{ fontSize: '0.56rem', fontWeight: 600, color: 'rgba(248,113,113,0.7)', letterSpacing: '0.05em' }}>UNDER</div>
-                                  {player.underOdds > 0 ? `+${player.underOdds}` : player.underOdds}
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-
-                    <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '2px' }}>
-                      Odds via DraftKings · FanDuel · BetMGM
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        {/* ── View Props link — opens Prop Builder tab ──────────────────── */}
+        <div style={{ padding: '0.25rem 1.1rem 0', textAlign: 'center' }}>
+          <button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('betos-navigate', { detail: 'props' }));
+              onClose();
+            }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+              color: '#60a5fa', fontSize: '0.72rem', fontWeight: 600, padding: '4px 8px',
+              borderRadius: '4px', opacity: 0.8, transition: 'opacity 0.12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.8'; }}
+          >
+            🎯 Browse all player props →
+          </button>
+        </div>
 
         {/* ── Divider + Custom Bet accordion ─────────────────────────────── */}
         <div style={{ padding: '0.75rem 1.1rem 0' }}>

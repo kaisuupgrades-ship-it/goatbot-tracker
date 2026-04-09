@@ -51,6 +51,16 @@ const Icons = {
       <rect x="10" y="1.5" width="3" height="11.5" rx="0.5"/>
     </svg>
   ),
+  Props: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="1" width="12" height="12" rx="2"/>
+      <circle cx="4.5" cy="4.5" r="0.8" fill="currentColor" stroke="none"/>
+      <circle cx="9.5" cy="4.5" r="0.8" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="9.5" r="0.8" fill="currentColor" stroke="none"/>
+      <circle cx="9.5" cy="9.5" r="0.8" fill="currentColor" stroke="none"/>
+      <circle cx="7"   cy="7"   r="0.8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
   Search: () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
       <circle cx="6" cy="6" r="4.5"/>
@@ -104,9 +114,10 @@ const NAV_SECTIONS = [
   {
     section: 'Tools',
     items: [
-      { id: 'analyzer',   label: 'Analyzer',    Icon: Icons.Analyzer,   desc: 'BetOS + AI tools' },
-      { id: 'sharpboard', label: 'Sharp Board', Icon: Icons.SharpBoard, desc: 'Public handicapper rankings' },
-      { id: 'usersearch', label: 'User Search', Icon: Icons.Search,     desc: 'Find & follow sharp bettors' },
+      { id: 'analyzer',   label: 'Analyzer',     Icon: Icons.Analyzer,   desc: 'BetOS + AI tools' },
+      { id: 'props',      label: 'Prop Builder', Icon: Icons.Props,      desc: 'Browse player props across all games' },
+      { id: 'sharpboard', label: 'Sharp Board',  Icon: Icons.SharpBoard, desc: 'Public handicapper rankings' },
+      { id: 'usersearch', label: 'User Search',  Icon: Icons.Search,     desc: 'Find & follow sharp bettors' },
     ],
   },
   {
