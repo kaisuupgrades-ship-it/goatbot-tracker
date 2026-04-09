@@ -336,6 +336,12 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
     }
   }, [user?.id, isDemo]);
 
+  // Scroll to top on every tab change — covers Sidebar clicks, programmatic nav,
+  // and cross-tab events (betos-navigate). Runs after the new tab renders.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
   // Listen for cross-tab navigation events (e.g. "Pick from Games" in HistoryTab)
   useEffect(() => {
     function handleNav(e) { if (e.detail) setActiveTab(e.detail); }
