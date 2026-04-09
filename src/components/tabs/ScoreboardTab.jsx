@@ -1298,6 +1298,19 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
         );
         const gameDate = event.date ? event.date.split('T')[0] : null;
 
+        // Mirror BetSlipModal: detect when ESPN encodes ML as the "spread" string (e.g. "NYI -270")
+        const spreadIsML = spreadParsed && Math.abs(spreadParsed.awayLine) >= 100;
+        // NHL and MLB always have a fixed ±1.5 puck/run line — show it even without explicit spread data
+        const alwaysHasFixedLine = ['nhl', 'mlb'].includes(sport);
+        const homeFavored = odds?.homeOdds != null && odds?.awayOdds != null
+          ? odds.homeOdds < odds.awayOdds
+          : true;
+        const needsInferredLine = spreadIsML || (!spreadParsed && alwaysHasFixedLine);
+        const effectiveSpread = needsInferredLine
+          ? (homeFavored ? { awayLine: 1.5, homeLine: -1.5 } : { awayLine: -1.5, homeLine: 1.5 })
+          : spreadParsed;
+        const spreadLabel = sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread';
+
         const options = [];
         if (odds?.awayOdds != null) options.push({
           label: away.team?.abbreviation || awayName, sublabel: 'Moneyline',
@@ -1307,28 +1320,32 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           label: home.team?.abbreviation || homeName, sublabel: 'Moneyline',
           team: homeName, bet_type: 'Moneyline', odds: odds.homeOdds, line: null,
         });
-        if (spreadParsed && odds?.awaySpreadOdds != null) options.push({
-          label: `${away.team?.abbreviation || awayName} ${spreadParsed.awayLine > 0 ? '+' : ''}${spreadParsed.awayLine}`,
-          sublabel: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
-          team: awayName,
-          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
-          odds: odds.awaySpreadOdds, line: spreadParsed.awayLine,
-        });
-        if (spreadParsed && odds?.homeSpreadOdds != null) options.push({
-          label: `${home.team?.abbreviation || homeName} ${spreadParsed.homeLine > 0 ? '+' : ''}${spreadParsed.homeLine}`,
-          sublabel: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
-          team: homeName,
-          bet_type: sport === 'mlb' ? 'Run Line' : sport === 'nhl' ? 'Puck Line' : 'Spread',
-          odds: odds.homeSpreadOdds, line: spreadParsed.homeLine,
-        });
-        if (odds?.total != null && odds?.overOdds != null) options.push({
-          label: `Over ${odds.total}`, sublabel: 'Total',
-          team: `Over ${odds.total}`, bet_type: 'Total (Over)', odds: odds.overOdds, line: odds.total,
-        });
-        if (odds?.total != null && odds?.underOdds != null) options.push({
-          label: `Under ${odds.total}`, sublabel: 'Total',
-          team: `Under ${odds.total}`, bet_type: 'Total (Under)', odds: odds.underOdds, line: odds.total,
-        });
+        if (effectiveSpread) {
+          options.push({
+            label: `${away.team?.abbreviation || awayName} ${effectiveSpread.awayLine > 0 ? '+' : ''}${effectiveSpread.awayLine}`,
+            sublabel: spreadLabel,
+            team: awayName,
+            bet_type: spreadLabel,
+            odds: odds?.awaySpreadOdds ?? -110, line: effectiveSpread.awayLine,
+          });
+          options.push({
+            label: `${home.team?.abbreviation || homeName} ${effectiveSpread.homeLine > 0 ? '+' : ''}${effectiveSpread.homeLine}`,
+            sublabel: spreadLabel,
+            team: homeName,
+            bet_type: spreadLabel,
+            odds: odds?.homeSpreadOdds ?? -110, line: effectiveSpread.homeLine,
+          });
+        }
+        if (odds?.total != null) {
+          options.push({
+            label: `Over ${odds.total}`, sublabel: 'Total',
+            team: `Over ${odds.total}`, bet_type: 'Total (Over)', odds: odds?.overOdds ?? -110, line: odds.total,
+          });
+          options.push({
+            label: `Under ${odds.total}`, sublabel: 'Total',
+            team: `Under ${odds.total}`, bet_type: 'Total (Under)', odds: odds?.underOdds ?? -110, line: odds.total,
+          });
+        }
 
         if (!options.length) return (
           <div onClick={e => e.stopPropagation()}
