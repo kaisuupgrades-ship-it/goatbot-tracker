@@ -641,7 +641,7 @@ export async function POST(req) {
         try { result = JSON.parse(text); } catch { result = { raw: text.slice(0, 300) }; }
         return NextResponse.json({ ok: true, status: res.status, result });
       } catch (fetchErr) {
-        return NextResponse.json({ ok: false, error: fetchErr.message }, { status: 200 });
+        return NextResponse.json({ ok: false, error: fetchErr.message }, { status: 500 });
       }
     }
 

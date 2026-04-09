@@ -198,6 +198,57 @@ export function normalizeTeam(team, sport) {
   return team; // No match — return as-is
 }
 
+// ── Fuzzy string normalization for teamsMatch ────────────────────────────────
+function normStr(name = '') {
+  return name
+    .toLowerCase()
+    .replace(/\b(the|a|an|fc|sc|cf|ac|city|united|sporting)\b/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Determine whether two team name strings refer to the same team.
+ *
+ * Algorithm (in priority order):
+ *   1. If `sport` is provided, resolve both names via normalizeTeam(). If both
+ *      resolve to the same official name they match — this handles "Sox"
+ *      disambiguation (Red Sox vs White Sox) and abbreviation expansion.
+ *   2. Fuzzy fallback: normalize strings (strip articles/suffixes, lowercase),
+ *      then check exact match, substring containment, or last-word match where
+ *      the last word is ≥ 4 characters long (filters out short noise like "FC").
+ *
+ * @param {string}      a      - first team name
+ * @param {string}      b      - second team name
+ * @param {string}     [sport] - uppercase sport key, e.g. 'MLB', 'NBA'
+ * @returns {boolean}
+ */
+export function teamsMatch(a, b, sport) {
+  if (!a || !b) return false;
+
+  // Step 1: sport-aware resolution via TEAM_MAP alias dictionary
+  if (sport) {
+    const normA = normalizeTeam(a, sport);
+    const normB = normalizeTeam(b, sport);
+    // If both resolved to official names, compare those directly
+    if (normA.toLowerCase() === normB.toLowerCase()) return true;
+    const sA = normStr(normA), sB = normStr(normB);
+    if (sA && sB && (sA === sB || sA.includes(sB) || sB.includes(sA))) return true;
+  }
+
+  // Step 2: fuzzy fallback (no sport context, or aliases didn't help)
+  const na = normStr(a), nb = normStr(b);
+  if (!na || !nb) return false;
+  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
+
+  const wordsA = na.split(' '), wordsB = nb.split(' ');
+  const lastA = wordsA[wordsA.length - 1], lastB = wordsB[wordsB.length - 1];
+  // Require last word ≥ 4 chars to avoid false matches on short suffixes
+  if (lastA && lastA === lastB && lastA.length >= 4) return true;
+  return (na.includes(lastB) && lastB.length >= 4) || (nb.includes(lastA) && lastA.length >= 4);
+}
+
 /**
  * Normalize a full parsed pick object in place.
  * Fixes team name + ensures sport casing is correct.

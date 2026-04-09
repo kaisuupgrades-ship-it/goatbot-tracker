@@ -1,3 +1,5 @@
+import { teamsMatch as _teamsMatch } from '@/lib/teamNormalizer';
+
 /**
  * gradeEngine.js — shared, battle-tested pick grading logic.
  *
@@ -24,50 +26,12 @@ export function normalize(str) {
 }
 
 /**
- * Common team abbreviations → a distinctive substring of the ESPN display name.
- * Used as a fallback in teamMatches() when the plain normalize+substring check fails
- * (e.g. "NYY" doesn't substring-match "newyorkyankees", but "yankees" does).
- * Values are chosen to be unambiguous within a sport context.
+ * Wrapper around the shared teamsMatch from teamNormalizer.
+ * Accepts an optional sport parameter for alias-aware disambiguation.
+ * Kept as a named export for backward compatibility with grading callers.
  */
-const ABBR_EXPANSIONS = {
-  // ── MLB ──────────────────────────────────────────────────────────────────────
-  nyy: 'yankees',    nym: 'mets',        lad: 'dodgers',    laa: 'angels',
-  stl: 'louis',      tb:  'tampa',       wsh: 'nationals',  kc:  'royals',
-  phi: 'phillies',   cle: 'guardians',   cin: 'reds',       mil: 'brewers',
-  min: 'twins',      chc: 'cubs',        cws: 'white',      det: 'tigers',
-  bos: 'sox',        bal: 'orioles',     sea: 'mariners',   oak: 'athletics',
-  pit: 'pirates',    hou: 'astros',      atl: 'braves',     mia: 'marlins',
-  ari: 'diamondbacks', az: 'diamondbacks', col: 'rockies',  tex: 'rangers',
-  tor: 'blue',       sd:  'padres',      sf:  'giants',
-  // ── NFL ──────────────────────────────────────────────────────────────────────
-  ne:  'patriots',   nyj: 'jets',        nyg: 'giants',     gb:  'packers',
-  no:  'saints',     lar: 'rams',        lac: 'chargers',   was: 'commanders',
-  kcc: 'chiefs',     lv:  'raiders',     tb:  'buccaneers',
-  // ── NBA ──────────────────────────────────────────────────────────────────────
-  lal: 'lakers',     gsw: 'warriors',    gs:  'warriors',   bkn: 'nets',
-  sa:  'spurs',      okc: 'thunder',     nop: 'pelicans',   por: 'blazers',
-  uta: 'jazz',       mem: 'grizzlies',   ind: 'pacers',     den: 'nuggets',
-  dal: 'mavericks',  sas: 'spurs',       phx: 'suns',       cle: 'cavaliers',
-  // ── NHL ──────────────────────────────────────────────────────────────────────
-  vgk: 'golden',     njd: 'devils',      nj:  'devils',     cbj: 'jackets',
-  tbl: 'lightning',  wpg: 'jets',        edm: 'oilers',     cgy: 'flames',
-  van: 'canucks',    ana: 'ducks',       cls: 'jackets',    mtl: 'canadiens',
-};
-
-/** Never return true when either side is blank — prevents ghost matches */
-export function teamMatches(a, b) {
-  if (!a || !b) return false;
-  const n1 = normalize(a);
-  const n2 = normalize(b);
-  if (!n1 || !n2) return false;
-  if (n1 === n2 || n1.includes(n2) || n2.includes(n1)) return true;
-  // Abbreviation expansion: if either side is a known short-form, expand and retry.
-  // e.g. "NYY" → "yankees" → matches "newyorkyankees"
-  const exp1 = ABBR_EXPANSIONS[n1];
-  const exp2 = ABBR_EXPANSIONS[n2];
-  if (exp1 && (n2.includes(exp1) || exp1.includes(n2))) return true;
-  if (exp2 && (n1.includes(exp2) || exp2.includes(n1))) return true;
-  return false;
+export function teamMatches(a, b, sport) {
+  return _teamsMatch(a, b, sport);
 }
 
 /** "BOS @ TB" or "PHI vs COL" or "Tulsa at Auburn" → { away, home } normalized strings */
