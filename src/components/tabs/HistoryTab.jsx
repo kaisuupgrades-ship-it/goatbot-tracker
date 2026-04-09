@@ -1258,7 +1258,7 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   );
 
   const filtered = useMemo(() => picks
-    .filter(p => filterResult === 'ALL' || p.result === filterResult)
+    .filter(p => filterResult === 'ALL' || (filterResult === 'PENDING' ? (!p.result || p.result === 'PENDING') : p.result === filterResult))
     .filter(p => filterSport === 'ALL' || (p.sport || 'Other').toUpperCase() === filterSport)
     .filter(p => !filterContest || p.contest_entry)
     .sort((a, b) => {
