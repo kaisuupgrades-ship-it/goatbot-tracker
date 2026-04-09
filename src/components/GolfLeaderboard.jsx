@@ -39,11 +39,11 @@ function syncStarredGolferStats(players, tournamentName) {
   for (const p of players) {
     const id = p.id || p.athlete?.id;
     if (!id || !starred[id]) continue;
-    const stats = p.statistics || [];
+    const parsed      = parseGolfStats(p.statistics);
     const newPosition = p.status?.position?.displayName || '—';
-    const newToPar    = stats[0]?.displayValue ?? p.score?.displayValue ?? '—';
-    const newThru     = String(p.status?.thru ?? stats[1]?.displayValue ?? '—');
-    const newToday    = stats[2]?.displayValue ?? '—';
+    const newToPar    = parsed.toPar !== '—' ? parsed.toPar : (p.score?.displayValue ?? '—');
+    const newThru     = String(p.status?.thru ?? parsed.thru ?? '—');
+    const newToday    = parsed.today;
     const newTournament = tournamentName || starred[id].tournament;
 
     // Only write if something actually changed — avoids spurious storage events that
