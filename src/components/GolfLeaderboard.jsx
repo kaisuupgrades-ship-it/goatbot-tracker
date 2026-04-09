@@ -8,7 +8,7 @@ function getStarredGolfers() {
   try { return JSON.parse(localStorage.getItem(GOLF_STAR_KEY) || '{}'); } catch { return {}; }
 }
 
-function toggleStarGolfer(player, tournamentName) {
+function toggleStarGolfer(player, tournamentName, eventId) {
   const starred = getStarredGolfers();
   const id = player.id || player.athlete?.id;
   if (!id) return;
@@ -19,6 +19,7 @@ function toggleStarGolfer(player, tournamentName) {
       id,
       name: player.athlete?.displayName || player.athlete?.fullName || '?',
       tournament: tournamentName || '',
+      eventId:    eventId || null,
       starredAt: new Date().toISOString(),
     };
   }
@@ -35,7 +36,7 @@ function isGolferStarred(player) {
 // Updates position/score for all currently-starred golfers from fresh data.
 // Uses parseGolfStats so win-odds injected at stats[2] by ESPN for featured
 // players don't contaminate the today/thru values.
-function syncStarredGolferStats(players, tournamentName) {
+function syncStarredGolferStats(players, tournamentName, eventId) {
   const starred = getStarredGolfers();
   let changed = false;
   for (const p of players) {
@@ -47,6 +48,7 @@ function syncStarredGolferStats(players, tournamentName) {
     const newThru     = String(p.status?.thru ?? parsed.thru ?? '—');
     const newToday    = parsed.today;
     const newTournament = tournamentName || starred[id].tournament;
+    const newEventId    = eventId || starred[id].eventId || null;
 
     // Only write if something actually changed — avoids spurious storage events that
     // cause FeaturedGamesTab to re-render even when no data changed.
@@ -56,7 +58,8 @@ function syncStarredGolferStats(players, tournamentName) {
       cur.toPar === newToPar &&
       cur.thru === newThru &&
       cur.today === newToday &&
-      cur.tournament === newTournament
+      cur.tournament === newTournament &&
+      cur.eventId === newEventId
     ) continue;
 
     starred[id] = {
@@ -66,6 +69,7 @@ function syncStarredGolferStats(players, tournamentName) {
       toPar:      newToPar,
       thru:       newThru,
       today:      newToday,
+      eventId:    newEventId,
     };
     changed = true;
   }
@@ -255,7 +259,7 @@ function ScoreCell({ hole }) {
 }
 
 // ── Inline scorecard panel ─────────────────────────────────────────────────────
-function InlineScorecardPanel({ player, eventId, league, onClose }) {
+export function InlineScorecardPanel({ player, eventId, league, onClose }) {
   const [rounds, setRounds]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
@@ -306,16 +310,26 @@ function InlineScorecardPanel({ player, eventId, league, onClose }) {
           setRounds(withHoles);
           setActiveRound(withHoles.length - 1);
         } else if (rawRounds.length > 0) {
-          // Rounds exist but without per-hole data — keep them for round-score display
-          const roundSummaries = rawRounds.map(r => ({
+          // Rounds exist but without per-hole data — keep them for round-score display.
+          // However, the leaderboard fallback also returns d.linescores which ARE the
+          // current-round hole-by-hole data. Attach them to the last round if present.
+          const rawLinescores = d.linescores || [];
+          const currentHoles  = rawLinescores.length > 0 ? rawLinescores.map(normalizeHole) : [];
+          const roundSummaries = rawRounds.map((r, idx) => ({
             number: r.number,
             value:  r.value ?? r.scoreToPar ?? null,
             par:    r.par ?? null,
             total:  r.score ?? r.total ?? null,
-            holes:  [],
-          })).filter(r => r.total != null);
+            // Attach live holes to the last (current) round only
+            holes:  (idx === rawRounds.length - 1 && currentHoles.length > 0) ? currentHoles : [],
+          })).filter(r => r.total != null || r.holes.length > 0);
           setRounds(roundSummaries);
           if (roundSummaries.length > 0) setActiveRound(roundSummaries.length - 1);
+        } else if ((d.linescores || []).length > 0) {
+          // No round summaries but linescores exist (in-progress first round)
+          const currentHoles = d.linescores.map(normalizeHole);
+          setRounds([{ number: 1, value: null, par: null, total: null, holes: currentHoles }]);
+          setActiveRound(0);
         }
       })
       .catch(e => setError(e.message || 'Could not load scorecard'))
@@ -685,7 +699,7 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
 
   function handleStar(e) {
     e.stopPropagation();
-    toggleStarGolfer(player, tournamentName);
+    toggleStarGolfer(player, tournamentName, eventId);
     setStarred(v => !v);
   }
 
@@ -852,8 +866,8 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
   // run the effect on every render. The JSON string only changes when player data changes.
   const rawPlayersKey = JSON.stringify(rawPlayers);
   useEffect(() => {
-    syncStarredGolferStats(rawPlayers, name);
-  }, [rawPlayersKey, name]); // eslint-disable-line react-hooks/exhaustive-deps
+    syncStarredGolferStats(rawPlayers, name, eventId);
+  }, [rawPlayersKey, name, eventId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sort by numeric position (handles ties like "T2" → 2, "CUT" → 999)
   function parsePos(pos) {

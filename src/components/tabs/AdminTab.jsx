@@ -542,6 +542,7 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
     team:          pick.team          || '',
     sport:         pick.sport         || '',
     bet_type:      pick.bet_type      || 'Moneyline',
+    line:          pick.line          != null ? String(pick.line) : '',
     odds:          pick.odds          != null ? String(pick.odds) : '',
     units:         pick.units         != null ? String(pick.units) : '1',
     result:        pick.result        || '',
@@ -560,6 +561,7 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
       team:          form.team,
       sport:         form.sport,
       bet_type:      form.bet_type,
+      line:          form.line !== '' ? parseFloat(form.line) : null,
       odds:          form.odds !== '' ? parseInt(form.odds) : null,
       units:         form.units !== '' ? parseFloat(form.units) : 1,
       result:        form.result || null,
@@ -616,6 +618,7 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
               {['Moneyline','Spread','Over','Under','Total (Over)','Total (Under)','Run Line','Puck Line','Other'].map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           ))}
+          {row('Line / Spread', inp('line', { placeholder: 'e.g. -5.5 or 8.5', type: 'number', step: '0.5' }))}
           {row('Odds (American)', inp('odds', { placeholder: 'e.g. -110 or +250', type: 'number' }))}
           {row('Units', inp('units', { placeholder: '1', type: 'number', step: '0.5' }))}
           {row('Result', (
@@ -624,6 +627,7 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
               <option value="WIN">WIN</option>
               <option value="LOSS">LOSS</option>
               <option value="PUSH">PUSH</option>
+              <option value="VOID">VOID</option>
             </select>
           ))}
         </div>

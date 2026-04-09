@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GameCard, sortAllSportsEvents, useStarredGames } from './ScoreboardTab';
+import { InlineScorecardPanel } from '../GolfLeaderboard';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function toLocalDateStr(d) {
@@ -594,6 +595,7 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   // Lazy initialization reads localStorage on the first render so My Golfers
   // appears immediately on mount — no flash of empty state while waiting for
   // the useEffect to fire.
+  const [expandedGolfer, setExpandedGolfer] = useState(null); // id of expanded golfer for scorecard
   const [starredGolfers, setStarredGolfers] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}');
@@ -820,59 +822,100 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
             {/* Golfer rows */}
             <div>
               {golferList.map((g, i) => {
-                const toPar = g.toPar || '—';
-                const today = g.today || '—';
-                const pos   = g.position || '—';
-                const thru  = g.thru || '—';
+                const toPar    = g.toPar || '—';
+                const today    = g.today || '—';
+                const pos      = g.position || '—';
+                const thru     = g.thru || '—';
+                const isExpanded = expandedGolfer === g.id;
                 return (
-                  <div key={g.id || i} style={{
-                    display: 'grid',
-                    gridTemplateColumns: '34px 1fr 54px 44px 40px 24px',
-                    alignItems: 'center',
-                    padding: '7px 14px',
-                    borderBottom: i < golferList.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                    gap: '6px',
-                  }}>
-                    {/* Position */}
-                    <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: 700, color: pos === '1' ? '#FFB800' : 'var(--text-muted)' }}>
-                      {pos}
-                    </div>
-                    {/* Name + tournament */}
-                    <div style={{ overflow: 'hidden' }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {g.name}
+                  <div key={g.id || i}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '34px 1fr 54px 44px 40px 24px',
+                      alignItems: 'center',
+                      padding: '7px 14px',
+                      borderBottom: (!isExpanded && i < golferList.length - 1) ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                      gap: '6px',
+                      background: isExpanded ? 'rgba(96,165,250,0.04)' : 'transparent',
+                    }}>
+                      {/* Position */}
+                      <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', fontWeight: 700, color: pos === '1' ? '#FFB800' : 'var(--text-muted)' }}>
+                        {pos}
                       </div>
-                      {g.tournament && (
-                        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {g.tournament}
+                      {/* Name + tournament — click to expand scorecard */}
+                      <div style={{ overflow: 'hidden' }}>
+                        <button
+                          onClick={() => setExpandedGolfer(isExpanded ? null : g.id)}
+                          title={isExpanded ? 'Close scorecard' : 'View scorecard'}
+                          style={{
+                            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                            fontSize: '0.85rem', fontWeight: 600,
+                            color: isExpanded ? '#60a5fa' : 'var(--text-primary)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            display: 'block', width: '100%', textAlign: 'left',
+                            textDecoration: 'underline',
+                            textDecorationColor: isExpanded ? '#60a5fa' : 'rgba(255,255,255,0.15)',
+                            textUnderlineOffset: '2px',
+                          }}
+                        >
+                          {g.name}
+                        </button>
+                        {g.tournament && (
+                          <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {g.tournament}
+                          </div>
+                        )}
+                      </div>
+                      {/* To Par */}
+                      <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.88rem', color: scoreColor(toPar) }}>
+                        {toPar !== '—' ? fmtScore(toPar) : '—'}
+                      </div>
+                      {/* Today */}
+                      <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: scoreColor(today) }}>
+                        {today !== '—' ? fmtScore(today) : '—'}
+                      </div>
+                      {/* Thru */}
+                      <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        {thru}
+                      </div>
+                      {/* Unstar button */}
+                      <button
+                        onClick={() => {
+                          const updated = JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}');
+                          delete updated[g.id];
+                          localStorage.setItem('betos_starred_golfers', JSON.stringify(updated));
+                          window.dispatchEvent(new Event('storage'));
+                        }}
+                        title="Remove"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.25)', fontSize: '0.75rem', padding: '2px', lineHeight: 1 }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
+                      >✕</button>
+                    </div>
+                    {/* Inline scorecard panel — rendered when golfer is expanded */}
+                    {isExpanded && (
+                      g.eventId ? (
+                        <InlineScorecardPanel
+                          player={{
+                            id: g.id,
+                            athlete: { id: g.id, displayName: g.name },
+                            statistics: [
+                              { displayValue: g.toPar },
+                              { displayValue: g.thru },
+                              { displayValue: g.today },
+                            ],
+                            status: { thru: g.thru },
+                          }}
+                          eventId={g.eventId}
+                          league={g.league || 'pga'}
+                          onClose={() => setExpandedGolfer(null)}
+                        />
+                      ) : (
+                        <div style={{ padding: '8px 14px 10px', background: 'rgba(255,255,255,0.02)', borderBottom: i < golferList.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          ⛳ Open the Golf tab and the scorecard will appear here next time.
                         </div>
-                      )}
-                    </div>
-                    {/* To Par */}
-                    <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 800, fontSize: '0.88rem', color: scoreColor(toPar) }}>
-                      {toPar !== '—' ? fmtScore(toPar) : '—'}
-                    </div>
-                    {/* Today */}
-                    <div style={{ textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: scoreColor(today) }}>
-                      {today !== '—' ? fmtScore(today) : '—'}
-                    </div>
-                    {/* Thru */}
-                    <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      {thru}
-                    </div>
-                    {/* Unstar button */}
-                    <button
-                      onClick={() => {
-                        const updated = JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}');
-                        delete updated[g.id];
-                        localStorage.setItem('betos_starred_golfers', JSON.stringify(updated));
-                        window.dispatchEvent(new Event('storage'));
-                      }}
-                      title="Remove"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.25)', fontSize: '0.75rem', padding: '2px', lineHeight: 1 }}
-                      onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
-                    >✕</button>
+                      )
+                    )}
                   </div>
                 );
               })}

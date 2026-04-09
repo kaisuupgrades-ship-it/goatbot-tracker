@@ -513,8 +513,8 @@ export async function POST(req) {
     }
 
     if (action === 'edit_pick') {
-      // Admin can correct: team, sport, bet_type, odds, units, result, notes, is_public, contest_entry
-      const allowed = ['team', 'sport', 'bet_type', 'odds', 'units', 'result', 'notes', 'is_public', 'contest_entry', 'profit', 'date'];
+      // Admin can correct: team, sport, bet_type, line, odds, units, result, notes, is_public, contest_entry
+      const allowed = ['team', 'sport', 'bet_type', 'line', 'odds', 'units', 'result', 'notes', 'is_public', 'contest_entry', 'profit', 'date'];
       const updates = {};
       for (const key of allowed) {
         if (body[key] !== undefined) updates[key] = body[key];
@@ -530,6 +530,10 @@ export async function POST(req) {
         }
         if (result === 'WIN' && profit != null && profit < 0) {
           return NextResponse.json({ error: 'WIN result cannot have negative profit' }, { status: 400 });
+        }
+        // VOID/PUSH automatically zero out profit (no units won or lost)
+        if ((result === 'VOID' || result === 'PUSH') && updates.profit === undefined) {
+          updates.profit = 0;
         }
       }
 
