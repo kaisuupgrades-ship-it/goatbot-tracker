@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeTeam } from '@/lib/teamNormalizer';
+import { calcParlayOdds } from '@/lib/odds';
 
 export const maxDuration = 20;
 
@@ -711,9 +712,18 @@ async function handleParlayPost(req, user, pick, legs) {
     }
   }
 
-  const userId           = user.id;
-  const combinedOdds     = calcParlayOdds(legs);
-  const legCount         = legs.length;
+  const userId = user.id;
+
+  // Block submission if any leg has null/invalid odds — calcParlayOdds returns null in that case
+  const combinedOdds = calcParlayOdds(legs);
+  if (combinedOdds === null) {
+    return NextResponse.json({
+      error: 'Cannot calculate combined odds',
+      errors: ['One or more legs is missing odds. Please enter odds for every leg before submitting.'],
+    }, { status: 422 });
+  }
+
+  const legCount = legs.length;
   const firstGameDate    = legs.find(l => l.game_date)?.game_date
     || new Date().toISOString().split('T')[0];
 
@@ -764,10 +774,23 @@ async function handleParlayPost(req, user, pick, legs) {
 
   const { error: legsErr } = await supabaseAdmin.from('parlay_legs').insert(legRows);
   if (legsErr) {
+    console.error('[picks] parlay_legs insert error:', legsErr.message, '— attempting rollback of pick', savedPick.id);
     // Roll back the parent pick so we don't have an orphaned row
     const { error: rollbackErr } = await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
-    if (rollbackErr) console.error('[picks] parlay rollback failed:', rollbackErr);
-    console.error('[picks] parlay_legs insert error:', legsErr);
+    if (rollbackErr) {
+      // CRITICAL: rollback failed — orphaned pick row exists with no legs.
+      // Manual cleanup required: DELETE FROM picks WHERE id = '<savedPick.id>'
+      console.error(
+        '[picks] CRITICAL: parlay rollback failed — orphaned pick id:', savedPick.id,
+        '— legs insert error:', legsErr.message,
+        '— rollback error:', rollbackErr.message
+      );
+      return NextResponse.json({
+        error: legsErr.message,
+        orphaned_pick_id: savedPick.id,
+        detail: 'Parlay legs failed to save and rollback also failed. The pick row is orphaned and requires manual cleanup.',
+      }, { status: 500 });
+    }
     return NextResponse.json({ error: legsErr.message }, { status: 500 });
   }
 

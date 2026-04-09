@@ -13,6 +13,7 @@ import { createClient }  from '@supabase/supabase-js';
 import {
   fetchESPNScoreboard,
   gradePicksAgainstScoreboard,
+  gradeParlay,
   SPORT_PATHS,
   SOCCER_FALLBACK_PATHS,
 } from '@/lib/gradeEngine';
@@ -51,9 +52,13 @@ export async function POST(req) {
     if (error) throw error;
     if (!picks?.length) return NextResponse.json({ graded: [], count: 0 });
 
+    // Separate parlay picks — they need multi-sport leg grading
+    const parlayPicks    = picks.filter(p => p.is_parlay || (p.sport || '').toUpperCase() === 'PARLAY' || (p.bet_type || '').toLowerCase() === 'parlay');
+    const nonParlayPicks = picks.filter(p => !p.is_parlay && (p.sport || '').toUpperCase() !== 'PARLAY' && (p.bet_type || '').toLowerCase() !== 'parlay');
+
     // Group by sport+date to minimise ESPN API calls
     const groups = {};
-    for (const pick of picks) {
+    for (const pick of nonParlayPicks) {
       const sport = (pick.sport || '').toLowerCase();
       // Allow generic 'soccer' and 'other' through — fetchESPNScoreboard handles fallback
       const supported = SPORT_PATHS[sport] || sport === 'soccer' || sport === 'other';
@@ -74,7 +79,7 @@ export async function POST(req) {
       const scoreboard = scoreboardCache[key];
       if (!scoreboard?.events) continue;
 
-      const graded = gradePicksAgainstScoreboard(groupPicks, scoreboard);
+      const graded = await gradePicksAgainstScoreboard(groupPicks, scoreboard, supabase);
 
       for (const g of graded) {
         // Idempotency: only grade picks that are still PENDING (result IS NULL)
@@ -112,6 +117,30 @@ export async function POST(req) {
             } catch { /* non-critical */ }
           }
         }
+      }
+    }
+
+    // Grade parlay picks
+    for (const pick of parlayPicks) {
+      try {
+        const parlayResult = await gradeParlay(pick, supabase);
+        if (!parlayResult) continue;
+
+        const { error: updateErr } = await supabase
+          .from('picks')
+          .update({
+            result:    parlayResult.result,
+            profit:    parlayResult.profit,
+            graded_at: new Date().toISOString(),
+          })
+          .eq('id', pick.id)
+          .is('result', null);
+
+        if (!updateErr) {
+          allGraded.push({ id: pick.id, user_id: pick.user_id, result: parlayResult.result, profit: parlayResult.profit });
+        }
+      } catch (parlayErr) {
+        console.error('[grade-picks] Error grading parlay', pick.id, ':', parlayErr.message);
       }
     }
 
