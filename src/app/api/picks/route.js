@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeTeam } from '@/lib/teamNormalizer';
+import { calcParlayOdds } from '@/lib/odds';
 
 export const maxDuration = 20;
 
@@ -322,21 +323,7 @@ async function validateSpreadVsML(pick) {
   return null;
 }
 
-// ── Parlay odds helpers ───────────────────────────────────────────────────────
-function americanToDecimal(american) {
-  const n = parseInt(american);
-  if (isNaN(n) || n === 0) return 1;
-  return n > 0 ? n / 100 + 1 : 100 / Math.abs(n) + 1;
-}
-function decimalToAmerican(decimal) {
-  if (decimal <= 1) return -10000;
-  if (decimal >= 2) return Math.round((decimal - 1) * 100);
-  return Math.round(-100 / (decimal - 1));
-}
-function calcParlayOdds(legs) {
-  const decimal = legs.reduce((acc, leg) => acc * americanToDecimal(leg.odds), 1);
-  return decimalToAmerican(decimal);
-}
+// calcParlayOdds imported from @/lib/odds — returns null if ANY leg has null odds
 
 // ── POST /api/picks ──────────────────────────────────────────────────────────
 export async function POST(req) {
@@ -466,13 +453,19 @@ export async function POST(req) {
 
     // Check daily limit — REJECTED picks don't count
     if (safePayload.date) {
-      const { data: existing } = await supabaseAdmin
+      const { data: existing, error: limitErr } = await supabaseAdmin
         .from('picks')
         .select('id')
         .eq('user_id', userId)
         .eq('contest_entry', true)
         .eq('date', safePayload.date)
         .neq('audit_status', 'REJECTED');
+
+      // Fail-closed: if the DB query fails we cannot verify the limit — block the pick
+      if (limitErr) {
+        console.error('[picks] contest limit check failed:', limitErr.message);
+        return NextResponse.json({ error: 'Could not verify contest daily limit — please try again' }, { status: 503 });
+      }
 
       if ((existing?.length || 0) >= CONTEST_RULES.maxPicksPerDay) {
         return NextResponse.json({
@@ -668,12 +661,17 @@ export async function POST(req) {
       { title: 'Line Mover', minXp: 6000 }, { title: 'Syndicate', minXp: 10000 },
       { title: 'Whale', minXp: 20000 }, { title: 'Legend', minXp: 40000 },
     ];
-    const { data: profile } = await supabaseAdmin.from('profiles').select('xp').eq('id', userId).single();
-    const newXp = (profile?.xp || 0) + 5;
-    let rank = RANKS[0];
-    for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
-    await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', userId);
-  } catch { /* non-critical */ }
+    const { data: profile, error: xpFetchErr } = await supabaseAdmin.from('profiles').select('xp').eq('id', userId).single();
+    if (xpFetchErr) {
+      console.error('[picks] XP fetch failed — skipping XP award:', xpFetchErr.message);
+    } else {
+      const newXp = (profile?.xp || 0) + 5;
+      let rank = RANKS[0];
+      for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
+      const { error: xpUpdateErr } = await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', userId);
+      if (xpUpdateErr) console.error('[picks] XP update failed:', xpUpdateErr.message);
+    }
+  } catch (err) { console.error('[picks] XP award error:', err.message); }
 
   return NextResponse.json({ pick: data, commence_time_found: !!commence_time });
 }
@@ -701,9 +699,18 @@ async function handleParlayPost(req, user, pick, legs) {
     }
   }
 
-  const userId           = user.id;
-  const combinedOdds     = calcParlayOdds(legs);
-  const legCount         = legs.length;
+  const userId = user.id;
+
+  // Block submission if any leg has null/invalid odds — calcParlayOdds returns null in that case
+  const combinedOdds = calcParlayOdds(legs);
+  if (combinedOdds === null) {
+    return NextResponse.json({
+      error: 'Cannot calculate combined odds',
+      errors: ['One or more legs is missing odds. Please enter odds for every leg before submitting.'],
+    }, { status: 422 });
+  }
+
+  const legCount = legs.length;
   const firstGameDate    = legs.find(l => l.game_date)?.game_date
     || new Date().toISOString().split('T')[0];
 
@@ -754,10 +761,23 @@ async function handleParlayPost(req, user, pick, legs) {
 
   const { error: legsErr } = await supabaseAdmin.from('parlay_legs').insert(legRows);
   if (legsErr) {
+    console.error('[picks] parlay_legs insert error:', legsErr.message, '— attempting rollback of pick', savedPick.id);
     // Roll back the parent pick so we don't have an orphaned row
     const { error: rollbackErr } = await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
-    if (rollbackErr) console.error('[picks] parlay rollback failed:', rollbackErr);
-    console.error('[picks] parlay_legs insert error:', legsErr);
+    if (rollbackErr) {
+      // CRITICAL: rollback failed — orphaned pick row exists with no legs.
+      // Manual cleanup required: DELETE FROM picks WHERE id = '<savedPick.id>'
+      console.error(
+        '[picks] CRITICAL: parlay rollback failed — orphaned pick id:', savedPick.id,
+        '— legs insert error:', legsErr.message,
+        '— rollback error:', rollbackErr.message
+      );
+      return NextResponse.json({
+        error: legsErr.message,
+        orphaned_pick_id: savedPick.id,
+        detail: 'Parlay legs failed to save and rollback also failed. The pick row is orphaned and requires manual cleanup.',
+      }, { status: 500 });
+    }
     return NextResponse.json({ error: legsErr.message }, { status: 500 });
   }
 
@@ -770,12 +790,17 @@ async function handleParlayPost(req, user, pick, legs) {
       { title: 'Line Mover', minXp: 6000 }, { title: 'Syndicate', minXp: 10000 },
       { title: 'Whale', minXp: 20000 }, { title: 'Legend', minXp: 40000 },
     ];
-    const { data: profile } = await supabaseAdmin.from('profiles').select('xp').eq('id', userId).single();
-    const newXp = (profile?.xp || 0) + 10;
-    let rank = RANKS[0];
-    for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
-    await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', userId);
-  } catch { /* non-critical */ }
+    const { data: profile, error: xpFetchErr } = await supabaseAdmin.from('profiles').select('xp').eq('id', userId).single();
+    if (xpFetchErr) {
+      console.error('[picks] parlay XP fetch failed — skipping XP award:', xpFetchErr.message);
+    } else {
+      const newXp = (profile?.xp || 0) + 10;
+      let rank = RANKS[0];
+      for (const r of RANKS) { if (newXp >= r.minXp) rank = r; }
+      const { error: xpUpdateErr } = await supabaseAdmin.from('profiles').update({ xp: newXp, rank_title: rank.title }).eq('id', userId);
+      if (xpUpdateErr) console.error('[picks] parlay XP update failed:', xpUpdateErr.message);
+    }
+  } catch (err) { console.error('[picks] parlay XP award error:', err.message); }
 
   return NextResponse.json({ pick: savedPick, parlay_legs: legRows, combined_odds: combinedOdds });
 }
