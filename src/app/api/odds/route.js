@@ -1,8 +1,11 @@
 /**
- * /api/odds — Live bookmaker odds
+ * /api/odds — Pre-match bookmaker odds (read-through cache)
  *
  * Primary:  The Odds API (the-odds-api.com) — all games + all markets in ONE call
  * Fallback: odds-api.io (legacy, requires per-event calls)
+ *
+ * Cache layers: L1 in-memory (2 min) → L2 odds_cache table (populated by refresh-odds cron)
+ *               → L3 settings table (legacy) → live fetch as last resort
  *
  * Used by: OddsTab (UI display), TrendsTab (client-side scan enrichment),
  *          BetSlipModal (quick-bet pre-fill via ScoreboardTab)
@@ -425,10 +428,9 @@ async function fetchFromTheOddsAPI(sportKey) {
   url.searchParams.set('regions', 'us');
   url.searchParams.set('markets', 'h2h,spreads,totals');
   url.searchParams.set('oddsFormat', 'american');
-  // commenceTimeFrom = 12 h ago so live/in-progress games (past commence_time) are included
-  // commenceTimeTo   = 2 days from now to cover upcoming games
-  const from = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const to   = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  // Pre-match only — commenceTimeFrom = 5 min ago (small buffer), 48 h window ahead
+  const from = new Date(Date.now() -  5 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const to   = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
   url.searchParams.set('commenceTimeFrom', from);
   url.searchParams.set('commenceTimeTo',   to);
 
@@ -515,7 +517,7 @@ async function fetchFromLegacy(sportKey) {
   let events = await eventsRes.json();
   if (!Array.isArray(events)) events = events.data || [];
   if (config.leagueSlug) events = events.filter(e => e.league?.slug === config.leagueSlug);
-  events = events.filter(e => e.status === 'pending' || e.status === 'live');
+  events = events.filter(e => e.status === 'pending');
   events.sort((a, b) => new Date(a.date) - new Date(b.date));
   const top = events.slice(0, 10);
 
@@ -549,11 +551,6 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const sportKey = (searchParams.get('sport') || 'mlb').toLowerCase();
 
-  // ?live=1 — called by ScoreboardTab when in-play games are active.
-  // Bypasses normal cache, uses a 30-second TTL matching The Odds API update frequency.
-  // This costs quota but live odds are moving fast — stale data causes logical impossibilities.
-  const isLive = searchParams.get('live') === '1';
-
   if (!THE_ODDS_KEY && !LEGACY_KEY) {
     return NextResponse.json({
       error: 'No odds API key configured',
@@ -563,35 +560,24 @@ export async function GET(req) {
     }, { status: 200 });
   }
 
-  // Live path: use a separate short-TTL cache so live requests don't pollute pre-game cache
-  const cacheKey = isLive ? `${sportKey}_live` : sportKey;
-  const LIVE_TTL = 30 * 1000; // 30s — matches The Odds API live update frequency
-
   // L1 memory cache check
-  const memHit = getMemCache(cacheKey);
+  const memHit = getMemCache(sportKey);
   if (memHit) {
-    // For live requests, respect the tighter 30s TTL within the L1 entry
-    if (!isLive || (Date.now() - (memCache.get(cacheKey)?.time || 0)) < LIVE_TTL) {
-      return NextResponse.json({ ...memHit, cached: true, liveMode: isLive });
-    }
+    return NextResponse.json({ ...memHit, cached: true });
   }
 
   // L2: odds_cache table — populated by /api/cron/refresh-odds (primary shared cache)
-  if (!isLive) {
-    const tableHit = await getOddsCacheTable(sportKey);
-    if (tableHit) {
-      setMemCache(cacheKey, tableHit);
-      return NextResponse.json({ ...tableHit, cached: true });
-    }
+  const tableHit = await getOddsCacheTable(sportKey);
+  if (tableHit) {
+    setMemCache(sportKey, tableHit);
+    return NextResponse.json({ ...tableHit, cached: true });
   }
 
-  // L3: settings table — legacy Supabase cache (skip for live requests)
-  if (!isLive) {
-    const sbHit = await getSupabaseCache(sportKey);
-    if (sbHit) {
-      setMemCache(cacheKey, sbHit); // warm L1 for this instance
-      return NextResponse.json({ ...sbHit, cached: true });
-    }
+  // L3: settings table — legacy Supabase cache
+  const sbHit = await getSupabaseCache(sportKey);
+  if (sbHit) {
+    setMemCache(sportKey, sbHit); // warm L1 for this instance
+    return NextResponse.json({ ...sbHit, cached: true });
   }
 
   // Cache miss (or live bypass) — fetch live data
@@ -614,13 +600,10 @@ export async function GET(req) {
       }
       oddsResult.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
       oddsResult.pinnacleUnavailable = pinnacleUnavailable;
-      oddsResult.liveMode = isLive;
       // Only cache if we got actual data back (0 games is valid off-season, errors are not)
       if (oddsResult?.data?.length >= 0) {
-        setMemCache(cacheKey, oddsResult);
-        // Live requests skip Supabase write — 30s TTL is too tight for the write overhead,
-        // and we don't want live odds polluting the shared pre-game cache
-        if (!isLive) await setSupabaseCache(sportKey, oddsResult);
+        setMemCache(sportKey, oddsResult);
+        await setSupabaseCache(sportKey, oddsResult);
       }
       return NextResponse.json({ ...oddsResult, cached: false });
     } catch (err) {
@@ -646,7 +629,7 @@ export async function GET(req) {
       result.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
       result.pinnacleUnavailable = pinnacleResult.status !== 'fulfilled';
       if (result?.data?.length > 0) {
-        setMemCache(cacheKey, result);
+        setMemCache(sportKey, result);
         await setSupabaseCache(sportKey, result);
       }
       return NextResponse.json({ ...result, cached: false });
