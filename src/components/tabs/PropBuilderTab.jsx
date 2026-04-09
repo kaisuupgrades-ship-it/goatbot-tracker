@@ -170,6 +170,11 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
   // Lazy-load props when first expanded
   useEffect(() => {
     if (!isExpanded || !eventId || propsData !== null) return;
+    if (gameState === 'in' || gameState === 'post') {
+      setError(gameState === 'in' ? 'Player props are only available before game time.' : 'Props are not available for completed games.');
+      setPropsData({ categories: [] });
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError('');
@@ -204,9 +209,9 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
     date: event.date,
   };
 
-  const canExpand = !!eventId;
   const isLive    = gameState === 'in';
   const isFinal   = gameState === 'post';
+  const canExpand = !!eventId && !isLive && !isFinal;
 
   return (
     <div style={{
@@ -254,7 +259,7 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
             <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{gameTime}</span>
           )}
           {!canExpand
-            ? <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>no props</span>
+            ? <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{isLive ? 'in progress' : isFinal ? 'final' : 'no props'}</span>
             : <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'inline-block', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▼</span>
           }
         </div>
