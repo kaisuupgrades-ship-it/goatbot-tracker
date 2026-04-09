@@ -301,6 +301,7 @@ export async function GET(req) {
   let gradedCount  = 0;
   let skippedCount = 0;
   const affectedUsers = new Set();
+  const gradedPickIds = new Set(); // track graded pick IDs for fallback retry
 
   for (const [key, groupPicks] of Object.entries(groups)) {
     const [sport, dateStr] = key.split('|');
@@ -331,6 +332,57 @@ export async function GET(req) {
       if (!updateErr) {
         gradedCount++;
         affectedUsers.add(g.user_id);
+        gradedPickIds.add(g.id);
+      }
+    }
+  }
+
+  // ── Phase 1b-retry: previous-day scoreboard fallback ──────────────────────
+  // Fixes edge case: when a pick lacks commence_time, we use pick.date (UTC).
+  // If the game started at e.g. 7pm ET (23:00 UTC), a pick logged at 11pm ET
+  // (03:00 UTC next day) gets pick.date = next UTC day, so the primary lookup
+  // finds zero games. Retry ungraded regular picks using (gameDate − 1 day).
+  const ungradedRegular = regularPicks.filter(p => !gradedPickIds.has(p.id));
+  if (ungradedRegular.length > 0) {
+    const prevDayGroups = {};
+    for (const pick of ungradedRegular) {
+      const sport = (pick.sport || '').toLowerCase();
+      if (!SPORT_PATHS[sport] && sport !== 'soccer') continue;
+      const gameDate = pick.commence_time
+        ? new Date(pick.commence_time).toISOString().slice(0, 10)
+        : pick.date;
+      // Subtract 1 day (anchored at noon UTC to avoid DST weirdness)
+      const prevDate = new Date(new Date(`${gameDate}T12:00:00Z`).getTime() - 86400000)
+        .toISOString().slice(0, 10);
+      const key = `${sport}|${prevDate}`;
+      if (!prevDayGroups[key]) prevDayGroups[key] = [];
+      prevDayGroups[key].push(pick);
+    }
+    for (const [key, groupPicks] of Object.entries(prevDayGroups)) {
+      const [sport, dateStr] = key.split('|');
+      if (!scoreboardCache[key]) {
+        scoreboardCache[key] = await fetchESPNScoreboard(sport, dateStr);
+      }
+      const scoreboard = scoreboardCache[key];
+      if (!scoreboard?.events) continue;
+      const graded = await gradePicksAgainstScoreboard(groupPicks, scoreboard, supabase);
+      for (const g of graded) {
+        const { error: updateErr } = await supabase
+          .from('picks')
+          .update({
+            result:            g.result,
+            profit:            g.profit,
+            graded_at:         new Date().toISOString(),
+            graded_home_score: g.home_score,
+            graded_away_score: g.away_score,
+          })
+          .eq('id', g.id)
+          .or('result.is.null,result.eq.PENDING');
+        if (!updateErr) {
+          gradedCount++;
+          affectedUsers.add(g.user_id);
+          gradedPickIds.add(g.id);
+        }
       }
     }
   }
