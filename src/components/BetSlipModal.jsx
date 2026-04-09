@@ -688,7 +688,8 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
         border: saved ? '1px solid rgba(74,222,128,0.4)' : '1px solid rgba(255,184,0,0.25)',
         borderRadius: '16px',
         width: 'calc(100% - 24px)', maxWidth: '480px',
-        maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
+        maxHeight: 'min(calc(100dvh - 40px), calc(100vh - 40px))',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '0 24px 80px rgba(0,0,0,0.7), 0 0 40px rgba(255,184,0,0.05)',
         animation: 'fade-in 0.18s cubic-bezier(0.34,1.56,0.64,1)',
         transition: 'border-color 0.3s',
@@ -731,6 +732,9 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
           >✕</button>
         </div>
+
+        {/* ── Scrollable content area — header and footer stay pinned ─────── */}
+        <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
         {/* ── Quick-Select Grid ───────────────────────────────────────────── */}
         {!propPrefill && <div style={{ padding: '0.85rem 1.1rem 0' }}>
@@ -1224,11 +1228,13 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
           </div>
         )}
 
-        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        </div>{/* end scrollable content area */}
+
+        {/* ── Footer — always visible, pinned to bottom ───────────────────── */}
         <div style={{
           padding: '0.85rem 1.1rem',
-          marginTop: '0.75rem',
           borderTop: '1px solid var(--border)',
+          flexShrink: 0,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
           background: 'var(--bg-elevated)',
           borderRadius: '0 0 16px 16px',
