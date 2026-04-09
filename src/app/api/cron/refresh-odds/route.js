@@ -6,21 +6,28 @@
  * the odds_cache Supabase table instead.
  *
  * Credit budget math (The Odds API):
- *  - Active hours: 8am–midnight ET (16h) × 4 fetches/hr × 4 sports × 2 markets = ~512 credits/day
- *  - Off-peak skip: midnight–8am ET saves ~32% (was ~768/day without time throttle)
- *  - Monthly budget: 20K credits → ~39 days at current rate
+ *  - Proximity TTL means most of the day games are >6h out → polled only ~2-3×/day/sport
+ *  - Final hour before tip-off: 12-min TTL → ~5 polls/sport
+ *  - Typical evening-game day: ~12 polls × 4 sports × 2 markets = ~96 credits/day
+ *  - Off-peak skip (midnight–8am ET) eliminates overnight waste entirely
+ *  - Monthly budget: 20K credits → 200+ days at current rate
  *  - TODO: revert to 3 markets (add totals back) after migrating to OddsPapi (unlimited)
  *
  * Smart refresh schedule (per sport):
- *  - Pre-match only:         commenceTimeFrom = now - 5min (live odds paused — v2 feature)
- *  - Off-peak (0–8am ET):    skip entirely (return early)
- *  - Shoulder (8–11am ET,    use 45-min TTL instead of 25-min
+ *  - Pre-match only:           commenceTimeFrom = now - 5min (live odds paused — v2 feature)
+ *  - Off-peak (0–8am ET):      skip entirely (return early)
+ *  - Shoulder (8–11am,         proximity TTLs ×1.8
  *    10pm–midnight ET):
- *  - Peak (11am–10pm ET):    DEFAULT_TTL = 25 min
- *  - All post-game:          skip entirely
- *  - No games today:         skip (ESPN check)
- *  - Empty cache:            always refresh
- *  - Deduplication:          skip if any game was fetched within last 10 min
+ *  - Peak (11am–10pm ET):      proximity TTLs as-is:
+ *      > 48h out → 6h TTL      (lines flat this far out)
+ *      12–48h   → 2h TTL
+ *       3–12h   → 60min TTL
+ *       1–3h    → 25min TTL   (active movement window)
+ *       < 1h    → 12min TTL   (final steam / closing line)
+ *  - All post-game:            skip entirely
+ *  - No games today:           skip (ESPN check)
+ *  - Empty cache:              always refresh
+ *  - Deduplication:            skip if cache < 10 min old
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -45,15 +52,28 @@ const SPORT_KEYS = {
   mls: 'soccer_usa_mls',
 };
 
-// Thresholds — how old the cache can be before triggering a re-fetch
-// TODO: LIVE_TTL_MS and NEAR_TTL_MS are effectively dormant while pre-match-only mode
-// is active (commenceTimeFrom = now - 5min). Re-enable when live in-play odds come back (v2).
-const LIVE_TTL_MS    = 90_000;        // 90 sec for live games (dormant — see above)
-const NEAR_TTL_MS    = 3 * 60_000;    // 3 min when game < 1 hr away (dormant — see above)
-const DEFAULT_TTL_MS = 25 * 60_000;   // 25 min for pre-game peak hours
-// Deduplication guard — never re-fetch a sport if its cache is this fresh
-// Protects against Vercel retry storms or accidental double-fires
-const DEDUP_TTL_MS   = 10 * 60_000;  // 10 min hard floor regardless of game state
+// TODO: LIVE_TTL_MS dormant while pre-match-only mode is active (commenceTimeFrom = now - 5min).
+// Re-enable (and restore 12h lookback) when live in-play odds come back (v2).
+const LIVE_TTL_MS  = 90_000; // 90 sec for live games (dormant)
+
+// Proximity-based TTL for pre-match games — lines barely move far out, sharps
+// bet heavily in the final hour. Tighter TTL only when it actually matters.
+//   > 48 h → 6 h      (2+ days out: lines essentially flat)
+//   12–48 h → 2 h     (tomorrow's games: modest movement)
+//    3–12 h → 60 min  (sharps start sizing positions)
+//    1–3 h  → 25 min  (active line movement window)
+//     < 1 h → 12 min  (final steam / closing line)
+function proximityTtl(msToStart) {
+  if (msToStart > 48 * 3600_000) return  6 * 3600_000;
+  if (msToStart > 12 * 3600_000) return  2 * 3600_000;
+  if (msToStart >  3 * 3600_000) return 60 *   60_000;
+  if (msToStart >      3600_000) return 25 *   60_000;
+  return 12 * 60_000;
+}
+
+// Deduplication guard — never re-fetch a sport if its cache is this fresh.
+// Protects against Vercel retry storms / accidental double-fires.
+const DEDUP_TTL_MS = 10 * 60_000;  // 10 min hard floor regardless of game state
 
 // NFL in-season months (1-indexed): Sept (9) through Feb (2) — skip otherwise to save credits
 const NFL_SEASON_MONTHS = new Set([9, 10, 11, 12, 1, 2]);
@@ -311,8 +331,8 @@ async function fetchSportOdds(sport) {
   // Pre-match only — live in-play odds are paused (v2 feature). A 5-min lookback buffer
   // catches games whose commence_time just ticked past now without missing their final pre-match line.
   // TODO: restore commenceTimeFrom to now - 12h when live in-play odds are re-enabled.
-  const from = new Date(Date.now() - 5 * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const to   = new Date(Date.now() + 2 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const from = new Date(Date.now() -  5 *   60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const to   = new Date(Date.now() + 48 * 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z'); // 48h — no value in caching lines further out
   url.searchParams.set('commenceTimeFrom', from);
   url.searchParams.set('commenceTimeTo',   to);
 
@@ -357,26 +377,30 @@ async function getSportCacheState(sport) {
   return rows || [];
 }
 
-// Returns threshold ms (cache must be older than this to trigger refresh),
-// or null meaning "all games are done, skip this sport".
-// defaultTtl can be overridden by the caller for time-of-day throttling.
-function getRefreshThreshold(games, defaultTtl = DEFAULT_TTL_MS) {
+// Returns threshold ms (cache must be older than this to trigger a re-fetch),
+// or null meaning "all games are done, skip this sport entirely".
+//
+// shoulderMultiplier > 1 stretches all TTLs during low-traffic hours so we
+// poll less without changing the proximity-based logic.
+function getRefreshThreshold(games, shoulderMultiplier = 1) {
   if (!games.length) return 0; // empty cache → always refresh
 
   const now = Date.now();
   const hasLive = games.some(g => g.game_status === 'live');
-  if (hasLive) return LIVE_TTL_MS;
+  if (hasLive) return LIVE_TTL_MS; // dormant in pre-match-only mode
 
   const preGames = games.filter(g => g.game_status === 'pre');
   if (!preGames.length) return null; // all post — skip
 
-  let minMsToStart = Infinity;
+  // The soonest game drives the TTL — it's the one whose line is moving most.
+  let minTtl = Infinity;
   for (const g of preGames) {
-    const ms = new Date(g.commence_time).getTime() - now;
-    if (ms > 0 && ms < minMsToStart) minMsToStart = ms;
+    const msToStart = Math.max(0, new Date(g.commence_time).getTime() - now);
+    const ttl = proximityTtl(msToStart);
+    if (ttl < minTtl) minTtl = ttl;
   }
 
-  return minMsToStart < 3600_000 ? NEAR_TTL_MS : defaultTtl;
+  return Math.round(minTtl * shoulderMultiplier);
 }
 
 // ── Upsert enriched games into odds_cache ─────────────────────────────────────
@@ -437,12 +461,12 @@ export async function GET(req) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'off-peak-ET', etHour });
   }
 
-  // Shoulder: 8–11am ET and 10pm–midnight ET — lighter traffic; use 45-min TTL
-  // Peak:     11am–10pm ET — keep DEFAULT_TTL_MS (25 min)
+  // Shoulder: 8–11am ET and 10pm–midnight ET — stretch all proximity TTLs by ×1.8
+  // Peak:     11am–10pm ET — use proximity TTLs as-is (multiplier = 1)
   const isShoulderHour = etHour < 11 || etHour >= 22;
-  const effectiveDefaultTtl = isShoulderHour ? 45 * 60_000 : DEFAULT_TTL_MS;
+  const shoulderMultiplier = isShoulderHour ? 1.8 : 1;
   if (isShoulderHour) {
-    console.log(`[refresh-odds] Shoulder ET (${etHour}:xx) — using 45-min TTL`);
+    console.log(`[refresh-odds] Shoulder ET (${etHour}:xx) — proximity TTLs ×1.8`);
   }
 
   const results = [];
@@ -466,7 +490,7 @@ export async function GET(req) {
       }
 
       const games     = await getSportCacheState(sport);
-      const threshold = getRefreshThreshold(games, effectiveDefaultTtl);
+      const threshold = getRefreshThreshold(games, shoulderMultiplier);
 
       if (threshold === null) {
         results.push({ sport, action: 'skip', reason: 'all post-game' });
