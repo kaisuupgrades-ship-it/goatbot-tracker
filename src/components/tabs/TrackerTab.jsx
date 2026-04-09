@@ -1202,20 +1202,31 @@ export default function TrackerTab({ picks, user, onViewGame }) {
                 p.result === 'WIN'  ? '#4ade80' :
                 p.result === 'LOSS' ? '#f87171' :
                 p.result === 'PUSH' ? '#94a3b8' : '#FFB800';
+              const resultLabel =
+                p.result === 'WIN'  ? 'Won' :
+                p.result === 'LOSS' ? 'Lost' :
+                p.result === 'PUSH' ? 'Push' : 'Pending';
+              const resultPillBg =
+                p.result === 'WIN'  ? 'rgba(74,222,128,0.18)' :
+                p.result === 'LOSS' ? 'rgba(248,113,113,0.18)' :
+                p.result === 'PUSH' ? 'rgba(148,163,184,0.15)' :
+                'rgba(255,184,0,0.08)';
+              const resultPillBorder = (!p.result || p.result === 'PENDING')
+                ? '1px solid rgba(255,184,0,0.35)' : 'none';
 
               return (
                 <div key={p.id} style={{
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border)',
-                  borderLeft: `3px solid ${resultColor}`,
-                  borderRadius: '10px',
+                  borderRadius: '12px',
                   overflow: 'hidden',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
                   display: 'flex', flexDirection: 'column',
                 }}>
-                  {/* ── Header: sport badge + date + units ── */}
+                  {/* ── Meta strip: sport + date ── */}
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '6px 11px 5px',
+                    padding: '6px 12px 5px',
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
                     background: 'rgba(255,255,255,0.02)',
                   }}>
@@ -1226,71 +1237,111 @@ export default function TrackerTab({ picks, user, onViewGame }) {
                         letterSpacing: '0.07em', color: '#60a5fa',
                         background: 'rgba(96,165,250,0.1)', padding: '1px 5px', borderRadius: '4px',
                       }}>{p.sport || 'Other'}</span>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{p.bet_type}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {p.date && (
-                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
-                          {new Date(p.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </span>
-                      )}
-                      <span style={{
-                        padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700,
-                        background: 'rgba(255,184,0,0.1)', color: 'var(--gold)',
-                        border: '1px solid rgba(255,184,0,0.2)',
-                      }}>{units}u</span>
-                    </div>
+                    {p.date && (
+                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                        {new Date(p.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
                   </div>
 
-                  {/* ── Main: team name + matchup ── */}
-                  <div style={{ padding: '8px 12px 7px', flex: 1 }}>
-                    {onViewGame ? (
-                      <button onClick={() => onViewGame(p)} style={{
-                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                        fontWeight: 700, color: 'var(--gold)', fontSize: '0.95rem',
-                        textDecoration: 'underline dotted', textUnderlineOffset: '2px',
-                        fontFamily: 'inherit', textAlign: 'left', lineHeight: 1.25,
-                        display: 'block', width: '100%',
-                      }} title="View on Scoreboard">{p.team}</button>
-                    ) : (
-                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.25 }}>{p.team}</div>
-                    )}
-                    {(p.matchup || (p.home_team && p.away_team)) && (
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
-                        {p.matchup || `${p.away_team} @ ${p.home_team}`}
+                  {/* ── Hero: team + odds + result pill ── */}
+                  <div style={{ padding: '12px 13px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* Team name */}
+                        <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                          {onViewGame ? (
+                            <button onClick={() => onViewGame(p)} style={{
+                              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                              fontWeight: 800, color: 'var(--text-primary)', fontSize: '1.05rem',
+                              textDecoration: 'underline dotted rgba(255,184,0,0.5)', textUnderlineOffset: '2px',
+                              fontFamily: 'inherit', textAlign: 'left', lineHeight: 1.2,
+                            }} title="View on Scoreboard">{p.team}</button>
+                          ) : (
+                            <span style={{ color: 'var(--text-primary)' }}>{p.team}</span>
+                          )}
+                          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: oddsNum > 0 ? '#4ade80' : 'var(--text-secondary)', flexShrink: 0 }}>
+                            {p.odds ? `${oddsNum > 0 ? '+' : ''}${p.odds}` : '—'}
+                          </span>
+                        </div>
+                        {/* Bet type */}
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '3px' }}>{p.bet_type}</div>
+                        {/* Matchup */}
+                        {(p.matchup || (p.home_team && p.away_team)) && (
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
+                            {p.matchup || `${p.away_team} @ ${p.home_team}`}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {/* Score bug + trend inline */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                      {/* Result pill */}
+                      <div style={{
+                        padding: '4px 11px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 800,
+                        background: resultPillBg, border: resultPillBorder,
+                        color: resultColor, flexShrink: 0, marginTop: '2px',
+                      }}>
+                        {resultLabel}
+                      </div>
+                    </div>
+
+                    {/* Wager line */}
+                    <div style={{ marginTop: '7px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Wager: <span style={{ color: 'var(--text-secondary)', fontWeight: 600, fontFamily: 'IBM Plex Mono, monospace' }}>{units}u</span>
+                    </div>
+
+                    {/* Score bug + trend */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
                       <MiniScoreBug pick={p} game={game} />
                       <TrendingBadge trend={trend} />
                     </div>
                   </div>
 
-                  {/* ── Stats footer: odds | result | P/L ── */}
+                  {/* ── Mini Scoreboard — when graded ── */}
+                  {p.graded_home_score != null && p.graded_away_score != null && p.home_team && p.away_team && (
+                    <div style={{ margin: '10px 13px 0', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}>
+                      <div style={{ padding: '3px 10px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        Final Score
+                      </div>
+                      {(() => {
+                        const aScore = parseInt(p.graded_away_score);
+                        const hScore = parseInt(p.graded_home_score);
+                        const awayWon = aScore > hScore;
+                        const homeWon = hScore > aScore;
+                        return (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', background: awayWon ? 'rgba(255,184,0,0.05)' : 'transparent' }}>
+                              <span style={{ fontSize: '0.76rem', fontWeight: awayWon ? 700 : 400, color: awayWon ? '#FFB800' : 'var(--text-secondary)' }}>{p.away_team}</span>
+                              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: awayWon ? '#FFB800' : 'var(--text-muted)' }}>{p.graded_away_score}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', background: homeWon ? 'rgba(255,184,0,0.05)' : 'transparent' }}>
+                              <span style={{ fontSize: '0.76rem', fontWeight: homeWon ? 700 : 400, color: homeWon ? '#FFB800' : 'var(--text-secondary)' }}>{p.home_team}</span>
+                              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: homeWon ? '#FFB800' : 'var(--text-muted)' }}>{p.graded_home_score}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* ── P/L Footer ── */}
                   <div style={{
-                    display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+                    margin: '10px 0 0',
+                    padding: '7px 13px',
                     borderTop: '1px solid rgba(255,255,255,0.06)',
-                    background: 'rgba(0,0,0,0.15)',
+                    background: 'rgba(0,0,0,0.12)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   }}>
-                    <div style={{ padding: '6px 10px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '1px' }}>Odds</div>
-                      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: oddsNum > 0 ? '#4ade80' : 'var(--text-primary)' }}>
-                        {p.odds ? `${oddsNum > 0 ? '+' : ''}${p.odds}` : '—'}
-                      </div>
-                    </div>
-                    <div style={{ padding: '6px 10px', borderRight: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '1px' }}>Result</div>
-                      <div style={{ fontWeight: 800, fontSize: '0.72rem', color: resultColor, textTransform: 'uppercase' }}>
-                        {p.result || 'PENDING'}
-                      </div>
-                    </div>
-                    <div style={{ padding: '6px 10px', textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: '1px' }}>P/L</div>
-                      <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: profitVal != null ? (profitVal >= 0 ? '#4ade80' : '#f87171') : 'var(--text-muted)' }}>
+                    <div>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginRight: '4px' }}>P/L</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.88rem', color: profitVal != null ? (profitVal >= 0 ? '#4ade80' : '#f87171') : 'var(--text-muted)' }}>
                         {profitVal != null ? `${profitVal >= 0 ? '+' : ''}${profitVal.toFixed(2)}u` : '—'}
-                      </div>
+                      </span>
                     </div>
+                    {p.date && (
+                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                        Placed {new Date(p.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
