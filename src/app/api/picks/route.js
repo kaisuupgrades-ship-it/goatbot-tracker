@@ -754,10 +754,16 @@ async function handleParlayPost(req, user, pick, legs) {
 
   const { error: legsErr } = await supabaseAdmin.from('parlay_legs').insert(legRows);
   if (legsErr) {
-    // Roll back the parent pick so we don't have an orphaned row
-    const { error: rollbackErr } = await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
-    if (rollbackErr) console.error('[picks] parlay rollback failed:', rollbackErr);
     console.error('[picks] parlay_legs insert error:', legsErr);
+    // Roll back the parent pick so we don't have an orphaned row (retry once on failure)
+    const { error: rollbackErr } = await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
+    if (rollbackErr) {
+      // Retry rollback
+      const { error: rollbackRetryErr } = await supabaseAdmin.from('picks').delete().eq('id', savedPick.id);
+      if (rollbackRetryErr) {
+        console.error(`[picks] CRITICAL: parlay rollback failed after retry — orphaned pick id=${savedPick.id}`, rollbackRetryErr);
+      }
+    }
     return NextResponse.json({ error: legsErr.message }, { status: 500 });
   }
 

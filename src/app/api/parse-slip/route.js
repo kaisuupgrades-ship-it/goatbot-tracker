@@ -296,7 +296,34 @@ export async function POST(req) {
       // Deterministic post-processing: normalize each pick's team name
       picks = picks.map(p => normalizeParsedPick(p));
 
-      return NextResponse.json({ picks });
+      // Validate each pick — require team and bet_type; parlays need non-empty legs with teams
+      const validPicks = [];
+      for (const p of picks) {
+        if (!p.team || typeof p.team !== 'string' || !p.team.trim()) {
+          console.warn('[parse-slip] dropping pick missing team field:', JSON.stringify(p));
+          continue;
+        }
+        if (!p.bet_type || typeof p.bet_type !== 'string' || !p.bet_type.trim()) {
+          console.warn('[parse-slip] dropping pick missing bet_type field:', JSON.stringify(p));
+          continue;
+        }
+        if ((p.bet_type || '').toLowerCase() === 'parlay') {
+          if (!Array.isArray(p.parlay_legs) || p.parlay_legs.length === 0) {
+            console.warn('[parse-slip] dropping parlay pick with no legs:', JSON.stringify(p));
+            continue;
+          }
+          const legsValid = p.parlay_legs.every(
+            leg => leg.team && typeof leg.team === 'string' && leg.team.trim()
+          );
+          if (!legsValid) {
+            console.warn('[parse-slip] dropping parlay pick with leg(s) missing team:', JSON.stringify(p));
+            continue;
+          }
+        }
+        validPicks.push(p);
+      }
+
+      return NextResponse.json({ picks: validPicks });
     } catch {
       return NextResponse.json({ error: 'Could not parse bet slip. Try pasting the text manually.', raw }, { status: 422 });
     }

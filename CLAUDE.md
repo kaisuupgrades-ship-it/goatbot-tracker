@@ -45,7 +45,7 @@ src/
       contest-audit/  # Audit picks for contest eligibility
       contest-leaderboard/
       cron/
-        grade-picks/        # Runs every 5 min during game hours (17-23 UTC, 0-8 UTC)
+        grade-picks/        # Runs every 5 min: 0-9, 10-14, 15-23 UTC (full 24hr coverage)
         pregenerate-analysis/ # Runs 12:00 + 20:00 UTC — only state==='pre' games
         trends/             # Runs 9:00 + 17:00 UTC
       follow/         # Follow/unfollow users
@@ -145,8 +145,10 @@ src/
 ### Cron Jobs (vercel.json)
 | Route | Schedule | Purpose |
 |---|---|---|
-| `/api/cron/grade-picks` | Every 5 min, 17-23 UTC + 0-8 UTC | Grade pending picks during game hours |
-| `/api/cron/pregenerate-analysis` | 12:00 UTC + 20:00 UTC | Pre-generate AI analyses (8am + 4pm ET) |
+| `/api/cron/grade-picks` | Every 5 min, 0-9 UTC (8pm-4am ET) | Late/west-coast games |
+| `/api/cron/grade-picks` | Every 5 min, 10-14 UTC (5am-9am ET) | Gap coverage — early afternoon |
+| `/api/cron/grade-picks` | Every 5 min, 15-23 UTC (10am-6pm ET) | Main daytime + evening window |
+| `/api/cron/pregenerate-analysis` | 12:00/14:00/16:00 UTC (per sport) | Pre-generate AI analyses |
 | `/api/cron/trends` | 9:00 UTC + 17:00 UTC | Refresh trend analysis |
 
 All cron routes require `Authorization: Bearer <CRON_SECRET>` header.

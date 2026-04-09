@@ -20,6 +20,10 @@
       "path": "/api/cron/grade-picks",
       "schedule": "*/5 0-9 * * *"
     },
+    {
+      "path": "/api/cron/grade-picks",
+      "schedule": "*/5 10-14 * * *"
+    },
     { "path": "/api/cron/pregenerate-analysis?sport=mlb",  "schedule": "0 12 * * *" },
     { "path": "/api/cron/pregenerate-analysis?sport=nba",  "schedule": "6 12 * * *" },
     { "path": "/api/cron/pregenerate-analysis?sport=nhl",  "schedule": "12 12 * * *" },

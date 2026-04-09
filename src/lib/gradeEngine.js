@@ -12,6 +12,8 @@
  *  3. extractTeamFromMatchup() handles "ILL vs UCONN" style team fields
  *  4. 4-tier home/away detection (side → team name → home/away fields → matchup parse)
  *  5. Totals grade correctly even without a stored line column
+ *  6. Postponed/cancelled games → PUSH (VOID_STATUSES)
+ *  7. Parlay grading: gradeParlay() + gradeParlaysAgainstScoreboard()
  */
 
 export function normalize(str) {
@@ -22,6 +24,18 @@ export function normalize(str) {
     .replace(/[^a-z0-9]/g, '')
     .trim();
 }
+
+/**
+ * ESPN status names that indicate a game is voided (postponed/cancelled).
+ * Standard sportsbook practice: voided game → PUSH (refund bets).
+ * For parlays: voided leg is removed and remaining legs recalculate.
+ */
+export const VOID_STATUSES = new Set([
+  'STATUS_POSTPONED',
+  'STATUS_CANCELED',
+  'STATUS_CANCELLED',
+  'STATUS_ABANDONED',
+]);
 
 /**
  * Common team abbreviations → a distinctive substring of the ESPN display name.
@@ -236,6 +250,15 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
   const betType = (pick.bet_type || 'Moneyline').toLowerCase();
   const pickSide = (pick.side || '').toLowerCase(); // explicit side field
 
+  // ── Props: stub — not auto-gradeable from ESPN scores ─────────────────────
+  if (betType.includes('prop')) {
+    // TODO: Props grading requires player stat data (yards, strikeouts, assists, etc.)
+    // which ESPN's scoreboard endpoint does not provide. When a stats API is integrated,
+    // implement gradeProps() here and route prop picks through it.
+    console.warn('[gradeEngine] Prop bet cannot be auto-graded from scoreboard — pick id:', pick.id);
+    return null;
+  }
+
   // Resolve line: stored column → parse from team name → parse from notes → null
   // Must produce null (not NaN) when nothing resolves — the spread/total guards check isNaN(line).
   const _rawLine = pick.line ?? parseLineFromTeam(pick.team) ?? parseLineFromNotes(pick.notes) ?? null;
@@ -413,15 +436,49 @@ export async function fetchESPNSoccerFallback(espnDate) {
 /**
  * Grade a batch of picks against a scoreboard response.
  * Returns array of { id, result, profit, home_score, away_score, home_team, away_team }
+ *
+ * Parlay picks (is_parlay = true) are skipped here — use gradeParlaysAgainstScoreboard()
+ * which handles the async leg-fetching and combined odds calculation.
  */
 export function gradePicksAgainstScoreboard(picks, scoreboard) {
   const results = [];
   const events  = scoreboard?.events || [];
 
   for (const pick of picks) {
+    // Parlay picks require async leg loading — skip here
+    if (pick.is_parlay) continue;
+
     for (const event of events) {
       const comp        = event.competitions?.[0];
       const statusName  = comp?.status?.type?.name;
+
+      // Handle void (postponed/cancelled) games — standard sportsbook practice: PUSH
+      if (VOID_STATUSES.has(statusName)) {
+        const competitors = comp?.competitors || [];
+        const homeComp    = competitors.find(c => c.homeAway === 'home');
+        const awayComp    = competitors.find(c => c.homeAway === 'away');
+        if (!homeComp || !awayComp) continue;
+
+        const homeTeamName = homeComp.team?.displayName || homeComp.team?.name || '';
+        const awayTeamName = awayComp.team?.displayName || awayComp.team?.name || '';
+
+        if (!pickMatchesGame(pick, homeTeamName, awayTeamName)) continue;
+
+        const units = parseFloat(pick.units || 1);
+        results.push({
+          id:           pick.id,
+          user_id:      pick.user_id,
+          result:       'PUSH',
+          profit:       0,
+          home_score:   null,
+          away_score:   null,
+          home_team:    homeTeamName,
+          away_team:    awayTeamName,
+          contest_entry: pick.contest_entry,
+          void_reason:  statusName,
+        });
+        break;
+      }
 
       // Only grade truly finished games.
       // Accept STATUS_FINAL* (covers STATUS_FINAL_OT, STATUS_FINAL_SO, STATUS_FINAL_PEN, etc.)
@@ -456,6 +513,274 @@ export function gradePicksAgainstScoreboard(picks, scoreboard) {
       });
       break; // matched — move to next pick
     }
+  }
+
+  return results;
+}
+
+// ── Parlay helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Convert American odds to decimal multiplier (e.g. +150 → 2.5, -110 → 1.909).
+ * Used to recalculate parlay payout when push legs are removed.
+ */
+function americanToDecimal(american) {
+  const n = parseInt(american);
+  if (isNaN(n) || n === 0) return null;
+  return n > 0 ? 1 + n / 100 : 1 + 100 / Math.abs(n);
+}
+
+/**
+ * Convert decimal odds back to American (e.g. 2.5 → +150, 1.909 → -110).
+ */
+function decimalToAmerican(decimal) {
+  if (!decimal || decimal <= 1) return 0;
+  return decimal >= 2
+    ? Math.round((decimal - 1) * 100)
+    : -Math.round(100 / (decimal - 1));
+}
+
+/**
+ * Find a parlay leg's game in an array of ESPN events.
+ * Leg may have game_id (preferred) or only team name.
+ * Returns { homeTeamName, awayTeamName, homeScore, awayScore, statusName } or null.
+ */
+function findLegGame(leg, events) {
+  for (const event of events) {
+    const comp       = event.competitions?.[0];
+    const statusName = comp?.status?.type?.name;
+
+    const competitors  = comp?.competitors || [];
+    const homeComp     = competitors.find(c => c.homeAway === 'home');
+    const awayComp     = competitors.find(c => c.homeAway === 'away');
+    if (!homeComp || !awayComp) continue;
+
+    const homeTeamName = homeComp.team?.displayName || homeComp.team?.name || '';
+    const awayTeamName = awayComp.team?.displayName || awayComp.team?.name || '';
+
+    // Match by game_id first (most reliable)
+    if (leg.game_id && event.id && String(event.id) === String(leg.game_id)) {
+      return {
+        homeTeamName, awayTeamName,
+        homeScore: parseFloat(homeComp.score ?? 0),
+        awayScore: parseFloat(awayComp.score ?? 0),
+        statusName,
+      };
+    }
+
+    // Fallback: match by team name
+    const legAsPick = { team: leg.team, home_team: leg.home_team, away_team: leg.away_team, matchup: leg.matchup };
+    if (pickMatchesGame(legAsPick, homeTeamName, awayTeamName)) {
+      return {
+        homeTeamName, awayTeamName,
+        homeScore: parseFloat(homeComp.score ?? 0),
+        awayScore: parseFloat(awayComp.score ?? 0),
+        statusName,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Grade a parlay pick given its legs (pre-fetched) and a flat array of all ESPN events.
+ *
+ * Rules:
+ *  - All legs WIN  → parlay WIN
+ *  - Any leg LOSS  → parlay LOSS
+ *  - Voided leg    → remove from parlay, recalculate combined odds (sportsbook standard)
+ *  - Not all legs finished → return null (can't grade yet)
+ *
+ * Returns { result, profit, legs_graded } or null.
+ */
+export function gradeParlay(pick, legs, allEvents) {
+  if (!legs?.length) {
+    console.warn('[gradeEngine] gradeParlay: no legs for pick id:', pick.id);
+    return null;
+  }
+
+  const units = parseFloat(pick.units || 1);
+  const legResults = [];
+
+  for (const leg of legs) {
+    const game = findLegGame(leg, allEvents);
+
+    if (!game) {
+      // Game not found in scoreboard — could be a different sport/date not yet fetched,
+      // or the game hasn't started. Treat as unfinished.
+      return null; // can't grade parlay until all legs have game data
+    }
+
+    // Voided leg (postponed/cancelled) → treat as push, remove from parlay
+    if (VOID_STATUSES.has(game.statusName)) {
+      legResults.push({ leg, result: 'VOID', game });
+      continue;
+    }
+
+    // Not yet finished
+    if (!(game.statusName?.startsWith('STATUS_FINAL') || game.statusName === 'STATUS_FULL_TIME')) {
+      return null; // parlay can't be graded until all legs finish
+    }
+
+    // Grade this leg using the standard gradePick logic
+    const legAsPick = {
+      id:       `${pick.id}_leg${leg.leg_number}`,
+      bet_type: leg.bet_type,
+      team:     leg.team,
+      line:     leg.line,
+      side:     leg.side ?? null,
+      odds:     leg.odds,
+      units:    1,
+    };
+    const legGrade = gradePick(legAsPick, game.homeTeamName, game.awayTeamName, game.homeScore, game.awayScore);
+
+    if (!legGrade) {
+      // Can't grade this leg (e.g. missing line for a spread) — skip entire parlay
+      console.warn('[gradeEngine] gradeParlay: cannot grade leg', leg.leg_number, 'for pick id:', pick.id);
+      return null;
+    }
+
+    legResults.push({ leg, result: legGrade.result, game });
+  }
+
+  // Any losing leg = parlay loss
+  if (legResults.some(lr => lr.result === 'LOSS')) {
+    return {
+      result: 'LOSS',
+      profit: -units,
+      legs_graded: legResults.map(lr => ({ leg_number: lr.leg.leg_number, result: lr.result })),
+    };
+  }
+
+  // Filter to active (non-void) legs for odds recalculation
+  const activeLegs = legResults.filter(lr => lr.result !== 'VOID');
+
+  if (!activeLegs.length) {
+    // All legs voided → PUSH (full parlay void)
+    return {
+      result: 'PUSH',
+      profit: 0,
+      legs_graded: legResults.map(lr => ({ leg_number: lr.leg.leg_number, result: lr.result })),
+    };
+  }
+
+  if (activeLegs.every(lr => lr.result === 'WIN' || lr.result === 'PUSH')) {
+    // Recalculate combined odds from active WIN legs only (push legs are removed)
+    const winLegs = activeLegs.filter(lr => lr.result === 'WIN');
+
+    if (!winLegs.length) {
+      // All active legs pushed — overall PUSH
+      return {
+        result: 'PUSH',
+        profit: 0,
+        legs_graded: legResults.map(lr => ({ leg_number: lr.leg.leg_number, result: lr.result })),
+      };
+    }
+
+    // Build combined decimal odds from individual leg odds where available
+    let combinedDecimal = null;
+    const legsWithOdds = winLegs.filter(lr => lr.leg.odds != null);
+
+    if (legsWithOdds.length === winLegs.length) {
+      // All win legs have individual odds — calculate precise payout
+      combinedDecimal = legsWithOdds.reduce((acc, lr) => {
+        const dec = americanToDecimal(lr.leg.odds);
+        return dec ? acc * dec : acc;
+      }, 1);
+    } else if (pick.odds) {
+      // Fall back to the stored combined parlay odds
+      combinedDecimal = americanToDecimal(pick.odds);
+    }
+
+    let profit;
+    if (combinedDecimal && combinedDecimal > 1) {
+      profit = parseFloat(((combinedDecimal - 1) * units).toFixed(3));
+    } else {
+      // No usable odds data — record WIN without profit calculation
+      profit = null;
+    }
+
+    return {
+      result: 'WIN',
+      profit,
+      effective_odds: combinedDecimal ? decimalToAmerican(combinedDecimal) : null,
+      legs_graded: legResults.map(lr => ({ leg_number: lr.leg.leg_number, result: lr.result })),
+    };
+  }
+
+  return null; // should not reach here
+}
+
+/**
+ * Async: Grade a batch of parlay picks.
+ * Fetches legs from Supabase, fetches missing scoreboards, then calls gradeParlay().
+ *
+ * @param {Array}  parlayPicks  - picks where is_parlay = true, result is null/PENDING
+ * @param {Object} scoreboardCache - existing { 'sport|date': scoreboardData } map (shared with caller)
+ * @param {Object} supabaseAdmin - Supabase client with service role access
+ * @returns {Array} graded results in same shape as gradePicksAgainstScoreboard()
+ */
+export async function gradeParlaysAgainstScoreboard(parlayPicks, scoreboardCache, supabaseAdmin) {
+  if (!parlayPicks?.length) return [];
+
+  const results = [];
+  const cache = scoreboardCache || {};
+
+  for (const pick of parlayPicks) {
+    // Load legs from DB
+    const { data: legs, error: legsErr } = await supabaseAdmin
+      .from('parlay_legs')
+      .select('*')
+      .eq('pick_id', pick.id)
+      .order('leg_number');
+
+    if (legsErr || !legs?.length) {
+      console.warn('[gradeEngine] gradeParlaysAgainstScoreboard: no legs for pick id:', pick.id);
+      continue;
+    }
+
+    // Ensure we have scoreboards for every leg's sport+date
+    for (const leg of legs) {
+      if (!leg.sport || !leg.game_date) continue;
+      const sport   = leg.sport.toLowerCase();
+      const cacheKey = `${sport}|${leg.game_date}`;
+      if (!cache[cacheKey]) {
+        cache[cacheKey] = await fetchESPNScoreboard(sport, leg.game_date);
+      }
+    }
+
+    // Also check the pick's own sport+date (for legs without explicit game_date)
+    const pickSport   = (pick.sport || '').toLowerCase();
+    const pickDate    = pick.commence_time
+      ? new Date(pick.commence_time).toISOString().slice(0, 10)
+      : pick.date;
+    const pickCacheKey = `${pickSport}|${pickDate}`;
+    if (pickSport && pickDate && !cache[pickCacheKey]) {
+      cache[pickCacheKey] = await fetchESPNScoreboard(pickSport, pickDate);
+    }
+
+    // Collect all events across all relevant scoreboards
+    const allEvents = [];
+    for (const sb of Object.values(cache)) {
+      if (sb?.events?.length) allEvents.push(...sb.events);
+    }
+
+    const gradeResult = gradeParlay(pick, legs, allEvents);
+    if (!gradeResult) continue; // can't grade yet (unfinished legs or ungradeable)
+
+    results.push({
+      id:            pick.id,
+      user_id:       pick.user_id,
+      result:        gradeResult.result,
+      profit:        gradeResult.profit,
+      effective_odds: gradeResult.effective_odds ?? null,
+      home_score:    null,
+      away_score:    null,
+      home_team:     null,
+      away_team:     null,
+      contest_entry: pick.contest_entry,
+      legs_graded:   gradeResult.legs_graded,
+    });
   }
 
   return results;
