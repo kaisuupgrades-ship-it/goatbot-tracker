@@ -593,8 +593,19 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   // ── My Golfers: read starred golfers from localStorage ───────────────────
   const [starredGolfers, setStarredGolfers] = useState({});
   useEffect(() => {
+    // Track last raw string so we only call setStarredGolfers when the data
+    // actually changed. Without this, JSON.parse always produces a new object
+    // reference → React always sees a state change → unnecessary re-render every
+    // time ANY storage event fires (including GolfLeaderboard's 3-min stat sync).
+    let lastRaw = '{}';
     function syncGolfers() {
-      try { setStarredGolfers(JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}')); } catch {}
+      try {
+        const raw = localStorage.getItem('betos_starred_golfers') || '{}';
+        if (raw !== lastRaw) {
+          lastRaw = raw;
+          setStarredGolfers(JSON.parse(raw));
+        }
+      } catch {}
     }
     syncGolfers();
     window.addEventListener('storage', syncGolfers);
