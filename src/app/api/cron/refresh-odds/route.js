@@ -330,7 +330,12 @@ async function fetchSportOdds(sport) {
 
   const events = await res.json();
   if (!Array.isArray(events)) throw new Error('Unexpected response shape');
-  return events;
+  // Return events + credit headers for usage logging
+  return {
+    events,
+    requestsUsed:      parseInt(res.headers.get('x-requests-used')      || '0') || null,
+    requestsRemaining: parseInt(res.headers.get('x-requests-remaining') || '0') || null,
+  };
 }
 
 // Derive game status from commence_time. Pre-match only — no live state.
@@ -511,8 +516,8 @@ export async function GET(req) {
         continue;
       }
 
-      let events = oddsResult.value;
-      events = sanitizeOddsConsistency(events);
+      const { events: rawEvents, requestsUsed, requestsRemaining } = oddsResult.value;
+      let events = sanitizeOddsConsistency(rawEvents);
 
       const pinnacleGames = pinnacleResult.status === 'fulfilled' ? pinnacleResult.value : null;
       if (pinnacleResult.status !== 'fulfilled') {
@@ -522,12 +527,29 @@ export async function GET(req) {
 
       const stored = await upsertGames(sport, events);
 
+      // Log credit usage to api_usage_log (non-fatal — failure doesn't break odds refresh)
+      if (requestsUsed != null) {
+        try {
+          await supabase.from('api_usage_log').insert([{
+            sport,
+            endpoint:           'odds',
+            requests_used:      requestsUsed,
+            requests_remaining: requestsRemaining,
+            games_fetched:      stored,
+          }]);
+        } catch (logErr) {
+          console.warn('[refresh-odds] api_usage_log insert failed (non-fatal):', logErr.message);
+        }
+      }
+
       results.push({
         sport,
         action:    'fetched',
         games:     stored,
         pinnacle:  !!pinnacleGames,
         ageWas:    `${Math.round(ageMs / 1000)}s`,
+        requestsUsed,
+        requestsRemaining,
       });
 
     } catch (err) {

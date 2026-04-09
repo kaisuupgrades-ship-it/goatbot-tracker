@@ -3306,6 +3306,169 @@ function ChatRoomAdminPanel({ userEmail }) {
   );
 }
 
+// ── API Usage Panel ───────────────────────────────────────────────────────────
+function ApiUsagePanel() {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [days,    setDays]    = useState(7);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch(`/api/admin/api-usage?days=${days}`)
+      .then(r => r.json())
+      .then(d => { if (d.error) setError(d.error); else setData(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [days]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>Loading usage data…</div>;
+  if (error)   return <div style={{ color: '#f87171', padding: '1rem' }}>Error: {error}</div>;
+
+  const MONTHLY_LIMIT = 100_000;
+  const latest = data?.latest;
+  const used      = latest?.requests_used       ?? null;
+  const remaining = latest?.requests_remaining  ?? null;
+  const totalUsed = remaining != null ? MONTHLY_LIMIT - remaining : null;
+  const pct = totalUsed != null ? ((totalUsed / MONTHLY_LIMIT) * 100).toFixed(1) : null;
+
+  const barColor = pct >= 80 ? '#f87171' : pct >= 50 ? '#fbbf24' : '#4ade80';
+
+  // Sorted daily entries for table/chart
+  const byDayEntries = Object.entries(data?.byDay || {}).sort((a, b) => b[0].localeCompare(a[0])).slice(0, days);
+  const bySportEntries = Object.entries(data?.bySport || {}).sort((a, b) => b[1] - a[1]);
+  const maxDayCredits = byDayEntries.length ? Math.max(...byDayEntries.map(e => e[1])) : 1;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+      {/* Not-yet-populated notice */}
+      {!data?.tableExists && (
+        <div style={{ padding: '1rem', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '8px', fontSize: '0.8rem', color: 'rgba(251,191,36,0.85)' }}>
+          ⚠️ <strong>api_usage_log table not found.</strong> Create it in Supabase then let the next refresh-odds cron run populate it.
+          <details style={{ marginTop: '6px' }}>
+            <summary style={{ cursor: 'pointer', fontSize: '0.72rem', color: 'var(--text-muted)' }}>Show SQL to create table</summary>
+            <pre style={{ marginTop: '6px', fontSize: '0.68rem', background: 'var(--bg-elevated)', padding: '8px', borderRadius: '6px', overflowX: 'auto' }}>{`CREATE TABLE api_usage_log (
+  id               bigserial PRIMARY KEY,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  sport            text,
+  endpoint         text,
+  requests_used    int,
+  requests_remaining int,
+  games_fetched    int
+);
+CREATE INDEX ON api_usage_log (created_at DESC);`}</pre>
+          </details>
+        </div>
+      )}
+
+      {/* Credit snapshot */}
+      <AdminSection title="Credit Snapshot">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+          <StatCard label="Last call used"      value={used      != null ? used.toLocaleString()      : '—'} icon="📡" />
+          <StatCard label="Remaining (month)"   value={remaining != null ? remaining.toLocaleString() : '—'} icon="🏦" color={remaining < 10000 ? '#f87171' : 'var(--text-primary)'} />
+          <StatCard label="Total used (month)"  value={totalUsed != null ? totalUsed.toLocaleString() : '—'} icon="📈" />
+          <StatCard label="% of 100K used"      value={pct != null ? `${pct}%` : '—'} icon="🎯" color={barColor} />
+        </div>
+        {pct != null && (
+          <div style={{ height: '8px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: barColor, borderRadius: '4px', transition: 'width 0.5s ease' }} />
+          </div>
+        )}
+        {latest && (
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+            Last logged: {new Date(latest.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+          </div>
+        )}
+      </AdminSection>
+
+      {/* Controls */}
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Show last</span>
+        {[3, 7, 14, 30].map(d => (
+          <button key={d} onClick={() => setDays(d)} style={{
+            padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer',
+            border: days === d ? '1px solid rgba(255,184,0,0.5)' : '1px solid var(--border)',
+            background: days === d ? 'rgba(255,184,0,0.1)' : 'var(--bg-elevated)',
+            color: days === d ? 'var(--gold)' : 'var(--text-muted)', fontWeight: days === d ? 700 : 400,
+          }}>{d}d</button>
+        ))}
+        <button onClick={load} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>↻ Refresh</button>
+      </div>
+
+      {/* Daily usage chart */}
+      <AdminSection title={`Daily Credits Used — Last ${days} Days`}>
+        {byDayEntries.length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem' }}>No data yet — logs populate on each refresh-odds cron run</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {byDayEntries.map(([day, credits]) => (
+              <div key={day} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', width: '70px', flexShrink: 0 }}>{day}</span>
+                <div style={{ flex: 1, height: '16px', background: 'var(--bg-elevated)', borderRadius: '3px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div style={{ width: `${(credits / maxDayCredits) * 100}%`, height: '100%', background: '#60a5fa', borderRadius: '3px', minWidth: '2px' }} />
+                </div>
+                <span style={{ fontSize: '0.68rem', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', width: '50px', textAlign: 'right' }}>{credits.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </AdminSection>
+
+      {/* Per-sport breakdown */}
+      {bySportEntries.length > 0 && (
+        <AdminSection title="Credits by Sport (window)">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            {bySportEntries.map(([sport, credits]) => (
+              <div key={sport} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', width: '50px', flexShrink: 0, textTransform: 'uppercase' }}>{sport}</span>
+                <div style={{ flex: 1, height: '12px', background: 'var(--bg-elevated)', borderRadius: '3px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div style={{ width: `${(credits / (bySportEntries[0]?.[1] || 1)) * 100}%`, height: '100%', background: 'rgba(255,184,0,0.5)', borderRadius: '3px' }} />
+                </div>
+                <span style={{ fontSize: '0.68rem', fontFamily: 'IBM Plex Mono, monospace', color: 'var(--text-secondary)', width: '50px', textAlign: 'right' }}>{credits.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </AdminSection>
+      )}
+
+      {/* Recent log rows */}
+      <AdminSection title="Recent API Calls">
+        {(data?.rows || []).length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem' }}>No log entries yet</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  {['Time', 'Sport', 'Endpoint', 'Req Used', 'Remaining', 'Games'].map(h => (
+                    <th key={h} style={{ padding: '4px 8px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(data?.rows || []).slice(0, 50).map(r => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ padding: '5px 8px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {new Date(r.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </td>
+                    <td style={{ padding: '5px 8px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{r.sport || '—'}</td>
+                    <td style={{ padding: '5px 8px', color: 'var(--text-muted)' }}>{r.endpoint || '—'}</td>
+                    <td style={{ padding: '5px 8px', fontFamily: 'IBM Plex Mono, monospace', color: '#60a5fa' }}>{r.requests_used?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '5px 8px', fontFamily: 'IBM Plex Mono, monospace', color: r.requests_remaining < 5000 ? '#f87171' : 'var(--text-secondary)' }}>{r.requests_remaining?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '5px 8px', color: 'var(--text-muted)' }}>{r.games_fetched ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </AdminSection>
+    </div>
+  );
+}
+
 // ── Consolidated tab definitions ──────────────────────────────────────────────
 const ADMIN_TABS = [
   { id: 'overview', label: '📊 Overview',  desc: 'Site-wide stats, leaderboard, and recent sign-ups' },
@@ -3316,6 +3479,7 @@ const ADMIN_TABS = [
   { id: 'flags',    label: '🔔 Flags',     desc: 'AI analysis errors and chatbot-escalated concerns' },
   { id: 'aitools',  label: '🧪 AI Tools',  desc: 'AI Lab performance tracker and historical backtester' },
   { id: 'system',   label: '⚙️ System',   desc: 'Site settings, scheduled jobs, and AI chat console' },
+  { id: 'apiusage', label: '📡 API Usage', desc: 'The Odds API credit consumption — daily usage, per-sport breakdown, and recent calls' },
 ];
 
 export default function AdminTab({ user }) {
@@ -3397,6 +3561,7 @@ export default function AdminTab({ user }) {
       {everMounted.has('flags')    && <div style={{ display: active === 'flags'    ? 'block' : 'none' }}><FlagsPanel         userEmail={user.email} /></div>}
       {everMounted.has('aitools')  && <div style={{ display: active === 'aitools'  ? 'block' : 'none' }}><AIToolsPanel       userEmail={user.email} /></div>}
       {everMounted.has('system')   && <div style={{ display: active === 'system'   ? 'block' : 'none' }}><SystemMegaPanel    userEmail={user.email} /></div>}
+      {everMounted.has('apiusage') && <div style={{ display: active === 'apiusage' ? 'block' : 'none' }}><ApiUsagePanel /></div>}
     </div>
   );
 }
