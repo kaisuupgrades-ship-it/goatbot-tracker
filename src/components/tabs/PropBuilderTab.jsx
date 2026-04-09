@@ -300,24 +300,26 @@ export default function PropBuilderTab({ user, picks, setPicks, isDemo }) {
   const [activeSport,    setActiveSport]    = useState('nba');
   const [games,          setGames]          = useState([]);
   const [gamesLoading,   setGamesLoading]   = useState(false);
+  const [gamesError,     setGamesError]     = useState('');
   const [expandedGameId, setExpandedGameId] = useState(null);
   const [betSlip,        setBetSlip]        = useState(null); // { game, sport, propPrefill }
 
   const loadGames = useCallback(async (sport) => {
     setGamesLoading(true);
     setGames([]);
+    setGamesError('');
     setExpandedGameId(null);
     try {
       const res  = await fetch(`/api/sports?sport=${sport}&endpoint=scoreboard`);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
-      // Show pre-game and live games only
-      const events = (data.events || []).filter(e => {
-        const st = e?.status?.type?.state;
-        return st === 'pre' || st === 'in';
-      });
+      // Exclude confirmed finals only — include pre, live, and any unknown state
+      const events = (data.events || []).filter(e => e?.status?.type?.state !== 'post');
+      console.log(`[PropBuilder] ${sport}: ${data.events?.length ?? 0} total, ${events.length} non-final`);
       setGames(events);
-    } catch {
-      setGames([]);
+    } catch (err) {
+      console.error('[PropBuilder] loadGames error:', err);
+      setGamesError(err.message || 'Failed to load games.');
     }
     setGamesLoading(false);
   }, []);
@@ -379,7 +381,17 @@ export default function PropBuilderTab({ user, picks, setPicks, isDemo }) {
       {/* ── Games list ── */}
       {gamesLoading && <Spinner text="Loading games…" />}
 
-      {!gamesLoading && games.length === 0 && (
+      {!gamesLoading && gamesError && (
+        <div style={{
+          padding: '1.5rem 2rem', textAlign: 'center',
+          background: 'rgba(248,113,113,0.06)', borderRadius: '12px', border: '1px solid rgba(248,113,113,0.2)',
+        }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f87171' }}>Failed to load games</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>{gamesError}</div>
+        </div>
+      )}
+
+      {!gamesLoading && !gamesError && games.length === 0 && (
         <div style={{
           padding: '3rem 2rem', textAlign: 'center',
           background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border)',
