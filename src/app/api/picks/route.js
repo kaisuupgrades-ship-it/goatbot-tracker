@@ -422,21 +422,43 @@ export async function POST(req) {
     safePayload.team = normalizeTeam(safePayload.team, safePayload.sport);
   }
 
-  // ── 3c. Set pick_type — 'contest', 'verified', or 'personal' ───────────
-  //    pick_type determines which leaderboards the pick feeds into.
-  //    Contest = 1u normalized on contest board. Verified = Sharp Board with real units.
-  //    Personal = dashboard only, no restrictions.
+  // ── 3c. Resolve pick tier — 'contest', 'verified', or 'personal' ─────────
+  //    pickTier drives timing and validation logic within this request.
+  //    pick_type column will be set to the normalized BET CATEGORY below (step 3d).
+  let pickTier;
   if (safePayload.contest_entry || safePayload.pick_type === 'contest') {
-    safePayload.pick_type = 'contest';
+    pickTier = 'contest';
     safePayload.contest_entry = true;  // keep backward compat
   } else if (safePayload.pick_type === 'verified') {
-    safePayload.pick_type = 'verified';
+    pickTier = 'verified';
   } else {
-    safePayload.pick_type = safePayload.pick_type || 'personal';
+    pickTier = 'personal';
+  }
+
+  // ── 3d. Validate line for spread/total picks, then set side + normalized pick_type ──
+  //    Spread picks with no line would silently grade as PUSH — reject early instead.
+  if ((isSpreadBet || isTotalBet) && (safePayload.line === undefined || safePayload.line === null || isNaN(safePayload.line))) {
+    return NextResponse.json({
+      error: 'Spread/total picks require a line value (e.g., \'Team -3.5\' or \'Over 8.5\')',
+    }, { status: 400 });
+  }
+
+  // Normalize pick_type to the bet category (moneyline / spread / total / prop).
+  // This is stored in the DB and consumed by gradeEngine for quick bet-type lookups.
+  if (isSpreadBet) {
+    safePayload.pick_type = 'spread';
+  } else if (isTotalBet) {
+    safePayload.pick_type = 'total';
+  } else if (betTypeLower.includes('moneyline') || betTypeLower === 'ml' || betTypeLower.includes('f5') || betTypeLower.includes('1h')) {
+    safePayload.pick_type = 'moneyline';
+  } else if (betTypeLower.includes('prop') || betTypeLower.includes('player')) {
+    safePayload.pick_type = 'prop';
+  } else {
+    safePayload.pick_type = 'moneyline'; // safe default for unknown types
   }
 
   // ── 4. Contest/Verified server-side validation ─────────────────────────
-  if (safePayload.pick_type === 'contest') {
+  if (pickTier === 'contest') {
     const errors = validateContestRules(safePayload);
     if (errors.length > 0) {
       return NextResponse.json({ error: 'Contest validation failed', errors }, { status: 422 });
@@ -479,7 +501,7 @@ export async function POST(req) {
   //    Cross-reference submitted odds against cached Odds API data.
   //    If user submits +350 but market shows -350, flag it.
   //    This prevents accidental sign errors that massively inflate profits.
-  if ((safePayload.pick_type === 'contest' || safePayload.pick_type === 'verified') && safePayload.odds && safePayload.team) {
+  if ((pickTier === 'contest' || pickTier === 'verified') && safePayload.odds && safePayload.team) {
     try {
       const oddsApiSport = {
         MLB: 'mlb', NBA: 'nba', NFL: 'nfl', NHL: 'nhl',
@@ -564,12 +586,37 @@ export async function POST(req) {
     }
   }
 
+  // ── 5b-i. Populate side column if not already set ───────────────────────
+  //    home/away for moneyline & spread; over/under for totals.
+  //    Uses the ESPN-resolved home_team/away_team set above.
+  if (!safePayload.side) {
+    if (isTotalBet) {
+      const teamLower = (safePayload.team || '').toLowerCase().trim();
+      if (teamLower.startsWith('over'))  safePayload.side = 'over';
+      if (teamLower.startsWith('under')) safePayload.side = 'under';
+      // Also check bet_type itself for "Total (Over)" / "Total (Under)" style
+      if (!safePayload.side) {
+        if (betTypeLower.includes('over'))  safePayload.side = 'over';
+        if (betTypeLower.includes('under')) safePayload.side = 'under';
+      }
+    } else if (safePayload.home_team || safePayload.away_team) {
+      const cleanedTeam = (safePayload.team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const homeNorm    = (safePayload.home_team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const awayNorm    = (safePayload.away_team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (homeNorm && (homeNorm.includes(cleanedTeam) || cleanedTeam.includes(homeNorm))) {
+        safePayload.side = 'home';
+      } else if (awayNorm && (awayNorm.includes(cleanedTeam) || cleanedTeam.includes(awayNorm))) {
+        safePayload.side = 'away';
+      }
+    }
+  }
+
   // ── 5b. HARD BLOCK: contest/verified picks must be submitted BEFORE game ──
   //    This is the definitive integrity check. We just fetched the real game
   //    start from ESPN — if the clock has already passed it, the pick is dead.
   //    Contest picks = hard block. Verified picks = downgrade to personal.
   //    Personal picks = no timing restrictions (user's own tracking).
-  if ((safePayload.pick_type === 'contest' || safePayload.pick_type === 'verified') && commence_time) {
+  if ((pickTier === 'contest' || pickTier === 'verified') && commence_time) {
     const submittedAt = new Date();
     const gameStart   = new Date(commence_time);
     const GRACE_MS    = 2 * 60 * 1000; // 2-minute grace window
@@ -577,7 +624,7 @@ export async function POST(req) {
     if (submittedAt.getTime() > gameStart.getTime() + GRACE_MS) {
       const startedAgo = Math.round((submittedAt - gameStart) / 60000);
 
-      if (safePayload.pick_type === 'contest') {
+      if (pickTier === 'contest') {
         // Contest = hard block, no in-game picks allowed
         return NextResponse.json({
           error: 'Game already started',
@@ -590,7 +637,8 @@ export async function POST(req) {
         }, { status: 422 });
       } else {
         // Verified → downgrade to personal (live bets can still be tracked, just not verified)
-        safePayload.pick_type = 'personal';
+        pickTier = 'personal';
+        safePayload.contest_entry = false;
       }
     }
   }

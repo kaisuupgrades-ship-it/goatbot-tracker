@@ -198,8 +198,10 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
   const betType = (pick.bet_type || 'Moneyline').toLowerCase();
   const pickSide = (pick.side || '').toLowerCase(); // explicit side field
 
-  // Resolve line: stored column → parse from team name → parse from notes → 0
-  const line = parseFloat(pick.line ?? parseLineFromTeam(pick.team) ?? parseLineFromNotes(pick.notes) ?? null);
+  // Resolve line: stored column → parse from team name → parse from notes → null
+  // Must produce null (not NaN) when nothing resolves — the spread/total guards check isNaN(line).
+  const _rawLine = pick.line ?? parseLineFromTeam(pick.team) ?? parseLineFromNotes(pick.notes) ?? null;
+  const line = _rawLine !== null ? parseFloat(_rawLine) : null;
 
   const total = homeScore + awayScore;
 
@@ -222,6 +224,11 @@ export function gradePick(pick, homeTeamName, awayTeamName, homeScore, awayScore
 
   // ── Spread / Run Line / Puck Line ─────────────────────────────────────────
   } else if (betType.includes('spread') || betType.includes('run line') || betType.includes('puck line')) {
+    if (line === null || isNaN(line)) {
+      // No line value — cannot grade this spread bet (would silently PUSH otherwise)
+      console.warn('[gradeEngine] Spread bet has no line for pick id:', pick.id, '— skipping');
+      return null;
+    }
     if (side === 'home') {
       const adj   = homeScore + line;
       result = adj > awayScore ? 'WIN' : adj < awayScore ? 'LOSS' : 'PUSH';
