@@ -310,12 +310,15 @@ export default function PropBuilderTab({ user, picks, setPicks, isDemo }) {
     setGamesError('');
     setExpandedGameId(null);
     try {
-      const res  = await fetch(`/api/sports?sport=${sport}&endpoint=scoreboard`);
+      // Always pass today's date — without it, ESPN defaults to the most-recently-completed day
+      // (e.g. yesterday's final games) when today's games haven't started yet, causing empty results.
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+      const res  = await fetch(`/api/sports?sport=${sport}&endpoint=scoreboard&date=${dateStr}`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
-      // Exclude confirmed finals only — include pre, live, and any unknown state
-      const events = (data.events || []).filter(e => e?.status?.type?.state !== 'post');
-      console.log(`[PropBuilder] ${sport}: ${data.events?.length ?? 0} total, ${events.length} non-final`);
+      // Show all of today's games — pre, live, and final
+      const events = data.events || [];
       setGames(events);
     } catch (err) {
       console.error('[PropBuilder] loadGames error:', err);
