@@ -1555,15 +1555,31 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
               const profitDisplay = profitVal != null
                 ? `${profitVal >= 0 ? '+' : ''}${profitVal.toFixed(2)}u`
                 : '—';
+              const resultLabel =
+                pick.result === 'WIN'  ? 'Won' :
+                pick.result === 'LOSS' ? 'Lost' :
+                pick.result === 'PUSH' ? 'Push' :
+                isTracking && live?.liveStatus === 'WINNING' ? 'Winning' :
+                isTracking && live?.liveStatus === 'LOSING'  ? 'Losing' :
+                isFinalNow ? 'Grading…' : 'Pending';
+              const resultPillBg =
+                pick.result === 'WIN'  ? 'rgba(74,222,128,0.18)' :
+                pick.result === 'LOSS' ? 'rgba(248,113,113,0.18)' :
+                pick.result === 'PUSH' ? 'rgba(148,163,184,0.15)' :
+                (isTracking && live?.liveStatus === 'WINNING') ? 'rgba(74,222,128,0.15)' :
+                (isTracking && live?.liveStatus === 'LOSING')  ? 'rgba(248,113,113,0.15)' :
+                'rgba(255,184,0,0.08)';
+              const resultPillBorder =
+                (!pick.result || pick.result === 'PENDING') && !isTracking
+                  ? '1px solid rgba(255,184,0,0.35)' : 'none';
 
               return (
                 <div key={pick.id} style={{
                   background: 'var(--bg-surface)',
-                  border: `1px solid ${isTracking ? 'rgba(74,222,128,0.2)' : 'var(--border)'}`,
-                  borderLeft: `3px solid ${resultColor}`,
-                  borderRadius: '10px',
+                  border: `1px solid ${isTracking ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                  borderRadius: '12px',
                   overflow: 'hidden',
-                  boxShadow: isTracking ? '0 2px 16px rgba(74,222,128,0.08)' : '0 2px 8px rgba(0,0,0,0.25)',
+                  boxShadow: isTracking ? '0 2px 16px rgba(74,222,128,0.1)' : '0 2px 8px rgba(0,0,0,0.3)',
                   display: 'flex', flexDirection: 'column',
                 }}>
 
@@ -1637,178 +1653,181 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                     </div>
                   </div>
 
-                  {/* ── Main: Team + Bet Type + Matchup ── */}
-                  <div style={{ padding: '10px 13px 9px', flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '2px', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
-                      {pick.is_parlay ? (
-                        <>
-                          <span style={{
-                            fontSize: '0.62rem', fontWeight: 800, padding: '2px 7px',
-                            borderRadius: '5px', letterSpacing: '0.07em',
-                            background: 'rgba(168,85,247,0.15)',
-                            color: '#c084fc',
-                            border: '1px solid rgba(168,85,247,0.3)',
-                            textTransform: 'uppercase',
-                            flexShrink: 0,
-                          }}>
-                            🎰 Parlay
+                  {/* ── Hero: Team + Odds + Result Pill ── */}
+                  <div style={{ padding: '12px 13px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* Team name — hero */}
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-primary)', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                          {pick.is_parlay ? (
+                            <>
+                              <span style={{
+                                fontSize: '0.62rem', fontWeight: 800, padding: '2px 7px',
+                                borderRadius: '5px', letterSpacing: '0.07em',
+                                background: 'rgba(168,85,247,0.15)', color: '#c084fc',
+                                border: '1px solid rgba(168,85,247,0.3)', textTransform: 'uppercase', flexShrink: 0,
+                              }}>🎰 Parlay</span>
+                              <span>{pick.parlay_leg_count || '?'}-Leg</span>
+                            </>
+                          ) : pick.team}
+                          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.95rem', color: pick.odds > 0 ? '#4ade80' : 'var(--text-secondary)', flexShrink: 0 }}>
+                            {oddsDisplay}
                           </span>
-                          <span>{pick.parlay_leg_count || '?'}-Leg</span>
-                        </>
-                      ) : pick.team}
-                    </div>
-                    <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: pick.matchup && !pick.is_parlay ? '5px' : 0 }}>
-                      {pick.is_parlay
-                        ? `${pick.parlay_leg_count || '?'} legs · Combined ${pick.parlay_combined_odds > 0 ? '+' : ''}${pick.parlay_combined_odds ?? (pick.odds > 0 ? '+' : '') + pick.odds}`
-                        : pick.bet_type}
-                    </div>
-                    {pick.matchup && !pick.is_parlay && (
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
-                        {pick.matchup}
-                      </div>
-                    )}
-                    {/* Parlay expand/collapse legs */}
-                    {pick.is_parlay && (
-                      <div style={{ marginTop: '6px' }}>
-                        <button
-                          onClick={e => { e.stopPropagation(); toggleParlayLegs(pick.id); }}
-                          style={{
-                            background: 'none', border: '1px solid rgba(168,85,247,0.25)',
-                            borderRadius: '5px', padding: '3px 9px',
-                            fontSize: '0.68rem', color: '#a855f7', cursor: 'pointer',
-                            fontFamily: 'inherit', fontWeight: 600,
-                            transition: 'all 0.1s',
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                        >
-                          {expandedParlayLegs[pick.id] && expandedParlayLegs[pick.id] !== 'loading'
-                            ? '▲ Hide Legs'
-                            : expandedParlayLegs[pick.id] === 'loading'
-                              ? 'Loading…'
-                              : '▼ Show Legs'}
-                        </button>
-                        {/* Legs list */}
-                        {expandedParlayLegs[pick.id] && expandedParlayLegs[pick.id] !== 'loading' && (
-                          <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {(expandedParlayLegs[pick.id] || []).map((leg, li) => {
-                              const legResultColor =
-                                leg.result === 'WIN'  ? '#4ade80' :
-                                leg.result === 'LOSS' ? '#f87171' :
-                                leg.result === 'PUSH' ? '#94a3b8' :
-                                leg.result === 'VOID' ? '#94a3b8' : '#FFB800';
-                              return (
-                                <div key={leg.id || li} style={{
-                                  display: 'flex', alignItems: 'center', gap: '7px',
-                                  padding: '4px 8px',
-                                  borderRadius: '6px',
-                                  background: 'rgba(168,85,247,0.05)',
-                                  border: '1px solid rgba(168,85,247,0.12)',
-                                  borderLeft: `3px solid ${legResultColor}`,
-                                }}>
-                                  <span style={{ fontSize: '0.65rem', color: '#718096', flexShrink: 0 }}>
-                                    {li + 1}.
-                                  </span>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {leg.team}
-                                      {leg.line != null ? ` ${leg.line > 0 ? '+' : ''}${leg.line}` : ''}
-                                    </div>
-                                    <div style={{ fontSize: '0.65rem', color: '#718096' }}>
-                                      {leg.bet_type} · {leg.sport}
-                                      {leg.away_team && leg.home_team ? ` · ${leg.away_team} @ ${leg.home_team}` : ''}
-                                    </div>
-                                  </div>
-                                  <span style={{
-                                    fontSize: '0.75rem', fontWeight: 700,
-                                    color: leg.odds > 0 ? '#4ade80' : '#94a3b8',
-                                    fontFamily: 'IBM Plex Mono, monospace',
-                                    flexShrink: 0,
-                                  }}>
-                                    {leg.odds > 0 ? '+' : ''}{leg.odds}
-                                  </span>
-                                  {leg.result && (
-                                    <span style={{
-                                      fontSize: '0.62rem', fontWeight: 800,
-                                      color: legResultColor,
-                                      flexShrink: 0,
-                                    }}>
-                                      {leg.result}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
+                        </div>
+                        {/* Bet type subtitle */}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                          {pick.is_parlay
+                            ? `${pick.parlay_leg_count || '?'} legs · Combined ${pick.parlay_combined_odds > 0 ? '+' : ''}${pick.parlay_combined_odds ?? (pick.odds > 0 ? '+' : '') + pick.odds}`
+                            : pick.bet_type}
+                        </div>
+                        {/* Matchup context */}
+                        {pick.matchup && !pick.is_parlay && (
+                          <div style={{ fontSize: '0.70rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
+                            {pick.matchup}
                           </div>
                         )}
                       </div>
-                    )}
-                    {/* Live score while game is in progress */}
-                    {isTracking && (
+                      {/* Result pill */}
                       <div style={{
-                        marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '4px 11px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 800,
+                        background: resultPillBg, border: resultPillBorder,
+                        color: resultColor, flexShrink: 0, marginTop: '2px',
+                        letterSpacing: '0.02em',
                       }}>
-                        <span style={{
-                          fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '1.1rem',
-                          color: live.liveStatus === 'WINNING' ? '#4ade80' : live.liveStatus === 'LOSING' ? '#f87171' : '#94a3b8',
-                          letterSpacing: '-0.02em',
-                        }}>
-                          {live.awayAbbr} {live.awayScore} – {live.homeScore} {live.homeAbbr}
-                        </span>
+                        {resultLabel}
                       </div>
-                    )}
-                    {/* Final score badge once game ended (not yet graded by server) */}
-                    {isFinalNow && !isTracking && (
-                      <div style={{
-                        marginTop: '5px', fontFamily: 'IBM Plex Mono, monospace',
-                        fontWeight: 700, fontSize: '0.72rem', color: '#94a3b8',
-                      }}>
-                        {live.awayScore}–{live.homeScore} <span style={{ fontWeight: 400, color: '#555' }}>FINAL · grading…</span>
-                      </div>
-                    )}
-                    {/* Final score if server-graded */}
-                    {pick.graded_home_score != null && pick.graded_away_score != null && (
-                      <div style={{
-                        marginTop: '5px', fontFamily: 'IBM Plex Mono, monospace',
-                        fontWeight: 700, fontSize: '0.72rem',
-                        color: pick.result === 'WIN' ? '#4ade80' : pick.result === 'LOSS' ? '#f87171' : '#94a3b8',
-                      }}>
-                        {pick.graded_away_score}-{pick.graded_home_score} <span style={{ fontWeight: 400, color: '#555' }}>FINAL</span>
-                      </div>
-                    )}
+                    </div>
+
+                    {/* Wager line */}
+                    <div style={{ marginTop: '8px', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                      Wager: <span style={{ color: 'var(--text-secondary)', fontWeight: 600, fontFamily: 'IBM Plex Mono, monospace' }}>{parseFloat(pick.units) || 1}u</span>
+                    </div>
                   </div>
 
-                  {/* ── Stats Row: Odds | Result | P/L ── */}
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
-                    borderTop: '1px solid rgba(255,255,255,0.06)',
-                    borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    background: 'rgba(0,0,0,0.15)',
-                  }}>
-                    <div style={{ padding: '7px 12px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '2px' }}>Odds</div>
-                      <div style={{
-                        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem',
-                        color: pick.odds > 0 ? '#4ade80' : 'var(--text-primary)',
-                      }}>{oddsDisplay}</div>
+                  {/* Parlay expand/collapse legs */}
+                  {pick.is_parlay && (
+                    <div style={{ padding: '0 13px', marginTop: '8px' }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleParlayLegs(pick.id); }}
+                        style={{
+                          background: 'none', border: '1px solid rgba(168,85,247,0.25)',
+                          borderRadius: '5px', padding: '3px 9px',
+                          fontSize: '0.68rem', color: '#a855f7', cursor: 'pointer',
+                          fontFamily: 'inherit', fontWeight: 600, transition: 'all 0.1s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(168,85,247,0.1)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                      >
+                        {expandedParlayLegs[pick.id] && expandedParlayLegs[pick.id] !== 'loading'
+                          ? '▲ Hide Legs'
+                          : expandedParlayLegs[pick.id] === 'loading' ? 'Loading…' : '▼ Show Legs'}
+                      </button>
+                      {expandedParlayLegs[pick.id] && expandedParlayLegs[pick.id] !== 'loading' && (
+                        <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {(expandedParlayLegs[pick.id] || []).map((leg, li) => {
+                            const legResultColor =
+                              leg.result === 'WIN'  ? '#4ade80' :
+                              leg.result === 'LOSS' ? '#f87171' :
+                              leg.result === 'PUSH' ? '#94a3b8' :
+                              leg.result === 'VOID' ? '#94a3b8' : '#FFB800';
+                            return (
+                              <div key={leg.id || li} style={{
+                                display: 'flex', alignItems: 'center', gap: '7px',
+                                padding: '4px 8px', borderRadius: '6px',
+                                background: 'rgba(168,85,247,0.05)',
+                                border: '1px solid rgba(168,85,247,0.12)',
+                                borderLeft: `3px solid ${legResultColor}`,
+                              }}>
+                                <span style={{ fontSize: '0.65rem', color: '#718096', flexShrink: 0 }}>{li + 1}.</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', lineHeight: 1.25 }}>
+                                    {leg.team}{leg.line != null ? ` ${leg.line > 0 ? '+' : ''}${leg.line}` : ''}
+                                  </div>
+                                  <div style={{ fontSize: '0.65rem', color: '#718096' }}>
+                                    {leg.bet_type} · {leg.sport}
+                                    {leg.away_team && leg.home_team ? ` · ${leg.away_team} @ ${leg.home_team}` : ''}
+                                  </div>
+                                </div>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: leg.odds > 0 ? '#4ade80' : '#94a3b8', fontFamily: 'IBM Plex Mono, monospace', flexShrink: 0 }}>
+                                  {leg.odds > 0 ? '+' : ''}{leg.odds}
+                                </span>
+                                {leg.result && (
+                                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: legResultColor, flexShrink: 0 }}>{leg.result}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ padding: '7px 12px', borderRight: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '2px' }}>Result</div>
-                      <div style={{ fontWeight: 800, fontSize: '0.75rem', color: resultColor, textTransform: 'uppercase', lineHeight: 1.1 }}>
-                        {isTracking && live?.liveStatus
-                          ? live.liveStatus
-                          : isFinalNow && !pick.result
-                            ? <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>GRADING…</span>
-                            : pick.result || 'PENDING'}
+                  )}
+
+                  {/* Live score while game is in progress */}
+                  {isTracking && (
+                    <div style={{ padding: '0 13px', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{
+                        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '1.05rem',
+                        color: live.liveStatus === 'WINNING' ? '#4ade80' : live.liveStatus === 'LOSING' ? '#f87171' : '#94a3b8',
+                        letterSpacing: '-0.02em',
+                      }}>
+                        {live.awayAbbr} {live.awayScore} – {live.homeScore} {live.homeAbbr}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Final score — grading in progress */}
+                  {isFinalNow && !isTracking && (
+                    <div style={{ padding: '0 13px', marginTop: '8px', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, fontSize: '0.72rem', color: '#94a3b8' }}>
+                      {live.awayScore}–{live.homeScore} <span style={{ fontWeight: 400, color: '#555' }}>FINAL · grading…</span>
+                    </div>
+                  )}
+
+                  {/* ── Mini Scoreboard — graded picks ── */}
+                  {pick.graded_home_score != null && pick.graded_away_score != null && pick.home_team && pick.away_team && (
+                    <div style={{ margin: '10px 13px 0', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}>
+                      <div style={{ padding: '3px 10px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        Final Score
                       </div>
+                      {(() => {
+                        const aScore = parseInt(pick.graded_away_score);
+                        const hScore = parseInt(pick.graded_home_score);
+                        const awayWon = aScore > hScore;
+                        const homeWon = hScore > aScore;
+                        return (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', background: awayWon ? 'rgba(255,184,0,0.05)' : 'transparent' }}>
+                              <span style={{ fontSize: '0.78rem', fontWeight: awayWon ? 700 : 400, color: awayWon ? '#FFB800' : 'var(--text-secondary)' }}>{pick.away_team}</span>
+                              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: awayWon ? '#FFB800' : 'var(--text-muted)' }}>{pick.graded_away_score}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: homeWon ? 'rgba(255,184,0,0.05)' : 'transparent' }}>
+                              <span style={{ fontSize: '0.78rem', fontWeight: homeWon ? 700 : 400, color: homeWon ? '#FFB800' : 'var(--text-secondary)' }}>{pick.home_team}</span>
+                              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: homeWon ? '#FFB800' : 'var(--text-muted)' }}>{pick.graded_home_score}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
-                    <div style={{ padding: '7px 12px', textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.58rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '2px' }}>P/L</div>
-                      <div style={{
-                        fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem',
-                        color: profitVal != null ? (profitVal >= 0 ? '#4ade80' : '#f87171') : 'var(--text-muted)',
-                      }}>{profitDisplay}</div>
+                  )}
+
+                  {/* ── P/L Footer ── */}
+                  <div style={{
+                    margin: '10px 0 0',
+                    padding: '8px 13px',
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(0,0,0,0.12)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginRight: '4px' }}>P/L</span>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 800, fontSize: '0.92rem', color: profitVal != null ? (profitVal >= 0 ? '#4ade80' : '#f87171') : 'var(--text-muted)' }}>
+                        {profitDisplay}
+                      </span>
                     </div>
+                    {pick.date && (
+                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                        Placed {new Date(pick.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
                   </div>
 
                   {/* ── Notes ── */}
