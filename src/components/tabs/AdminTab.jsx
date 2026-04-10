@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import BacktestPanel from './admin/BacktestPanel';
 import AILabPanel from './admin/AILabPanel';
 
@@ -1850,6 +1850,7 @@ function SystemPanel({ userEmail }) {
   const [autoGradeMsg,     setAutoGradeMsg]     = useState('');
   const [autoGradeRunning, setAutoGradeRunning] = useState(false);
   const [pregenErrorsOpen, setPregenErrorsOpen] = useState(false);
+  const analysesDateInputRef = useRef(null);
 
   async function handleBackfill() {
     if (!confirm('Backfill commence_time on all historical picks using ESPN? This looks up game start times and updates the database.')) return;
@@ -2333,26 +2334,28 @@ function SystemPanel({ userEmail }) {
               }}
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px 9px', fontSize: '0.78rem', lineHeight: 1 }}
             >‹</button>
-            {/* Date label — clicking opens the date input */}
-            <label style={{ position: 'relative', cursor: 'pointer' }}>
-              <span style={{
+            {/* Date label — clicking opens the date picker; arrows do NOT trigger it */}
+            <span
+              onClick={() => { analysesDateInputRef.current?.showPicker?.() ?? analysesDateInputRef.current?.click(); }}
+              style={{
                 display: 'inline-block', padding: '3px 10px', borderRadius: '5px',
                 background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
                 color: 'var(--text-primary)', fontSize: '0.72rem', fontWeight: 600,
-                fontFamily: 'IBM Plex Mono, monospace', userSelect: 'none',
-              }}>
-                {(() => {
-                  const [y, m, d] = analysesDate.split('-');
-                  return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                })()}
-              </span>
-              <input
-                type="date"
-                value={analysesDate}
-                onChange={e => { setAnalysesDate(e.target.value); loadGeneratedAnalyses(e.target.value); }}
-                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}
-              />
-            </label>
+                fontFamily: 'IBM Plex Mono, monospace', userSelect: 'none', cursor: 'pointer',
+              }}
+            >
+              {(() => {
+                const [y, m, d] = analysesDate.split('-');
+                return new Date(+y, +m - 1, +d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              })()}
+            </span>
+            <input
+              ref={analysesDateInputRef}
+              type="date"
+              value={analysesDate}
+              onChange={e => { setAnalysesDate(e.target.value); loadGeneratedAnalyses(e.target.value); }}
+              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+            />
             {/* Next day */}
             <button
               onClick={() => {
