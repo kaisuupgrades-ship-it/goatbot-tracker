@@ -357,6 +357,28 @@ export async function GET(req) {
       return NextResponse.json({ bans: bans || [] });
     }
 
+    if (action === 'reviews') {
+      const statusFilter = searchParams.get('status') || 'PENDING';
+      const { data: reviews, error: reviewErr } = await supabaseAdmin
+        .from('pick_review_requests')
+        .select(`
+          id, pick_id, user_id, user_message, ai_analysis, suggested_changes,
+          status, admin_notes, created_at, resolved_at,
+          picks!pick_id(id, team, sport, bet_type, line, odds, units, result, notes, date, matchup),
+          profiles!user_id(username, display_name, avatar_emoji)
+        `)
+        .eq('status', statusFilter)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (reviewErr) {
+        // Table may not exist yet
+        if (reviewErr.code === '42P01') return NextResponse.json({ reviews: [], tableExists: false });
+        throw reviewErr;
+      }
+      return NextResponse.json({ reviews: reviews || [], tableExists: true });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (err) {
     console.error('Admin API error:', err.message);
@@ -778,6 +800,62 @@ export async function POST(req) {
         .from('settings')
         .upsert([{ key: 'announcement', value: value, updated_at: new Date().toISOString() }], { onConflict: 'key' });
       if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'resolve_review') {
+      const { reviewId, resolution, admin_notes: adminNotes } = body;
+      if (!reviewId || !['APPROVED', 'DENIED'].includes(resolution)) {
+        return NextResponse.json({ error: 'reviewId and resolution (APPROVED|DENIED) required' }, { status: 400 });
+      }
+
+      // Load the review request
+      const { data: review, error: reviewErr } = await supabaseAdmin
+        .from('pick_review_requests')
+        .select('*')
+        .eq('id', reviewId)
+        .single();
+
+      if (reviewErr || !review) return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+      if (review.status !== 'PENDING') return NextResponse.json({ error: 'Review already resolved' }, { status: 409 });
+
+      // On APPROVE: apply suggested_changes to the pick
+      if (resolution === 'APPROVED' && review.suggested_changes) {
+        const allowed = ['team', 'sport', 'bet_type', 'line', 'odds', 'units', 'result', 'notes'];
+        const pickUpdates = {};
+        for (const [key, val] of Object.entries(review.suggested_changes)) {
+          if (!allowed.includes(key)) continue;
+          if (key === 'odds')  pickUpdates[key] = parseInt(val) || null;
+          else if (key === 'line' || key === 'units') pickUpdates[key] = parseFloat(val) ?? null;
+          else pickUpdates[key] = val;
+        }
+        if (Object.keys(pickUpdates).length > 0) {
+          // VOID/PUSH zero out profit
+          const newResult = pickUpdates.result;
+          if ((newResult === 'VOID' || newResult === 'PUSH') && pickUpdates.profit === undefined) {
+            pickUpdates.profit = 0;
+          }
+          pickUpdates.admin_edited_at = new Date().toISOString();
+          pickUpdates.admin_edited_by = adminEmail;
+          const { error: pickErr } = await supabaseAdmin
+            .from('picks')
+            .update(pickUpdates)
+            .eq('id', review.pick_id);
+          if (pickErr) throw pickErr;
+        }
+      }
+
+      // Mark review as resolved
+      const { error: updateErr } = await supabaseAdmin
+        .from('pick_review_requests')
+        .update({
+          status:      resolution,
+          admin_notes: adminNotes || null,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', reviewId);
+
+      if (updateErr) throw updateErr;
       return NextResponse.json({ ok: true });
     }
 

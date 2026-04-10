@@ -78,6 +78,7 @@ async function getOddsCacheTable(sport) {
 
     if (error || !rows || rows.length === 0) return null;
 
+    const nowMs = Date.now();
     const events = rows.map(row => ({
       id:            row.game_id,
       home_team:     row.home_team,
@@ -88,6 +89,8 @@ async function getOddsCacheTable(sport) {
       bookmakers:    row.odds_data?.bookmakers    || [],
       pinnacle:      row.odds_data?.pinnacle      || null,
       suspectOdds:   row.odds_data?.suspectOdds   || false,
+      // Flag set when game has already started — odds shown are the closing line (last pre-game snapshot)
+      _closingLine:  row.game_status === 'post' || new Date(row.commence_time).getTime() <= nowMs,
     }));
 
     return {

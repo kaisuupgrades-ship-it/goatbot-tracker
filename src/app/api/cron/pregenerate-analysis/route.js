@@ -24,14 +24,27 @@ const supabase = createClient(
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 const XAI_BASE  = 'https://api.x.ai/v1';
 
-const SPORT_PATHS = {
+const ESPN_SPORT_PATHS = {
   mlb:  'baseball/mlb',
   nba:  'basketball/nba',
   nhl:  'hockey/nhl',
   nfl:  'football/nfl',
   mls:  'soccer/usa.1',
   wnba: 'basketball/wnba',
+  mma:  'mma/ufc',
 };
+
+// Sports that use outright/futures markets instead of head-to-head matchups.
+// These are discovered dynamically from odds_cache and processed separately.
+const TOURNAMENT_SPORT_PREFIXES = ['golf_', 'tennis_'];
+function isTournamentSport(sportKey) {
+  return TOURNAMENT_SPORT_PREFIXES.some(p => (sportKey || '').startsWith(p));
+}
+
+// Maximum valid American odds price for GAME lines (h2h, spreads, totals).
+// Anything outside ±1500 is almost certainly a futures/data-error line leaking into game data.
+// Tournament outrights have their own (higher) threshold in buildTournamentOddsString.
+const MAX_VALID_PRICE = 1500;
 
 // ── Player prop fetch constants ───────────────────────────────────────────────
 const PROP_SPORT_KEYS = {
@@ -255,7 +268,7 @@ Be decisive. Use only the provided data. Never fabricate.`;
 // final, but we still want to cache analyses for them).
 // includeAll=false (default, cron runs): only return pre/in-progress games.
 async function fetchTodaysGames(sport, dateStr, includeAll = false) {
-  const path = SPORT_PATHS[sport];
+  const path = ESPN_SPORT_PATHS[sport];
   if (!path) return [];
   try {
     const res = await fetch(`${ESPN_BASE}/${path}/scoreboard?dates=${dateStr}`, {
@@ -291,20 +304,278 @@ async function fetchTodaysGames(sport, dateStr, includeAll = false) {
   }
 }
 
-// Build a rich multi-bookmaker odds string from a bookmakers array (shared helper)
+// Build a rich multi-bookmaker odds string from a bookmakers array (shared helper).
+// Filters out prices outside ±MAX_VALID_PRICE to prevent futures/garbage lines from
+// contaminating game analyses (e.g. Pittsburgh -20000 from a data error in NHL odds).
 function buildOddsString(bookmakers) {
   const lines = [];
   for (const book of (bookmakers || []).slice(0, 4)) {
     const bookLines = [];
     for (const market of (book.markets || [])) {
-      const outcomes = (market.outcomes || []).map(o =>
-        `${o.name} ${o.point != null ? (o.point > 0 ? '+' : '') + o.point : ''} (${o.price > 0 ? '+' : ''}${o.price})`
-      ).join(' / ');
+      const outcomes = (market.outcomes || [])
+        .filter(o => Math.abs(o.price || 0) <= MAX_VALID_PRICE)
+        .map(o =>
+          `${o.name} ${o.point != null ? (o.point > 0 ? '+' : '') + o.point : ''} (${o.price > 0 ? '+' : ''}${o.price})`
+        ).join(' / ');
       if (outcomes) bookLines.push(`${market.key}: ${outcomes}`);
     }
     if (bookLines.length) lines.push(`${book.title || book.key}: ${bookLines.join(' | ')}`);
   }
   return lines.length ? `LIVE ODDS (from The Odds API cache):\n${lines.join('\n')}` : '';
+}
+
+// Build outright winner odds string for tournament sports (golf, tennis).
+// Collects player/contestant odds from the outrights market across all bookmakers.
+// Outright prices can legitimately be very large (+10000 for longshots) — uses a higher threshold.
+function buildTournamentOddsString(rows) {
+  const MAX_OUTRIGHT = 50000; // sanity cap for outright odds
+  const playerOdds = {}; // player → best (highest/most favorable) odds found
+
+  for (const row of (rows || [])) {
+    const bookmakers = row.odds_data?.bookmakers || [];
+    for (const book of bookmakers.slice(0, 4)) {
+      for (const market of (book.markets || [])) {
+        if (!['outrights', 'winner', 'tournament_winner'].includes(market.key)) continue;
+        for (const o of (market.outcomes || [])) {
+          const price = o.price;
+          if (!price || Math.abs(price) > MAX_OUTRIGHT) continue;
+          // Keep the best available odds for each player across all books
+          if (playerOdds[o.name] === undefined || price > playerOdds[o.name]) {
+            playerOdds[o.name] = price;
+          }
+        }
+      }
+    }
+  }
+
+  const entries = Object.entries(playerOdds);
+  if (!entries.length) return '';
+
+  // Sort: favorites first (most negative), then positives ascending
+  entries.sort((a, b) => {
+    if (a[1] < 0 && b[1] < 0) return a[1] - b[1]; // more negative = bigger fav
+    if (a[1] < 0) return -1;
+    if (b[1] < 0) return 1;
+    return a[1] - b[1];
+  });
+
+  const lines = entries.slice(0, 25).map(([name, price]) => `${name}: ${price > 0 ? '+' : ''}${price}`);
+  return `OUTRIGHT WINNER ODDS (from The Odds API cache — best available across books):\n${lines.join('\n')}`;
+}
+
+// System prompt for tournament (golf, tennis) analyses.
+function buildTournamentAnalysisSystem() {
+  return `You are BetOS — an elite sharp sports betting intelligence system specialized in tournament outright markets (golf, tennis, etc.).
+
+IMPORTANT: Outright winner odds are ALREADY PROVIDED below — do NOT waste web searches looking for odds or futures prices.
+
+Use web search ONLY for (1-2 searches, stay efficient):
+1. Current tournament leaderboard / round scores if the tournament is in progress
+2. Recent form for the top 5-8 favorites (last 2-3 events, course/surface stats)
+3. Any critical news: withdrawals, injuries, weather forecast for remaining rounds
+
+━━━ TOURNAMENT ANALYSIS FRAMEWORK ━━━
+
+For GOLF tournaments, evaluate:
+- Strokes Gained: Total/Off-the-tee/Approach stats vs. the specific course setup
+- Course fit: driving distances vs. fairway width, approach distances to greens, rough length
+- Recent form: last 3 tournament finishes and current leaderboard position if in-progress
+- Motivational factors: major streak, hot form run, course history / past wins
+- Weather: wind impact on scoring, temperature effects on ball flight
+
+For TENNIS tournaments, evaluate:
+- Surface win rate (hard/clay/grass) this season
+- Recent match win rate and retirement/injury risk
+- Draw analysis: potential tough quarterfinal/semifinal matchups
+- H2H records against likely opponents in draw
+- Fatigue from previous rounds or tight tournament schedule
+
+━━━ FAIR VALUE FRAMEWORK FOR OUTRIGHTS ━━━
+1. Calculate market-implied probability for each contender
+   - If price > 0: implied = 100 / (price + 100)
+   - If price < 0: implied = |price| / (|price| + 100)
+2. Estimate true probability using form + course fit + situational factors
+3. Calculate EDGE = (true_prob − market_implied) × 100
+4. Only recommend bets where edge ≥ 3% AND implied probability ≥ 5% (long shots with no edge are lottery tickets, not bets)
+
+━━━ OUTPUT FORMAT — FOLLOW EXACTLY ━━━
+
+=== TOURNAMENT OVERVIEW ===
+[Tournament name, current round/status if known, course/venue, key conditions]
+
+=== TOP CONTENDERS ANALYSIS ===
+[Top 5-8 players: current odds, implied probability, key strengths/weaknesses for THIS event, 2-3 specific stats or recent results]
+
+=== VALUE PLAYS ===
+[2-3 outright/placement bets with genuine edge. For each:
+Player name | Bet type (outright/top 5/top 10/top 20/make cut) | Best available odds | Edge% | 2-sentence reasoning]
+
+=== AVOID ===
+[1-2 players the market is overrating — specific reason their market-implied probability exceeds your true estimate]
+
+=== BEST PLAY ===
+THE PICK: [Player + Bet Type + Odds + Book]
+Edge: [X%] | Confidence: [LOW/MEDIUM/HIGH/ELITE] | Edge Score: [X/10]
+BetOS Win Probability: Market implied [X%] → BetOS adjusted [Y-Z%]
+Unit Sizing: [0.5u–2u — never exceed 2u on a single outright bet due to higher variance]
+
+=== KEY INTELLIGENCE ===
+• [Critical course-fit or surface-specific insight]
+• [Recent form note or withdrawal/injury risk]
+• [Market signal — steam move, sharp action, or notable odds movement]
+
+=== RED FLAGS ===
+[Overpriced favorites, GTD injury concerns, unconfirmed participation, field depth warning]
+
+⚠️ ODDS DISCLAIMER: Tournament outright odds shift frequently. Verify current odds on your sportsbook before placing any bets. Futures/outrights carry higher variance than game lines — size accordingly.
+
+Be decisive. Cite specific numbers. Never fabricate stats.`;
+}
+
+// User prompt for tournament analyses.
+function buildTournamentUserPrompt(sportKey, tournamentName, oddsContext, gameDate) {
+  const sportLabel = sportKey.startsWith('golf_') ? 'GOLF' : sportKey.startsWith('tennis_') ? 'TENNIS' : 'TOURNAMENT';
+  return `Analyze this ${sportLabel} tournament for ${gameDate}:
+
+TOURNAMENT: ${tournamentName}
+SPORT KEY: ${sportKey}
+DATE: ${gameDate}
+
+${oddsContext
+  ? `KNOWN OUTRIGHT ODDS (pre-fetched from The Odds API cache — use these exact numbers, do NOT search for different prices):\n${oddsContext}`
+  : 'No odds pre-fetched — search for current outright prices and leaderboard.'}
+
+Search for: current round/leaderboard if in-progress, recent form and course-specific stats for top 5-8 favorites, any withdrawals or weather conditions impacting scoring.`;
+}
+
+// Discover active tournament sport keys in odds_cache for the given ET date.
+// Scans for distinct sport values with prefix 'golf_' or 'tennis_'.
+async function discoverActiveSports(todayStr) {
+  try {
+    const { data: rows } = await supabase
+      .from('odds_cache')
+      .select('sport')
+      .in('game_status', ['pre', 'live'])
+      .order('sport');
+    if (!rows?.length) return [];
+    const distinct = [...new Set(rows.map(r => r.sport))];
+    return distinct.filter(isTournamentSport);
+  } catch (e) {
+    console.log('[pregenerate] discoverActiveSports failed:', e.message);
+    return [];
+  }
+}
+
+// Process a single tournament sport (golf, tennis) end-to-end:
+// dedup check → odds fetch → AI analysis → DB upsert.
+async function processTournamentForDay(sportKey, todayStr, { force = false, isAdmin = false, runId = '', triggerSource = 'cron' } = {}) {
+  const { data: rows } = await supabase
+    .from('odds_cache')
+    .select('home_team, away_team, commence_time, odds_data')
+    .eq('sport', sportKey)
+    .in('game_status', ['pre', 'live'])
+    .order('commence_time');
+
+  if (!rows?.length) {
+    console.log(`[pregenerate] Tournament ${sportKey}: no odds_cache rows, skipping`);
+    return { skipped: true, reason: 'no-odds', sport: sportKey };
+  }
+
+  // Use home_team from the first row as the tournament name (Odds API convention)
+  const tournamentName = rows[0].home_team || sportKey;
+  const homeTeam = tournamentName;
+  const awayTeam = 'Field';
+
+  // Dedup check — skip if a valid (non-empty-odds) analysis exists within 12h
+  if (!force) {
+    const dedupCutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const { data: existing } = await supabase
+      .from('game_analyses')
+      .select('id, updated_at, analysis')
+      .eq('sport', sportKey).eq('game_date', todayStr)
+      .ilike('home_team', tournamentName)
+      .maybeSingle();
+    if (existing && existing.updated_at > dedupCutoff) {
+      const noOddsMarkers = ['No odds data available', 'ODDS NOT YET AVAILABLE', 'odds not confirmed'];
+      if (!noOddsMarkers.some(m => existing.analysis?.includes(m))) {
+        const ageMin = Math.round((Date.now() - new Date(existing.updated_at).getTime()) / 60000);
+        console.log(`[pregenerate] ⏭ Tournament ${sportKey} — dedup skip (${ageMin}min old)`);
+        return { skipped: true, reason: 'dedup', sport: sportKey };
+      }
+    }
+  }
+
+  const oddsContext = buildTournamentOddsString(rows);
+  if (!oddsContext && !isAdmin) {
+    console.log(`[pregenerate] Tournament ${sportKey}: no valid outright odds, skipping`);
+    return { skipped: true, reason: 'no-odds', sport: sportKey };
+  }
+
+  const systemPrompt = buildTournamentAnalysisSystem();
+  const userPrompt   = buildTournamentUserPrompt(sportKey, tournamentName, oddsContext, todayStr);
+
+  console.log(`[pregenerate] ⚡ Generating tournament analysis: ${tournamentName} (${sportKey})`);
+  const t0 = Date.now();
+  let result = null;
+
+  // Tier 1: Claude Opus + search
+  console.log(`[pregenerate] 🔵 Tournament Tier 1 (claude-opus+search): ${tournamentName}`);
+  try {
+    const r = await callClaude(systemPrompt, userPrompt, { maxTokens: 2000, timeout: 120_000 });
+    if (r) result = { ...r, model_used: 'claude-opus-4-6', provider: 'anthropic', was_fallback: false };
+  } catch (e) { console.log(`[pregenerate] Tournament Tier 1 failed: ${e.message}`); }
+
+  // Tier 2: Grok-4 + search
+  if (!result) {
+    console.log(`[pregenerate] 🔵 Tournament Tier 2 (grok-4+search): ${tournamentName}`);
+    try {
+      const r = await callGrok(systemPrompt, userPrompt, { useSearch: true, maxTokens: 2000, timeout: 120_000 });
+      if (r) result = { ...r, model_used: 'grok-4', provider: 'xai', was_fallback: false };
+    } catch (e) { console.log(`[pregenerate] Tournament Tier 2 failed: ${e.message}`); }
+  }
+
+  // Tier 3: Grok-3 no-search
+  if (!result) {
+    console.log(`[pregenerate] 🔵 Tournament Tier 3 (grok-3 no-search): ${tournamentName}`);
+    try {
+      const r = await callGrok3(systemPrompt, userPrompt, { maxTokens: 2000, timeout: 45_000 });
+      if (r) result = { ...r, model_used: 'grok-3', provider: 'xai', was_fallback: true };
+    } catch (e) { console.log(`[pregenerate] Tournament Tier 3 failed: ${e.message}`); }
+  }
+
+  if (!result) {
+    console.log(`[pregenerate] ❌ Tournament ${sportKey}: all AI tiers failed`);
+    return { error: 'All AI tiers failed', sport: sportKey, homeTeam, awayTeam };
+  }
+
+  const latency_ms = Date.now() - t0;
+
+  const { error: upsertErr } = await supabase.from('game_analyses').upsert(
+    [{
+      sport:         sportKey,
+      game_date:     todayStr,
+      home_team:     homeTeam,
+      away_team:     awayTeam,
+      analysis:      result.text,
+      model:         'BetOS AI',
+      provider:      result.provider,
+      was_fallback:  result.was_fallback,
+      latency_ms,
+      trigger_source: triggerSource,
+      run_id:        runId,
+      generated_at:  new Date().toISOString(),
+      updated_at:    new Date().toISOString(),
+    }],
+    { onConflict: 'sport,game_date,home_team,away_team', ignoreDuplicates: false }
+  );
+
+  if (upsertErr) {
+    console.warn(`[pregenerate] Tournament DB save failed for ${sportKey}: ${upsertErr.message}`);
+    return { error: upsertErr.message, sport: sportKey, homeTeam, awayTeam };
+  }
+
+  console.log(`[pregenerate] ✅ Tournament ${tournamentName} done — model=${result.model_used} latency=${latency_ms}ms`);
+  return { success: true, sport: sportKey, homeTeam, awayTeam, model: result.model_used, latency_ms };
 }
 
 // Fetch cached odds for a specific game — reads from odds_cache table (primary)
@@ -416,7 +687,7 @@ async function fetchGamesFromOddsCache(sport) {
 // Fetch ESPN injury data for the two teams in a game.
 // Returns a formatted injury report string, or '' if unavailable.
 async function fetchInjuryData(sport, homeTeam, awayTeam) {
-  const path = SPORT_PATHS[sport];
+  const path = ESPN_SPORT_PATHS[sport];
   if (!path) return '';
   try {
     const res = await fetch(`${ESPN_BASE}/${path}/injuries`, {
@@ -989,9 +1260,16 @@ export async function GET(req) {
   // Odds cache check: the refresh-odds cron (*/2 * * * *) normally keeps odds_cache fresh.
   // Only call The Odds API directly here as a fallback when the table has no recent data.
   const THE_ODDS_KEY = (process.env.THE_ODDS_API_KEY || '').trim();
+  // Maps short sport keys (used internally) → Odds API sport keys (used in API URLs).
+  // Golf/tennis tournament sports are discovered dynamically from odds_cache, not listed here.
   const ODDS_SPORT_KEYS = {
-    mlb: 'baseball_mlb', nba: 'basketball_nba', nhl: 'icehockey_nhl',
-    nfl: 'americanfootball_nfl', mls: 'soccer_usa_mls', wnba: 'basketball_wnba',
+    mlb:  'baseball_mlb',
+    nba:  'basketball_nba',
+    nhl:  'icehockey_nhl',
+    nfl:  'americanfootball_nfl',
+    mls:  'soccer_usa_mls',
+    wnba: 'basketball_wnba',
+    mma:  'mma_mixed_martial_arts',
   };
 
   // Track Odds API event counts per sport — used as a gate to skip sports with 0 active
@@ -1066,10 +1344,12 @@ export async function GET(req) {
   // All games queued for dispatcher self-calls (filled during sport loop, dispatched after)
   const allGamesToDispatch = [];
 
-  // Filter to a single sport if specified (allows fast per-sport admin calls)
+  // Filter to a single sport if specified (allows fast per-sport admin calls).
+  // Tournament sports (golf_, tennis_) are NOT in ESPN_SPORT_PATHS — they're handled
+  // separately by discoverActiveSports() after the main h2h dispatch loop.
   const sportsToProcess = sportFilter
-    ? Object.entries(SPORT_PATHS).filter(([key]) => key === sportFilter)
-    : Object.entries(SPORT_PATHS);
+    ? Object.entries(ESPN_SPORT_PATHS).filter(([key]) => key === sportFilter)
+    : Object.entries(ESPN_SPORT_PATHS);
 
   // Write live progress so the UI can poll status even if the user switches tabs
   const totalSports = sportsToProcess.length;
@@ -1306,6 +1586,32 @@ export async function GET(req) {
       else generated.push(`${v.awayTeam || g.awayTeam}@${v.homeTeam || g.homeTeam} (${v.sport?.toUpperCase() || g.sport?.toUpperCase()})`);
     } else {
       errors.push(`${g.awayTeam}@${g.homeTeam} (${g.sport?.toUpperCase()}): ${r.reason?.message || 'dispatch error'}`);
+    }
+  }
+
+  // ── Tournament sports: golf, tennis ────────────────────────────────────────
+  // Discovered dynamically from odds_cache after h2h dispatches complete.
+  // sportFilter can be a tournament key (e.g. 'golf_masters_tournament_winner') from
+  // an admin per-sport trigger — process it here since it won't be in ESPN_SPORT_PATHS.
+  const activeTournamentSports = await discoverActiveSports(todayStr);
+  const tournamentsToProcess = sportFilter
+    ? (isTournamentSport(sportFilter) ? [sportFilter] : [])
+    : activeTournamentSports;
+
+  if (tournamentsToProcess.length) {
+    console.log(`[pregenerate] Processing ${tournamentsToProcess.length} tournament sport(s): ${tournamentsToProcess.join(', ')}`);
+    const tTriggerSource = isAdmin ? 'admin' : (new Date().getUTCHours() < 14 ? 'cron_8am' : 'cron_4pm');
+    for (const tSport of tournamentsToProcess) {
+      const tResult = await processTournamentForDay(tSport, todayStr, {
+        force, isAdmin, runId, triggerSource: tTriggerSource,
+      });
+      if (tResult?.success) {
+        generated.push(`${tResult.homeTeam} (${tSport.toUpperCase()})`);
+      } else if (tResult?.error) {
+        errors.push(`${tSport}: ${tResult.error}`);
+      } else {
+        skipped.push(`${tSport}: tournament-${tResult?.reason || 'unknown'}`);
+      }
     }
   }
 

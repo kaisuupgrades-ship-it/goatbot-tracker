@@ -362,6 +362,77 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 /**
+ * Fetch outright winner odds for active golf/tournament sports from odds_cache.
+ * Used to inject pre-cached odds into live Analyzer queries so the AI doesn't
+ * waste web searches hunting for prices we already have.
+ * Returns a formatted string to append to the user prompt, or null if no data.
+ */
+const GOLF_KEYWORDS_RE = /\b(golf|masters|pga|lpga|british open|open championship|u\.?s\.?\s*open|ryder cup|tournament|fairway|birdie|eagle|golfer|round\s+\d|leaderboard)\b/i;
+
+async function fetchGolfOutrightOdds(prompt, sportParam) {
+  const isGolfSport = sportParam && (String(sportParam).startsWith('golf_') || String(sportParam) === 'golf');
+  const isGolfPrompt = GOLF_KEYWORDS_RE.test(prompt);
+  if (!isGolfSport && !isGolfPrompt) return null;
+
+  try {
+    const { data: rows } = await supabase
+      .from('odds_cache')
+      .select('sport, home_team, away_team, odds_data')
+      .like('sport', 'golf_%')
+      .in('game_status', ['pre', 'live'])
+      .order('commence_time');
+
+    if (!rows?.length) return null;
+
+    // Group by tournament (sport key)
+    const byTournament = {};
+    for (const row of rows) {
+      (byTournament[row.sport] = byTournament[row.sport] || []).push(row);
+    }
+
+    const sections = [];
+    for (const [sportKey, tournRows] of Object.entries(byTournament)) {
+      const tournamentName = tournRows[0].home_team || sportKey;
+      const playerOdds = {};
+      const MAX_OUTRIGHT = 50000;
+
+      for (const row of tournRows) {
+        for (const book of (row.odds_data?.bookmakers || []).slice(0, 3)) {
+          for (const market of (book.markets || [])) {
+            if (!['outrights', 'winner', 'tournament_winner'].includes(market.key)) continue;
+            for (const o of (market.outcomes || [])) {
+              if (!o.price || Math.abs(o.price) > MAX_OUTRIGHT) continue;
+              if (playerOdds[o.name] === undefined || o.price > playerOdds[o.name]) {
+                playerOdds[o.name] = o.price;
+              }
+            }
+          }
+        }
+      }
+
+      const entries = Object.entries(playerOdds);
+      if (!entries.length) continue;
+
+      entries.sort((a, b) => {
+        if (a[1] < 0 && b[1] < 0) return a[1] - b[1];
+        if (a[1] < 0) return -1;
+        if (b[1] < 0) return 1;
+        return a[1] - b[1];
+      });
+
+      const lines = entries.slice(0, 25).map(([name, price]) => `${name}: ${price > 0 ? '+' : ''}${price}`);
+      sections.push(`### ${tournamentName} (${sportKey})\n${lines.join('\n')}`);
+    }
+
+    if (!sections.length) return null;
+    return `\n\n## GOLF TOURNAMENT OUTRIGHT ODDS (from The Odds API cache — use these exact numbers, do NOT search for different prices):\n\n${sections.join('\n\n')}`;
+  } catch (e) {
+    console.log('[goatbot] fetchGolfOutrightOdds failed:', e.message);
+    return null;
+  }
+}
+
+/**
  * Look up the game's kickoff time (ET) from odds_cache by matching team names.
  * Returns a formatted string like "7:10 PM ET" or null if not found.
  */
@@ -669,6 +740,16 @@ export async function POST(req) {
 
     // ── No cache (or stale) — run full AI analysis ────────────────────────────
 
+    // ── Golf odds injection ───────────────────────────────────────────────────
+    // For golf/tournament queries, inject outright odds from odds_cache so the AI
+    // uses our pre-fetched prices instead of searching for ones that may differ.
+    let activePrompt = prompt;
+    const golfOdds = await fetchGolfOutrightOdds(prompt, sport);
+    if (golfOdds) {
+      activePrompt = prompt + golfOdds;
+      console.log('[goatbot] Injected golf outright odds from odds_cache into prompt');
+    }
+
     // ── Tier 1: Claude Opus 4.6 + live web search (90s) ──────────────────────
     if (claudeKey) {
       try {
@@ -681,7 +762,7 @@ export async function POST(req) {
               model: 'claude-opus-4-6',
               system: SYSTEM_PROMPT,
               tools: [{ type: 'web_search_20260209' }],
-              messages: [{ role: 'user', content: prompt }],
+              messages: [{ role: 'user', content: activePrompt }],
               max_tokens: 4000,
               temperature: 1,
             }),
@@ -719,7 +800,7 @@ export async function POST(req) {
             body: JSON.stringify({
               model: 'grok-4',
               instructions: SYSTEM_PROMPT,
-              input: [{ role: 'user', content: prompt }],
+              input: [{ role: 'user', content: activePrompt }],
               tools: [{ type: 'web_search' }],
               max_output_tokens: 3000,
             }),
@@ -750,7 +831,7 @@ export async function POST(req) {
               model: 'grok-3',
               messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: prompt },
+                { role: 'user', content: activePrompt },
               ],
               temperature: 0.7,
               max_tokens: 3000,
@@ -783,7 +864,7 @@ export async function POST(req) {
             body: JSON.stringify({
               model: 'claude-opus-4-6',
               system: SYSTEM_PROMPT + '\n\n[NOTE: Live web search is unavailable for this request. Base analysis on the provided odds data and training knowledge. Flag any facts that should be verified live.]',
-              messages: [{ role: 'user', content: prompt }],
+              messages: [{ role: 'user', content: activePrompt }],
               max_tokens: 3000,
               temperature: 0.7,
             }),

@@ -344,6 +344,11 @@ function deriveStatus(commenceTime) {
   return start > Date.now() ? 'pre' : 'post';
 }
 
+// Returns true if the game's commence_time is in the past — i.e., it has started.
+function hasStarted(commenceTime) {
+  return new Date(commenceTime).getTime() <= Date.now();
+}
+
 // ── Smart scheduling ──────────────────────────────────────────────────────────
 
 async function getSportCacheState(sport) {
@@ -382,16 +387,36 @@ function getRefreshThreshold(games, shoulderMultiplier = 1) {
 }
 
 // ── Upsert enriched games into odds_cache ─────────────────────────────────────
-
+// CRITICAL: Only update odds_data for PRE-MATCH games.
+// Once a game starts, the last cached odds become the "closing line" — we must not
+// overwrite them with live in-game prices. The Odds API can return in-game odds within
+// a short window after commence_time, which look wrong in the UI and waste API credits.
 async function upsertGames(sport, events) {
-  const now = new Date().toISOString();
-  const rows = events.map(ev => ({
+  const now   = new Date().toISOString();
+
+  const preMatch = events.filter(ev => !hasStarted(ev.commence_time));
+  const started  = events.filter(ev =>  hasStarted(ev.commence_time));
+
+  if (started.length > 0) {
+    console.log(`[refresh-odds] ${sport.toUpperCase()}: preserving closing line for ${started.length} started game(s) — skipping odds overwrite`);
+    // Mark started games as 'post' without touching odds_data (closing line stays intact)
+    for (const ev of started) {
+      supabase.from('odds_cache')
+        .update({ game_status: 'post', last_fetched_at: now })
+        .eq('sport', sport).eq('game_id', ev.id)
+        .then(() => {});  // fire-and-forget
+    }
+  }
+
+  if (!preMatch.length) return 0;
+
+  const rows = preMatch.map(ev => ({
     sport,
     game_id:        ev.id,
     home_team:      ev.home_team,
     away_team:      ev.away_team,
     commence_time:  ev.commence_time,
-    game_status:    deriveStatus(ev.commence_time),
+    game_status:    'pre',
     odds_data: {
       bookmakers:  ev.bookmakers  || [],
       sport_title: ev.sport_title || '',

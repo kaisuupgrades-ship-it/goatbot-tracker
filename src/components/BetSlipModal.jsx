@@ -217,6 +217,8 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const homeLogo  = home.team?.logo || null;
   const gameDate  = date ? toLocalDateStr(date) : toLocalDateStr(new Date());
   const betTypes  = SPORT_BET_TYPES[sport] || DEFAULT_BET_TYPES;
+  // Detect if the game has already started — odds shown are closing line (last pre-game snapshot)
+  const gameStarted = date && new Date(date).getTime() <= Date.now();
 
   // ── Parse available lines from odds ────────────────────────────────────────
   const spreadData = odds?.spread ? parseSpread(odds.spread, awayAbbr, homeAbbr) : null;
@@ -738,9 +740,14 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
 
         {/* ── Quick-Select Grid ───────────────────────────────────────────── */}
         {!propPrefill && <div style={{ padding: '0.85rem 1.1rem 0' }}>
-          <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+          <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: gameStarted ? '4px' : '0.6rem' }}>
             Select your bet
           </div>
+          {gameStarted && (
+            <div style={{ fontSize: '0.6rem', color: 'rgba(251,191,36,0.8)', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.18)', borderRadius: '6px', padding: '4px 8px', marginBottom: '0.6rem' }}>
+              Closing odds — game in progress. Picks allowed but not contest-eligible.
+            </div>
+          )}
 
           {quickBets.map(section => (
             <div key={section.section} style={{ marginBottom: '0.65rem' }}>
