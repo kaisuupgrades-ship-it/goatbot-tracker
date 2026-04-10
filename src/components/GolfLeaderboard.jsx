@@ -8,7 +8,7 @@ function getStarredGolfers() {
   try { return JSON.parse(localStorage.getItem(GOLF_STAR_KEY) || '{}'); } catch { return {}; }
 }
 
-function toggleStarGolfer(player, tournamentName, eventId) {
+function toggleStarGolfer(player, tournamentName, eventId, league) {
   const starred = getStarredGolfers();
   const id = player.id || player.athlete?.id;
   if (!id) return;
@@ -17,10 +17,11 @@ function toggleStarGolfer(player, tournamentName, eventId) {
   } else {
     starred[id] = {
       id,
-      name: player.athlete?.displayName || player.athlete?.fullName || '?',
+      name:       player.athlete?.displayName || player.athlete?.fullName || '?',
       tournament: tournamentName || '',
       eventId:    eventId || null,
-      starredAt: new Date().toISOString(),
+      league:     league  || 'pga',
+      starredAt:  new Date().toISOString(),
     };
   }
   try { localStorage.setItem(GOLF_STAR_KEY, JSON.stringify(starred)); } catch {}
@@ -36,7 +37,7 @@ function isGolferStarred(player) {
 // Updates position/score for all currently-starred golfers from fresh data.
 // Uses parseGolfStats so win-odds injected at stats[2] by ESPN for featured
 // players don't contaminate the today/thru values.
-function syncStarredGolferStats(players, tournamentName, eventId) {
+function syncStarredGolferStats(players, tournamentName, eventId, league) {
   const starred = getStarredGolfers();
   let changed = false;
   for (const p of players) {
@@ -48,7 +49,8 @@ function syncStarredGolferStats(players, tournamentName, eventId) {
     const newThru     = String(p.status?.thru ?? parsed.thru ?? '—');
     const newToday    = parsed.today;
     const newTournament = tournamentName || starred[id].tournament;
-    const newEventId    = eventId || starred[id].eventId || null;
+    const newEventId    = eventId  || starred[id].eventId  || null;
+    const newLeague     = league   || starred[id].league   || 'pga';
 
     // Only write if something actually changed — avoids spurious storage events that
     // cause FeaturedGamesTab to re-render even when no data changed.
@@ -59,7 +61,8 @@ function syncStarredGolferStats(players, tournamentName, eventId) {
       cur.thru === newThru &&
       cur.today === newToday &&
       cur.tournament === newTournament &&
-      cur.eventId === newEventId
+      cur.eventId === newEventId &&
+      cur.league  === newLeague
     ) continue;
 
     starred[id] = {
@@ -70,6 +73,7 @@ function syncStarredGolferStats(players, tournamentName, eventId) {
       thru:       newThru,
       today:      newToday,
       eventId:    newEventId,
+      league:     newLeague,
     };
     changed = true;
   }
@@ -284,13 +288,36 @@ export function InlineScorecardPanel({ player, eventId, league, onClose }) {
   }
 
   // Normalize a round — ESPN returns linescores (not holes) inside each round.
+  // playersummary shape: r.period = round number, r.value = stroke total (e.g. 67),
+  //   r.displayValue = to-par string (e.g. "-5" or "+4"), r.linescores = hole array.
+  // Other shapes: r.number = round number, r.value = to-par integer, r.score/r.total = stroke count.
   function normalizeRound(r) {
     const rawHoles = r.holes || r.linescores || [];
+
+    let roundValue = null; // to-par integer
+    let roundTotal = null; // stroke count
+
+    if (typeof r.value === 'number' && r.value > 50) {
+      // r.value is a stroke total (playersummary format) — to-par is in displayValue
+      roundTotal = r.value;
+      const dv = r.displayValue;
+      if (dv === 'E' || dv === 0) {
+        roundValue = 0;
+      } else if (dv != null) {
+        const n = typeof dv === 'number' ? dv : parseInt(String(dv), 10);
+        if (!isNaN(n)) roundValue = n;
+      }
+    } else {
+      // Standard shape: r.value is already to-par
+      roundValue = r.value ?? r.scoreToPar ?? null;
+      roundTotal = r.score ?? r.total ?? null;
+    }
+
     return {
-      number: r.number,
-      value:  r.value ?? r.scoreToPar ?? null,
+      number: r.number ?? r.period,   // playersummary uses 'period', others use 'number'
+      value:  roundValue,
       par:    r.par   ?? null,
-      total:  r.score ?? r.total ?? null,
+      total:  roundTotal,
       holes:  rawHoles.map(normalizeHole),
     };
   }
@@ -699,7 +726,7 @@ function PlayerRow({ player, isMobile, tournamentName, eventId, league }) {
 
   function handleStar(e) {
     e.stopPropagation();
-    toggleStarGolfer(player, tournamentName, eventId);
+    toggleStarGolfer(player, tournamentName, eventId, league);
     setStarred(v => !v);
   }
 
@@ -866,8 +893,8 @@ function TournamentCard({ event, defaultOpen, search, isMobile, league }) {
   // run the effect on every render. The JSON string only changes when player data changes.
   const rawPlayersKey = JSON.stringify(rawPlayers);
   useEffect(() => {
-    syncStarredGolferStats(rawPlayers, name, eventId);
-  }, [rawPlayersKey, name, eventId]); // eslint-disable-line react-hooks/exhaustive-deps
+    syncStarredGolferStats(rawPlayers, name, eventId, league);
+  }, [rawPlayersKey, name, eventId, league]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sort by numeric position (handles ties like "T2" → 2, "CUT" → 999)
   function parsePos(pos) {

@@ -123,15 +123,18 @@ function enrichWithOddsApiScores(espnData, oddsApiScores) {
   return { ...espnData, events: enrichedEvents };
 }
 
-async function espnFetch(path, base = ESPN_BASE) {
+async function espnFetch(path, base = ESPN_BASE, { timeout } = {}) {
   const key = `${base}/${path}`;
   const cached = getCached(key);
   if (cached) return cached;
 
-  const res = await fetch(`${base}/${path}`, {
+  const opts = {
     headers: { 'User-Agent': 'Mozilla/5.0' },
     next: { revalidate: 20 },
-  });
+  };
+  if (timeout) opts.signal = AbortSignal.timeout(timeout);
+
+  const res = await fetch(`${base}/${path}`, opts);
   if (!res.ok) throw new Error(`ESPN API ${res.status}: ${path}`);
   const data = await res.json();
   setCache(key, data);
@@ -184,27 +187,45 @@ export async function GET(req) {
         return roundScores;
       }
 
-      // Endpoint 1: site.web.api scorecards (most detailed — has par per hole)
+      // Endpoint 1 (best): playersummary?player= via site.web.api — confirmed working.
+      // Returns per-round linescores with hole-by-hole data + to-par displayValue.
+      // Try player= first (confirmed 200), then athlete= (returns 400 but kept for future).
+      for (const param of ['player', 'athlete']) {
+        try {
+          const data = await espnFetch(
+            `golf/${golfLeague}/leaderboard/${eventId}/playersummary?${param}=${athleteId}`,
+            ESPN_WEB_SITE_BASE,
+            { timeout: 8000 },
+          );
+          if (data?.rounds?.length || data?.player?.rounds?.length) {
+            return NextResponse.json(data);
+          }
+        } catch (err) {
+          console.warn(`Golf playersummary (${param}=) failed:`, err.message);
+        }
+      }
+
+      // Endpoint 2: scorecards via site.web.api (detailed — may work for some events)
       try {
-        const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`, ESPN_WEB_BASE);
+        const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`, ESPN_WEB_BASE, { timeout: 6000 });
         const rounds = data?.rounds || data?.player?.rounds || [];
         if (rounds.length > 0) return NextResponse.json(data);
       } catch (err) {
         console.warn('Golf scorecard web endpoint failed:', err.message);
       }
 
-      // Endpoint 1b: same scorecard path but via the public ESPN base (site.api.espn.com)
+      // Endpoint 2b: scorecards via public ESPN base
       try {
-        const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`);
+        const data = await espnFetch(`golf/${golfLeague}/scorecards/${athleteId}?event=${eventId}`, ESPN_BASE, { timeout: 6000 });
         const rounds = data?.rounds || data?.player?.rounds || [];
         if (rounds.length > 0) return NextResponse.json(data);
       } catch (err) {
         console.warn('Golf scorecard public endpoint failed:', err.message);
       }
 
-      // Endpoint 2: event summary — sometimes includes full competitor round data
+      // Endpoint 3: event summary (may be slow/502 — short timeout, last resort before leaderboard)
       try {
-        const data = await espnFetch(`golf/${golfLeague}/summary?event=${eventId}`);
+        const data = await espnFetch(`golf/${golfLeague}/summary?event=${eventId}`, ESPN_BASE, { timeout: 5000 });
         const competitors = data?.competitors || data?.competition?.competitors || [];
         const player = competitors.find(c =>
           String(c.id) === String(athleteId) ||
@@ -216,23 +237,6 @@ export async function GET(req) {
         }
       } catch (err) {
         console.warn('Golf summary endpoint failed:', err.message);
-      }
-
-      // Endpoint 2b: site.web.api competitor detail
-      // ESPN playersummary endpoint lives under /apis/site/v2 (not /apis/v2)
-      // Try both athlete= and player= param names — ESPN has been inconsistent
-      for (const param of ['athlete', 'player']) {
-        try {
-          const data = await espnFetch(
-            `golf/${golfLeague}/leaderboard/${eventId}/playersummary?${param}=${athleteId}`,
-            ESPN_WEB_SITE_BASE
-          );
-          if (data?.rounds?.length || data?.player?.rounds?.length) {
-            return NextResponse.json(data);
-          }
-        } catch (err) {
-          console.warn(`Golf player summary (${param}=) failed:`, err.message);
-        }
       }
 
       // Endpoint 3: Pull from the main leaderboard — always succeeds when an event is active.
