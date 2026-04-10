@@ -3691,6 +3691,382 @@ CREATE INDEX ON pick_review_requests (status, created_at DESC);`}</pre>
   );
 }
 
+// ── ERROR LOG PANEL ───────────────────────────────────────────────────────────
+
+const SETUP_SQL = `CREATE TABLE IF NOT EXISTS error_log (
+  id            bigserial PRIMARY KEY,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  level         text NOT NULL DEFAULT 'error' CHECK (level IN ('error', 'warn', 'info')),
+  source        text NOT NULL DEFAULT 'client' CHECK (source IN ('client', 'api', 'cron', 'webhook')),
+  endpoint      text,
+  message       text NOT NULL,
+  stack         text,
+  metadata      jsonb,
+  user_id       uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  resolved      boolean NOT NULL DEFAULT false,
+  resolved_at   timestamptz,
+  resolved_by   text
+);
+CREATE INDEX IF NOT EXISTS idx_error_log_level      ON error_log (level);
+CREATE INDEX IF NOT EXISTS idx_error_log_resolved   ON error_log (resolved, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_error_log_created_at ON error_log (created_at DESC);
+ALTER TABLE error_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "service_role_all" ON error_log FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "authenticated_insert" ON error_log FOR INSERT TO authenticated WITH CHECK (true);`;
+
+const LEVEL_STYLE = {
+  error: { color: '#f87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.25)', dot: '#f87171' },
+  warn:  { color: '#fbbf24', bg: 'rgba(251,191,36,0.08)',  border: 'rgba(251,191,36,0.25)',  dot: '#fbbf24' },
+  info:  { color: '#60a5fa', bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)',  dot: '#60a5fa' },
+};
+const SOURCE_LABELS = { client: 'CLIENT', api: 'API', cron: 'CRON', webhook: 'WEBHOOK' };
+const SOURCE_COLORS = { client: '#a78bfa', api: '#34d399', cron: '#fbbf24', webhook: '#60a5fa' };
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function ErrorCard({ entry, selected, onSelect, onResolve, onUnresolve }) {
+  const [expanded, setExpanded] = useState(false);
+  const ls = LEVEL_STYLE[entry.level] || LEVEL_STYLE.error;
+  const isResolved = entry.resolved;
+
+  return (
+    <div style={{
+      background: 'var(--bg-elevated)',
+      border: `1px solid ${isResolved ? 'var(--border)' : ls.border}`,
+      borderRadius: '10px', overflow: 'hidden',
+      opacity: isResolved ? 0.65 : 1,
+      transition: 'opacity 0.2s',
+    }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: isResolved ? 'transparent' : ls.bg, borderBottom: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
+        {/* Checkbox */}
+        <input type="checkbox" checked={selected} onChange={e => onSelect(entry.id, e.target.checked)}
+          style={{ width: '14px', height: '14px', cursor: 'pointer', flexShrink: 0 }} />
+        {/* Level badge */}
+        <span style={{ fontSize: '0.6rem', fontWeight: 800, color: ls.color, background: ls.bg, border: `1px solid ${ls.border}`, borderRadius: '4px', padding: '1px 6px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          {entry.level}
+        </span>
+        {/* Source badge */}
+        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: SOURCE_COLORS[entry.source] || '#94a3b8', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '1px 6px' }}>
+          {SOURCE_LABELS[entry.source] || entry.source}
+        </span>
+        {/* Endpoint */}
+        {entry.endpoint && (
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {entry.endpoint}
+          </span>
+        )}
+        {/* Resolved badge */}
+        {isResolved && (
+          <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '4px', padding: '1px 6px' }}>
+            RESOLVED
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtTs(entry.created_at)}</span>
+        {/* Expand toggle */}
+        <button onClick={() => setExpanded(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', padding: '0 2px', lineHeight: 1 }}>
+          {expanded ? '▲' : '▼'}
+        </button>
+      </div>
+
+      {/* Message */}
+      <div style={{ padding: '8px 12px 6px', fontSize: '0.8rem', color: 'var(--text-primary)', lineHeight: 1.5, wordBreak: 'break-word' }}>
+        {entry.message}
+      </div>
+
+      {/* Expanded: stack + metadata */}
+      {expanded && (
+        <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {entry.stack && (
+            <div>
+              <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '4px' }}>Stack Trace</div>
+              <pre style={{ margin: 0, fontSize: '0.66rem', color: '#f87171', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '8px 10px', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1.5, maxHeight: '200px', overflowY: 'auto' }}>
+                {entry.stack}
+              </pre>
+            </div>
+          )}
+          {entry.metadata && (
+            <div>
+              <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '4px' }}>Metadata</div>
+              <pre style={{ margin: 0, fontSize: '0.66rem', color: '#94a3b8', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '8px 10px', overflowX: 'auto', fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1.5, maxHeight: '150px', overflowY: 'auto' }}>
+                {JSON.stringify(entry.metadata, null, 2)}
+              </pre>
+            </div>
+          )}
+          {entry.resolved_by && (
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Resolved by {entry.resolved_by} at {fmtTs(entry.resolved_at)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action row */}
+      <div style={{ padding: '6px 12px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.08)' }}>
+        {!isResolved
+          ? <button onClick={() => onResolve([entry.id])} style={{ padding: '3px 10px', borderRadius: '5px', border: 'none', background: '#4ade80', color: '#000', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}>✓ Resolve</button>
+          : <button onClick={() => onUnresolve([entry.id])} style={{ padding: '3px 10px', borderRadius: '5px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem' }}>↩ Unresolve</button>
+        }
+        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', alignSelf: 'center' }}>ID #{entry.id}</span>
+      </div>
+    </div>
+  );
+}
+
+function ErrorLogPanel() {
+  const [items,        setItems]        = useState([]);
+  const [total,        setTotal]        = useState(0);
+  const [page,         setPage]         = useState(1);
+  const [pages,        setPages]        = useState(1);
+  const [loading,      setLoading]      = useState(true);
+  const [actionMsg,    setActionMsg]    = useState('');
+  const [tableNotFound, setTableNotFound] = useState(false);
+  const [unresolvedCount, setUnresolvedCount] = useState(0);
+
+  // Filters
+  const [filterLevel,    setFilterLevel]    = useState('');
+  const [filterSource,   setFilterSource]   = useState('');
+  const [filterResolved, setFilterResolved] = useState('false'); // 'false'=unresolved, 'true'=resolved, ''=all
+  const [filterSearch,   setFilterSearch]   = useState('');
+  const [filterFrom,     setFilterFrom]     = useState('');
+  const [filterTo,       setFilterTo]       = useState('');
+
+  // Selection (bulk actions)
+  const [selected, setSelected] = useState(new Set());
+
+  // Auto-refresh
+  const [autoRefresh,   setAutoRefresh]   = useState(false);
+  const autoRefreshRef = React.useRef(null);
+
+  const load = useCallback(async (pg = 1) => {
+    setLoading(true);
+    setSelected(new Set());
+    try {
+      const token = await getAuthToken();
+      const params = new URLSearchParams({ page: pg, limit: 50 });
+      if (filterLevel)    params.set('level',    filterLevel);
+      if (filterSource)   params.set('source',   filterSource);
+      if (filterResolved) params.set('resolved', filterResolved);
+      if (filterSearch)   params.set('search',   filterSearch);
+      if (filterFrom)     params.set('from',     filterFrom);
+      if (filterTo)       params.set('to',       filterTo);
+
+      const res = await adminFetch(`/api/admin/error-log?${params}`);
+      const data = await res.json();
+
+      if (data.tableNotFound) { setTableNotFound(true); setLoading(false); return; }
+      if (data.error) { setActionMsg(`⚠ ${data.error}`); setLoading(false); return; }
+
+      setItems(data.items || []);
+      setTotal(data.total || 0);
+      setPage(data.page || 1);
+      setPages(data.pages || 1);
+      setUnresolvedCount(data.unresolvedCount || 0);
+      setTableNotFound(false);
+    } catch (e) {
+      setActionMsg(`⚠ ${e.message}`);
+    }
+    setLoading(false);
+  }, [filterLevel, filterSource, filterResolved, filterSearch, filterFrom, filterTo]);
+
+  useEffect(() => { load(1); }, [load]);
+
+  useEffect(() => {
+    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    if (autoRefresh) {
+      autoRefreshRef.current = setInterval(() => load(page), 30_000);
+    }
+    return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
+  }, [autoRefresh, load, page]);
+
+  async function resolve(ids, resolved = true) {
+    try {
+      const res = await adminFetch('/api/admin/error-log', {
+        method: 'PATCH',
+        body: JSON.stringify({ ids, resolved }),
+      });
+      const data = await res.json();
+      if (data.error) { setActionMsg(`⚠ ${data.error}`); return; }
+      setActionMsg(resolved ? `✓ Resolved ${ids.length} error(s)` : `✓ Unresolved ${ids.length} error(s)`);
+      load(page);
+    } catch (e) { setActionMsg(`⚠ ${e.message}`); }
+  }
+
+  async function clearResolved() {
+    if (!window.confirm('Delete all resolved entries? This cannot be undone.')) return;
+    try {
+      const res = await adminFetch('/api/admin/error-log', {
+        method: 'PATCH',
+        body: JSON.stringify({ clearAll: true }),
+      });
+      const data = await res.json();
+      if (data.error) { setActionMsg(`⚠ ${data.error}`); return; }
+      setActionMsg('✓ Cleared all resolved entries');
+      load(1);
+    } catch (e) { setActionMsg(`⚠ ${e.message}`); }
+  }
+
+  function onSelect(id, checked) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      checked ? next.add(id) : next.delete(id);
+      return next;
+    });
+  }
+  const selectedArr = Array.from(selected);
+  const allSelected = items.length > 0 && items.every(i => selected.has(i.id));
+
+  function toggleAll(checked) {
+    setSelected(checked ? new Set(items.map(i => i.id)) : new Set());
+  }
+
+  if (tableNotFound) {
+    return (
+      <div style={{ padding: '1rem', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '10px' }}>
+        <div style={{ fontWeight: 700, color: '#fbbf24', fontSize: '0.85rem', marginBottom: '6px' }}>Table Not Created Yet</div>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '8px' }}>
+          Run this SQL in{' '}
+          <a href="https://app.supabase.com/project/vhlqfxembugromsnjvzm/editor" target="_blank" rel="noreferrer"
+            style={{ color: '#60a5fa' }}>Supabase SQL Editor</a>:
+        </div>
+        <pre style={{ margin: 0, background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '10px 14px', fontSize: '0.68rem', color: '#ccc', overflowX: 'auto', fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+          {SETUP_SQL}
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+        {/* Filters */}
+        <select value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}
+          style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '0.75rem', cursor: 'pointer' }}>
+          <option value="">All levels</option>
+          <option value="error">Error</option>
+          <option value="warn">Warn</option>
+          <option value="info">Info</option>
+        </select>
+        <select value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}
+          style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '0.75rem', cursor: 'pointer' }}>
+          <option value="">All sources</option>
+          <option value="client">Client</option>
+          <option value="api">API</option>
+          <option value="cron">Cron</option>
+          <option value="webhook">Webhook</option>
+        </select>
+        <select value={filterResolved} onChange={e => { setFilterResolved(e.target.value); setPage(1); }}
+          style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '0.75rem', cursor: 'pointer' }}>
+          <option value="false">Unresolved</option>
+          <option value="true">Resolved</option>
+          <option value="">All</option>
+        </select>
+        <input value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && load(1)}
+          placeholder="Search message / endpoint…"
+          style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '0.75rem', minWidth: '180px' }} />
+        <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+          style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '0.72rem' }} />
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>→</span>
+        <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+          style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '0.72rem' }} />
+        <button onClick={() => load(1)} style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}>↺ Refresh</button>
+
+        {/* Auto-refresh toggle */}
+        <button onClick={() => setAutoRefresh(v => !v)}
+          style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${autoRefresh ? 'rgba(74,222,128,0.4)' : 'var(--border)'}`, background: autoRefresh ? 'rgba(74,222,128,0.1)' : 'transparent', color: autoRefresh ? '#4ade80' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: autoRefresh ? 700 : 400 }}>
+          {autoRefresh ? '● Auto 30s' : '○ Auto-refresh'}
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '0.85rem', flexWrap: 'wrap' }}>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{total}</span> total
+          {unresolvedCount > 0 && (
+            <span style={{ marginLeft: '8px', color: '#f87171', fontWeight: 700 }}>
+              {unresolvedCount} unresolved
+            </span>
+          )}
+        </div>
+        {selectedArr.length > 0 && (
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{selectedArr.length} selected</span>
+            <button onClick={() => resolve(selectedArr, true)}
+              style={{ padding: '2px 10px', borderRadius: '5px', border: 'none', background: '#4ade80', color: '#000', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700 }}>
+              ✓ Resolve all
+            </button>
+            <button onClick={() => resolve(selectedArr, false)}
+              style={{ padding: '2px 10px', borderRadius: '5px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem' }}>
+              ↩ Unresolve
+            </button>
+          </div>
+        )}
+        <button onClick={clearResolved}
+          style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(248,113,113,0.25)', background: 'transparent', color: '#f87171', cursor: 'pointer', fontSize: '0.72rem' }}>
+          🗑 Clear resolved
+        </button>
+      </div>
+
+      {/* Action message */}
+      {actionMsg && (
+        <div style={{ padding: '7px 12px', borderRadius: '7px', background: actionMsg.startsWith('✓') ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.06)', color: actionMsg.startsWith('✓') ? '#4ade80' : '#f87171', fontSize: '0.8rem', marginBottom: '0.75rem', border: `1px solid ${actionMsg.startsWith('✓') ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}` }}>
+          {actionMsg}
+        </div>
+      )}
+
+      {/* Select-all row */}
+      {items.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px', marginBottom: '6px' }}>
+          <input type="checkbox" checked={allSelected} onChange={e => toggleAll(e.target.checked)}
+            style={{ width: '14px', height: '14px', cursor: 'pointer' }} />
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Select all on page</span>
+        </div>
+      )}
+
+      {/* List */}
+      {loading ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Loading…</div>
+      ) : items.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.85rem' }}>
+          {filterLevel || filterSource || filterSearch ? 'No errors match the current filters' : 'No errors logged yet'}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {items.map(entry => (
+            <ErrorCard
+              key={entry.id}
+              entry={entry}
+              selected={selected.has(entry.id)}
+              onSelect={onSelect}
+              onResolve={ids => resolve(ids, true)}
+              onUnresolve={ids => resolve(ids, false)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {pages > 1 && (
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', marginTop: '1rem', alignItems: 'center' }}>
+          <button onClick={() => { setPage(p => Math.max(1, p - 1)); load(Math.max(1, page - 1)); }}
+            disabled={page <= 1}
+            style={{ padding: '4px 10px', borderRadius: '5px', border: '1px solid var(--border)', background: 'transparent', color: page <= 1 ? 'var(--text-muted)' : 'var(--text-primary)', cursor: page <= 1 ? 'not-allowed' : 'pointer', fontSize: '0.78rem' }}>‹</button>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Page {page} / {pages}</span>
+          <button onClick={() => { setPage(p => Math.min(pages, p + 1)); load(Math.min(pages, page + 1)); }}
+            disabled={page >= pages}
+            style={{ padding: '4px 10px', borderRadius: '5px', border: '1px solid var(--border)', background: 'transparent', color: page >= pages ? 'var(--text-muted)' : 'var(--text-primary)', cursor: page >= pages ? 'not-allowed' : 'pointer', fontSize: '0.78rem' }}>›</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Consolidated tab definitions ──────────────────────────────────────────────
 const ADMIN_TABS = [
   { id: 'overview', label: '📊 Overview',  desc: 'Site-wide stats, leaderboard, and recent sign-ups' },
@@ -3703,6 +4079,7 @@ const ADMIN_TABS = [
   { id: 'aitools',  label: '🧪 AI Tools',  desc: 'AI Lab performance tracker and historical backtester' },
   { id: 'system',   label: '⚙️ System',   desc: 'Site settings, scheduled jobs, and AI chat console' },
   { id: 'apiusage', label: '📡 API Usage', desc: 'The Odds API credit consumption — daily usage, per-sport breakdown, and recent calls' },
+  { id: 'errors',   label: '🔴 Errors',   desc: 'Client and server error log — unhandled exceptions, API failures, and cron errors' },
 ];
 
 export default function AdminTab({ user }) {
@@ -3712,6 +4089,17 @@ export default function AdminTab({ user }) {
   // in-flight API call (pre-gen, grading, etc.) continues even if the
   // admin clicks to a different panel mid-run.
   const [everMounted, setEverMounted] = React.useState(() => new Set(['overview']));
+
+  // Unresolved error count — shown as badge on Errors tab
+  const [errorBadge, setErrorBadge] = React.useState(0);
+  React.useEffect(() => {
+    let cancelled = false;
+    adminFetch('/api/admin/error-log?resolved=false&limit=1')
+      .then(r => r.json())
+      .then(d => { if (!cancelled && !d.error && !d.tableNotFound) setErrorBadge(d.unresolvedCount || 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const isAdmin = ADMIN_EMAILS.length > 0
     ? ADMIN_EMAILS.includes(user?.email?.toLowerCase())
@@ -3765,8 +4153,14 @@ export default function AdminTab({ user }) {
               color: active === t.id ? 'var(--gold)' : 'var(--text-muted)',
               fontWeight: active === t.id ? 700 : 400,
               transition: 'all 0.12s',
+              display: 'flex', alignItems: 'center', gap: '5px',
             }}>
             {t.label}
+            {t.id === 'errors' && errorBadge > 0 && (
+              <span style={{ background: '#f87171', color: '#000', borderRadius: '10px', fontSize: '0.6rem', fontWeight: 900, padding: '1px 6px', lineHeight: 1.4 }}>
+                {errorBadge > 99 ? '99+' : errorBadge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -3786,6 +4180,7 @@ export default function AdminTab({ user }) {
       {everMounted.has('aitools')  && <div style={{ display: active === 'aitools'  ? 'block' : 'none' }}><AIToolsPanel       userEmail={user.email} /></div>}
       {everMounted.has('system')   && <div style={{ display: active === 'system'   ? 'block' : 'none' }}><SystemMegaPanel    userEmail={user.email} /></div>}
       {everMounted.has('apiusage') && <div style={{ display: active === 'apiusage' ? 'block' : 'none' }}><ApiUsagePanel /></div>}
+      {everMounted.has('errors')   && <div style={{ display: active === 'errors'   ? 'block' : 'none' }}><ErrorLogPanel /></div>}
     </div>
   );
 }

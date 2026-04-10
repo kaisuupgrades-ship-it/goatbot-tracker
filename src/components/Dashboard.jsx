@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut } from '@/lib/supabase';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { startSessionTracking, stopSessionTracking } from '@/lib/sessionTracker';
+import { initErrorLogger } from '@/lib/errorLogger';
 import { useRouter } from 'next/navigation';
 import Sidebar       from './Sidebar';
 import TrackerTab    from './tabs/TrackerTab';
@@ -335,6 +336,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
       return () => stopSessionTracking();
     }
   }, [user?.id, isDemo]);
+
+  // Install global client-side error logger (runs once, catches unhandled errors)
+  useEffect(() => { initErrorLogger(); }, []);
 
   // Scroll to top on every tab change — covers Sidebar clicks, programmatic nav,
   // and cross-tab events (betos-navigate). Runs after the new tab renders.
