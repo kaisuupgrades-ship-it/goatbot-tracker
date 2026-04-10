@@ -257,8 +257,17 @@ async function getAnalytics(from, to, sport, pickType) {
   const roi     = picks.length > 0 ? (totalProfit / picks.length) * 100 : 0;
   const winRate = settled > 0 ? (wins.length / settled) * 100 : 0;
 
-  const avgOdds = (arr) =>
-    arr.length > 0 ? Math.round(arr.reduce((s, p) => s + (parseInt(p.odds) || 0), 0) / arr.length) : null;
+  // Average odds via decimal conversion (arithmetic mean of American odds is meaningless
+  // when mixing positive/negative — e.g. averaging -200 and +150 gives -25, not -127).
+  const avgOdds = (arr) => {
+    const valid = arr.map(p => parseInt(p.odds)).filter(o => !isNaN(o) && o !== 0);
+    if (!valid.length) return null;
+    // Convert to decimal odds, average, convert back to American
+    const avgDec = valid.reduce((s, o) => s + (o > 0 ? o / 100 + 1 : 100 / Math.abs(o) + 1), 0) / valid.length;
+    return avgDec >= 2
+      ? Math.round((avgDec - 1) * 100)
+      : Math.round(-100 / (avgDec - 1));
+  };
   const avgWinOdds  = avgOdds(wins);
   const avgLossOdds = avgOdds(losses);
 
