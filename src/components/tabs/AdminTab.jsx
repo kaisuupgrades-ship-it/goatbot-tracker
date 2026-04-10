@@ -3509,8 +3509,16 @@ function ReviewQueuePanel({ userEmail }) {
   const [showResolved, setShowResolved] = React.useState(false);
   const [resolved, setResolved]   = React.useState([]);
   const [loadingResolved, setLoadingResolved] = React.useState(false);
+  const [typeFilter, setTypeFilter] = React.useState('all'); // 'all' | 'ungraded' | 'correction'
 
   function flash(msg) { setActionMsg(msg); setTimeout(() => setActionMsg(''), 3500); }
+
+  // Determine the type of a review from its suggested_changes
+  function getReviewType(review) {
+    const sc = review.suggested_changes;
+    if (sc?.type === 'ungraded') return 'ungraded';
+    return 'correction';
+  }
 
   const loadPending = React.useCallback(() => {
     setLoading(true);
@@ -3576,18 +3584,69 @@ function ReviewQueuePanel({ userEmail }) {
     setDenyNote('');
   }
 
+  // Grade an ungraded pick directly (WIN/LOSS/PUSH/VOID) then resolve the review
+  async function handleGradeNow(review, result) {
+    setResolving(review.id);
+    try {
+      const pick = review.picks || {};
+      const units = parseFloat(pick.units) || 1;
+      const odds  = parseInt(pick.odds)   || 0;
+      let profit = 0;
+      if (result === 'WIN') {
+        profit = odds > 0
+          ? parseFloat((units * odds / 100).toFixed(2))
+          : parseFloat((units * 100 / Math.abs(odds)).toFixed(2));
+      } else if (result === 'LOSS') {
+        profit = -units;
+      }
+      // 1. Apply the grade to the pick
+      const editRes = await adminFetch('/api/admin', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'edit_pick', targetId: review.pick_id, result, profit }),
+      });
+      const editData = await editRes.json();
+      if (editData.error) { flash(`Error grading pick: ${editData.error}`); setResolving(null); return; }
+      // 2. Mark the review as resolved
+      await adminFetch('/api/admin', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'resolve_review', reviewId: review.id, resolution: 'APPROVED',
+          admin_notes: `Manually graded as ${result} via Reviews panel`,
+        }),
+      });
+      flash(`✓ Pick graded ${result} and review resolved`);
+      setPending(prev => prev.filter(r => r.id !== review.id));
+    } catch (e) { flash(`Error: ${e.message}`); }
+    setResolving(null);
+  }
+
   const fmtDate = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
   function ReviewCard({ review, isResolved }) {
-    const pick = review.picks || {};
-    const user = review.profiles || {};
-    const changes = review.suggested_changes || {};
-    const hasChanges = Object.keys(changes).length > 0;
-    const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
-    const isProcessing = resolving === review.id;
+    const pick        = review.picks || {};
+    const user        = review.profiles || {};
+    const changes     = review.suggested_changes || {};
+    const reviewType  = getReviewType(review);
+    const isUngraded  = reviewType === 'ungraded';
+    // For corrections, filter out internal metadata keys from the display
+    const displayChanges = isUngraded ? {} : Object.fromEntries(
+      Object.entries(changes).filter(([k]) => !['type', 'game_status', 'commence_time'].includes(k))
+    );
+    const hasChanges    = Object.keys(displayChanges).length > 0;
+    const oddsDisplay   = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
+    const isProcessing  = resolving === review.id;
+
+    // Type badge config
+    const typeBadge = isUngraded
+      ? { label: 'Ungraded', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)' }
+      : { label: 'Correction', color: '#60a5fa', bg: 'rgba(96,165,250,0.1)', border: 'rgba(96,165,250,0.25)' };
+
     return (
-      <div style={{ background: 'var(--bg-elevated)', border: `1px solid ${isResolved ? 'var(--border)' : 'rgba(255,184,0,0.2)'}`, borderRadius: '10px', overflow: 'hidden', opacity: isProcessing ? 0.7 : 1, transition: 'opacity 0.2s' }}>
-        <div style={{ padding: '8px 12px', background: isResolved ? 'rgba(255,255,255,0.02)' : 'rgba(255,184,0,0.04)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <div style={{ background: 'var(--bg-elevated)', border: `1px solid ${isResolved ? 'var(--border)' : isUngraded ? 'rgba(251,191,36,0.25)' : 'rgba(96,165,250,0.2)'}`, borderRadius: '10px', overflow: 'hidden', opacity: isProcessing ? 0.7 : 1, transition: 'opacity 0.2s' }}>
+        {/* Header row */}
+        <div style={{ padding: '8px 12px', background: isResolved ? 'rgba(255,255,255,0.02)' : isUngraded ? 'rgba(251,191,36,0.04)' : 'rgba(96,165,250,0.03)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Type badge */}
+          <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: typeBadge.color, background: typeBadge.bg, border: `1px solid ${typeBadge.border}`, padding: '1px 7px', borderRadius: '4px' }}>{typeBadge.label}</span>
           <span style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-primary)' }}>{user.username || 'Unknown'}</span>
           <span style={{ fontSize: '0.68rem', color: '#60a5fa', background: 'rgba(96,165,250,0.1)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>{pick.sport || '—'}</span>
           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }}>{pick.team || '—'}</span>
@@ -3597,11 +3656,21 @@ function ReviewQueuePanel({ userEmail }) {
           <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: 'var(--text-muted)' }}>{fmtDate(review.created_at)}</span>
           {isResolved && <span style={{ fontSize: '0.65rem', fontWeight: 700, color: review.status === 'APPROVED' ? '#4ade80' : '#f87171', background: review.status === 'APPROVED' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', borderRadius: '4px', padding: '1px 6px' }}>{review.status}</span>}
         </div>
+
+        {/* Body */}
         <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div>
-            <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '3px' }}>User's Request</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 9px', borderLeft: '3px solid rgba(96,165,250,0.4)' }}>{review.user_message}</div>
-          </div>
+          {isUngraded ? (
+            // Ungraded picks: show game info instead of user message
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, background: 'rgba(251,191,36,0.04)', borderRadius: '6px', padding: '6px 9px', borderLeft: '3px solid rgba(251,191,36,0.35)' }}>
+              <span style={{ fontWeight: 700, color: '#fbbf24' }}>Auto-flagged: </span>
+              Game concluded (started {changes.commence_time ? new Date(changes.commence_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}) but pick was never graded. Use Grade Now buttons below to resolve.
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '3px' }}>User's Request</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 9px', borderLeft: '3px solid rgba(96,165,250,0.4)' }}>{review.user_message}</div>
+            </div>
+          )}
           {review.ai_analysis && (
             <div>
               <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--gold)', marginBottom: '3px' }}>AI Analysis</div>
@@ -3612,7 +3681,7 @@ function ReviewQueuePanel({ userEmail }) {
             <div>
               <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4ade80', marginBottom: '4px' }}>Suggested Changes</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {Object.entries(changes).map(([field, val]) => (
+                {Object.entries(displayChanges).map(([field, val]) => (
                   <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '6px', padding: '3px 9px' }}>
                     <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#4ade80' }}>{field}</span>
                     <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>→</span>
@@ -3626,28 +3695,57 @@ function ReviewQueuePanel({ userEmail }) {
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>Admin note: {review.admin_notes}</div>
           )}
         </div>
+
+        {/* Action footer */}
         {!isResolved && (
-          <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.1)' }}>
-            <button onClick={() => handleApprove(review)} disabled={isProcessing} style={{ padding: '5px 14px', borderRadius: '7px', border: 'none', background: isProcessing ? '#333' : '#4ade80', color: '#000', cursor: isProcessing ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>{isProcessing ? '…' : `✓ Approve${hasChanges ? ' & Apply' : ''}`}</button>
-            <button onClick={() => { setDenyId(review.id); setDenyNote(''); }} disabled={isProcessing} style={{ padding: '5px 14px', borderRadius: '7px', border: '1px solid rgba(248,113,113,0.3)', background: 'transparent', color: '#f87171', cursor: isProcessing ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>✗ Deny</button>
-            {!hasChanges && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No changes extracted — approving will log the review only</span>}
+          <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', background: 'rgba(0,0,0,0.1)' }}>
+            {isUngraded ? (
+              // Grade Now buttons for auto-flagged ungraded picks
+              <>
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginRight: '2px' }}>Grade Now:</span>
+                {['WIN', 'LOSS', 'PUSH', 'VOID'].map(r => (
+                  <button key={r} onClick={() => handleGradeNow(review, r)} disabled={isProcessing} style={{
+                    padding: '4px 12px', borderRadius: '6px', border: 'none', cursor: isProcessing ? 'not-allowed' : 'pointer',
+                    fontWeight: 700, fontSize: '0.75rem',
+                    background: isProcessing ? '#333' : r === 'WIN' ? 'rgba(74,222,128,0.15)' : r === 'LOSS' ? 'rgba(248,113,113,0.15)' : 'rgba(148,163,184,0.12)',
+                    color: isProcessing ? '#555' : r === 'WIN' ? '#4ade80' : r === 'LOSS' ? '#f87171' : '#94a3b8',
+                  }}>{isProcessing ? '…' : r}</button>
+                ))}
+                <button onClick={() => { setDenyId(review.id); setDenyNote(''); }} disabled={isProcessing} style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(248,113,113,0.3)', background: 'transparent', color: '#f87171', cursor: isProcessing ? 'not-allowed' : 'pointer', fontSize: '0.75rem' }}>✗ Dismiss</button>
+              </>
+            ) : (
+              // Standard approve/deny for user correction requests
+              <>
+                <button onClick={() => handleApprove(review)} disabled={isProcessing} style={{ padding: '5px 14px', borderRadius: '7px', border: 'none', background: isProcessing ? '#333' : '#4ade80', color: '#000', cursor: isProcessing ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>{isProcessing ? '…' : `✓ Approve${hasChanges ? ' & Apply' : ''}`}</button>
+                <button onClick={() => { setDenyId(review.id); setDenyNote(''); }} disabled={isProcessing} style={{ padding: '5px 14px', borderRadius: '7px', border: '1px solid rgba(248,113,113,0.3)', background: 'transparent', color: '#f87171', cursor: isProcessing ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>✗ Deny</button>
+                {!hasChanges && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No changes extracted — approving will log the review only</span>}
+              </>
+            )}
           </div>
         )}
       </div>
     );
   }
 
+  const filteredPending = pending.filter(r => {
+    if (typeFilter === 'all') return true;
+    return getReviewType(r) === typeFilter;
+  });
+
+  const ungradedCount   = pending.filter(r => getReviewType(r) === 'ungraded').length;
+  const correctionCount = pending.filter(r => getReviewType(r) === 'correction').length;
+
   return (
     <div>
       {denyId !== null && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 9500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={e => { if (e.target === e.currentTarget) { setDenyId(null); setDenyNote(''); } }}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '14px', padding: '1.25rem', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.75rem' }}>Deny Review Request</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Optional note to the user (explain why it was denied):</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.75rem' }}>Deny / Dismiss Review</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Optional note (explain why it was denied):</div>
             <textarea value={denyNote} onChange={e => setDenyNote(e.target.value)} placeholder="Optional: explain why the request was denied…" rows={3} maxLength={500} style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '7px', padding: '0.5rem 0.7rem', color: 'var(--text-primary)', fontSize: '0.8rem', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
             <div style={{ display: 'flex', gap: '8px', marginTop: '0.85rem', justifyContent: 'flex-end' }}>
               <button onClick={() => { setDenyId(null); setDenyNote(''); }} style={{ padding: '6px 14px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
-              <button onClick={() => handleDeny(denyId, denyNote)} style={{ padding: '6px 14px', borderRadius: '7px', border: 'none', background: '#f87171', color: '#000', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>Confirm Deny</button>
+              <button onClick={() => handleDeny(denyId, denyNote)} style={{ padding: '6px 14px', borderRadius: '7px', border: 'none', background: '#f87171', color: '#000', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>Confirm</button>
             </div>
           </div>
         </div>
@@ -3674,22 +3772,41 @@ CREATE INDEX ON pick_review_requests (status, created_at DESC);`}</pre>
           </div>
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+
+      {/* Header + filter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)', marginRight: '4px' }}>
           Pending Reviews
           {pending.length > 0 && <span style={{ marginLeft: '8px', background: 'rgba(255,184,0,0.15)', color: '#FFB800', borderRadius: '10px', padding: '1px 8px', fontSize: '0.72rem', fontWeight: 800 }}>{pending.length}</span>}
         </div>
-        <button onClick={loadPending} style={{ padding: '3px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem' }}>↺ Refresh</button>
+        {/* Type filter buttons */}
+        {[
+          { key: 'all',        label: 'All',        count: pending.length },
+          { key: 'ungraded',   label: 'Ungraded',   count: ungradedCount },
+          { key: 'correction', label: 'Correction',  count: correctionCount },
+        ].map(({ key, label, count }) => (
+          <button key={key} onClick={() => setTypeFilter(key)} style={{
+            padding: '2px 10px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer',
+            border: typeFilter === key ? '1px solid rgba(255,184,0,0.4)' : '1px solid var(--border)',
+            background: typeFilter === key ? 'rgba(255,184,0,0.08)' : 'transparent',
+            color: typeFilter === key ? 'var(--gold)' : 'var(--text-muted)',
+            fontWeight: typeFilter === key ? 700 : 400,
+          }}>{label}{count > 0 ? ` (${count})` : ''}</button>
+        ))}
+        <button onClick={loadPending} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem' }}>↺ Refresh</button>
       </div>
+
       {loading ? (
         <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Loading reviews…</div>
       ) : error ? (
         <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', fontSize: '0.8rem' }}>⚠ {error}</div>
-      ) : pending.length === 0 ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.85rem' }}>No pending review requests</div>
+      ) : filteredPending.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.85rem' }}>
+          {typeFilter === 'all' ? 'No pending review requests' : `No pending ${typeFilter} reviews`}
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '1.5rem' }}>
-          {pending.map(review => <ReviewCard key={review.id} review={review} isResolved={false} />)}
+          {filteredPending.map(review => <ReviewCard key={review.id} review={review} isResolved={false} />)}
         </div>
       )}
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
