@@ -1215,21 +1215,6 @@ export async function GET(req) {
         ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
         : '';
 
-      // Cross-reference: only analyze games present in BOTH ESPN and The Odds API.
-      // Prevents wasting AI tokens on games that have no bookmaker lines yet.
-      const htLast = homeTeam.toLowerCase().split(' ').pop();
-      const atLast = awayTeam.toLowerCase().split(' ').pop();
-      const inOddsApi = oddsEventsList.some(r => {
-        const rh = (r.homeTeam || '').toLowerCase();
-        const ra = (r.awayTeam || '').toLowerCase();
-        return rh.includes(htLast) && ra.includes(atLast);
-      });
-      if (!inOddsApi) {
-        console.log(`[pregenerate] Skipping ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) — not in Odds API`);
-        skipped.push(`${awayTeam}@${homeTeam} (not-in-odds-api)`);
-        continue;
-      }
-
       await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime);
     }
 
