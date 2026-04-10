@@ -592,24 +592,17 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   }, [fetchAll, interval]);
 
   // ── My Golfers: read starred golfers from localStorage ───────────────────
-  // Lazy initialization reads localStorage on the first render so My Golfers
-  // appears immediately on mount — no flash of empty state while waiting for
-  // the useEffect to fire.
   const [expandedGolfer, setExpandedGolfer] = useState(null); // id of expanded golfer for scorecard
-  const [starredGolfers, setStarredGolfers] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}');
-    } catch { return {}; }
-  });
+  // NOTE: localStorage is unavailable during Next.js SSR, so the lazy initializer returns {}
+  // on the server. React hydrates with that empty state. The useEffect below re-reads from
+  // localStorage on mount to recover the correct data regardless of SSR.
+  const [starredGolfers, setStarredGolfers] = useState({});
   useEffect(() => {
     // Track last raw string so we only call setStarredGolfers when the data
     // actually changed. Without this, JSON.parse always produces a new object
     // reference → React always sees a state change → unnecessary re-render every
     // time ANY storage event fires (including GolfLeaderboard's 3-min stat sync).
-    // Seed lastRaw from localStorage so the guard is in sync with the lazy
-    // initial state — prevents a spurious setStarredGolfers call on mount when
-    // the data hasn't changed since the lazy initializer read it.
-    let lastRaw = (() => { try { return localStorage.getItem('betos_starred_golfers') || '{}'; } catch { return '{}'; } })();
+    let lastRaw = '{}';
     function syncGolfers() {
       try {
         const raw = localStorage.getItem('betos_starred_golfers') || '{}';
@@ -619,8 +612,11 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
         }
       } catch {}
     }
-    // Register the listener — don't call syncGolfers() here because the lazy
-    // initializer already loaded the data; the listener handles future changes.
+    // Always sync on mount — the SSR initial state is {} because localStorage is
+    // unavailable server-side. Without this call, golfers would only reappear after
+    // a storage event (e.g. starring/unstarring), so they'd be gone on every fresh
+    // page load (including returning the next day during an ongoing tournament).
+    syncGolfers();
     window.addEventListener('storage', syncGolfers);
     return () => window.removeEventListener('storage', syncGolfers);
   }, []);
@@ -937,6 +933,10 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
       {/* Content */}
       {starredList.length === 0 && Object.keys(starredGolfers).length === 0 ? (
         <EmptyStars />
+
+      ) : starredList.length === 0 ? (
+        /* Golfer-only mode: My Golfers widget above is the only content — no game cards needed */
+        null
 
       ) : loading && featuredEvents.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
