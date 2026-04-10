@@ -3473,6 +3473,224 @@ CREATE INDEX ON api_usage_log (created_at DESC);`}</pre>
   );
 }
 
+// ── Pick Review Queue Panel ───────────────────────────────────────────────────
+function ReviewQueuePanel({ userEmail }) {
+  const [pending, setPending]     = React.useState([]);
+  const [loading, setLoading]     = React.useState(true);
+  const [error, setError]         = React.useState('');
+  const [tableExists, setTableExists] = React.useState(true);
+  const [resolving, setResolving] = React.useState(null);
+  const [denyId, setDenyId]       = React.useState(null);
+  const [denyNote, setDenyNote]   = React.useState('');
+  const [actionMsg, setActionMsg] = React.useState('');
+  const [showResolved, setShowResolved] = React.useState(false);
+  const [resolved, setResolved]   = React.useState([]);
+  const [loadingResolved, setLoadingResolved] = React.useState(false);
+
+  function flash(msg) { setActionMsg(msg); setTimeout(() => setActionMsg(''), 3500); }
+
+  const loadPending = React.useCallback(() => {
+    setLoading(true);
+    adminFetch('/api/admin?action=reviews&status=PENDING')
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); setLoading(false); return; }
+        setTableExists(d.tableExists !== false);
+        setPending(d.reviews || []);
+        setLoading(false);
+      })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, []);
+
+  React.useEffect(() => { loadPending(); }, [loadPending]);
+
+  async function loadResolved() {
+    setLoadingResolved(true);
+    try {
+      const [approvedRes, deniedRes] = await Promise.all([
+        adminFetch('/api/admin?action=reviews&status=APPROVED').then(r => r.json()),
+        adminFetch('/api/admin?action=reviews&status=DENIED').then(r => r.json()),
+      ]);
+      const all = [
+        ...(approvedRes.reviews || []),
+        ...(deniedRes.reviews || []),
+      ].sort((a, b) => new Date(b.resolved_at || b.created_at) - new Date(a.resolved_at || a.created_at));
+      setResolved(all);
+    } catch (e) { flash(`Error: ${e.message}`); }
+    setLoadingResolved(false);
+  }
+
+  async function handleApprove(review) {
+    if (!confirm(`Apply suggested changes to pick #${review.pick_id} and mark as APPROVED?`)) return;
+    setResolving(review.id);
+    try {
+      const res = await adminFetch('/api/admin', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'resolve_review', reviewId: review.id, resolution: 'APPROVED' }),
+      });
+      const d = await res.json();
+      if (d.error) { flash(`Error: ${d.error}`); setResolving(null); return; }
+      flash('✓ Review approved and pick updated');
+      setPending(prev => prev.filter(r => r.id !== review.id));
+    } catch (e) { flash(`Error: ${e.message}`); }
+    setResolving(null);
+  }
+
+  async function handleDeny(reviewId, note) {
+    setResolving(reviewId);
+    try {
+      const res = await adminFetch('/api/admin', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'resolve_review', reviewId, resolution: 'DENIED', admin_notes: note || null }),
+      });
+      const d = await res.json();
+      if (d.error) { flash(`Error: ${d.error}`); setResolving(null); return; }
+      flash('✗ Review denied');
+      setPending(prev => prev.filter(r => r.id !== reviewId));
+    } catch (e) { flash(`Error: ${e.message}`); }
+    setResolving(null);
+    setDenyId(null);
+    setDenyNote('');
+  }
+
+  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  function ReviewCard({ review, isResolved }) {
+    const pick = review.picks || {};
+    const user = review.profiles || {};
+    const changes = review.suggested_changes || {};
+    const hasChanges = Object.keys(changes).length > 0;
+    const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
+    const isProcessing = resolving === review.id;
+    return (
+      <div style={{ background: 'var(--bg-elevated)', border: `1px solid ${isResolved ? 'var(--border)' : 'rgba(255,184,0,0.2)'}`, borderRadius: '10px', overflow: 'hidden', opacity: isProcessing ? 0.7 : 1, transition: 'opacity 0.2s' }}>
+        <div style={{ padding: '8px 12px', background: isResolved ? 'rgba(255,255,255,0.02)' : 'rgba(255,184,0,0.04)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-primary)' }}>{user.username || 'Unknown'}</span>
+          <span style={{ fontSize: '0.68rem', color: '#60a5fa', background: 'rgba(96,165,250,0.1)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>{pick.sport || '—'}</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }}>{pick.team || '—'}</span>
+          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{pick.bet_type || '—'}</span>
+          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{oddsDisplay}</span>
+          {pick.result && <span style={{ fontSize: '0.65rem', fontWeight: 700, color: pick.result === 'WIN' ? '#4ade80' : pick.result === 'LOSS' ? '#f87171' : '#94a3b8', background: pick.result === 'WIN' ? 'rgba(74,222,128,0.1)' : pick.result === 'LOSS' ? 'rgba(248,113,113,0.1)' : 'rgba(148,163,184,0.1)', borderRadius: '4px', padding: '1px 6px' }}>{pick.result}</span>}
+          <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: 'var(--text-muted)' }}>{fmtDate(review.created_at)}</span>
+          {isResolved && <span style={{ fontSize: '0.65rem', fontWeight: 700, color: review.status === 'APPROVED' ? '#4ade80' : '#f87171', background: review.status === 'APPROVED' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', borderRadius: '4px', padding: '1px 6px' }}>{review.status}</span>}
+        </div>
+        <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div>
+            <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '3px' }}>User's Request</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 9px', borderLeft: '3px solid rgba(96,165,250,0.4)' }}>{review.user_message}</div>
+          </div>
+          {review.ai_analysis && (
+            <div>
+              <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--gold)', marginBottom: '3px' }}>AI Analysis</div>
+              <div style={{ fontSize: '0.76rem', color: '#ccc', lineHeight: 1.5, background: 'rgba(255,184,0,0.04)', borderRadius: '6px', padding: '6px 9px', borderLeft: '3px solid rgba(255,184,0,0.3)' }}>{review.ai_analysis}</div>
+            </div>
+          )}
+          {hasChanges && (
+            <div>
+              <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4ade80', marginBottom: '4px' }}>Suggested Changes</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {Object.entries(changes).map(([field, val]) => (
+                  <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '6px', padding: '3px 9px' }}>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#4ade80' }}>{field}</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>→</span>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>{String(val)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {isResolved && review.admin_notes && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>Admin note: {review.admin_notes}</div>
+          )}
+        </div>
+        {!isResolved && (
+          <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.1)' }}>
+            <button onClick={() => handleApprove(review)} disabled={isProcessing} style={{ padding: '5px 14px', borderRadius: '7px', border: 'none', background: isProcessing ? '#333' : '#4ade80', color: '#000', cursor: isProcessing ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>{isProcessing ? '…' : `✓ Approve${hasChanges ? ' & Apply' : ''}`}</button>
+            <button onClick={() => { setDenyId(review.id); setDenyNote(''); }} disabled={isProcessing} style={{ padding: '5px 14px', borderRadius: '7px', border: '1px solid rgba(248,113,113,0.3)', background: 'transparent', color: '#f87171', cursor: isProcessing ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>✗ Deny</button>
+            {!hasChanges && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No changes extracted — approving will log the review only</span>}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {denyId !== null && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 9500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={e => { if (e.target === e.currentTarget) { setDenyId(null); setDenyNote(''); } }}>
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '14px', padding: '1.25rem', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.75rem' }}>Deny Review Request</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Optional note to the user (explain why it was denied):</div>
+            <textarea value={denyNote} onChange={e => setDenyNote(e.target.value)} placeholder="Optional: explain why the request was denied…" rows={3} maxLength={500} style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '7px', padding: '0.5rem 0.7rem', color: 'var(--text-primary)', fontSize: '0.8rem', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '0.85rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setDenyId(null); setDenyNote(''); }} style={{ padding: '6px 14px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
+              <button onClick={() => handleDeny(denyId, denyNote)} style={{ padding: '6px 14px', borderRadius: '7px', border: 'none', background: '#f87171', color: '#000', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>Confirm Deny</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {actionMsg && <div style={{ padding: '8px 12px', borderRadius: '7px', background: actionMsg.startsWith('✓') ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.06)', color: actionMsg.startsWith('✓') ? '#4ade80' : '#f87171', fontSize: '0.8rem', marginBottom: '0.75rem', border: `1px solid ${actionMsg.startsWith('✓') ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}` }}>{actionMsg}</div>}
+      {!tableExists && (
+        <div style={{ padding: '1rem', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '10px', marginBottom: '1rem' }}>
+          <div style={{ fontWeight: 700, color: '#fbbf24', fontSize: '0.85rem', marginBottom: '4px' }}>Table Not Created Yet</div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            Run this SQL in Supabase to create the review table:
+            <pre style={{ marginTop: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', padding: '8px 12px', fontSize: '0.72rem', color: '#ccc', overflowX: 'auto', fontFamily: 'IBM Plex Mono, monospace' }}>{`CREATE TABLE pick_review_requests (
+  id bigserial PRIMARY KEY,
+  pick_id bigint,
+  user_id uuid,
+  user_message text NOT NULL,
+  ai_analysis text,
+  suggested_changes jsonb,
+  status text NOT NULL DEFAULT 'PENDING',
+  admin_notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  resolved_at timestamptz
+);
+CREATE INDEX ON pick_review_requests (status, created_at DESC);`}</pre>
+          </div>
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+          Pending Reviews
+          {pending.length > 0 && <span style={{ marginLeft: '8px', background: 'rgba(255,184,0,0.15)', color: '#FFB800', borderRadius: '10px', padding: '1px 8px', fontSize: '0.72rem', fontWeight: 800 }}>{pending.length}</span>}
+        </div>
+        <button onClick={loadPending} style={{ padding: '3px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem' }}>↺ Refresh</button>
+      </div>
+      {loading ? (
+        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Loading reviews…</div>
+      ) : error ? (
+        <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', fontSize: '0.8rem' }}>⚠ {error}</div>
+      ) : pending.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.85rem' }}>No pending review requests</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '1.5rem' }}>
+          {pending.map(review => <ReviewCard key={review.id} review={review} isResolved={false} />)}
+        </div>
+      )}
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+        <button onClick={() => { setShowResolved(v => !v); if (!showResolved && resolved.length === 0) loadResolved(); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', padding: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {showResolved ? '▲' : '▼'} Resolved History
+        </button>
+        {showResolved && (
+          <div style={{ marginTop: '0.75rem' }}>
+            {loadingResolved ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>Loading…</div>
+            ) : resolved.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>No resolved reviews yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {resolved.map(review => <ReviewCard key={review.id} review={review} isResolved={true} />)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Consolidated tab definitions ──────────────────────────────────────────────
 const ADMIN_TABS = [
   { id: 'overview', label: '📊 Overview',  desc: 'Site-wide stats, leaderboard, and recent sign-ups' },
@@ -3480,6 +3698,7 @@ const ADMIN_TABS = [
   { id: 'picks',    label: '📋 Picks',     desc: 'Audit and moderate all user picks' },
   { id: 'contests', label: '🏆 Contests',  desc: 'Active contests and participants' },
   { id: 'chat',     label: '💬 Chat Room', desc: 'Chat settings, mods, bans, and XP/rank management' },
+  { id: 'reviews',  label: '⚑ Reviews',   desc: 'Pick correction review queue — approve or deny user requests' },
   { id: 'flags',    label: '🔔 Flags',     desc: 'AI analysis errors and chatbot-escalated concerns' },
   { id: 'aitools',  label: '🧪 AI Tools',  desc: 'AI Lab performance tracker and historical backtester' },
   { id: 'system',   label: '⚙️ System',   desc: 'Site settings, scheduled jobs, and AI chat console' },
@@ -3562,6 +3781,7 @@ export default function AdminTab({ user }) {
       {everMounted.has('picks')    && <div style={{ display: active === 'picks'    ? 'block' : 'none' }}><PicksAuditPanel    userEmail={user.email} /></div>}
       {everMounted.has('contests') && <div style={{ display: active === 'contests' ? 'block' : 'none' }}><ContestsPanel      userEmail={user.email} /></div>}
       {everMounted.has('chat')     && <div style={{ display: active === 'chat'     ? 'block' : 'none' }}><ChatRoomAdminPanel userEmail={user.email} /></div>}
+      {everMounted.has('reviews')  && <div style={{ display: active === 'reviews'  ? 'block' : 'none' }}><ReviewQueuePanel   userEmail={user.email} /></div>}
       {everMounted.has('flags')    && <div style={{ display: active === 'flags'    ? 'block' : 'none' }}><FlagsPanel         userEmail={user.email} /></div>}
       {everMounted.has('aitools')  && <div style={{ display: active === 'aitools'  ? 'block' : 'none' }}><AIToolsPanel       userEmail={user.email} /></div>}
       {everMounted.has('system')   && <div style={{ display: active === 'system'   ? 'block' : 'none' }}><SystemMegaPanel    userEmail={user.email} /></div>}

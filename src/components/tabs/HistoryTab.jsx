@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { addPick, updatePick, deletePick, fetchParlayLegs, submitParlay } from '@/lib/supabase';
+import { addPick, updatePick, deletePick, fetchParlayLegs, submitParlay, supabase } from '@/lib/supabase';
 import { saveDemoPicks, saveDemoContest, demoId } from '@/lib/demoData';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { validateContestEntry, DEFAULT_CONTEST_RULES } from '@/lib/contestValidation';
@@ -904,6 +904,141 @@ function PickForm({ form, setForm, onSave, onCancel, saving }) {
   );
 }
 
+// ── Pick Review / Correction Request Modal ───────────────────────────────────
+function ReviewRequestModal({ pick, onClose }) {
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState(''); // AI rejection reason
+  const [analysis, setAnalysis] = useState(''); // AI summary on success
+
+  async function handleSubmit() {
+    const msg = message.trim();
+    if (!msg) { setError('Please describe the issue and the corrected value.'); return; }
+    setSubmitting(true); setError(''); setFeedback('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not authenticated — please refresh and try again.');
+      const res = await fetch('/api/picks/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ pickId: pick.id, message: msg }),
+      });
+      const d = await res.json();
+      if (res.status === 422) { setFeedback(d.feedback || d.error || 'Please add more detail.'); setSubmitting(false); return; }
+      if (!res.ok) throw new Error(d.error || 'Request failed');
+      setAnalysis(d.analysis || '');
+      setSubmitted(true);
+    } catch (e) {
+      setError(e.message || 'Something went wrong. Try again.');
+    }
+    setSubmitting(false);
+  }
+
+  const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid rgba(255,184,0,0.25)',
+        borderRadius: '16px', width: '100%', maxWidth: '460px',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        maxHeight: 'min(calc(100dvh - 40px), calc(100vh - 40px))',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '1rem 1.25rem 0.75rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Request Pick Review</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+              {pick.team} · {pick.bet_type} · {oddsDisplay} · {pick.sport}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer', padding: '4px' }}>✕</button>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '1rem 1.25rem' }}>
+          {submitted ? (
+            <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>✅</div>
+              <div style={{ fontWeight: 700, color: '#4ade80', fontSize: '0.95rem', marginBottom: '0.5rem' }}>Review Request Submitted</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: analysis ? '1rem' : 0 }}>
+                Your request has been sent to the admin team. You'll see an update on your pick once it's reviewed.
+              </div>
+              {analysis && (
+                <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(255,184,0,0.06)', border: '1px solid rgba(255,184,0,0.15)', borderRadius: '10px', textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--gold)', marginBottom: '4px' }}>AI Summary</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{analysis}</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+                Describe what's wrong and provide the correct value. Be specific — for example:
+                <ul style={{ margin: '0.4rem 0 0 1rem', padding: 0, lineHeight: 1.7 }}>
+                  <li>"The result should be WIN, final score was 110–105"</li>
+                  <li>"The spread should be -3.5, not -4.5"</li>
+                  <li>"The odds should be +150, I entered -150 by mistake"</li>
+                </ul>
+              </div>
+              <textarea
+                value={message}
+                onChange={e => { setMessage(e.target.value); setError(''); setFeedback(''); }}
+                placeholder="Describe the correction needed..."
+                maxLength={1000}
+                rows={5}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: 'var(--bg-elevated)', border: `1px solid ${feedback ? '#f87171' : 'var(--border)'}`,
+                  borderRadius: '8px', padding: '0.6rem 0.8rem',
+                  color: 'var(--text-primary)', fontSize: '0.82rem', resize: 'vertical',
+                  fontFamily: 'inherit', lineHeight: 1.5, outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '3px' }}>
+                <span style={{ fontSize: '0.65rem', color: message.length > 900 ? '#f87171' : 'var(--text-muted)' }}>{message.length}/1000</span>
+              </div>
+              {feedback && (
+                <div style={{ marginTop: '0.6rem', padding: '0.65rem 0.9rem', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '8px', fontSize: '0.78rem', color: '#f87171', lineHeight: 1.5 }}>
+                  <strong>More detail needed:</strong> {feedback}
+                </div>
+              )}
+              {error && (
+                <div style={{ marginTop: '0.6rem', padding: '0.65rem 0.9rem', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '8px', fontSize: '0.78rem', color: '#f87171' }}>
+                  {error}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '0.85rem 1.25rem', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', gap: '8px', justifyContent: 'flex-end', background: 'var(--bg-elevated)' }}>
+          <button onClick={onClose} style={{ padding: '7px 16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>
+            {submitted ? 'Close' : 'Cancel'}
+          </button>
+          {!submitted && (
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || !message.trim()}
+              style={{ padding: '7px 16px', borderRadius: '8px', border: 'none', background: submitting || !message.trim() ? '#333' : 'var(--gold)', color: submitting || !message.trim() ? 'var(--text-muted)' : '#000', cursor: submitting || !message.trim() ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.82rem', transition: 'all 0.15s' }}
+            >
+              {submitting ? 'Submitting…' : 'Submit Request'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HistoryTab({ picks, setPicks, user, contest, setContest, isDemo, onViewGame, onLeaderboardRefresh, isActive }) {
   const [addMode, setAddMode]   = useState(null); // null | 'choose' | 'import' | 'manual'
   const [showForm, setShowForm] = useState(false);
@@ -926,6 +1061,9 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
   // ── Parlay leg expansion ─────────────────────────────────────────────────
   // expandedParlayLegs: { [pickId]: null | 'loading' | leg[] }
   const [expandedParlayLegs, setExpandedParlayLegs] = useState({});
+
+  // ── Review Request ────────────────────────────────────────────────────────
+  const [reviewPick, setReviewPick] = useState(null);
 
   async function toggleParlayLegs(pickId) {
     if (expandedParlayLegs[pickId] && expandedParlayLegs[pickId] !== 'loading') {
@@ -1295,6 +1433,11 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
 
   return (
     <div className="fade-in">
+
+      {/* Review request modal */}
+      {reviewPick && !isDemo && (
+        <ReviewRequestModal pick={reviewPick} onClose={() => setReviewPick(null)} />
+      )}
 
       {/* Header bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -1928,6 +2071,14 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                         title={analyses[pick.id] ? 'View AI analysis' : 'Get AI analysis'}
                         style={{ padding: '3px 7px', borderRadius: '5px', border: `1px solid ${analyses[pick.id] ? 'rgba(255,184,0,0.3)' : '#333'}`, background: expandedAnalysis === pick.id ? 'rgba(255,184,0,0.08)' : 'transparent', color: analyses[pick.id] ? '#FFB800' : '#666', cursor: 'pointer', fontSize: '0.72rem' }}
                       >🎯</button>
+                      {/* Request Review — dispute a grade or correct pick data */}
+                      {!isDemo && pick.id && (
+                        <button
+                          onClick={() => setReviewPick(pick)}
+                          title="Request a correction — dispute grade or fix pick data"
+                          style={{ padding: '3px 7px', borderRadius: '5px', border: '1px solid rgba(148,163,184,0.25)', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '0.72rem' }}
+                        >⚑</button>
+                      )}
                       {/* Rejected notice */}
                       {!pick.contest_entry && pick.contest_rejected_date && (
                         <span
