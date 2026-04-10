@@ -592,7 +592,8 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
   }, [fetchAll, interval]);
 
   // ── My Golfers: read starred golfers from localStorage ───────────────────
-  const [expandedGolfer, setExpandedGolfer] = useState(null); // id of expanded golfer for scorecard
+  const [expandedGolfer,    setExpandedGolfer]    = useState(null);
+  const [golferStatsLoading, setGolferStatsLoading] = useState(false);
   // NOTE: localStorage is unavailable during Next.js SSR, so the lazy initializer returns {}
   // on the server. React hydrates with that empty state. The useEffect below re-reads from
   // localStorage on mount to recover the correct data regardless of SSR.
@@ -620,6 +621,122 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
     window.addEventListener('storage', syncGolfers);
     return () => window.removeEventListener('storage', syncGolfers);
   }, []);
+
+  // ── Fetch live golf stats whenever starred golfers are present ────────────
+  // syncStarredGolferStats() in GolfLeaderboard only runs when the Golf tab is
+  // open. This bridges the gap: on every load of FeaturedGamesTab (including
+  // returning the next day) we fetch the leaderboard directly and push fresh
+  // position/toPar/thru/today values into localStorage so the widget has data.
+  //
+  // Uses the golfer IDs as a stable dep-key — re-fires whenever the set of
+  // starred golfers changes (add/remove), but not on mere stat updates.
+  const golferIdKey = Object.keys(starredGolfers).sort().join(',');
+  useEffect(() => {
+    if (!golferIdKey) return; // no golfers to fetch
+
+    // Same stat parser used by GolfLeaderboard — handles ESPN's win-odds injection
+    // at stats[2] that would otherwise corrupt the today/thru values.
+    function parseGolfStatsLocal(statistics) {
+      const stats = statistics || [];
+      const toPar = stats[0]?.displayValue ?? '—';
+      const thru  = stats[1]?.displayValue ?? '—';
+      let today = '—';
+      const raw2 = stats[2]?.displayValue;
+      if (raw2 != null) {
+        const n2 = parseInt(raw2);
+        const looksLikeScore = !isNaN(n2) && n2 >= -15 && n2 <= 18;
+        if (!isNaN(n2) && !looksLikeScore) {
+          // Out-of-range integer → win odds injected by ESPN; today is at index 3
+          today = stats[3]?.displayValue ?? '—';
+        } else {
+          today = raw2;
+        }
+      }
+      return { toPar, thru, today };
+    }
+
+    async function fetchGolferStats() {
+      setGolferStatsLoading(true);
+      try {
+        // Re-read from localStorage so we work with the freshest data
+        const current = (() => {
+          try { return JSON.parse(localStorage.getItem('betos_starred_golfers') || '{}'); } catch { return {}; }
+        })();
+        const ids = Object.keys(current);
+        if (ids.length === 0) return;
+
+        // Fetch all unique leagues in parallel
+        const leagues = [...new Set(ids.map(id => current[id]?.league || 'pga'))];
+        const results = await Promise.allSettled(
+          leagues.map(lg =>
+            fetch(`/api/sports?sport=golf&endpoint=leaderboard&league=${lg}`)
+              .then(r => r.json())
+              .then(json => ({ league: lg, json }))
+          )
+        );
+
+        let changed = false;
+        for (const r of results) {
+          if (r.status !== 'fulfilled' || r.value?.json?.error) continue;
+          const { json } = r.value;
+          // ESPN leaderboard nests events under different paths depending on version
+          const events =
+            json?.events ||
+            json?.sports?.[0]?.leagues?.[0]?.events ||
+            json?.leagues?.[0]?.events || [];
+
+          for (const event of events) {
+            const comp = event.competitions?.[0] ?? {};
+            const players = comp.competitors || event.competitors || event.leaderboard || [];
+            const tournamentName = event.name || event.shortName || '';
+            const eventId = event.id;
+
+            for (const p of players) {
+              const id = String(p.id || p.athlete?.id || '');
+              if (!id || !current[id]) continue;
+
+              const parsed      = parseGolfStatsLocal(p.statistics);
+              const newPosition = p.status?.position?.displayName || '—';
+              const newToPar    = parsed.toPar !== '—' ? parsed.toPar : (p.score?.displayValue ?? '—');
+              const newThru     = String(p.status?.thru ?? parsed.thru ?? '—');
+              const newToday    = parsed.today;
+
+              const cur = current[id];
+              // Skip write if nothing changed (avoids a storage event that would
+              // bounce back through syncGolfers and cause an unnecessary re-render)
+              if (
+                cur.position === newPosition &&
+                cur.toPar    === newToPar &&
+                cur.thru     === newThru &&
+                cur.today    === newToday
+              ) continue;
+
+              current[id] = {
+                ...cur,
+                position:   newPosition,
+                toPar:      newToPar,
+                thru:       newThru,
+                today:      newToday,
+                tournament: tournamentName || cur.tournament,
+                eventId:    eventId        || cur.eventId,
+              };
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          try {
+            localStorage.setItem('betos_starred_golfers', JSON.stringify(current));
+            window.dispatchEvent(new Event('storage'));
+          } catch {}
+        }
+      } catch {}
+      setGolferStatsLoading(false);
+    }
+
+    fetchGolferStats();
+  }, [golferIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build sorted featured event list ─────────────────────────────────────
   // Memoized so the 1-second countdown timer (setCountdown) doesn't produce
@@ -811,9 +928,12 @@ export default function FeaturedGamesTab({ onAnalyze, user, picks, setPicks, isD
                 <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--gold)' }}>My Golfers</span>
                 <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>{golferList.length} tracked</span>
               </div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                Updated from Golf tab · ★ to manage
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {golferStatsLoading && (
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>fetching…</span>
+                )}
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>★ to manage</span>
+              </div>
             </div>
             {/* Golfer rows */}
             <div>
