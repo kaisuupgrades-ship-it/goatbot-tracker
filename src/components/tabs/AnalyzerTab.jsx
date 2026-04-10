@@ -1175,7 +1175,7 @@ ANGLE: [one-line betting takeaway]
 
 Do not include any URLs, markdown formatting, asterisks, or source citations. Plain text only.`;
 
-function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportConsumed, user, isDemo }) {
+function BetOSLive({ injectedPrompt, onPromptConsumed, injectedMeta, injectedReport, onReportConsumed, user, isDemo }) {
   const [prompt, setPrompt]             = useState('');
   const [result, setResult]             = useState('');
   const [model, setModel]               = useState('');
@@ -1208,6 +1208,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   const startTime    = useRef(null);
   const retryRef     = useRef(false);   // true if we're in an auto-retry
   const lastPromptRef = useRef('');     // tracks prompt for tab-return retry
+  const pendingMetaRef = useRef(null);  // structured game meta from ScoreboardTab
 
   // Load history on mount
   useEffect(() => { setHistory(getReports()); }, []);
@@ -1227,6 +1228,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   useEffect(() => {
     if (injectedPrompt && injectedPrompt !== prompt) {
       setPrompt(injectedPrompt);
+      pendingMetaRef.current = injectedMeta || null;
       hasRun.current = false;
     }
   }, [injectedPrompt]);
@@ -1276,16 +1278,24 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
     setGameInfo(null);
     const t0 = Date.now();
     try {
-      // Extract team names before the fetch so they can be sent as structured fields.
-      // The goatbot route uses homeTeam/awayTeam to cache the analysis in game_analyses.
+      // Structured meta from ScoreboardTab button click (preferred); fall back to
+      // regex extraction from the prompt text for user-typed queries.
+      const meta = pendingMetaRef.current;
+      pendingMetaRef.current = null; // consume once
       const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|$)/i);
-      const awayTeamField = teamMatch ? teamMatch[1].trim() : null;
-      const homeTeamField = teamMatch ? teamMatch[2].trim() : null;
+      const awayTeamField = meta?.awayTeam || (teamMatch ? teamMatch[1].trim() : null);
+      const homeTeamField = meta?.homeTeam || (teamMatch ? teamMatch[2].trim() : null);
 
       const res = await fetch('/api/goatbot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: q, awayTeam: awayTeamField, homeTeam: homeTeamField }),
+        body: JSON.stringify({
+          prompt: q,
+          ...(homeTeamField   && { homeTeam:  homeTeamField   }),
+          ...(awayTeamField   && { awayTeam:  awayTeamField   }),
+          ...(meta?.sport     && { sport:     meta.sport      }),
+          ...(meta?.gameDate  && { gameDate:  meta.gameDate   }),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'API error');
@@ -2604,7 +2614,7 @@ const SECTIONS = [
   { id: 'insights',  label: '🧠 AI Insights',           desc: 'Personalized coaching — leaks, edges, and habits from your pick history' },
 ];
 
-export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPromptConsumed, goatReport, onGoatReportConsumed }) {
+export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPromptConsumed, goatMeta, goatReport, onGoatReportConsumed }) {
   const [active, setActive] = useState('betos');
 
   // Auto-switch to BetOS tab when a prompt or report is injected
@@ -2654,6 +2664,7 @@ export default function AnalyzerTab({ picks, user, isDemo, goatPrompt, onGoatPro
         <BetOSLive
           injectedPrompt={goatPrompt}
           onPromptConsumed={onGoatPromptConsumed}
+          injectedMeta={goatMeta}
           injectedReport={goatReport}
           onReportConsumed={onGoatReportConsumed}
           user={user}

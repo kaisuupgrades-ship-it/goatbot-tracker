@@ -1856,6 +1856,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   const homeImpl = odds?.homeOdds ? calcImplied(odds.homeOdds) : null;
 
                   // Build a verified data block Grok must treat as ground truth
+                  const gameDate = event.date ? event.date.split('T')[0] : new Date().toISOString().split('T')[0];
                   const verifiedBlock = odds ? [
                     '--- VERIFIED ODDS (from live feed — treat as ground truth, do not search for different odds) ---',
                     `Matchup: ${awayName} @ ${homeName}`,
@@ -1868,6 +1869,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                   ].filter(Boolean).join('\n') : [
                     '--- VERIFIED MATCHUP (no odds available — treat team names as ground truth) ---',
                     `${awayName} @ ${homeName}`,
+                    `Date: ${gameDate}`,
                     `Status: ${gameState.label}`,
                     'Odds: not available from live feed — do not invent numbers. Use web search only.',
                     '--- END VERIFIED MATCHUP ---',
@@ -1883,7 +1885,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     venueInfo,
                     'Use web search ONLY for: confirmed injury/lineup news, line movement history from open to now, public betting splits, and any sharp action signals. Do not invent or override any numbers in the verified block above.',
                   ].filter(Boolean).join('\n\n');
-                  onAnalyze(prompt);
+                  onAnalyze(prompt, { homeTeam: homeName, awayTeam: awayName, sport, gameDate });
                 }}
                 style={{
                   padding: '6px 14px', borderRadius: '8px',

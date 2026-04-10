@@ -321,6 +321,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
   }
   // Preserved state for cross-tab navigation
   const [goatPrompt, setGoatPrompt] = useState('');
+  const [goatMeta, setGoatMeta] = useState(null);
   const [goatReport, setGoatReport] = useState(null);
   // Pick → Scoreboard navigation
   const [scoreboardGame, setScoreboardGame] = useState(null);
@@ -475,7 +476,7 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           <div style={{ display: activeTab === 'tracker'    ? 'block' : 'none' }}><TrackerTab    picks={picks} user={user} onViewGame={onViewGame} /></div>
           <div style={{ display: activeTab === 'scoreboard' ? 'block' : 'none' }}>
             <ScoreboardTab
-              onAnalyze={(prompt) => { setGoatPrompt(prompt); setActiveTab('analyzer'); }}
+              onAnalyze={(prompt, meta) => { setGoatPrompt(prompt); setGoatMeta(meta || null); setActiveTab('analyzer'); }}
               user={user}
               picks={picks}
               setPicks={setPicks}
@@ -500,7 +501,8 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
           <div style={{ display: activeTab === 'analyzer'   ? 'block' : 'none' }}>
             <AnalyzerTab
               picks={picks} user={user} isDemo={isDemo}
-              goatPrompt={goatPrompt} onGoatPromptConsumed={() => setGoatPrompt('')}
+              goatPrompt={goatPrompt} onGoatPromptConsumed={() => { setGoatPrompt(''); setGoatMeta(null); }}
+              goatMeta={goatMeta}
               goatReport={goatReport} onGoatReportConsumed={() => setGoatReport(null)}
             />
           </div>
