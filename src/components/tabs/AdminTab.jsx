@@ -60,7 +60,7 @@ function AdminSection({ title, children }) {
 }
 
 // ── OVERVIEW TAB ─────────────────────────────────────────────────────────────
-function OverviewPanel({ userEmail }) {
+function OverviewPanel({ userEmail, onNavigate }) {
   const [data, setData]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -104,7 +104,7 @@ function OverviewPanel({ userEmail }) {
               Games started 4+ hours ago — grade-check cron or manual grading needed
             </span>
           </div>
-          <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.72rem', color: '#fbbf24', textDecoration: 'none', whiteSpace: 'nowrap', opacity: 0.8 }}>
+          <a href="#" onClick={e => { e.preventDefault(); onNavigate?.('errors'); }} style={{ fontSize: '0.72rem', color: '#fbbf24', textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', fontWeight: 700, borderBottom: '1px solid rgba(251,191,36,0.45)' }}>
             Check Errors tab →
           </a>
         </div>
@@ -125,7 +125,10 @@ function OverviewPanel({ userEmail }) {
                 {(u.username || '?')[0].toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 600 }}>{u.username || 'Unknown'}</div>
+                <div
+                  onClick={() => onNavigate?.('users')}
+                  style={{ color: '#D4A843', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textDecorationColor: 'rgba(212,168,67,0.45)' }}
+                >{u.username || 'Unknown'}</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>joined {u.created_at ? new Date(u.created_at).toLocaleDateString() : '?'}</div>
               </div>
               {u.is_banned && <Badge label="BANNED" color="#f87171" bg="rgba(248,113,113,0.1)" border="rgba(248,113,113,0.2)" />}
@@ -141,8 +144,11 @@ function OverviewPanel({ userEmail }) {
       <AdminSection title="Sport Distribution">
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {Object.entries(data?.sportCounts || {}).sort((a, b) => b[1] - a[1]).map(([sport, count]) => (
-            <div key={sport} style={{ padding: '0.5rem 0.85rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'center' }}>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 700 }}>{sport}</div>
+            <div key={sport} onClick={() => onNavigate?.('picks', { sport: sport.toUpperCase() })} style={{ padding: '0.5rem 0.85rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.12s' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(212,168,67,0.5)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+            >
+              <div style={{ color: '#D4A843', fontSize: '0.78rem', fontWeight: 700 }}>{sport}</div>
               <div style={{ color: 'var(--gold)', fontSize: '0.72rem', fontFamily: 'IBM Plex Mono, monospace' }}>{count} picks</div>
             </div>
           ))}
@@ -679,13 +685,22 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
 }
 
 // ── PICKS AUDIT TAB ───────────────────────────────────────────────────────────
-function PicksAuditPanel({ userEmail }) {
+function PicksAuditPanel({ userEmail, onNavigate, externalSport }) {
   const [picks, setPicks]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [page, setPage]         = useState(0);
   const [sport, setSport]       = useState('');
   const [actionMsg, setActionMsg] = useState('');
+
+  // Sync sport filter from external navigation (e.g. clicking a sport pill in Overview)
+  useEffect(() => {
+    if (externalSport !== undefined && externalSport !== sport) {
+      setSport(externalSport);
+      setPage(0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalSport]);
   const [editPick, setEditPick] = useState(null);
   const [showAddPick, setShowAddPick] = useState(false);
 
@@ -787,7 +802,11 @@ function PicksAuditPanel({ userEmail }) {
               return (
                 <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: adminEdited ? 'rgba(255,184,0,0.03)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {username}
+                    <span
+                      onClick={() => onNavigate?.('users')}
+                      style={{ color: '#D4A843', cursor: 'pointer', borderBottom: '1px dotted rgba(212,168,67,0.45)' }}
+                      title="View in Users tab"
+                    >{username}</span>
                     {adminEdited && <span style={{ marginLeft: '4px', fontSize: '0.58rem', color: '#FFB800' }} title={`Edited by ${p.admin_edited_by || 'admin'}`}>✏</span>}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{p.date}</td>
@@ -4233,6 +4252,15 @@ export default function AdminTab({ user }) {
   // admin clicks to a different panel mid-run.
   const [everMounted, setEverMounted] = React.useState(() => new Set(['overview']));
 
+  // Sport filter to forward into PicksAuditPanel via Overview sport pill clicks
+  const [navPicksSport, setNavPicksSport] = React.useState('');
+
+  // Central navigation handler — switches tab and forwards optional payload
+  function navigate(tabId, opts = {}) {
+    setActive(tabId);
+    if (opts.sport !== undefined) setNavPicksSport(opts.sport);
+  }
+
   // Unresolved error count — shown as badge on Errors tab
   const [errorBadge, setErrorBadge] = React.useState(0);
   React.useEffect(() => {
@@ -4313,9 +4341,9 @@ export default function AdminTab({ user }) {
           display:none hides the inactive panel without unmounting it, so any
           in-flight operations (pre-gen, batch grade, AI runs, etc.) continue
           uninterrupted even when the admin switches panels mid-run. */}
-      {everMounted.has('overview') && <div style={{ display: active === 'overview' ? 'block' : 'none' }}><OverviewPanel      userEmail={user.email} /></div>}
+      {everMounted.has('overview') && <div style={{ display: active === 'overview' ? 'block' : 'none' }}><OverviewPanel      userEmail={user.email} onNavigate={navigate} /></div>}
       {everMounted.has('users')    && <div style={{ display: active === 'users'    ? 'block' : 'none' }}><UsersMegaPanel     userEmail={user.email} /></div>}
-      {everMounted.has('picks')    && <div style={{ display: active === 'picks'    ? 'block' : 'none' }}><PicksAuditPanel    userEmail={user.email} /></div>}
+      {everMounted.has('picks')    && <div style={{ display: active === 'picks'    ? 'block' : 'none' }}><PicksAuditPanel    userEmail={user.email} onNavigate={navigate} externalSport={navPicksSport} /></div>}
       {everMounted.has('contests') && <div style={{ display: active === 'contests' ? 'block' : 'none' }}><ContestsPanel      userEmail={user.email} /></div>}
       {everMounted.has('chat')     && <div style={{ display: active === 'chat'     ? 'block' : 'none' }}><ChatRoomAdminPanel userEmail={user.email} /></div>}
       {everMounted.has('reviews')  && <div style={{ display: active === 'reviews'  ? 'block' : 'none' }}><ReviewQueuePanel   userEmail={user.email} /></div>}

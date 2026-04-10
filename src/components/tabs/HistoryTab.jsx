@@ -1778,11 +1778,15 @@ export default function HistoryTab({ picks, setPicks, user, contest, setContest,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '0.88rem', lineHeight: 1 }}>{sportEmoji(pick.sport)}</span>
-                      <span style={{
-                        fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
-                        letterSpacing: '0.07em', color: '#60a5fa',
-                        background: 'rgba(96,165,250,0.1)', padding: '2px 6px', borderRadius: '4px',
-                      }}>{pick.sport || 'Other'}</span>
+                      <span
+                        onClick={() => setFilterSport((pick.sport || 'Other').toUpperCase())}
+                        title={`Filter by ${pick.sport || 'Other'}`}
+                        style={{
+                          fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
+                          letterSpacing: '0.07em', color: '#60a5fa',
+                          background: 'rgba(96,165,250,0.1)', padding: '2px 6px', borderRadius: '4px',
+                          cursor: 'pointer',
+                        }}>{pick.sport || 'Other'}</span>
                       {pick.contest_entry && (
                         <span style={{
                           fontSize: '0.62rem', color: '#FFB800',
