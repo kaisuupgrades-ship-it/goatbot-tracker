@@ -525,16 +525,16 @@ async function processTournamentForDay(sportKey, todayStr, { force = false, isAd
     if (r) result = { ...r, model_used: 'claude-opus-4-6', provider: 'anthropic', was_fallback: false };
   } catch (e) { console.log(`[pregenerate] Tournament Tier 1 failed: ${e.message}`); }
 
-  // Tier 2: Grok-4 + search
+  // Tier 2: grok-4-1-fast no-search — odds already in prompt, ~15x cheaper than grok-4
   if (!result) {
-    console.log(`[pregenerate] 🔵 Tournament Tier 2 (grok-4+search): ${tournamentName}`);
+    console.log(`[pregenerate] 🔵 Tournament Tier 2 (grok-4-1-fast): ${tournamentName}`);
     try {
-      const r = await callGrok(systemPrompt, userPrompt, { useSearch: true, maxTokens: 2000, timeout: 120_000 });
-      if (r) result = { ...r, model_used: 'grok-4', provider: 'xai', was_fallback: false };
+      const r = await callGrok3(systemPrompt, userPrompt, { model: GROK_FAST_MODEL, maxTokens: 2000, timeout: 60_000 });
+      if (r) result = { ...r, model_used: GROK_FAST_MODEL, provider: 'xai', was_fallback: false };
     } catch (e) { console.log(`[pregenerate] Tournament Tier 2 failed: ${e.message}`); }
   }
 
-  // Tier 3: Grok-3 no-search
+  // Tier 3: grok-3 no-search — last resort
   if (!result) {
     console.log(`[pregenerate] 🔵 Tournament Tier 3 (grok-3 no-search): ${tournamentName}`);
     try {
@@ -764,6 +764,9 @@ Keep response under 150 words. Do NOT repeat prior analysis. Be fast and factual
 // Maximum games to process per sport per run. Prevents timeout on heavy slates (MLB 15+ games).
 const MAX_GAMES_PER_SPORT = 8;
 
+// Primary Grok model — fast tier, ~15x cheaper than grok-4 ($0.20/$0.50 vs $3/$15 per MTok)
+const GROK_FAST_MODEL = 'grok-4-1-fast-non-reasoning';
+
 // ── xAI API call helper ───────────────────────────────────────────────────────
 async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens = 2000, timeout = 120_000 } = {}) {
   const xaiKey = (process.env.XAI_API_KEY || '').trim();
@@ -825,8 +828,8 @@ async function callGrok(systemPrompt, userPrompt, { useSearch = true, maxTokens 
   };
 }
 
-// grok-3 via chat/completions — fast, reliable fallback (no web search)
-async function callGrok3(systemPrompt, userPrompt, { maxTokens = 2000, timeout = 45_000 } = {}) {
+// xAI chat/completions — used for grok-4-1-fast-non-reasoning (primary) and grok-3 (fallback)
+async function callGrok3(systemPrompt, userPrompt, { model = 'grok-3', maxTokens = 2000, timeout = 45_000 } = {}) {
   const xaiKey = (process.env.XAI_API_KEY || '').trim();
   if (!xaiKey) return null;
 
@@ -835,7 +838,7 @@ async function callGrok3(systemPrompt, userPrompt, { maxTokens = 2000, timeout =
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
     body: JSON.stringify({
-      model: 'grok-3',
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -846,7 +849,7 @@ async function callGrok3(systemPrompt, userPrompt, { maxTokens = 2000, timeout =
     signal: AbortSignal.timeout(timeout),
   });
 
-  if (!res.ok) throw new Error(`grok-3 HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`${model} HTTP ${res.status}`);
 
   const data = await res.json();
   const latency = Date.now() - t0;
@@ -914,7 +917,7 @@ async function callClaude(systemPrompt, userPrompt, { maxTokens = 2000, timeout 
 }
 
 // ── generateAnalysis ──────────────────────────────────────────────────────────
-// Pipeline: Claude Opus+search (240s) → grok-4+search (150s) → grok-4 no-search (45s) → grok-3 no-search (45s)
+// Pipeline: Claude Opus+search (240s) → grok-4-1-fast no-search (45s) → grok-4 no-search (45s) → grok-3 no-search (45s)
 // adminMode parameter kept for API compatibility but timeouts are now uniform.
 async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext, performanceContext, injuryData = '', propsData = '', mode = 'full', adminMode = false) {
   const isRefresh = mode === 'refresh';
@@ -974,34 +977,33 @@ Produce a complete BetOS analysis using only this data. Note any limitations.`;
     } catch (e) {
       console.log(`[pregenerate] ⚠️ Tier 1 (claude-opus+search) threw for ${awayTeam}@${homeTeam}: ${e.message}`);
     }
-    console.log(`[pregenerate] → Falling to Tier 2 (grok-4+search) for ${awayTeam}@${homeTeam}`);
+    console.log(`[pregenerate] → Falling to Tier 2 (grok-4-1-fast) for ${awayTeam}@${homeTeam}`);
   }
 
-  // ── Tier 2: grok-4 + web search (150s) ───────────────────────────────
-  if (!isRefresh) {
-    console.log(`[pregenerate] 🔵 Tier 2 (grok-4+search) attempting: ${awayTeam}@${homeTeam}`);
-    try {
-      const systemPrompt = buildAnalysisSystem(hasVerifiedOdds, injuryData, propsData);
-      const result = await callGrok(systemPrompt, userPrompt, {
-        useSearch: true,
-        maxTokens: 2000,
-        timeout: 150_000,
-      });
-      if (result) {
-        console.log(`[pregenerate] ✅ Tier 2 (grok-4+search) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
-        return {
-          text: result.text, mode, model: 'BetOS AI', model_used: 'grok-4',
-          provider: 'xai', was_fallback: false, latency_ms: result.latency,
-          tokens_in: result.tokens_in, tokens_out: result.tokens_out,
-          system_prompt: systemPrompt, user_prompt: userPrompt, prompt_version: PROMPT_VERSION,
-        };
-      }
-      console.log(`[pregenerate] ⚠️ Tier 2 (grok-4+search) returned null for ${awayTeam}@${homeTeam}`);
-    } catch (e) {
-      console.log(`[pregenerate] ⚠️ Tier 2 (grok-4+search) threw for ${awayTeam}@${homeTeam}: ${e.message}`);
+  // ── Tier 2: grok-4-1-fast no-search (45s) — data pre-injected ────────
+  // All odds, injuries, and performance data are already in noSearchPrompt;
+  // no web search needed. ~15x cheaper than grok-4 ($0.20/$0.50 vs $3/$15 per MTok).
+  console.log(`[pregenerate] 🔵 Tier 2 (grok-4-1-fast) attempting: ${awayTeam}@${homeTeam}`);
+  try {
+    const result = await callGrok3(noSearchSystem, noSearchPrompt, {
+      model: GROK_FAST_MODEL,
+      maxTokens: isRefresh ? 400 : 2000,
+      timeout: isRefresh ? 25_000 : 45_000,
+    });
+    if (result) {
+      console.log(`[pregenerate] ✅ Tier 2 (grok-4-1-fast) ${awayTeam}@${homeTeam}: ${result.latency}ms`);
+      return {
+        text: result.text, mode, model: 'BetOS AI', model_used: GROK_FAST_MODEL,
+        provider: 'xai', was_fallback: false, latency_ms: result.latency,
+        tokens_in: result.tokens_in, tokens_out: result.tokens_out,
+        system_prompt: noSearchSystem, user_prompt: noSearchPrompt, prompt_version: PROMPT_VERSION,
+      };
     }
-    console.log(`[pregenerate] → Falling to Tier 3 (grok-4 no-search) for ${awayTeam}@${homeTeam}`);
+    console.log(`[pregenerate] ⚠️ Tier 2 (grok-4-1-fast) returned null for ${awayTeam}@${homeTeam}`);
+  } catch (e) {
+    console.log(`[pregenerate] ⚠️ Tier 2 (grok-4-1-fast) threw for ${awayTeam}@${homeTeam}: ${e.message}`);
   }
+  console.log(`[pregenerate] → Falling to Tier 3 (grok-4 no-search) for ${awayTeam}@${homeTeam}`);
 
   // ── Tier 3: grok-4 no-search via Responses API (45s) ─────────────────
   console.log(`[pregenerate] 🔵 Tier 3 (grok-4 no-search) attempting: ${awayTeam}@${homeTeam}`);

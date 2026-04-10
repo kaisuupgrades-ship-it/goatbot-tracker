@@ -789,7 +789,41 @@ export async function POST(req) {
       }
     }
 
-    // ── Tier 2: grok-4 + web search (90s) ────────────────────────────────────
+    // ── Tier 2: grok-4-1-fast no-search (30s) — ~15x cheaper than grok-4 ─────
+    if (XAI_API_KEY) {
+      try {
+        const { response, timedOut } = await fetchWithTimeout(
+          `${XAI_BASE}/chat/completions`,
+          {
+            method: 'POST',
+            headers: xaiHeaders,
+            body: JSON.stringify({
+              model: 'grok-4-1-fast-non-reasoning',
+              messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: activePrompt },
+              ],
+              temperature: 0.7,
+              max_tokens: 3000,
+            }),
+          },
+          30_000,
+        );
+        if (!timedOut && response?.ok) {
+          const data = await response.json();
+          const result = data.choices[0].message.content;
+          cacheAnalysis(sport, homeTeam, awayTeam, targetDate, result, 'BetOS AI');
+          savePromptCache(pKey, result, 'BetOS AI');
+          return NextResponse.json({ result, model: 'BetOS AI' });
+        }
+        if (timedOut) console.log('[goatbot] grok-4-1-fast timed out after 30s');
+        else console.log('[goatbot] grok-4-1-fast returned', response?.status);
+      } catch (err) {
+        console.log('[goatbot] grok-4-1-fast error:', err.message);
+      }
+    }
+
+    // ── Tier 3: grok-4 + web search (90s) — last resort ─────────────────────
     if (XAI_API_KEY) {
       try {
         const { response, timedOut } = await fetchWithTimeout(
@@ -820,7 +854,7 @@ export async function POST(req) {
         console.log('[goatbot] grok-4 error:', err.message);
       }
 
-      // ── Tier 3: grok-3 (60s) ─────────────────────────────────────────────
+      // ── Tier 4: grok-3 (60s) ─────────────────────────────────────────────
       try {
         const { response, timedOut } = await fetchWithTimeout(
           `${XAI_BASE}/chat/completions`,
