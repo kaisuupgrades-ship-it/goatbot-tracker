@@ -912,6 +912,17 @@ function ReviewRequestModal({ pick, onClose }) {
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState(''); // AI rejection reason
   const [analysis, setAnalysis] = useState(''); // AI summary on success
+  const modalRef = useRef(null);
+
+  // Scroll modal into view on open — needed when HistoryTab renders inside a
+  // transformed/overflow container where position:fixed is relative to that
+  // container instead of the viewport, causing the modal to appear at the top
+  // of the scrollable area while the user may be scrolled far down.
+  useEffect(() => {
+    if (modalRef.current) {
+      modalRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
 
   async function handleSubmit() {
     const msg = message.trim();
@@ -940,7 +951,7 @@ function ReviewRequestModal({ pick, onClose }) {
   const oddsDisplay = pick.odds ? `${pick.odds > 0 ? '+' : ''}${pick.odds}` : '—';
 
   return (
-    <div style={{
+    <div ref={modalRef} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
     }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
