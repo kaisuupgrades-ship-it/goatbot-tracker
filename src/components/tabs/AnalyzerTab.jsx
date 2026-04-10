@@ -1179,6 +1179,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
   const [prompt, setPrompt]             = useState('');
   const [result, setResult]             = useState('');
   const [model, setModel]               = useState('');
+  const [gameInfo, setGameInfo]         = useState(null); // { game_date, away_team, home_team, sport, game_time }
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState('');
   const [loadStep, setLoadStep]         = useState(0);
@@ -1272,6 +1273,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
     setResult('');
     setError('');
     setModel('');
+    setGameInfo(null);
     const t0 = Date.now();
     try {
       const res = await fetch('/api/goatbot', {
@@ -1286,6 +1288,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       setResult(data.result);
       setModel(data.model || 'BetOS AI');
       setRunTime(rt);
+      setGameInfo(data.game_meta || null);
       // Extract team names from prompt for cross-tab linkage (Featured, History)
       const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|$)/i);
       const report = {
@@ -1747,6 +1750,25 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       {/* ── RESULT (collapsible) ───────────────────────────────────── */}
       {result && !loading && (
         <div style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,184,0,0.25)', borderRadius: '12px', overflow: 'hidden' }}>
+          {/* Game date/time banner — shown when analysis came from pregenerated cache */}
+          {gameInfo && (gameInfo.game_date || gameInfo.game_time) && (
+            <div style={{ padding: '6px 1.25rem', background: 'rgba(255,184,0,0.06)', borderBottom: '1px solid rgba(255,184,0,0.12)', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                {gameInfo.sport?.toUpperCase()}
+              </span>
+              {gameInfo.away_team && gameInfo.home_team && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {gameInfo.away_team} @ {gameInfo.home_team}
+                </span>
+              )}
+              {(gameInfo.game_date || gameInfo.game_time) && (
+                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                  📅 {gameInfo.game_date ? new Date(gameInfo.game_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}
+                  {gameInfo.game_time ? ` · ${gameInfo.game_time}` : ''}
+                </span>
+              )}
+            </div>
+          )}
           {/* Collapse header */}
           <button
             onClick={() => setResultCollapsed(v => !v)}

@@ -362,6 +362,31 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 /**
+ * Look up the game's kickoff time (ET) from odds_cache by matching team names.
+ * Returns a formatted string like "7:10 PM ET" or null if not found.
+ */
+async function lookupGameTime(sport, homeTeam, awayTeam) {
+  try {
+    const ht = homeTeam.toLowerCase().split(' ').pop();
+    const at = awayTeam.toLowerCase().split(' ').pop();
+    const { data: rows } = await supabase
+      .from('odds_cache')
+      .select('home_team, away_team, commence_time')
+      .eq('sport', sport)
+      .order('commence_time');
+    if (!rows?.length) return null;
+    const row = rows.find(r =>
+      r.home_team?.toLowerCase().includes(ht) &&
+      r.away_team?.toLowerCase().includes(at)
+    );
+    if (!row?.commence_time) return null;
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    }).format(new Date(row.commence_time));
+  } catch { return null; }
+}
+
+/**
  * Try to find a pre-generated analysis in game_analyses table.
  * Matches by looking for team names from the cache appearing in the user's prompt.
  * Returns the matching row or null.
@@ -619,7 +644,21 @@ export async function POST(req) {
           result += `\n\n[Analysis pre-generated ${ageLabel} · BetOS AI · Freshness checked]`;
         }
 
-        return NextResponse.json({ result, model: 'BetOS AI (cached)', cached: true });
+        // Look up kickoff time from odds_cache (non-blocking — null if not found)
+        const gameTime = await lookupGameTime(cached.sport, cached.home_team, cached.away_team).catch(() => null);
+
+        return NextResponse.json({
+          result,
+          model: 'BetOS AI (cached)',
+          cached: true,
+          game_meta: {
+            game_date:  cached.game_date,
+            away_team:  cached.away_team,
+            home_team:  cached.home_team,
+            sport:      cached.sport,
+            game_time:  gameTime || null,
+          },
+        });
       }
 
       // Cache is stale — fall through to fresh generation, but we'll update it

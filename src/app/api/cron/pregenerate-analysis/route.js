@@ -353,8 +353,23 @@ async function fetchCachedOdds(sport, homeTeam, awayTeam) {
   }
 }
 
+// ET date formatter — converts a UTC timestamp to YYYY-MM-DD in America/New_York.
+// Games that start at e.g. 00:30 UTC (8:30 PM ET the night before) get the correct local date.
+const etDateFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+const etTimeFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+
+function commenceToEtDate(commence_time) {
+  if (!commence_time) return null;
+  return etDateFmt.format(new Date(commence_time));
+}
+function commenceToEtTime(commence_time) {
+  if (!commence_time) return '';
+  return etTimeFmt.format(new Date(commence_time));
+}
+
 // List games from odds_cache table — used as fallback when ESPN returns nothing.
-// Returns [{ homeTeam, awayTeam, gameTime }] for each pre/live game in the cache.
+// Returns [{ homeTeam, awayTeam, gameTime, gameDate }] where gameDate is the actual
+// ET date of the game (not the run date — e.g. April 11 games when run on April 9).
 async function fetchGamesFromOddsCache(sport) {
   try {
     const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
@@ -372,9 +387,8 @@ async function fetchGamesFromOddsCache(sport) {
       return rows.map(r => ({
         homeTeam: r.home_team,
         awayTeam: r.away_team,
-        gameTime: r.commence_time
-          ? new Date(r.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-          : '',
+        gameTime: commenceToEtTime(r.commence_time),
+        gameDate: commenceToEtDate(r.commence_time),
       }));
     }
 
@@ -390,9 +404,8 @@ async function fetchGamesFromOddsCache(sport) {
       .map(g => ({
         homeTeam: g.home_team,
         awayTeam: g.away_team,
-        gameTime: g.commence_time
-          ? new Date(g.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-          : '',
+        gameTime: commenceToEtTime(g.commence_time),
+        gameDate: commenceToEtDate(g.commence_time),
       }));
   } catch (e) {
     console.log(`[pregenerate] fetchGamesFromOddsCache failed for ${sport}:`, e.message);
@@ -1109,7 +1122,8 @@ export async function GET(req) {
           oddsApiGames = staleRows.map(r => ({
             homeTeam: r.home_team,
             awayTeam: r.away_team,
-            gameTime: r.commence_time || '',
+            gameTime: commenceToEtTime(r.commence_time),
+            gameDate: commenceToEtDate(r.commence_time),
           }));
         } else {
           // No stale data either — this is a genuine "no games today" for this sport
@@ -1136,9 +1150,13 @@ export async function GET(req) {
     // Build list of games that need analysis
     const gamesToProcess = [];
 
-    // Helper: apply freshness check and push game onto the queue (or skip if fresh)
-    const enqueueGame = async (homeTeam, awayTeam, oddsContext, gameTime) => {
-      // FIX 2: Skip games with no odds data — no value in AI analyzing without lines
+    // Helper: apply freshness check and push game onto the queue (or skip if fresh).
+    // actualGameDate: the ET calendar date of the game (may differ from todayStr for
+    // multi-day odds_cache results — e.g. April 11 games when the cron runs on April 9).
+    const enqueueGame = async (homeTeam, awayTeam, oddsContext, gameTime, actualGameDate) => {
+      const gameDate = actualGameDate || todayStr;
+
+      // Skip games with no odds data — no value in AI analyzing without lines
       if (!oddsContext) {
         console.log(`[pregenerate] Skipping ${awayTeam} @ ${homeTeam} (${sport.toUpperCase()}) — no odds available yet`);
         skipped.push(`${awayTeam}@${homeTeam} (no-odds)`);
@@ -1148,13 +1166,13 @@ export async function GET(req) {
       let gameMode = 'full';
       if (!force) {
         // Guard A (content-based dedup): skip if a valid analysis already exists within 12h.
-        // "Valid" means the analysis doesn't contain no-odds placeholder text.
-        // If the cached analysis had no odds but odds are now available, force a full re-run.
+        // Uses the actual game date, not the run date, so April 11 analyses don't re-run
+        // on every subsequent cron run until April 11.
         const dedupCutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
         const { data: existing } = await supabase
           .from('game_analyses')
           .select('id, updated_at, analysis')
-          .eq('sport', sport).eq('game_date', todayStr)
+          .eq('sport', sport).eq('game_date', gameDate)
           .ilike('home_team', homeTeam).ilike('away_team', awayTeam)
           .maybeSingle();
         if (existing) {
@@ -1178,7 +1196,7 @@ export async function GET(req) {
           // Older than 12h → full re-analysis (gameMode already 'full')
         }
       }
-      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode });
+      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode, gameDate });
     };
 
     for (const event of events) {
@@ -1211,11 +1229,13 @@ export async function GET(req) {
       // No ESPN fallback — games without real Odds API odds were already filtered above.
       let oddsContext = await fetchCachedOdds(sport, homeTeam, awayTeam);
 
-      const gameTime = event.competitions?.[0]?.date
-        ? new Date(event.competitions[0].date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-        : '';
+      const eventTs = event.competitions?.[0]?.date;
+      const gameTime = eventTs ? commenceToEtTime(eventTs) : '';
+      // Use the actual ET calendar date of the game (not the run date).
+      // Critical for late-night games that cross midnight UTC.
+      const eventGameDate = eventTs ? commenceToEtDate(eventTs) : todayStr;
 
-      await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime);
+      await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime, eventGameDate);
     }
 
     // ── Odds API fallback ─────────────────────────────────────────────────────
@@ -1225,9 +1245,9 @@ export async function GET(req) {
       const oddsGames = await fetchGamesFromOddsCache(sport);
       if (oddsGames.length) {
         console.log(`[pregenerate] ${sport.toUpperCase()}: ESPN 0 events — falling back to Odds API cache (${oddsGames.length} games)`);
-        for (const { homeTeam, awayTeam, gameTime } of oddsGames) {
+        for (const { homeTeam, awayTeam, gameTime, gameDate: gd } of oddsGames) {
           const oddsContext = await fetchCachedOdds(sport, homeTeam, awayTeam);
-          await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime);
+          await enqueueGame(homeTeam, awayTeam, oddsContext, gameTime, gd);
         }
       }
     }
@@ -1243,7 +1263,7 @@ export async function GET(req) {
 
     // Queue all games for the parallel dispatcher — each gets its own invocation budget
     for (const g of gamesToProcess) {
-      allGamesToDispatch.push({ sport, homeTeam: g.homeTeam, awayTeam: g.awayTeam, triggerSource });
+      allGamesToDispatch.push({ sport, homeTeam: g.homeTeam, awayTeam: g.awayTeam, gameDate: g.gameDate, triggerSource });
     }
     console.log(`[pregenerate] ${sport.toUpperCase()}: queued ${gamesToProcess.length} game(s) for dispatch`);
   }
@@ -1256,12 +1276,13 @@ export async function GET(req) {
   console.log(`[pregenerate] Dispatching ${allGamesToDispatch.length} game worker(s) in parallel (runId=${runId})`);
 
   const dispatchResults = await Promise.allSettled(
-    allGamesToDispatch.map(({ sport, homeTeam, awayTeam, triggerSource: ts }) => {
+    allGamesToDispatch.map(({ sport, homeTeam, awayTeam, gameDate: gd, triggerSource: ts }) => {
       const url = new URL(selfBase);
       url.searchParams.set('sport', sport);
       url.searchParams.set('homeTeam', homeTeam);
       url.searchParams.set('awayTeam', awayTeam);
-      url.searchParams.set('gameDate', todayStr);
+      // Use the actual game date (e.g. 2026-04-11) not the run date (2026-04-09)
+      url.searchParams.set('gameDate', gd || todayStr);
       url.searchParams.set('runId', runId);
       url.searchParams.set('triggerSource', ts || 'dispatcher');
       if (force) url.searchParams.set('force', 'true');
