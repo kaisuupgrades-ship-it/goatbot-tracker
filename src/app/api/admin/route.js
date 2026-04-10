@@ -323,6 +323,51 @@ export async function GET(req) {
       return NextResponse.json({ concerns: concerns || [] });
     }
 
+    if (action === 'reviews') {
+      const status = searchParams.get('status') || 'PENDING';
+      // Query without Supabase join syntax — pick_review_requests has no FK to profiles in schema cache
+      let reviewsQuery = supabaseAdmin
+        .from('pick_review_requests')
+        .select('id, pick_id, user_id, user_message, ai_analysis, suggested_changes, status, admin_notes, created_at, resolved_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (status !== 'ALL') reviewsQuery = reviewsQuery.eq('status', status);
+      const { data: reviews, error: reviewsError } = await reviewsQuery;
+      // Gracefully handle table-not-found
+      if (reviewsError) {
+        if (reviewsError.code === '42P01' || (reviewsError.message || '').includes('does not exist')) {
+          return NextResponse.json({ reviews: [], tableExists: false });
+        }
+        throw reviewsError;
+      }
+      // Fetch related picks separately
+      const pickIds = [...new Set((reviews || []).map(r => r.pick_id).filter(Boolean))];
+      let picksMap = {};
+      if (pickIds.length > 0) {
+        const { data: pickRows } = await supabaseAdmin
+          .from('picks')
+          .select('id, sport, team, bet_type, odds, result')
+          .in('id', pickIds);
+        (pickRows || []).forEach(p => { picksMap[p.id] = p; });
+      }
+      // Fetch usernames separately (no FK between pick_review_requests and profiles)
+      const userIds = [...new Set((reviews || []).map(r => r.user_id).filter(Boolean))];
+      let usernameMap = {};
+      if (userIds.length > 0) {
+        const { data: profileRows } = await supabaseAdmin
+          .from('profiles')
+          .select('id, username')
+          .in('id', userIds);
+        (profileRows || []).forEach(p => { usernameMap[p.id] = p.username; });
+      }
+      const enrichedReviews = (reviews || []).map(r => ({
+        ...r,
+        picks: picksMap[r.pick_id] || null,
+        profiles: { username: usernameMap[r.user_id] || 'Unknown' },
+      }));
+      return NextResponse.json({ reviews: enrichedReviews, tableExists: true });
+    }
+
     if (action === 'game_analyses') {
       const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
       const { data: analyses } = await supabaseAdmin
@@ -791,6 +836,38 @@ export async function POST(req) {
       if (!messageId) return NextResponse.json({ error: 'messageId required' }, { status: 400 });
       const { error } = await supabaseAdmin.from('chat_messages').delete().eq('id', messageId);
       if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'resolve_review') {
+      const { reviewId, resolution, admin_notes } = body;
+      if (!reviewId || !resolution) return NextResponse.json({ error: 'reviewId and resolution required' }, { status: 400 });
+      if (!['APPROVED', 'DENIED'].includes(resolution)) return NextResponse.json({ error: 'Invalid resolution' }, { status: 400 });
+      // If approving, apply suggested_changes to the pick
+      if (resolution === 'APPROVED') {
+        const { data: review } = await supabaseAdmin
+          .from('pick_review_requests')
+          .select('pick_id, suggested_changes')
+          .eq('id', reviewId)
+          .single();
+        if (review?.pick_id && review?.suggested_changes && Object.keys(review.suggested_changes).length > 0) {
+          const allowed = ['team', 'sport', 'bet_type', 'line', 'odds', 'units', 'result', 'notes', 'is_public', 'contest_entry', 'profit', 'date'];
+          const updates = {};
+          for (const [key, val] of Object.entries(review.suggested_changes)) {
+            if (allowed.includes(key)) updates[key] = val;
+          }
+          if (Object.keys(updates).length > 0) {
+            updates.admin_edited_at = new Date().toISOString();
+            updates.admin_edited_by = adminEmail;
+            await supabaseAdmin.from('picks').update(updates).eq('id', review.pick_id);
+          }
+        }
+      }
+      const { error: resolveErr } = await supabaseAdmin
+        .from('pick_review_requests')
+        .update({ status: resolution, admin_notes: admin_notes || null, resolved_at: new Date().toISOString() })
+        .eq('id', reviewId);
+      if (resolveErr) throw resolveErr;
       return NextResponse.json({ ok: true });
     }
 

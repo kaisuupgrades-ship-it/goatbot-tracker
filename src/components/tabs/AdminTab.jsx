@@ -3117,10 +3117,14 @@ function ChatRoomAdminPanel({ userEmail }) {
 
   const load = useCallback(async () => {
     try {
+      const s = await import('@/lib/supabase').then(m => m.supabase);
+      const { data: { session } } = await s.auth.getSession();
+      const token = session?.access_token;
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
       const [sRes, mRes, bRes] = await Promise.all([
-        fetch('/api/admin?action=chat_settings').then(r => r.json()),
-        fetch('/api/admin?action=chat_mods').then(r => r.json()),
-        fetch('/api/admin?action=chat_bans').then(r => r.json()),
+        fetch('/api/admin?action=chat_settings', { headers }).then(r => r.json()),
+        fetch('/api/admin?action=chat_mods', { headers }).then(r => r.json()),
+        fetch('/api/admin?action=chat_bans', { headers }).then(r => r.json()),
       ]);
       if (sRes?.settings) setSettings(sRes.settings);
       if (mRes?.mods)     setMods(mRes.mods);
