@@ -173,13 +173,29 @@ export async function GET(req) {
     }
   }
 
-  // ── Flag anything still ungraded → admin error log ─────────────────────────
+  // ── Flag anything still ungraded → error log + review queue ──────────────
   const flagPicks = regularPicks.filter(p => !gradedPickIds.has(p.id));
   let flaggedCount = 0;
+
+  // Batch-check which pick_ids already have a PENDING review request
+  // to avoid inserting duplicates on every cron run.
+  let existingReviewPickIds = new Set();
+  if (flagPicks.length > 0) {
+    try {
+      const { data: existing } = await supabase
+        .from('pick_review_requests')
+        .select('pick_id')
+        .in('pick_id', flagPicks.map(p => p.id))
+        .eq('status', 'PENDING');
+      (existing || []).forEach(r => existingReviewPickIds.add(r.pick_id));
+    } catch { /* non-critical — proceed, dedup will just be skipped */ }
+  }
 
   for (const pick of flagPicks) {
     const label = [pick.team, pick.bet_type, pick.line != null ? pick.line : null]
       .filter(Boolean).join(' ');
+
+    // Write to ai_error_logs for Errors tab visibility
     try {
       await supabase.from('ai_error_logs').insert([{
         pick_id:       pick.id,
@@ -198,10 +214,31 @@ export async function GET(req) {
         created_at:    new Date().toISOString(),
         resolved:      false,
       }]);
-      flaggedCount++;
     } catch (logErr) {
-      console.warn('[cron/grade-check] Could not log ungraded pick', pick.id, logErr?.message);
+      console.warn('[cron/grade-check] Could not log to ai_error_logs for pick', pick.id, logErr?.message);
     }
+
+    // Insert into pick_review_requests for the Reviews queue — skip if one already exists
+    if (!existingReviewPickIds.has(pick.id)) {
+      try {
+        await supabase.from('pick_review_requests').insert([{
+          pick_id:          pick.id,
+          user_id:          pick.user_id || null,
+          user_message:     'Auto-detected: ungraded pick on concluded game — needs manual grading',
+          suggested_changes: {
+            type:         'ungraded',
+            game_status:  'concluded',
+            commence_time: pick.commence_time,
+          },
+          status:     'PENDING',
+          created_at: new Date().toISOString(),
+        }]);
+      } catch (reviewErr) {
+        console.warn('[cron/grade-check] Could not insert review request for pick', pick.id, reviewErr?.message);
+      }
+    }
+
+    flaggedCount++;
   }
 
   // ── Persist run summary to settings for admin observability ───────────────
