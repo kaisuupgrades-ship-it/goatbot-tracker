@@ -230,39 +230,68 @@ async function getRunDetail(runId) {
   });
 }
 
-// ── Analytics: picks-based ROI dashboard ──────────────────────────────────────
+// ── Parse prediction_pick text → { bet_type, odds } ──────────────────────────
+function parsePredictionPickServer(text) {
+  if (!text) return { bet_type: 'Unknown', odds: null };
+  const t = text.trim();
+  // Over/Under totals: "Over 217.5 -110", "Under 8.5 +100"
+  const ouMatch = t.match(/^(Over|Under)\s+[\d.]+\s+([+-]\d+)/i);
+  if (ouMatch) return { bet_type: 'Total', odds: parseInt(ouMatch[2]) };
+  // Spread: ends with a signed number line then odds, e.g. "Chiefs -3.5 -115"
+  const spreadMatch = t.match(/[+-][\d.]+\s+([+-]\d{3,4})$/);
+  if (spreadMatch) return { bet_type: 'Spread', odds: parseInt(spreadMatch[1]) };
+  // ML: "Lakers ML -150" or just ends with odds after team name
+  const mlMatch = t.match(/ML\s+([+-]\d+)/i) || t.match(/\s([+-]\d{3,4})$/);
+  if (mlMatch) return { bet_type: 'Moneyline', odds: parseInt(mlMatch[1]) };
+  return { bet_type: 'Unknown', odds: null };
+}
+
+// ── Analytics: game_analyses-based ROI dashboard ──────────────────────────────
 async function getAnalytics(from, to, sport, pickType) {
   let query = supabase
-    .from('picks')
-    .select('id, sport, pick_type, team, odds, result, profit, date, created_at, graded_at')
-    .in('result', ['WIN', 'LOSS', 'PUSH'])
-    .order('date', { ascending: true })
+    .from('game_analyses')
+    .select('id, sport, game_date, prediction_pick, prediction_conf, prediction_result, model')
+    .in('prediction_result', ['WIN', 'LOSS', 'PUSH'])
+    .order('game_date', { ascending: true })
     .limit(5000);
 
-  if (from) query = query.gte('date', from);
-  if (to)   query = query.lte('date', to);
-  if (sport)    query = query.eq('sport', sport);
-  if (pickType) query = query.eq('pick_type', pickType);
+  if (from) query = query.gte('game_date', from);
+  if (to)   query = query.lte('game_date', to);
+  if (sport) query = query.eq('sport', sport);
 
   const { data: rawPicks, error } = await query;
   if (error) throw error;
 
-  const picks = rawPicks || [];
-  const wins   = picks.filter(p => p.result === 'WIN');
-  const losses = picks.filter(p => p.result === 'LOSS');
-  const pushes = picks.filter(p => p.result === 'PUSH');
+  // Enrich each row with parsed odds, bet_type, and theoretical profit
+  const picks = (rawPicks || []).map(p => {
+    const { bet_type, odds } = parsePredictionPickServer(p.prediction_pick);
+    let profit = 0;
+    if (p.prediction_result === 'WIN') {
+      profit = odds != null ? (odds > 0 ? odds / 100 : 100 / Math.abs(odds)) : 1;
+    } else if (p.prediction_result === 'LOSS') {
+      profit = -1;
+    }
+    return { ...p, bet_type, odds, profit };
+  });
+
+  // Filter by pick type if requested
+  const filtered = pickType
+    ? picks.filter(p => p.bet_type === pickType)
+    : picks;
+
+  const wins   = filtered.filter(p => p.prediction_result === 'WIN');
+  const losses = filtered.filter(p => p.prediction_result === 'LOSS');
+  const pushes = filtered.filter(p => p.prediction_result === 'PUSH');
   const settled = wins.length + losses.length;
 
-  const totalProfit = picks.reduce((s, p) => s + (parseFloat(p.profit) || 0), 0);
-  const roi     = picks.length > 0 ? (totalProfit / picks.length) * 100 : 0;
+  const totalProfit = filtered.reduce((s, p) => s + p.profit, 0);
+  const roi     = filtered.length > 0 ? (totalProfit / filtered.length) * 100 : 0;
   const winRate = settled > 0 ? (wins.length / settled) * 100 : 0;
 
-  // Average odds via decimal conversion (arithmetic mean of American odds is meaningless
-  // when mixing positive/negative — e.g. averaging -200 and +150 gives -25, not -127).
+  // Average odds via decimal conversion
   const avgOdds = (arr) => {
-    const valid = arr.map(p => parseInt(p.odds)).filter(o => !isNaN(o) && o !== 0);
+    const valid = arr.map(p => p.odds).filter(o => o != null && !isNaN(o) && o !== 0);
     if (!valid.length) return null;
-    // Convert to decimal odds, average, convert back to American
     const avgDec = valid.reduce((s, o) => s + (o > 0 ? o / 100 + 1 : 100 / Math.abs(o) + 1), 0) / valid.length;
     return avgDec >= 2
       ? Math.round((avgDec - 1) * 100)
@@ -273,20 +302,15 @@ async function getAnalytics(from, to, sport, pickType) {
 
   // ROI over time (cumulative units by date)
   const dateMap = {};
-  const sortedPicks = [...picks].sort((a, b) => {
-    const da = a.date || a.created_at?.split('T')[0] || '';
-    const db = b.date || b.created_at?.split('T')[0] || '';
-    return da.localeCompare(db);
-  });
-  for (const p of sortedPicks) {
-    const d = p.date || p.created_at?.split('T')[0];
+  for (const p of filtered) {
+    const d = p.game_date;
     if (!d) continue;
     if (!dateMap[d]) dateMap[d] = { date: d, picks: 0, wins: 0, losses: 0, pushes: 0, dailyProfit: 0 };
     dateMap[d].picks++;
-    if (p.result === 'WIN')  dateMap[d].wins++;
-    if (p.result === 'LOSS') dateMap[d].losses++;
-    if (p.result === 'PUSH') dateMap[d].pushes++;
-    dateMap[d].dailyProfit += parseFloat(p.profit) || 0;
+    if (p.prediction_result === 'WIN')  dateMap[d].wins++;
+    if (p.prediction_result === 'LOSS') dateMap[d].losses++;
+    if (p.prediction_result === 'PUSH') dateMap[d].pushes++;
+    dateMap[d].dailyProfit += p.profit;
   }
   let running = 0;
   const roiByDate = Object.values(dateMap)
@@ -305,14 +329,14 @@ async function getAnalytics(from, to, sport, pickType) {
 
   // By sport
   const sportMap = {};
-  for (const p of picks) {
+  for (const p of filtered) {
     const s = (p.sport || 'unknown').toUpperCase();
     if (!sportMap[s]) sportMap[s] = { sport: s, picks: 0, wins: 0, losses: 0, pushes: 0, profit: 0 };
     sportMap[s].picks++;
-    if (p.result === 'WIN')  sportMap[s].wins++;
-    if (p.result === 'LOSS') sportMap[s].losses++;
-    if (p.result === 'PUSH') sportMap[s].pushes++;
-    sportMap[s].profit += parseFloat(p.profit) || 0;
+    if (p.prediction_result === 'WIN')  sportMap[s].wins++;
+    if (p.prediction_result === 'LOSS') sportMap[s].losses++;
+    if (p.prediction_result === 'PUSH') sportMap[s].pushes++;
+    sportMap[s].profit += p.profit;
   }
   const bySport = Object.values(sportMap).map(s => ({
     ...s,
@@ -321,16 +345,16 @@ async function getAnalytics(from, to, sport, pickType) {
     profit:  parseFloat(s.profit.toFixed(2)),
   })).sort((a, b) => b.picks - a.picks);
 
-  // By pick type
+  // By pick type (derived from prediction_pick text)
   const typeMap = {};
-  for (const p of picks) {
-    const t = p.pick_type || 'Unknown';
+  for (const p of filtered) {
+    const t = p.bet_type || 'Unknown';
     if (!typeMap[t]) typeMap[t] = { type: t, picks: 0, wins: 0, losses: 0, pushes: 0, profit: 0 };
     typeMap[t].picks++;
-    if (p.result === 'WIN')  typeMap[t].wins++;
-    if (p.result === 'LOSS') typeMap[t].losses++;
-    if (p.result === 'PUSH') typeMap[t].pushes++;
-    typeMap[t].profit += parseFloat(p.profit) || 0;
+    if (p.prediction_result === 'WIN')  typeMap[t].wins++;
+    if (p.prediction_result === 'LOSS') typeMap[t].losses++;
+    if (p.prediction_result === 'PUSH') typeMap[t].pushes++;
+    typeMap[t].profit += p.profit;
   }
   const byPickType = Object.values(typeMap).map(t => ({
     ...t,
@@ -340,9 +364,9 @@ async function getAnalytics(from, to, sport, pickType) {
   })).sort((a, b) => b.picks - a.picks);
 
   // Streaks (settled picks only, chronological)
-  const resultSeq = sortedPicks
-    .filter(p => p.result === 'WIN' || p.result === 'LOSS')
-    .map(p => p.result);
+  const resultSeq = filtered
+    .filter(p => p.prediction_result === 'WIN' || p.prediction_result === 'LOSS')
+    .map(p => p.prediction_result);
   let longestWin = 0, longestLoss = 0, tW = 0, tL = 0;
   for (const r of resultSeq) {
     if (r === 'WIN') { tW++; tL = 0; longestWin = Math.max(longestWin, tW); }
@@ -368,14 +392,15 @@ async function getAnalytics(from, to, sport, pickType) {
     { label: '≥ +401',       min:  401,  max: 9999 },
   ];
   const calibration = oddsRanges.map(({ label, min, max }) => {
-    const inRange = picks.filter(p => {
-      const o = parseInt(p.odds);
-      return !isNaN(o) && o >= min && o <= max && (p.result === 'WIN' || p.result === 'LOSS');
+    const inRange = filtered.filter(p => {
+      const o = p.odds;
+      return o != null && !isNaN(o) && o >= min && o <= max &&
+        (p.prediction_result === 'WIN' || p.prediction_result === 'LOSS');
     });
     if (!inRange.length) return null;
-    const w = inRange.filter(p => p.result === 'WIN').length;
+    const w = inRange.filter(p => p.prediction_result === 'WIN').length;
     const impliedArr = inRange.map(p => {
-      const o = parseInt(p.odds);
+      const o = p.odds;
       return o < 0 ? Math.abs(o) / (Math.abs(o) + 100) * 100 : 100 / (o + 100) * 100;
     });
     const avgImplied = impliedArr.reduce((s, v) => s + v, 0) / impliedArr.length;
@@ -404,7 +429,7 @@ async function getAnalytics(from, to, sport, pickType) {
 
   return NextResponse.json({
     summary: {
-      totalPicks: picks.length,
+      totalPicks: filtered.length,
       wins: wins.length,
       losses: losses.length,
       pushes: pushes.length,
