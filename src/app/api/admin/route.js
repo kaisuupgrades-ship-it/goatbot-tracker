@@ -48,16 +48,26 @@ export async function GET(req) {
   try {
     if (action === 'stats') {
       // Site-wide stats
+      const concludedCutoff = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
+      const sevenDaysAgo    = new Date(Date.now() - 7 * 86400 * 1000).toISOString().split('T')[0];
       const [
         { count: totalUsers },
         { count: totalPicks },
         { data: recentPicks },
         { data: profiles },
+        { count: ungradedConcluded },
       ] = await Promise.all([
         supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
         supabaseAdmin.from('picks').select('*', { count: 'exact', head: true }),
         supabaseAdmin.from('picks').select('result, sport, profit, created_at').order('created_at', { ascending: false }).limit(200),
         supabaseAdmin.from('profiles').select('id, username, created_at, is_banned').order('created_at', { ascending: false }).limit(100),
+        // Count ungraded picks whose game should already be over (safety-net indicator)
+        supabaseAdmin.from('picks')
+          .select('*', { count: 'exact', head: true })
+          .or('result.is.null,result.eq.PENDING')
+          .not('commence_time', 'is', null)
+          .lt('commence_time', concludedCutoff)
+          .gte('date', sevenDaysAgo),
       ]);
 
       const wins   = (recentPicks || []).filter(p => p.result === 'WIN').length;
@@ -68,8 +78,9 @@ export async function GET(req) {
       (recentPicks || []).forEach(p => { sportCounts[p.sport] = (sportCounts[p.sport] || 0) + 1; });
 
       return NextResponse.json({
-        totalUsers:  totalUsers || 0,
-        totalPicks:  totalPicks || 0,
+        totalUsers:        totalUsers        || 0,
+        totalPicks:        totalPicks        || 0,
+        ungradedConcluded: ungradedConcluded || 0,
         winRate,
         sportCounts,
         recentUsers: profiles || [],

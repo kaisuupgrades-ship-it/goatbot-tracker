@@ -91,6 +91,25 @@ function OverviewPanel({ userEmail }) {
           fontFamily: 'inherit',
         }}>↺ Refresh</button>
       </div>
+
+      {/* Ungraded concluded picks warning */}
+      {data?.ungradedConcluded > 0 && (
+        <div style={{ padding: '0.65rem 1rem', marginBottom: '1rem', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '1rem' }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontWeight: 700, color: '#fbbf24', fontSize: '0.82rem' }}>
+              {data.ungradedConcluded} ungraded pick{data.ungradedConcluded !== 1 ? 's' : ''} on concluded games
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '8px' }}>
+              Games started 4+ hours ago — grade-check cron or manual grading needed
+            </span>
+          </div>
+          <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.72rem', color: '#fbbf24', textDecoration: 'none', whiteSpace: 'nowrap', opacity: 0.8 }}>
+            Check Errors tab →
+          </a>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '1.5rem' }}>
         <StatCard label="Total Users"    value={data?.totalUsers}  icon="👥" />
         <StatCard label="Total Picks"    value={data?.totalPicks}  icon="📋" />
