@@ -1865,7 +1865,13 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
                     odds.total    ? `Over/Under: ${odds.total}` : '',
                     odds.provider ? `Source: ${odds.provider}` : '',
                     '--- END VERIFIED ODDS ---',
-                  ].filter(Boolean).join('\n') : '';
+                  ].filter(Boolean).join('\n') : [
+                    '--- VERIFIED MATCHUP (no odds available — treat team names as ground truth) ---',
+                    `${awayName} @ ${homeName}`,
+                    `Status: ${gameState.label}`,
+                    'Odds: not available from live feed — do not invent numbers. Use web search only.',
+                    '--- END VERIFIED MATCHUP ---',
+                  ].join('\n');
 
                   const recInfo = `${awayName} record: ${awayRec.total || '—'} (away: ${awayRec.away || '—'}). ${homeName} record: ${homeRec.total || '—'} (home: ${homeRec.home || '—'}).`;
                   const venueInfo = venue ? `Venue: ${venue}.` : '';
@@ -2358,12 +2364,14 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
       const homeComp = competitors.find(c => c.homeAway === 'home') || competitors[1] || {};
       const awayComp = competitors.find(c => c.homeAway === 'away') || competitors[0] || {};
       const homeName = homeComp.team?.displayName || homeComp.team?.name || '';
+      const awayName = awayComp.team?.displayName || awayComp.team?.name || '';
       if (!homeName) return event;
 
       const homeKey  = homeName.toLowerCase().replace(/\s+/g, '_');
       const realGame = realOddsLookup[homeKey]
         || Object.values(realOddsLookup).find(g =>
-            (g.home_team || '').toLowerCase().includes(homeName.split(' ').pop().toLowerCase())
+            (g.home_team || '').toLowerCase().includes(homeName.split(' ').pop().toLowerCase()) &&
+            (!awayName || (g.away_team || '').toLowerCase().includes(awayName.split(' ').pop().toLowerCase()))
           );
       if (!realGame) return event;
 

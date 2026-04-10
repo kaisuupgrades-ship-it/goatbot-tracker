@@ -1276,10 +1276,16 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
     setGameInfo(null);
     const t0 = Date.now();
     try {
+      // Extract team names before the fetch so they can be sent as structured fields.
+      // The goatbot route uses homeTeam/awayTeam to cache the analysis in game_analyses.
+      const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|$)/i);
+      const awayTeamField = teamMatch ? teamMatch[1].trim() : null;
+      const homeTeamField = teamMatch ? teamMatch[2].trim() : null;
+
       const res = await fetch('/api/goatbot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: q }),
+        body: JSON.stringify({ prompt: q, awayTeam: awayTeamField, homeTeam: homeTeamField }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'API error');
@@ -1289,8 +1295,6 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
       setModel(data.model || 'BetOS AI');
       setRunTime(rt);
       setGameInfo(data.game_meta || null);
-      // Extract team names from prompt for cross-tab linkage (Featured, History)
-      const teamMatch = base.match(/on\s+(.+?)\s+@\s+(.+?)(?:\s*[\-—–]|\s*\(|$)/i);
       const report = {
         id: Date.now().toString(),
         prompt: base,
@@ -1298,8 +1302,8 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedReport, onReportC
         model: data.model || 'BetOS AI',
         timestamp: new Date().toISOString(),
         runTime: rt,
-        awayTeam: teamMatch ? teamMatch[1].trim() : null,
-        homeTeam: teamMatch ? teamMatch[2].trim() : null,
+        awayTeam: awayTeamField,
+        homeTeam: homeTeamField,
       };
       saveReport(report);
       setHistory(getReports());
