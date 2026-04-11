@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { teamsMatch } from '@/lib/teamNormalizer';
 
 export const maxDuration = 15;
 
@@ -141,13 +142,33 @@ function getCached(key) {
 }
 function setCache(key, data) { cache.set(key, { data, time: Date.now() }); }
 
+// Fetch event ID from The Odds API by matching home/away team names.
+// Used as fallback when ESPN doesn't have odds_api_event_id for an event.
+async function resolveEventId(sportKey, homeTeam, awayTeam) {
+  try {
+    const url = new URL(`${THE_ODDS_BASE}/sports/${sportKey}/events`);
+    url.searchParams.set('apiKey', THE_ODDS_KEY);
+    url.searchParams.set('dateFormat', 'iso');
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const events = await res.json();
+    if (!Array.isArray(events)) return null;
+    const match = events.find(ev =>
+      teamsMatch(ev.home_team, homeTeam) && teamsMatch(ev.away_team, awayTeam)
+    );
+    return match?.id || null;
+  } catch { return null; }
+}
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const sport   = searchParams.get('sport');   // e.g. 'nfl'
-  const eventId = searchParams.get('eventId'); // The Odds API event UUID
+  const sport     = searchParams.get('sport');     // e.g. 'nfl'
+  let   eventId   = searchParams.get('eventId');   // The Odds API event UUID (may be empty)
+  const homeTeam  = searchParams.get('homeTeam');  // fallback: home team display name
+  const awayTeam  = searchParams.get('awayTeam');  // fallback: away team display name
 
-  if (!sport || !eventId) {
-    return NextResponse.json({ error: 'sport and eventId required' }, { status: 400 });
+  if (!sport) {
+    return NextResponse.json({ error: 'sport required' }, { status: 400 });
   }
 
   const sportKey = SPORT_KEYS[sport];
@@ -157,6 +178,23 @@ export async function GET(req) {
 
   if (!THE_ODDS_KEY) {
     return NextResponse.json({ props: [], categories: [], note: 'THE_ODDS_API_KEY not configured' });
+  }
+
+  // If no eventId was passed (odds_api_event_id missing on ESPN event), try to find it
+  // by matching team names against The Odds API /events endpoint.
+  if (!eventId && homeTeam && awayTeam) {
+    console.log(`[/api/props] No eventId for ${awayTeam} @ ${homeTeam} — attempting lookup by team name`);
+    eventId = await resolveEventId(sportKey, homeTeam, awayTeam);
+    if (eventId) {
+      console.log(`[/api/props] Resolved eventId: ${eventId}`);
+    } else {
+      console.warn(`[/api/props] Could not resolve event for ${awayTeam} @ ${homeTeam}`);
+      return NextResponse.json({ props: [], categories: [], note: `Event not found for ${awayTeam} @ ${homeTeam} — props may not be available yet` });
+    }
+  }
+
+  if (!eventId) {
+    return NextResponse.json({ error: 'eventId required (or provide homeTeam + awayTeam)' }, { status: 400 });
   }
 
   const cacheKey = `props_${sport}_${eventId}`;

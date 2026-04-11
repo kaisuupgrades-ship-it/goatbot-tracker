@@ -2667,6 +2667,22 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               {f.label}
             </button>
           ))}
+          {/* Live filter pill — always shown; pulses green when games are in progress */}
+          <button onClick={() => setFilter(filter === 'live' ? 'all' : 'live')}
+            style={{
+              padding: '4px 11px', borderRadius: '20px', cursor: 'pointer', fontSize: '0.75rem',
+              border: `1px solid ${filter === 'live' ? 'rgba(74,222,128,0.7)' : liveCount > 0 ? 'rgba(74,222,128,0.35)' : 'var(--border)'}`,
+              background: filter === 'live' ? 'rgba(74,222,128,0.15)' : 'transparent',
+              color: filter === 'live' ? '#4ade80' : liveCount > 0 ? '#4ade80' : 'var(--text-muted)',
+              fontWeight: filter === 'live' ? 700 : liveCount > 0 ? 600 : 400,
+              transition: 'all 0.12s',
+              display: 'flex', alignItems: 'center', gap: '5px',
+            }}>
+            {liveCount > 0 && (
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', display: 'inline-block', flexShrink: 0, animation: 'live-pulse 1.5s infinite' }} />
+            )}
+            {liveCount > 0 ? `LIVE (${liveCount})` : 'Live'}
+          </button>
           {/* Build Parlay toggle */}
           <button
             onClick={() => {

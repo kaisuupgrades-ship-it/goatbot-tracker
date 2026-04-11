@@ -169,16 +169,22 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
 
   // Lazy-load props when first expanded
   useEffect(() => {
-    if (!isExpanded || !eventId || propsData !== null) return;
+    if (!isExpanded || propsData !== null) return;
     if (gameState === 'in' || gameState === 'post') {
-      setError(gameState === 'in' ? 'Player props are only available before game time.' : 'Props are not available for completed games.');
+      setError(gameState === 'in' ? 'Props lock at game time — check back before tip-off.' : 'Props are not available for completed games.');
       setPropsData({ categories: [] });
       return;
     }
     let cancelled = false;
     setLoading(true);
     setError('');
-    fetch(`/api/props?sport=${sport}&eventId=${encodeURIComponent(eventId)}`)
+    // Build URL: pass eventId if we have it; always pass team names so the backend
+    // can resolve the event via The Odds API /events endpoint when eventId is missing.
+    const params = new URLSearchParams({ sport });
+    if (eventId) params.set('eventId', eventId);
+    params.set('homeTeam', homeName);
+    params.set('awayTeam', awayName);
+    fetch(`/api/props?${params.toString()}`)
       .then(r => r.json())
       .then(data => {
         if (cancelled) return;
@@ -194,7 +200,7 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [isExpanded, eventId, sport, propsData]);
+  }, [isExpanded, eventId, homeName, awayName, sport, propsData]);
 
   function handleShowMore(catIdx, mktIdx, total) {
     const key = `${catIdx}_${mktIdx}`;
@@ -229,7 +235,9 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
 
   const isLive    = gameState === 'in';
   const isFinal   = gameState === 'post';
-  const canExpand = !!eventId && !isLive && !isFinal;
+  // Allow expansion for pre-game events even when odds_api_event_id is missing.
+  // The props endpoint will attempt to resolve the event by team name as a fallback.
+  const canExpand = !isLive && !isFinal;
 
   return (
     <div style={{
@@ -277,7 +285,7 @@ function GameRow({ event, sport, isExpanded, onToggle, onPropClick }) {
             <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{gameTime}</span>
           )}
           {!canExpand
-            ? <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{isLive ? 'in progress' : isFinal ? 'final' : 'no props'}</span>
+            ? <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{isLive ? 'in progress' : 'final'}</span>
             : <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'inline-block', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▼</span>
           }
         </div>
