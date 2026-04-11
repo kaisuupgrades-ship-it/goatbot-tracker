@@ -51,7 +51,7 @@ async function getSupabaseCache(sportKey) {
     if (ageMs > getOddsCacheTTL()) return null; // stale
     const payload = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
     return { ...payload, _cachedAt: data.updated_at };
-  } catch { return null; }
+  } catch (e) { console.warn('[odds] getSupabaseCache error:', e.message); return null; }
 }
 
 async function setSupabaseCache(sportKey, result) {
@@ -60,7 +60,7 @@ async function setSupabaseCache(sportKey, result) {
       [{ key: `odds_cache_${sportKey}`, value: JSON.stringify(result) }],
       { onConflict: 'key' }
     );
-  } catch { /* cache write failure is non-fatal */ }
+  } catch (e) { console.warn('[odds] setSupabaseCache error (non-fatal):', e.message); }
 }
 
 // ── Primary L2: odds_cache table (populated by /api/cron/refresh-odds) ────────
@@ -79,6 +79,7 @@ async function getOddsCacheTable(sport) {
     if (error || !rows || rows.length === 0) return null;
 
     const nowMs = Date.now();
+    // Note: no timestamp needed here — freshness is determined by last_fetched_at in the DB rows
     const events = rows.map(row => ({
       id:            row.game_id,
       home_team:     row.home_team,
@@ -101,7 +102,7 @@ async function getOddsCacheTable(sport) {
       source:            'odds_cache_table',
       pinnacleConnected: events.some(e => e.pinnacle != null),
     };
-  } catch { return null; }
+  } catch (e) { console.warn('[odds] getOddsCacheTable error:', e.message); return null; }
 }
 
 // L1: In-process memory cache (warm instances only — keeps latency low when
@@ -592,6 +593,7 @@ export async function GET(req) {
       oddsResult.pinnacleUnavailable = pinnacleUnavailable;
       // Only cache if we got actual data back (0 games is valid off-season, errors are not)
       if (oddsResult?.data?.length >= 0) {
+        oddsResult.timestamp = Date.now();
         setMemCache(cacheKey, oddsResult);
         await setSupabaseCache(sportKey, oddsResult);
       }
@@ -619,6 +621,7 @@ export async function GET(req) {
       result.pinnacleConnected = Array.isArray(pinnacleGames) && pinnacleGames.length > 0;
       result.pinnacleUnavailable = pinnacleResult.status !== 'fulfilled';
       if (result?.data?.length > 0) {
+        result.timestamp = Date.now();
         setMemCache(sportKey, result);
         await setSupabaseCache(sportKey, result);
       }
@@ -629,7 +632,7 @@ export async function GET(req) {
         configured: true, data: [], total: 0, source: 'error', cached: false,
         oddsUnavailable: true,
         error: 'Odds data temporarily unavailable',
-      }, { status: 503 });
+      }, { status: 200 });
     }
   }
 

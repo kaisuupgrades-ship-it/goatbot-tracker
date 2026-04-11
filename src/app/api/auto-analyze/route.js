@@ -238,7 +238,7 @@ async function runBatchAll() {
         }
         await saveAnalysis(pick.id, analysis, model);
         processed++;
-      } catch { failed++; }
+      } catch (e) { console.error(`[auto-analyze] Failed pick ${pick.id}:`, e.message); failed++; }
     }));
     // Small delay between batches
     if (i + 5 < unanalyzed.length) await new Promise(r => setTimeout(r, 500));

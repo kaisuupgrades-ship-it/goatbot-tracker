@@ -134,7 +134,7 @@ async function fetchTodaysGames() {
           oddsSource: 'espn',
         });
       }
-    } catch { /* skip */ }
+    } catch (e) { console.warn('[trends] ESPN game parse error (skipping):', e.message); }
   }
   return gameList;
 }

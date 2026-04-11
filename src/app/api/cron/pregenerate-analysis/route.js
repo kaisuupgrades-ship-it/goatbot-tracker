@@ -1237,6 +1237,17 @@ export async function GET(req) {
     } catch (e) {
       console.warn('[pregenerate] Guard B check failed (non-fatal):', e.message);
     }
+
+    // Write early lock so any concurrent invocation sees a recent run_at and aborts via Guard B.
+    // This closes the race window between Guard B passing and the final summary write at the end.
+    try {
+      await supabase.from('settings').upsert(
+        [{ key: 'cron_pregenerate_last_run', value: JSON.stringify({ run_at: new Date().toISOString(), status: 'running' }) }],
+        { onConflict: 'key' }
+      );
+    } catch (e) {
+      console.warn('[pregenerate] Early lock write failed (non-fatal):', e.message);
+    }
   }
 
   const started = Date.now();
