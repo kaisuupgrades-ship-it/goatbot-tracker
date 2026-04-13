@@ -248,4 +248,18 @@ All cron routes require `Authorization: Bearer <CRON_SECRET>` header.
 
 ---
 
+## Coding Guidelines (Karpathy-Inspired)
+
+1. **Think Before Coding** — State assumptions explicitly. If uncertain, ask. If multiple interpretations exist, present them — don't pick silently. Push back when warranted.
+
+2. **Simplicity First** — Minimum code that solves the problem. No features beyond what was asked. No abstractions for single-use code. If you write 200 lines and it could be 50, rewrite it.
+
+3. **Surgical Changes** — Touch only what you must. Don't "improve" adjacent code, comments, or formatting. Match existing style. Every changed line should trace directly to the request.
+
+4. **Goal-Driven Execution** — Define success criteria. Loop until verified. Transform vague asks into testable goals. Always run `npm run build` before committing.
+
+5. **No Regressions** — Before pushing any change, verify it doesn't break existing functionality. Run the build. Check that core flows still work.
+
+---
+
 Codex will review your output once you are done.
