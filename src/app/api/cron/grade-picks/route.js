@@ -100,10 +100,25 @@ function gradeGolfPick(playerName, betType, leaderboard) {
 function parseAnalysisPick(analysis) {
   const pickMatch = analysis?.match(/THE PICK[:\s]+([^\n]{5,150})/i);
   if (!pickMatch) return null;
-  const pickLine = pickMatch[1].trim();
 
   const confMatch = analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
   const conf = confMatch?.[1] || null;
+
+  // Normalize the pick line:
+  //  1. Strip markdown bold/italic markers (** and *)
+  //  2. Strip "— N units" or "- N units" trailing suffix
+  //  3. Normalize parenthesized odds: (-110) → -110, (+200) → +200
+  //  4. Strip remaining parentheticals like (est. -145) or (Pinnacle line looks stale)
+  //  5. Strip sportsbook name trailing tokens
+  //  6. Strip "PL" (puck line indicator) that appears between spread and odds
+  const pickLine = pickMatch[1].trim()
+    .replace(/\*+/g, '')                          // strip * and **
+    .replace(/\s+[—–-]+\s+[\d.]+\s+units?.*$/i, '') // strip "— 2 units" suffix
+    .replace(/\(([+-]?\d+)\)/g, '$1')             // (-110) → -110, (+200) → +200
+    .replace(/\([^)]*\)/g, '')                    // strip remaining parentheticals
+    .replace(/\s+(DraftKings|FanDuel|BetMGM|Caesars|Pinnacle|PointsBet|BetRivers|Fanatics|MyBookie|Bookmaker|ESPN\s*Bet)\s*$/i, '')
+    .replace(/\s+PL\b/i, '')                      // strip "PL" (puck line) token
+    .trim();
 
   // Over/Under total
   const overMatch = pickLine.match(/^Over\s+([\d.]+)/i);
@@ -126,6 +141,7 @@ function parseAnalysisPick(analysis) {
 
   // Fallback: assume ML if team name found
   // Allow dots/apostrophes in team names (e.g. "St. Louis Cardinals", "D'Antoni")
+  // Also handles "TEAM ML" without odds (e.g. after stripping "est." odds)
   const fallbackMatch = pickLine.match(/^([A-Z][a-zA-Z0-9\s.']+?)(?:\s+(?:ML|Moneyline)|\s+[+-]?\d)/i);
   if (fallbackMatch) return { team: fallbackMatch[1].trim(), type: 'ml', raw: pickLine, conf };
 
@@ -257,23 +273,21 @@ export async function GET(req) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (!picks?.length) {
-    const summary = { graded: 0, users: 0, skipped: 0, duration_ms: Date.now() - started };
-    console.log('[cron/grade-picks] No pending picks found', summary);
-    return NextResponse.json(summary);
-  }
+  // NOTE: do NOT early-return when picks is empty — Phase 2 (AI analysis grading)
+  // must always run regardless of whether there are user picks pending.
+  const allPicks = picks || [];
 
   // Separate picks by grading path:
   //   parlayPicks  → gradeParlay (multi-sport, needs DB leg lookup)
   //   otherPicks   → golf PGA grading path
   //   regularPicks → ESPN scoreboard grading
-  const parlayPicks  = picks.filter(p =>
+  const parlayPicks  = allPicks.filter(p =>
     p.is_parlay || (p.sport || '').toUpperCase() === 'PARLAY' || (p.bet_type || '').toLowerCase() === 'parlay'
   );
-  const otherPicks   = picks.filter(p =>
+  const otherPicks   = allPicks.filter(p =>
     !p.is_parlay && (p.sport || '').toLowerCase() === 'other' && (p.bet_type || '').toLowerCase() !== 'parlay'
   );
-  const regularPicks = picks.filter(p =>
+  const regularPicks = allPicks.filter(p =>
     !p.is_parlay &&
     (p.sport || '').toUpperCase() !== 'PARLAY' &&
     (p.bet_type || '').toLowerCase() !== 'parlay' &&
@@ -465,9 +479,10 @@ export async function GET(req) {
 
   try {
     // Fetch all ungraded analyses where game_date is today or earlier
+    // Include prediction_pick so we can use the pre-stored value instead of re-parsing analysis text
     const { data: analyses, error: analysisErr } = await supabase
       .from('game_analyses')
-      .select('id, sport, away_team, home_team, game_date, analysis, prediction_result')
+      .select('id, sport, away_team, home_team, game_date, analysis, prediction_result, prediction_pick')
       .is('prediction_result', null)
       .lte('game_date', todayStr)
       .gte('game_date', cutoffDate)
@@ -477,8 +492,21 @@ export async function GET(req) {
       console.log(`[cron/grade-picks] Found ${analyses.length} ungraded AI analyses`);
 
       for (const row of analyses) {
-        // 1. Parse the pick from analysis text
-        const pick = parseAnalysisPick(row.analysis);
+        // 1. Parse the pick.
+        //    Prefer the pre-stored prediction_pick column (already extracted when the analysis
+        //    was generated) over re-parsing the full analysis text. The analysis text uses
+        //    markdown formatting (**Team -4 (-110)**) that the parser struggles with.
+        //    Fall back to parsing analysis text only when prediction_pick is absent.
+        let pick;
+        const storedPick = (row.prediction_pick || '').trim();
+        if (storedPick && !/^pass[.\s—-]*/i.test(storedPick)) {
+          // Synthesize the THE PICK: prefix so parseAnalysisPick can handle it
+          pick = parseAnalysisPick(`THE PICK: ${storedPick}\n`);
+        }
+        // Fall back to full analysis text if stored pick is absent or failed to parse
+        if (!pick || pick.type === 'unknown') {
+          pick = parseAnalysisPick(row.analysis);
+        }
         if (!pick || pick.type === 'unknown') { aiSkipped++; continue; }
 
         // 2. Reuse cached scoreboard or fetch new one
@@ -498,16 +526,22 @@ export async function GET(req) {
         const result = gradeAnalysisPick(pick, game, row.away_team, row.home_team);
         if (!result) { aiSkipped++; continue; }
 
-        // 5. Update the row
+        // 5. Update the row.
+        //    Only update prediction_pick if it wasn't already populated — the stored
+        //    value is the canonical one (used for display) and shouldn't be overwritten
+        //    with a re-parsed/normalized version.
+        const updatePayload = {
+          prediction_result:    result,
+          prediction_conf:      pick.conf || null,
+          prediction_graded_at: new Date().toISOString(),
+          final_score:          `${game.awayScore}-${game.homeScore}`,
+        };
+        if (!row.prediction_pick) {
+          updatePayload.prediction_pick = pick.raw;
+        }
         const { error: updateErr } = await supabase
           .from('game_analyses')
-          .update({
-            prediction_result:    result,
-            prediction_pick:      pick.raw,
-            prediction_conf:      pick.conf,
-            prediction_graded_at: new Date().toISOString(),
-            final_score:          `${game.awayScore}-${game.homeScore}`,
-          })
+          .update(updatePayload)
           .eq('id', row.id)
           .is('prediction_result', null); // idempotency guard
 
