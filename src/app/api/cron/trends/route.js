@@ -247,12 +247,13 @@ async function runTrendsPipeline() {
 
   // 6. Log the run
   const logPayload = JSON.stringify({
-    last_run_at:  new Date().toISOString(),
+    run_at:       new Date().toISOString(),
     edge_count:   edges.length,
     game_count:   gameList.length,
     ai_provider:  aiResult.provider,
     ai_model:     aiResult.model,
     duration_ms:  Date.now() - startTime,
+    status:       'ok',
   });
   await supabase
     .from('settings')
@@ -305,6 +306,17 @@ export async function GET(req) {
     return NextResponse.json(result);
   } catch (err) {
     console.error('[cron/trends] Pipeline failed:', err.message);
+    // Log the failure so the timestamp stays current and the error is visible in admin
+    try {
+      await supabase.from('settings').upsert(
+        [{ key: CRON_LOG_KEY, value: JSON.stringify({
+          run_at:     new Date().toISOString(),
+          status:     'error',
+          error:      err.message,
+        }) }],
+        { onConflict: 'key' }
+      );
+    } catch { /* non-critical */ }
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
@@ -321,6 +333,16 @@ export async function POST(req) {
     return NextResponse.json(result);
   } catch (err) {
     console.error('[cron/trends] Manual trigger failed:', err.message);
+    try {
+      await supabase.from('settings').upsert(
+        [{ key: CRON_LOG_KEY, value: JSON.stringify({
+          run_at:     new Date().toISOString(),
+          status:     'error',
+          error:      err.message,
+        }) }],
+        { onConflict: 'key' }
+      );
+    } catch { /* non-critical */ }
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

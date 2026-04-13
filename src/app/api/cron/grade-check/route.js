@@ -68,8 +68,15 @@ export async function GET(req) {
   }
 
   if (!picks?.length) {
-    const summary = { found: 0, graded: 0, flagged: 0, duration_ms: Date.now() - started };
+    const summary = { found: 0, graded: 0, flagged: 0, duration_ms: Date.now() - started, run_at: new Date().toISOString() };
     console.log('[cron/grade-check] No concluded ungraded picks found', summary);
+    // Always write the log so the timestamp stays current even on healthy (nothing-to-do) runs
+    try {
+      await supabase.from('settings').upsert(
+        [{ key: 'cron_grade_check_last_run', value: JSON.stringify(summary) }],
+        { onConflict: 'key' }
+      );
+    } catch { /* non-critical */ }
     return NextResponse.json(summary);
   }
 
