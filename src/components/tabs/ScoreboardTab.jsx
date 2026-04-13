@@ -2143,6 +2143,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         setGames(prev => sortAllSportsEvents(mergeGames(prev, merged)));
       } else {
         const res = await fetch(`/api/sports?sport=${s}&endpoint=scoreboard&date=${espnDate}`);
+        if (!res.ok) throw new Error(`Scoreboard fetch failed: HTTP ${res.status}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setGames(prev => mergeGames(prev, data.events || []));

@@ -75,7 +75,8 @@ export async function fetchPicks(userId) {
     .from('picks')
     .select('*')
     .eq('user_id', userId)
-    .order('date', { ascending: true });
+    .order('date', { ascending: true })
+    .limit(200);
   return { data: data || [], error };
 }
 

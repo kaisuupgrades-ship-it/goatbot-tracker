@@ -1174,9 +1174,13 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
 }
 
 export async function GET(req) {
-  // Auth check
+  // Auth check — fail-closed: if CRON_SECRET is not configured, reject with 503
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 });
+  }
   const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

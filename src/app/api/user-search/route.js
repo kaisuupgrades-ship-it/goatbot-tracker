@@ -111,7 +111,7 @@ export async function GET(req) {
   const isDemo   = searchParams.get('demo') === '1';
   const sort     = searchParams.get('sort')  || 'hot';
   const sport    = searchParams.get('sport') || '';
-  const days     = parseInt(searchParams.get('days') || '7', 10);
+  const days     = Math.min(Math.max(parseInt(searchParams.get('days') || '7', 10) || 7, 1), 365);
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo   = searchParams.get('dateTo')   || '';
   const minPicks = parseInt(searchParams.get('minPicks') || '1', 10);
@@ -129,8 +129,13 @@ export async function GET(req) {
     let fromDate = '';
     let toDate   = '';
     if (dateFrom && dateTo) {
-      fromDate = new Date(dateFrom).toISOString();
-      toDate   = new Date(dateTo + 'T23:59:59').toISOString();
+      const parsedFrom = new Date(dateFrom);
+      const parsedTo   = new Date(dateTo + 'T23:59:59');
+      if (isNaN(parsedFrom.getTime()) || isNaN(parsedTo.getTime())) {
+        return NextResponse.json({ error: 'Invalid dateFrom or dateTo parameter' }, { status: 400 });
+      }
+      fromDate = parsedFrom.toISOString();
+      toDate   = parsedTo.toISOString();
     } else if (days > 0) {
       fromDate = new Date(Date.now() - days * 86_400_000).toISOString();
     }
