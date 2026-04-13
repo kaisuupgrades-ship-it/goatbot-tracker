@@ -245,3 +245,7 @@ All cron routes require `Authorization: Bearer <CRON_SECRET>` header.
 - Never hardcode admin emails — use `ADMIN_EMAILS` env var
 - Never use service role key for public/unauthenticated endpoints — use anon key + RLS
 - Never accept `userId` from request body without JWT verification
+
+---
+
+Codex will review your output once you are done.
