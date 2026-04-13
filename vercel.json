@@ -22,6 +22,7 @@
     { "path": "/api/cron/pregenerate-analysis?sport=mls",  "schedule": "24 12 * * *" },
     { "path": "/api/cron/pregenerate-analysis",            "schedule": "0 14 * * *" },
     { "path": "/api/cron/pregenerate-analysis",            "schedule": "0 16 * * *" },
+    { "path": "/api/cron/pregenerate-analysis?retry=true", "schedule": "5 16 * * *" },
     { "path": "/api/cron/grade-check",                     "schedule": "0 */2 * * *" }
   ],
   "redirects": [

@@ -1196,6 +1196,10 @@ export async function GET(req) {
   const sportFilter = params.get('sport') || null;
   // Optional: override date (YYYY-MM-DD). Used by admin "Generate for Tomorrow" button.
   const dateOverride = params.get('date') || null;
+  // Retry mode: re-analyze only games that were skipped (no prediction_pick) in the morning run.
+  // Uses a separate lock key so it doesn't collide with the 8 AM pass.
+  const isRetry = params.get('retry') === 'true';
+  const lockKey = isRetry ? 'cron_pregenerate_retry_last_run' : 'cron_pregenerate_last_run';
 
   // ── Single-game mode (per-game worker invocations fired by the dispatcher) ──
   // When homeTeam + awayTeam are in the URL, this is a dispatcher child call.
@@ -1223,10 +1227,11 @@ export async function GET(req) {
 
   // Guard B (time-based cron lock): prevent duplicate runs within 10 minutes.
   // Admin-triggered runs (force, per-sport, or date override) always bypass the lock.
-  if (!force && !sportFilter && !dateOverride) {
+  // Retry runs use their own lock key and are NOT treated as admin, so Guard B always applies.
+  if (!force && (!sportFilter || isRetry) && !dateOverride) {
     try {
       const { data: lockData } = await supabase
-        .from('settings').select('value').eq('key', 'cron_pregenerate_last_run').maybeSingle();
+        .from('settings').select('value').eq('key', lockKey).maybeSingle();
       if (lockData?.value) {
         const lastRun = typeof lockData.value === 'string' ? JSON.parse(lockData.value) : lockData.value;
         const lastRunAt = lastRun?.run_at ? new Date(lastRun.run_at).getTime() : 0;
@@ -1245,7 +1250,7 @@ export async function GET(req) {
     // This closes the race window between Guard B passing and the final summary write at the end.
     try {
       await supabase.from('settings').upsert(
-        [{ key: 'cron_pregenerate_last_run', value: JSON.stringify({ run_at: new Date().toISOString(), status: 'running' }) }],
+        [{ key: lockKey, value: JSON.stringify({ run_at: new Date().toISOString(), status: 'running' }) }],
         { onConflict: 'key' }
       );
     } catch (e) {
@@ -1271,7 +1276,10 @@ export async function GET(req) {
   // Admin gets unlimited timeouts and tokens; cron gets budget-conscious limits
   const isAdmin = force || !!sportFilter || !!dateOverride;
 
-  console.log(`[pregenerate-analysis] Starting for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}, admin=${isAdmin}`);
+  console.log(`[pregenerate-analysis] Starting ${isRetry ? '🔄 RETRY PASS' : ''} for ${todayStr}, force=${force}, sport=${sportFilter || 'all'}, admin=${isAdmin}, retry=${isRetry}`);
+  if (isRetry) {
+    console.log('[pregenerate] 🔄 RETRY PASS: Re-analyzing games with missing prediction_pick for', todayStr);
+  }
 
   // Odds cache check: the refresh-odds cron (*/2 * * * *) normally keeps odds_cache fresh.
   // Only call The Odds API directly here as a fallback when the table has no recent data.
@@ -1437,11 +1445,13 @@ export async function GET(req) {
     const events = await fetchTodaysGames(sport, espnDate, isAdmin || !!dateOverride);
 
     // Determine trigger source for audit logging
-    const triggerSource = sportFilter
-      ? (isAdmin ? 'admin_per_sport' : 'cron_per_sport')
-      : params.get('force') === 'true'
-        ? 'admin_manual'
-        : new Date().getUTCHours() < 14 ? 'cron_8am' : 'cron_4pm';
+    const triggerSource = isRetry
+      ? 'cron_retry'
+      : sportFilter
+        ? (isAdmin ? 'admin_per_sport' : 'cron_per_sport')
+        : params.get('force') === 'true'
+          ? 'admin_manual'
+          : new Date().getUTCHours() < 14 ? 'cron_8am' : 'cron_4pm';
 
     // Build list of games that need analysis
     const gamesToProcess = [];
@@ -1467,7 +1477,7 @@ export async function GET(req) {
         const dedupCutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
         const { data: existing } = await supabase
           .from('game_analyses')
-          .select('id, updated_at, analysis')
+          .select('id, updated_at, analysis, prediction_pick')
           .eq('sport', sport).eq('game_date', gameDate)
           .ilike('home_team', homeTeam).ilike('away_team', awayTeam)
           .maybeSingle();
@@ -1479,6 +1489,13 @@ export async function GET(req) {
           );
           if (existing.updated_at > dedupCutoff) {
             if (!cachedHasNoOdds) {
+              // Retry mode: if analysis exists but has no prediction_pick, re-queue it.
+              // (The morning run may have succeeded structurally but failed to parse a pick.)
+              if (isRetry && !existing.prediction_pick) {
+                console.log(`[pregenerate] 🔄 RETRY: Re-queuing ${awayTeam}@${homeTeam} (${sport.toUpperCase()}) — existing analysis has no prediction_pick`);
+                gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: 'full', gameDate, forceSingle: true });
+                return;
+              }
               const ageMin = Math.round((Date.now() - new Date(existing.updated_at).getTime()) / 60000);
               console.log(`[pregenerate] ⏭ Skipping ${awayTeam}@${homeTeam} (${sport.toUpperCase()}) — valid analysis cached ${ageMin}min ago`);
               skipped.push(`${awayTeam}@${homeTeam}`);
@@ -1492,7 +1509,7 @@ export async function GET(req) {
           // Older than 12h → full re-analysis (gameMode already 'full')
         }
       }
-      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode, gameDate });
+      gamesToProcess.push({ homeTeam, awayTeam, oddsContext, gameTime, mode: gameMode, gameDate, forceSingle: false });
     };
 
     for (const event of events) {
@@ -1559,7 +1576,7 @@ export async function GET(req) {
 
     // Queue all games for the parallel dispatcher — each gets its own invocation budget
     for (const g of gamesToProcess) {
-      allGamesToDispatch.push({ sport, homeTeam: g.homeTeam, awayTeam: g.awayTeam, gameDate: g.gameDate, triggerSource });
+      allGamesToDispatch.push({ sport, homeTeam: g.homeTeam, awayTeam: g.awayTeam, gameDate: g.gameDate, triggerSource, forceSingle: g.forceSingle || false });
     }
     console.log(`[pregenerate] ${sport.toUpperCase()}: queued ${gamesToProcess.length} game(s) for dispatch`);
   }
@@ -1581,7 +1598,7 @@ export async function GET(req) {
       url.searchParams.set('gameDate', gd || todayStr);
       url.searchParams.set('runId', runId);
       url.searchParams.set('triggerSource', ts || 'dispatcher');
-      if (force) url.searchParams.set('force', 'true');
+      if (force || g.forceSingle) url.searchParams.set('force', 'true');
       return fetch(url.toString(), {
         headers: { authorization: `Bearer ${cronSecret}` },
         signal: AbortSignal.timeout(400_000), // 400s per game max
@@ -1647,7 +1664,7 @@ export async function GET(req) {
   // Store summary for Admin Panel
   try {
     await supabase.from('settings').upsert(
-      [{ key: 'cron_pregenerate_last_run', value: JSON.stringify(summary) }],
+      [{ key: lockKey, value: JSON.stringify(summary) }],
       { onConflict: 'key' }
     );
   } catch { /* non-critical */ }
