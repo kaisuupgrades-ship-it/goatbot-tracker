@@ -613,13 +613,20 @@ export function parseAnalysisPick(analysis) {
   return { type: 'unknown', raw: pickLine, conf };
 }
 
-/** Identify whether pickTeam is 'home', 'away', or null relative to the game. */
-export function identifyAnalysisSide(pickTeam, awayTeam, homeTeam) {
+/**
+ * Identify whether pickTeam is 'home', 'away', or null relative to the game.
+ * awayAbbr / homeAbbr are optional ESPN team.abbreviation values (e.g. "TBL", "NSH")
+ * passed through from findAnalysisGame for exact 3-letter abbreviation matching.
+ */
+export function identifyAnalysisSide(pickTeam, awayTeam, homeTeam, awayAbbr = '', homeAbbr = '') {
   const clean = s => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
   const p = clean(pickTeam);
   const a = clean(awayTeam);
   const h = clean(homeTeam);
   if (!p) return null;
+  // Exact ESPN abbreviation match — handles 3-letter abbreviations like TBL, NSH, VGK
+  if (homeAbbr && clean(homeAbbr) === p) return 'home';
+  if (awayAbbr && clean(awayAbbr) === p) return 'away';
   if (h.includes(p) || p.includes(h)) return 'home';
   if (a.includes(p) || p.includes(a)) return 'away';
   const pLast = p.split(' ').pop();
@@ -664,6 +671,8 @@ export function findAnalysisGame(events, awayTeam, homeTeam) {
         homeScore:  parseInt(homeC.score),
         awayScore:  parseInt(awayC.score),
         totalScore: parseInt(homeC.score) + parseInt(awayC.score),
+        homeAbbr:   (homeC.team?.abbreviation || '').toLowerCase(),
+        awayAbbr:   (awayC.team?.abbreviation || '').toLowerCase(),
       };
     }
   }
@@ -682,14 +691,14 @@ export function gradeAnalysisPick(pick, game, awayTeam, homeTeam) {
   if (pick.type === 'under')  return totalScore < pick.total ? 'WIN' : totalScore > pick.total ? 'LOSS' : 'PUSH';
 
   if (pick.type === 'ml') {
-    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam);
+    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam, game.awayAbbr, game.homeAbbr);
     if (!side) return null;
     if (side === 'home') return homeScore > awayScore ? 'WIN' : homeScore < awayScore ? 'LOSS' : 'PUSH';
     return awayScore > homeScore ? 'WIN' : awayScore < homeScore ? 'LOSS' : 'PUSH';
   }
 
   if (pick.type === 'spread') {
-    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam);
+    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam, game.awayAbbr, game.homeAbbr);
     if (!side) return null;
     const pickedScore = side === 'home' ? homeScore : awayScore;
     const oppScore    = side === 'home' ? awayScore : homeScore;
