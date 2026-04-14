@@ -107,6 +107,22 @@ const ALL_SPORTS_KEYS = SPORTS.filter(s => s.key !== 'all' && s.key !== 'golf' &
 // Sports that render their own dedicated component — no ESPN scoreboard fetch needed
 const DEDICATED_VIEW_SPORTS = new Set(['golf', 'tennis', 'tenniswta', 'soccer']);
 
+// Override ESPN's stuck "in-progress" status for historical dates.
+// ESPN's scoreboard API occasionally returns state:"in" for games that finished days ago.
+// A game from any past date is physically impossible to still be live — treat as Final.
+function fixHistoricalLive(events) {
+  return events.map(ev => {
+    if (ev?.status?.type?.state !== 'in') return ev;
+    return {
+      ...ev,
+      status: {
+        ...ev.status,
+        type: { ...ev.status.type, state: 'post', name: 'STATUS_FINAL', shortDetail: 'Final', completed: true },
+      },
+    };
+  });
+}
+
 // Merge new games into existing state by game ID, preserving object references for unchanged games
 function mergeGames(prevGames, newGames) {
   if (!prevGames.length) return newGames; // first load, just set
@@ -2128,6 +2144,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     setError('');
     try {
       const espnDate = toESPNDate(dateStr || todayStr);
+      const isHistorical = (dateStr || todayStr) < todayStr;
 
       if (s === 'all') {
         // Fetch all sports in parallel, tag each event with _sport
@@ -2140,13 +2157,15 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           )
         );
         const merged = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-        setGames(prev => sortAllSportsEvents(mergeGames(prev, merged)));
+        const events = isHistorical ? fixHistoricalLive(merged) : merged;
+        setGames(prev => sortAllSportsEvents(mergeGames(prev, events)));
       } else {
         const res = await fetch(`/api/sports?sport=${s}&endpoint=scoreboard&date=${espnDate}`);
         if (!res.ok) throw new Error(`Scoreboard fetch failed: HTTP ${res.status}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        setGames(prev => mergeGames(prev, data.events || []));
+        const events = isHistorical ? fixHistoricalLive(data.events || []) : (data.events || []);
+        setGames(prev => mergeGames(prev, events));
       }
       setLastUpdated(new Date());
     } catch (e) {
