@@ -1800,7 +1800,12 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           {/* BetOS AI Lean */}
           {(() => {
             const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
-            const lean = gameLeans[leanKey];
+            const lean = gameLeans[leanKey]
+              || Object.values(gameLeans).find(a =>
+                   a.sport === sport &&
+                   homeName.toLowerCase().includes(a.home_team.toLowerCase().split(' ').pop()) &&
+                   awayName.toLowerCase().includes(a.away_team.toLowerCase().split(' ').pop())
+                 );
             if (!lean?.pick) return null;
             const confColors = { ELITE: '#FFB800', HIGH: '#4ade80', MEDIUM: '#60a5fa', LOW: '#9ca3af' };
             const confColor = confColors[lean.conf] || '#9ca3af';

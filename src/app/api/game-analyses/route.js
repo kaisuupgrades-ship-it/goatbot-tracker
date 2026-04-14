@@ -28,7 +28,8 @@ export async function GET(req) {
 
   // Parse just the key fields from each analysis — keeps payload small
   const analyses = (data || []).map(row => {
-    const pickM  = row.analysis?.match(/THE PICK[:\s]+([^\n]{5,120})/i);
+    const pickM  = row.analysis?.match(/(?:^|\n)\*{0,2}THE PICK\*{0,2}\s*:\s*([^\n]{5,120})/im);
+    const pick   = pickM?.[1]?.replace(/\*+/g, '').trim() || null;
     const confM  = row.analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
     const edgeM  = row.analysis?.match(/EDGE SCORE[:\s]+([\d.]+)/i);
     const edgeBM = row.analysis?.match(/EDGE BREAKDOWN[:\s]*([^\n]{10,200})/i);
@@ -38,7 +39,7 @@ export async function GET(req) {
       away_team: row.away_team,
       home_team: row.home_team,
       updated_at: row.updated_at,
-      pick:      pickM?.[1]?.trim()  || null,
+      pick,
       conf:      confM?.[1]?.trim()  || null,
       edge:      edgeM?.[1]?.trim()  || null,
       edge_breakdown: edgeBM?.[1]?.trim() || null,
