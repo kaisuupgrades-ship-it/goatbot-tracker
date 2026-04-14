@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signOut } from '@/lib/supabase';
 import { playWin, playLoss, playGrade } from '@/lib/sounds';
 import { startSessionTracking, stopSessionTracking } from '@/lib/sessionTracker';
@@ -246,59 +246,9 @@ const TAB_META = {
 };
 
 // ── Draggable FAB hook ────────────────────────────────────────────────────────
-function useDraggable(defaultPos) {
-  const [pos, setPos]       = useState(defaultPos);
-  const [dragging, setDragging] = useState(false);
-  const dragRef  = useRef(null);
-  const startRef = useRef(null); // { x, y, bx, by } at drag start
-
-  const clamp = useCallback((p) => ({
-    x: Math.max(0, Math.min(window.innerWidth  - (dragRef.current?.offsetWidth  || 160), p.x)),
-    y: Math.max(0, Math.min(window.innerHeight - (dragRef.current?.offsetHeight || 52),  p.y)),
-  }), []);
-
-  const onMouseDown = useCallback((e) => {
-    if (e.button !== 0) return;
-    startRef.current = { mx: e.clientX, my: e.clientY, bx: pos.x, by: pos.y };
-    setDragging(true);
-    e.preventDefault();
-  }, [pos]);
-
-  const onTouchStart = useCallback((e) => {
-    const t = e.touches[0];
-    startRef.current = { mx: t.clientX, my: t.clientY, bx: pos.x, by: pos.y };
-    setDragging(true);
-  }, [pos]);
-
-  useEffect(() => {
-    if (!dragging) return;
-    function onMove(e) {
-      const { clientX, clientY } = e.touches ? e.touches[0] : e;
-      const { mx, my, bx, by } = startRef.current;
-      setPos(clamp({ x: bx + clientX - mx, y: by + clientY - my }));
-    }
-    function onUp() { setDragging(false); }
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onUp);
-    };
-  }, [dragging, clamp]);
-
-  return { pos, dragging, dragRef, onMouseDown, onTouchStart };
-}
-
 export default function Dashboard({ user, initialPicks, initialContest, isDemo }) {
   const router = useRouter();
   const [activeTab, setActiveTab]   = useState('tracker');
-  // FAB drag state — default: bottom-right (mirrors original fixed position)
-  // Using window dimensions requires a client-side init; start with a sentinel
-  const fabDrag = useDraggable({ x: -1, y: -1 }); // -1 = use CSS default until first drag
 
   // Shared sport selection — kept in sync between Scoreboard and Odds Board
   const [activeSport, setActiveSport] = useState('all');
@@ -598,42 +548,6 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
       {/* Support Chat Widget — bottom left, always visible */}
       {!isDemo && <SupportChatWidget user={currentUser} />}
 
-      {/* ── Floating "Add Pick" FAB — draggable, bottom-right default ── */}
-      {!isDemo && activeTab !== 'scoreboard' && activeTab !== 'featured' && (() => {
-        const hasDragged = fabDrag.pos.x >= 0 && fabDrag.pos.y >= 0;
-        const posStyle = hasDragged
-          ? { left: fabDrag.pos.x, top: fabDrag.pos.y, bottom: 'auto', right: 'auto' }
-          : { bottom: '16px', right: '72px' };
-        return (
-          <button
-            ref={fabDrag.dragRef}
-            onClick={() => {
-              if (fabDrag.dragging) return;
-              setActiveTab('scoreboard');
-            }}
-            onMouseDown={fabDrag.onMouseDown}
-            onTouchStart={fabDrag.onTouchStart}
-            title="Add a pick — go to Scoreboard (drag to move)"
-            style={{
-              position: 'fixed', ...posStyle, zIndex: 5000,
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '14px 22px', borderRadius: '50px',
-              background: 'linear-gradient(135deg, #00D48B 0%, #00b876 100%)',
-              border: 'none', cursor: fabDrag.dragging ? 'grabbing' : 'grab',
-              color: '#000', fontWeight: 800, fontSize: '0.95rem',
-              fontFamily: 'inherit', letterSpacing: '0.01em',
-              boxShadow: fabDrag.dragging
-                ? '0 8px 32px rgba(0,212,139,0.5), 0 4px 16px rgba(0,0,0,0.4)'
-                : '0 4px 20px rgba(0,212,139,0.35), 0 2px 8px rgba(0,0,0,0.3)',
-              transition: fabDrag.dragging ? 'box-shadow 0.1s' : 'box-shadow 0.2s, transform 0.2s',
-              userSelect: 'none', touchAction: 'none',
-            }}
-          >
-            <span style={{ fontSize: '0.55rem', opacity: 0.6, lineHeight: 1 }}>⠿</span>
-            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> Add Pick
-          </button>
-        );
-      })()}
     </div>
   );
 }
