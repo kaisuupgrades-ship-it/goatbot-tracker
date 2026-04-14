@@ -1636,7 +1636,7 @@ const CRON_DEFS = [
     key:      'grade_picks',
     label:    '🏆 Grade Picks',
     desc:     'Grades pending picks for all users by checking final ESPN scores.',
-    schedule: 'Every 5 min, 12 PM–4 AM ET',
+    schedule: 'Every 5 min, 24/7',
     path:     '/api/cron/grade-picks',
     lastRunKey: 'cron_grade_last_run',
   },

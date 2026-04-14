@@ -1,10 +1,7 @@
 // /api/cron/grade-picks
-// Vercel Cron: grades PENDING picks for ALL users during game hours.
+// Vercel Cron: grades PENDING picks for ALL users, every 5 minutes 24/7.
 //
-// Schedule (vercel.json):
-//   every 5 min, 15-23 UTC  →  11am-7pm ET  (afternoon + evening games)
-//   every 5 min, 0-9 UTC    →  8pm-5am ET   (late west coast + overnight)
-//   every 5 min, 10-14 UTC  →  6am-10am ET  (closes the early morning gap)
+// Schedule (vercel.json): */5 * * * *
 //
 // Key fixes:
 //  - Catches result=null picks as well as result='PENDING'
