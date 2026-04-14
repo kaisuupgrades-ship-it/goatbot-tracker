@@ -367,10 +367,10 @@ export async function GET(req) {
         //    Fall back to parsing analysis text only when prediction_pick is absent.
         let pick;
         const storedPick = (row.prediction_pick || '').trim();
-        // Intentional non-picks (AVOID, PASS, NO PLAY, SKIP) → mark N/A, don't leave null
+        // Intentional non-picks (AVOID, PASS, NO PLAY, SKIP) → mark PUSH (no action), don't leave null
         if (storedPick && SKIP_PICK_RE.test(storedPick)) {
           await supabase.from('game_analyses')
-            .update({ prediction_result: 'N/A', prediction_graded_at: new Date().toISOString() })
+            .update({ prediction_result: 'PUSH', prediction_graded_at: new Date().toISOString() })
             .eq('id', row.id)
             .is('prediction_result', null);
           aiSkipped++;

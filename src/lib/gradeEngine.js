@@ -624,11 +624,18 @@ export function identifyAnalysisSide(pickTeam, awayTeam, homeTeam, awayAbbr = ''
   const a = clean(awayTeam);
   const h = clean(homeTeam);
   if (!p) return null;
-  // Exact ESPN abbreviation match — handles 3-letter abbreviations like TBL, NSH, VGK
+  // Exact ESPN abbreviation match — handles 3-letter abbreviations like NSH, VGK
   if (homeAbbr && clean(homeAbbr) === p) return 'home';
   if (awayAbbr && clean(awayAbbr) === p) return 'away';
   if (h.includes(p) || p.includes(h)) return 'home';
   if (a.includes(p) || p.includes(a)) return 'away';
+  // Initialism match: "TBL" → Tampa Bay Lightning (first letter of each word)
+  // Handles cases where ESPN abbreviation differs from human-written pick abbreviation
+  if (p.length >= 2 && p.length <= 5) {
+    const initialism = s => s.split(/\s+/).map(w => (w[0] || '')).join('');
+    if (initialism(h) === p) return 'home';
+    if (initialism(a) === p) return 'away';
+  }
   const pLast = p.split(' ').pop();
   if (pLast && pLast.length >= 4) {
     if (h.split(' ').includes(pLast)) return 'home';
