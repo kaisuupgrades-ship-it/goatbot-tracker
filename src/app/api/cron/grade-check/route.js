@@ -20,6 +20,10 @@ import {
   fetchESPNScoreboard,
   gradePicksAgainstScoreboard,
   SPORT_PATHS,
+  SKIP_PICK_RE,
+  parseAnalysisPick,
+  findAnalysisGame,
+  gradeAnalysisPick,
 } from '@/lib/gradeEngine';
 
 export const maxDuration = 60;
@@ -67,20 +71,13 @@ export async function GET(req) {
     return NextResponse.json({ error: fetchErr.message }, { status: 500 });
   }
 
+  // NOTE: do NOT early-return when picks is empty — Phase 2 (AI analysis grading)
+  // must always run regardless of whether there are user picks pending.
   if (!picks?.length) {
-    const summary = { found: 0, graded: 0, flagged: 0, duration_ms: Date.now() - started, run_at: new Date().toISOString() };
-    console.log('[cron/grade-check] No concluded ungraded picks found', summary);
-    // Always write the log so the timestamp stays current even on healthy (nothing-to-do) runs
-    try {
-      await supabase.from('settings').upsert(
-        [{ key: 'cron_grade_check_last_run', value: JSON.stringify(summary) }],
-        { onConflict: 'key' }
-      );
-    } catch { /* non-critical */ }
-    return NextResponse.json(summary);
+    console.log('[cron/grade-check] No concluded ungraded user picks found — proceeding to Phase 2');
+  } else {
+    console.log(`[cron/grade-check] Found ${picks.length} ungraded picks on concluded games`);
   }
-
-  console.log(`[cron/grade-check] Found ${picks.length} ungraded picks on concluded games`);
 
   // Skip parlays — gradeParlay needs multi-sport leg resolution; grade-picks handles those
   const regularPicks = picks.filter(p =>
@@ -248,11 +245,85 @@ export async function GET(req) {
     flaggedCount++;
   }
 
+  // ── Phase 2: Grade ungraded AI game analyses ─────────────────────────────
+  // Safety net for game_analyses rows that were skipped by grade-picks because
+  // ESPN hadn't marked the game STATUS_FINAL yet (common for late west-coast games).
+  let aiGraded = 0, aiSkipped = 0, aiNoScore = 0;
+  try {
+    const todayStr   = new Date().toISOString().split('T')[0];
+    const { data: analyses, error: analysisErr } = await supabase
+      .from('game_analyses')
+      .select('id, sport, away_team, home_team, game_date, analysis, prediction_result, prediction_pick')
+      .is('prediction_result', null)
+      .lte('game_date', todayStr)
+      .gte('game_date', cutoffDate)
+      .limit(200);
+
+    if (!analysisErr && analyses?.length) {
+      console.log(`[cron/grade-check] Found ${analyses.length} ungraded AI analyses`);
+
+      for (const row of analyses) {
+        const storedPick = (row.prediction_pick || '').trim();
+        // Intentional non-picks → mark N/A instead of leaving null forever
+        if (storedPick && SKIP_PICK_RE.test(storedPick)) {
+          await supabase.from('game_analyses')
+            .update({ prediction_result: 'N/A', prediction_graded_at: new Date().toISOString() })
+            .eq('id', row.id)
+            .is('prediction_result', null);
+          aiSkipped++;
+          continue;
+        }
+
+        let pick;
+        if (storedPick) {
+          pick = parseAnalysisPick(`THE PICK: ${storedPick}\n`);
+        }
+        if (!pick || pick.type === 'unknown') {
+          pick = parseAnalysisPick(row.analysis);
+        }
+        if (!pick || pick.type === 'unknown') { aiSkipped++; continue; }
+
+        const sport    = (row.sport || '').toLowerCase();
+        const cacheKey = `${sport}|${row.game_date}`;
+        if (!scoreboardCache[cacheKey]) {
+          scoreboardCache[cacheKey] = await fetchESPNScoreboard(sport, row.game_date);
+        }
+        const scoreboard = scoreboardCache[cacheKey];
+        if (!scoreboard?.events) { aiNoScore++; continue; }
+
+        const game = findAnalysisGame(scoreboard.events, row.away_team, row.home_team);
+        if (!game) { aiNoScore++; continue; }
+
+        const result = gradeAnalysisPick(pick, game, row.away_team, row.home_team);
+        if (!result) { aiSkipped++; continue; }
+
+        const updatePayload = {
+          prediction_result:    result,
+          prediction_conf:      pick.conf || null,
+          prediction_graded_at: new Date().toISOString(),
+          final_score:          `${game.awayScore}-${game.homeScore}`,
+        };
+        if (!row.prediction_pick) {
+          updatePayload.prediction_pick = pick.raw;
+        }
+        const { error: updateErr } = await supabase
+          .from('game_analyses')
+          .update(updatePayload)
+          .eq('id', row.id)
+          .is('prediction_result', null);
+        if (!updateErr) aiGraded++;
+      }
+    }
+  } catch (aiErr) {
+    console.error('[cron/grade-check] AI analysis grading error:', aiErr.message);
+  }
+
   // ── Persist run summary to settings for admin observability ───────────────
   const summary = {
     found:       picks.length,
     graded:      gradedCount,
     flagged:     flaggedCount,
+    ai_analyses: { graded: aiGraded, skipped: aiSkipped, noScore: aiNoScore },
     duration_ms: Date.now() - started,
     run_at:      new Date().toISOString(),
   };
