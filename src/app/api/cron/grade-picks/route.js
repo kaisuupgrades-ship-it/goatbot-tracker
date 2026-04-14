@@ -21,6 +21,10 @@ import {
   gradeParlay,
   SPORT_PATHS,
   SOCCER_FALLBACK_PATHS,
+  SKIP_PICK_RE,
+  parseAnalysisPick,
+  findAnalysisGame,
+  gradeAnalysisPick,
 } from '@/lib/gradeEngine';
 import { generatePostMortems } from '@/lib/feedbackLoop';
 
@@ -94,142 +98,6 @@ function gradeGolfPick(playerName, betType, leaderboard) {
   });
   if (!match) return 'LOSS'; // Player not in event = loss
   return match.position === 1 ? 'WIN' : 'LOSS';
-}
-
-// ── AI Analysis pick parsing & grading (for pre-generated game analyses) ──────
-function parseAnalysisPick(analysis) {
-  const pickMatch = analysis?.match(/THE PICK[:\s]+([^\n]{5,150})/i);
-  if (!pickMatch) return null;
-
-  const confMatch = analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
-  const conf = confMatch?.[1] || null;
-
-  // Normalize the pick line:
-  //  1. Strip markdown bold/italic markers (** and *)
-  //  2. Strip "— N units" or "- N units" trailing suffix
-  //  3. Normalize parenthesized odds: (-110) → -110, (+200) → +200
-  //  4. Strip remaining parentheticals like (est. -145) or (Pinnacle line looks stale)
-  //  5. Strip sportsbook name trailing tokens
-  //  6. Strip "PL" (puck line indicator) that appears between spread and odds
-  const pickLine = pickMatch[1].trim()
-    .replace(/\*+/g, '')                          // strip * and **
-    .replace(/\s+[—–-]+\s+[\d.]+\s+units?.*$/i, '') // strip "— 2 units" suffix
-    .replace(/\(([+-]?\d+)\)/g, '$1')             // (-110) → -110, (+200) → +200
-    .replace(/\([^)]*\)/g, '')                    // strip remaining parentheticals
-    .replace(/\s+(DraftKings|FanDuel|BetMGM|Caesars|Pinnacle|PointsBet|BetRivers|Fanatics|MyBookie|Bookmaker|ESPN\s*Bet)\s*$/i, '')
-    .replace(/\s+PL\b/i, '')                      // strip "PL" (puck line) token
-    .trim();
-
-  // Over/Under total
-  const overMatch = pickLine.match(/^Over\s+([\d.]+)/i);
-  if (overMatch) return { type: 'over', total: parseFloat(overMatch[1]), raw: pickLine, conf };
-  const underMatch = pickLine.match(/^Under\s+([\d.]+)/i);
-  if (underMatch) return { type: 'under', total: parseFloat(underMatch[1]), raw: pickLine, conf };
-
-  // Team ML — handles both "ML" abbreviation and "Moneyline" spelled out
-  const mlMatch = pickLine.match(/^(.+?)\s+(?:ML|Moneyline)\s+([+-]?\d+)/i);
-  if (mlMatch) return { team: mlMatch[1].trim(), type: 'ml', line: parseInt(mlMatch[2]), raw: pickLine, conf };
-
-  // Team spread (e.g., "Nets +6.5 -110")
-  const spreadMatch = pickLine.match(/^(.+?)\s+([+-][\d.]+)\s+[+-]?\d+/i);
-  if (spreadMatch) {
-    const spread = parseFloat(spreadMatch[2]);
-    if (spread !== Math.floor(spread) || Math.abs(spread) > 20) {
-      return { team: spreadMatch[1].trim(), type: 'spread', spread, raw: pickLine, conf };
-    }
-  }
-
-  // Fallback: assume ML if team name found
-  // Allow dots/apostrophes in team names (e.g. "St. Louis Cardinals", "D'Antoni")
-  // Also handles "TEAM ML" without odds (e.g. after stripping "est." odds)
-  const fallbackMatch = pickLine.match(/^([A-Z][a-zA-Z0-9\s.']+?)(?:\s+(?:ML|Moneyline)|\s+[+-]?\d)/i);
-  if (fallbackMatch) return { team: fallbackMatch[1].trim(), type: 'ml', raw: pickLine, conf };
-
-  return { type: 'unknown', raw: pickLine, conf };
-}
-
-function findAnalysisGame(events, awayTeam, homeTeam) {
-  const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-  const away = normalize(awayTeam);
-  const home = normalize(homeTeam);
-
-  for (const evt of events) {
-    const comp = evt.competitions?.[0];
-    if (!comp) continue;
-    const status = comp.status?.type?.name;
-    if (!(status?.startsWith('STATUS_FINAL') || status === 'STATUS_FULL_TIME')) continue;
-
-    const competitors = comp.competitors || [];
-    const homeC = competitors.find(c => c.homeAway === 'home');
-    const awayC = competitors.find(c => c.homeAway === 'away');
-    if (!homeC || !awayC) continue;
-
-    const homeNames = [homeC.team?.displayName, homeC.team?.shortDisplayName, homeC.team?.name, homeC.team?.abbreviation].filter(Boolean).map(normalize);
-    const awayNames = [awayC.team?.displayName, awayC.team?.shortDisplayName, awayC.team?.name, awayC.team?.abbreviation].filter(Boolean).map(normalize);
-
-    const homeMatch = homeNames.some(n => n.includes(home) || home.includes(n));
-    const awayMatch = awayNames.some(n => n.includes(away) || away.includes(n));
-
-    if (homeMatch && awayMatch) {
-      return {
-        homeScore: parseInt(homeC.score),
-        awayScore: parseInt(awayC.score),
-        totalScore: parseInt(homeC.score) + parseInt(awayC.score),
-      };
-    }
-  }
-  return null;
-}
-
-function gradeAnalysisPick(pick, game, awayTeam, homeTeam) {
-  if (!pick || !game) return null;
-  const { homeScore, awayScore, totalScore } = game;
-
-  if (pick.type === 'over') return totalScore > pick.total ? 'WIN' : totalScore < pick.total ? 'LOSS' : 'PUSH';
-  if (pick.type === 'under') return totalScore < pick.total ? 'WIN' : totalScore > pick.total ? 'LOSS' : 'PUSH';
-
-  if (pick.type === 'ml') {
-    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam);
-    if (!side) return null;
-    if (side === 'home') return homeScore > awayScore ? 'WIN' : homeScore < awayScore ? 'LOSS' : 'PUSH';
-    return awayScore > homeScore ? 'WIN' : awayScore < homeScore ? 'LOSS' : 'PUSH';
-  }
-
-  if (pick.type === 'spread') {
-    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam);
-    if (!side) return null;
-    const pickedScore = side === 'home' ? homeScore : awayScore;
-    const oppScore    = side === 'home' ? awayScore : homeScore;
-    const adjusted = pickedScore + pick.spread;
-    return adjusted > oppScore ? 'WIN' : adjusted < oppScore ? 'LOSS' : 'PUSH';
-  }
-
-  return null;
-}
-
-function identifyAnalysisSide(pickTeam, awayTeam, homeTeam) {
-  // Strip punctuation for a cleaner comparison (handles "St. Louis" vs "St Louis")
-  const clean = s => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-  const p = clean(pickTeam);
-  const a = clean(awayTeam);
-  const h = clean(homeTeam);
-  if (!p) return null;
-  // Full substring match
-  if (h.includes(p) || p.includes(h)) return 'home';
-  if (a.includes(p) || p.includes(a)) return 'away';
-  // Last word match (e.g. "Cardinals" matches "St. Louis Cardinals")
-  const pLast = p.split(' ').pop();
-  if (pLast && pLast.length >= 4) {
-    if (h.split(' ').includes(pLast)) return 'home';
-    if (a.split(' ').includes(pLast)) return 'away';
-  }
-  // Any significant word in the pick team matches a word in the ESPN name
-  const pWords = p.split(' ').filter(w => w.length >= 4);
-  for (const w of pWords) {
-    if (h.split(' ').includes(w)) return 'home';
-    if (a.split(' ').includes(w)) return 'away';
-  }
-  return null;
 }
 
 export async function GET(req) {
@@ -499,8 +367,16 @@ export async function GET(req) {
         //    Fall back to parsing analysis text only when prediction_pick is absent.
         let pick;
         const storedPick = (row.prediction_pick || '').trim();
-        if (storedPick && !/^pass[.\s—-]*/i.test(storedPick)) {
-          // Synthesize the THE PICK: prefix so parseAnalysisPick can handle it
+        // Intentional non-picks (AVOID, PASS, NO PLAY, SKIP) → mark N/A, don't leave null
+        if (storedPick && SKIP_PICK_RE.test(storedPick)) {
+          await supabase.from('game_analyses')
+            .update({ prediction_result: 'N/A', prediction_graded_at: new Date().toISOString() })
+            .eq('id', row.id)
+            .is('prediction_result', null);
+          aiSkipped++;
+          continue;
+        }
+        if (storedPick) {
           pick = parseAnalysisPick(`THE PICK: ${storedPick}\n`);
         }
         // Fall back to full analysis text if stored pick is absent or failed to parse

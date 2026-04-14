@@ -561,6 +561,145 @@ export async function gradeParlay(pick, supabaseAdmin) {
   return { result: parlayResult, profit, home_score: null, away_score: null };
 }
 
+// ── AI Analysis grading helpers ──────────────────────────────────────────────
+// Shared between grade-picks and grade-check crons.
+
+/**
+ * Regex matching intentional non-picks (PASS, AVOID, NO PLAY, SKIP).
+ * These should be written as prediction_result = 'N/A' rather than left null.
+ */
+export const SKIP_PICK_RE = /^(pass|avoid|no\s*play|skip)[\s.\u2014\u2013-]*/i;
+
+/**
+ * Parse the structured pick line from a GoatBot analysis text.
+ * Returns { type, raw, conf, ...fields } or { type: 'unknown', raw, conf }.
+ * Returns null if no THE PICK line found.
+ */
+export function parseAnalysisPick(analysis) {
+  const pickMatch = analysis?.match(/THE PICK[:\s]+([^\n]{5,150})/i);
+  if (!pickMatch) return null;
+
+  const confMatch = analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
+  const conf = confMatch?.[1] || null;
+
+  const pickLine = pickMatch[1].trim()
+    .replace(/\*+/g, '')
+    .replace(/\s+[—–-]+\s+[\d.]+\s+units?.*$/i, '')
+    .replace(/\(([+-]?\d+)\)/g, '$1')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+(DraftKings|FanDuel|BetMGM|Caesars|Pinnacle|PointsBet|BetRivers|Fanatics|MyBookie|Bookmaker|ESPN\s*Bet)\s*$/i, '')
+    .replace(/\s+PL\b/i, '')
+    .trim();
+
+  const overMatch = pickLine.match(/^Over\s+([\d.]+)/i);
+  if (overMatch) return { type: 'over', total: parseFloat(overMatch[1]), raw: pickLine, conf };
+  const underMatch = pickLine.match(/^Under\s+([\d.]+)/i);
+  if (underMatch) return { type: 'under', total: parseFloat(underMatch[1]), raw: pickLine, conf };
+
+  const mlMatch = pickLine.match(/^(.+?)\s+(?:ML|Moneyline)\s+([+-]?\d+)/i);
+  if (mlMatch) return { team: mlMatch[1].trim(), type: 'ml', line: parseInt(mlMatch[2]), raw: pickLine, conf };
+
+  const spreadMatch = pickLine.match(/^(.+?)\s+([+-][\d.]+)\s+[+-]?\d+/i);
+  if (spreadMatch) {
+    const spread = parseFloat(spreadMatch[2]);
+    if (spread !== Math.floor(spread) || Math.abs(spread) > 20) {
+      return { team: spreadMatch[1].trim(), type: 'spread', spread, raw: pickLine, conf };
+    }
+  }
+
+  const fallbackMatch = pickLine.match(/^([A-Z][a-zA-Z0-9\s.']+?)(?:\s+(?:ML|Moneyline)|\s+[+-]?\d)/i);
+  if (fallbackMatch) return { team: fallbackMatch[1].trim(), type: 'ml', raw: pickLine, conf };
+
+  return { type: 'unknown', raw: pickLine, conf };
+}
+
+/** Identify whether pickTeam is 'home', 'away', or null relative to the game. */
+export function identifyAnalysisSide(pickTeam, awayTeam, homeTeam) {
+  const clean = s => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const p = clean(pickTeam);
+  const a = clean(awayTeam);
+  const h = clean(homeTeam);
+  if (!p) return null;
+  if (h.includes(p) || p.includes(h)) return 'home';
+  if (a.includes(p) || p.includes(a)) return 'away';
+  const pLast = p.split(' ').pop();
+  if (pLast && pLast.length >= 4) {
+    if (h.split(' ').includes(pLast)) return 'home';
+    if (a.split(' ').includes(pLast)) return 'away';
+  }
+  const pWords = p.split(' ').filter(w => w.length >= 4);
+  for (const w of pWords) {
+    if (h.split(' ').includes(w)) return 'home';
+    if (a.split(' ').includes(w)) return 'away';
+  }
+  return null;
+}
+
+/**
+ * Find a finished ESPN game matching awayTeam @ homeTeam in an events array.
+ * Returns { homeScore, awayScore, totalScore } or null if not found / not final.
+ */
+export function findAnalysisGame(events, awayTeam, homeTeam) {
+  const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const away = norm(awayTeam);
+  const home = norm(homeTeam);
+
+  for (const evt of events) {
+    const comp = evt.competitions?.[0];
+    if (!comp) continue;
+    const status = comp.status?.type?.name;
+    if (!(status?.startsWith('STATUS_FINAL') || status === 'STATUS_FULL_TIME')) continue;
+
+    const competitors = comp.competitors || [];
+    const homeC = competitors.find(c => c.homeAway === 'home');
+    const awayC = competitors.find(c => c.homeAway === 'away');
+    if (!homeC || !awayC) continue;
+
+    const homeNames = [homeC.team?.displayName, homeC.team?.shortDisplayName, homeC.team?.name, homeC.team?.abbreviation].filter(Boolean).map(norm);
+    const awayNames = [awayC.team?.displayName, awayC.team?.shortDisplayName, awayC.team?.name, awayC.team?.abbreviation].filter(Boolean).map(norm);
+
+    if (homeNames.some(n => n.includes(home) || home.includes(n)) &&
+        awayNames.some(n => n.includes(away) || away.includes(n))) {
+      return {
+        homeScore:  parseInt(homeC.score),
+        awayScore:  parseInt(awayC.score),
+        totalScore: parseInt(homeC.score) + parseInt(awayC.score),
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Grade a parsed AI analysis pick against a finished game.
+ * Returns 'WIN' | 'LOSS' | 'PUSH' | null (null = can't determine).
+ */
+export function gradeAnalysisPick(pick, game, awayTeam, homeTeam) {
+  if (!pick || !game) return null;
+  const { homeScore, awayScore, totalScore } = game;
+
+  if (pick.type === 'over')   return totalScore > pick.total ? 'WIN' : totalScore < pick.total ? 'LOSS' : 'PUSH';
+  if (pick.type === 'under')  return totalScore < pick.total ? 'WIN' : totalScore > pick.total ? 'LOSS' : 'PUSH';
+
+  if (pick.type === 'ml') {
+    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam);
+    if (!side) return null;
+    if (side === 'home') return homeScore > awayScore ? 'WIN' : homeScore < awayScore ? 'LOSS' : 'PUSH';
+    return awayScore > homeScore ? 'WIN' : awayScore < homeScore ? 'LOSS' : 'PUSH';
+  }
+
+  if (pick.type === 'spread') {
+    const side = identifyAnalysisSide(pick.team, awayTeam, homeTeam);
+    if (!side) return null;
+    const pickedScore = side === 'home' ? homeScore : awayScore;
+    const oppScore    = side === 'home' ? awayScore : homeScore;
+    const adjusted    = pickedScore + pick.spread;
+    return adjusted > oppScore ? 'WIN' : adjusted < oppScore ? 'LOSS' : 'PUSH';
+  }
+
+  return null;
+}
+
 /**
  * Grade a batch of picks against a scoreboard response.
  *
