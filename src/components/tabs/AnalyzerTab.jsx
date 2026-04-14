@@ -141,8 +141,8 @@ function parseReport(text) {
   // THE PICK — match "THE PICK:" followed by the actual bet on the same line
   // Be careful NOT to capture date context like "for April 5, 2026" when the AI
   // writes "Best Pick for April 5, 2026:" — only capture if line has team/odds content
-  const pickM = t.match(/(?:^|\n)THE PICK\s*:\s*([^\n]{5,100})/im)
-             || t.match(/(?:^|\n)(?:MY PICK|BEST PICK)\s*:\s*([^\n]{5,100})/im);
+  const pickM = t.match(/(?:^|\n)\*{0,2}THE PICK\*{0,2}\s*:\s*([^\n]{5,100})/im)
+             || t.match(/(?:^|\n)\*{0,2}(?:MY PICK|BEST PICK|The Pick)\*{0,2}\s*:\s*([^\n]{5,100})/im);
   let pick = pickM ? stripMarkdown(pickM[1]).trim() : null;
   // Sanity-check: reject if the "pick" looks like just a date phrase
   if (pick && /^for\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}\/)/i.test(pick)) pick = null;
@@ -1794,7 +1794,7 @@ function BetOSLive({ injectedPrompt, onPromptConsumed, injectedMeta, injectedRep
                 <div style={{ color: 'var(--gold)', fontWeight: 800, fontSize: '0.78rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>BetOS Pick Report</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '360px' }}>
                   {(() => {
-                    const pick = result?.match(/(?:^|\n)THE PICK\s*:\s*([^\n]{5,100})/im)?.[1]?.trim();
+                    const pick = result?.match(/(?:^|\n)\*{0,2}(?:THE PICK|The Pick)\*{0,2}\s*:\s*([^\n]{5,100})/im)?.[1]?.trim();
                     return pick || cleanPromptDisplay(prompt, 80);
                   })()}
                 </div>
