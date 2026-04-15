@@ -324,6 +324,7 @@ export const SPORT_PATHS = {
   mls:              'soccer/usa.1',
   wnba:             'basketball/wnba',
   ufc:              'mma/ufc',
+  mma:              'mma/ufc',            // alias — DB rows use 'mma' as the sport key
   // Soccer leagues (specific)
   'serie a':        'soccer/ita.1',
   'premier league': 'soccer/eng.1',

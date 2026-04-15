@@ -598,10 +598,31 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       setAiChecking(false);
     }
 
+    // Resolve the real sport key for this specific game.
+    //
+    // game._sport is the ground-truth tag set when we fetched this event from
+    // ESPN's per-sport scoreboard. It's always a canonical key like "mlb" when
+    // present. The `sport` prop is the outer Scoreboard filter state — in the
+    // "All" tab that's literally the string "all", which is unusable by the
+    // grader. Historically we wrote `SPORT_LABELS[sport] || sport.toUpperCase()`
+    // which in All-mode produced sport="ALL" in the DB and caused the grade-picks
+    // cron to silently skip the pick forever (SPORT_PATHS["all"] is undefined).
+    // Prefer the event tag, fall back to a validated prop, and never write
+    // "ALL" / empty as a sport.
+    const sportKey = game._sport
+      || (sport && sport !== 'all' ? sport : null);
+    const sportLabel = sportKey
+      ? (SPORT_LABELS[sportKey] || sportKey.toUpperCase())
+      : 'Other';
+
+    // Commence time — normalize to ISO so the grader can parse it consistently.
+    // `date` here is either an ISO string from ESPN or undefined.
+    const commenceTime = date ? new Date(date).toISOString() : null;
+
     const payload = {
       user_id:       user?.id || 'demo',
       date:          gameDate,
-      sport:         (SPORT_LABELS[sport] || sport?.toUpperCase() || 'Other'),
+      sport:         sportLabel,
       team:          teamValue,
       bet_type:      betTypeValue,
       odds:          oddsNum,
@@ -611,6 +632,13 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
       notes:         notes.trim() || null,
       book:          book,
       matchup:       `${awayAbbr} @ ${homeAbbr}`,
+      // Structured identifiers so the grader can match this pick to an ESPN game
+      // with zero fuzzy guessing. Without these the grader has nothing to work with
+      // beyond the formatted matchup string.
+      home_team:     homeName,
+      away_team:     awayName,
+      commence_time: commenceTime,
+      game_id:       game?.id ? String(game.id) : null,
       contest_entry: finalContestEntry,
     };
 

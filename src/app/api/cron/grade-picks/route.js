@@ -159,18 +159,58 @@ export async function GET(req) {
     (p.sport || '').toLowerCase() !== 'other'
   );
 
-  // Group regular picks by sport + date to batch ESPN calls
+  // ── Sport value normalizer ───────────────────────────────────────────────
+  // Over time the `picks.sport` column has accumulated several spellings for
+  // the same thing (MLB / mlb / Baseball, NHL / Hockey, MMA / UFC, etc.), plus
+  // a few malformed values ('ALL', 'Other', null) from bugs in the pick-
+  // creation flow. Normalize them once here so the downstream match uses the
+  // canonical key that SPORT_PATHS knows about. Anything we can't confidently
+  // map is left as-is and the multi-sport fallback below handles it.
+  const SPORT_ALIASES = {
+    baseball:        'mlb',
+    football:        'nfl',           // ambiguous vs NCAAF — prefer NFL, fallback catches NCAAF
+    basketball:      'nba',
+    hockey:          'nhl',
+    'ice hockey':    'nhl',
+    mma:             'ufc',
+    ufc:             'ufc',
+    bellator:        'ufc',           // fights grade off the same mma/ufc endpoint
+    'college football': 'ncaaf',
+    cfb:             'ncaaf',
+    'college basketball': 'ncaab',
+    cbb:             'ncaab',
+    soccer:          'soccer',        // handled by SOCCER_FALLBACK_PATHS further down
+  };
+  function normalizeSport(raw) {
+    const s = (raw || '').toLowerCase().trim();
+    if (!s) return null;
+    if (SPORT_PATHS[s]) return s;
+    if (SPORT_ALIASES[s]) return SPORT_ALIASES[s];
+    return null; // unknown → fallback resolver will try every sport on the date
+  }
+
+  // Group regular picks by sport + date to batch ESPN calls.
+  // Picks with an unknown/malformed sport go into a special '__unknown__' bucket
+  // that the cross-sport fallback below handles — they are no longer silently
+  // dropped the way they were before (that's how statsnipe's two 'ALL' picks sat
+  // pending indefinitely).
   const groups = {};
+  const unknownSportPicks = [];
   for (const pick of regularPicks) {
-    const sport = (pick.sport || '').toLowerCase();
-    const supported = SPORT_PATHS[sport] || sport === 'soccer' || sport === 'other';
-    if (!supported) continue;
+    const rawSport = (pick.sport || '').toLowerCase();
+    const normSport = normalizeSport(rawSport);
     // Use the actual game date (from commence_time) so we fetch the right ESPN scoreboard.
-    // pick.date is the submission date — if a user added the pick the night before,
-    // pick.date would be yesterday and the game wouldn't appear in that day's scoreboard.
     const gameDate = pick.commence_time
       ? new Date(pick.commence_time).toISOString().slice(0, 10)
       : pick.date;
+
+    if (!normSport && rawSport !== 'soccer' && rawSport !== 'other') {
+      // Unknown sport — queue for cross-sport fallback. We'll attempt to find
+      // the game by team names across every supported sport on that date.
+      unknownSportPicks.push({ pick, gameDate });
+      continue;
+    }
+    const sport = normSport || rawSport; // preserve 'soccer'/'other' as-is
     const key = `${sport}|${gameDate}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(pick);
@@ -213,6 +253,55 @@ export async function GET(req) {
         affectedUsers.add(g.user_id);
         gradedPickIds.add(g.id);
       }
+    }
+  }
+
+  // ── Phase 1a-fallback: unknown-sport resolver ─────────────────────────────
+  // Picks with a malformed `sport` value (e.g. 'ALL', 'Other', null) land here.
+  // For each pick we try every supported sport's scoreboard for that date and
+  // take the first one whose events contain the pick's matchup. Prevents the
+  // silent-skip bug that stranded statsnipe's two Apr-14 picks indefinitely.
+  if (unknownSportPicks.length > 0) {
+    const FALLBACK_SPORTS = ['mlb', 'nba', 'nhl', 'nfl', 'ncaaf', 'ncaab', 'wnba', 'mls', 'ufc'];
+    for (const { pick, gameDate } of unknownSportPicks) {
+      let resolved = false;
+      for (const sport of FALLBACK_SPORTS) {
+        const key = `${sport}|${gameDate}`;
+        if (!scoreboardCache[key]) {
+          scoreboardCache[key] = await fetchESPNScoreboard(sport, gameDate);
+        }
+        const scoreboard = scoreboardCache[key];
+        if (!scoreboard?.events?.length) continue;
+
+        const graded = await gradePicksAgainstScoreboard([pick], scoreboard, supabase);
+        if (graded.length === 0) continue; // no match in this sport, try next
+
+        const g = graded[0];
+        const { error: updateErr } = await supabase
+          .from('picks')
+          .update({
+            result:            g.result,
+            profit:            g.profit,
+            graded_at:         new Date().toISOString(),
+            graded_home_score: g.home_score,
+            graded_away_score: g.away_score,
+            // Also backfill the correct sport so it doesn't hit the fallback
+            // on every subsequent run.
+            sport:             sport.toUpperCase(),
+          })
+          .eq('id', g.id)
+          .or('result.is.null,result.eq.PENDING');
+
+        if (!updateErr) {
+          gradedCount++;
+          affectedUsers.add(g.user_id);
+          gradedPickIds.add(g.id);
+          resolved = true;
+          console.log(`[grade-picks] Fallback resolved pick ${g.id} as ${sport.toUpperCase()} — result=${g.result}`);
+        }
+        break; // stop after first sport that matched, regardless of update error
+      }
+      if (!resolved) skippedCount++;
     }
   }
 

@@ -1200,7 +1200,60 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
   return { success: true, sport, homeTeam, awayTeam, model: result.model_used, latency_ms };
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Top-level error logger
+//
+// Writes the full stack of any unexpected failure into the `error_log` table and
+// into the cron summary setting so the admin UI + a future health-check can see
+// what's actually happening. Historically, the GET handler had no outer try/catch
+// so exceptions propagated up to Vercel's default 500 handler and the only trace
+// was a truncated "[pregenerate-analysis] Start..." log line in the runtime feed.
+// That made it basically impossible to diagnose crashes from the cron.
+async function logPregenerateFailure(e, req, extras = {}) {
+  const payload = {
+    url:        req?.url || null,
+    at:         new Date().toISOString(),
+    message:    String(e?.message || e),
+    stack:      (e?.stack || '').slice(0, 4000),
+    ...extras,
+  };
+  try {
+    await supabase.from('error_log').insert({
+      level:    'error',
+      source:   'cron/pregenerate-analysis',
+      endpoint: '/api/cron/pregenerate-analysis',
+      message:  payload.message,
+      stack:    payload.stack,
+      metadata: payload,
+    });
+  } catch (logErr) {
+    console.error('[pregenerate-analysis] Failed to write error_log row:', logErr?.message);
+  }
+  // Also blow away the stuck "running" lock so it doesn't block the next cron
+  // run's Guard B check (which aborts if a recent-enough run_at exists).
+  try {
+    const lockKey = extras.lockKey || 'cron_pregenerate_last_run';
+    await supabase.from('settings').upsert(
+      [{ key: lockKey, value: JSON.stringify({ run_at: new Date().toISOString(), status: 'error', error: payload.message }) }],
+      { onConflict: 'key' }
+    );
+  } catch (_) { /* non-fatal */ }
+}
+
 export async function GET(req) {
+  try {
+    return await _getImpl(req);
+  } catch (e) {
+    console.error('[pregenerate-analysis] Uncaught error:', e?.stack || e);
+    await logPregenerateFailure(e, req);
+    return NextResponse.json(
+      { error: String(e?.message || e), stack: (e?.stack || '').slice(0, 1000) },
+      { status: 500 }
+    );
+  }
+}
+
+async function _getImpl(req) {
   // Auth check — fail-closed: if CRON_SECRET is not configured, reject with 503
   if (!process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 });
