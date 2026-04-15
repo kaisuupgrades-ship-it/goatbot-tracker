@@ -47,6 +47,24 @@ function toLocalDateStr(d) {
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 }
 
+// Convert a commence time (ISO string or Date) to the ET-local calendar date
+// as YYYY-MM-DD. This is the canonical "game day" used across the platform:
+// ESPN's scoreboard API, game_analyses.game_date, contest day_number logic,
+// and every downstream aggregation all anchor on ET. Using browser-local at
+// save time produced a bug where picks made from India showed up on the
+// wrong day after travel home (the commence_time stayed correct but
+// pick.date was frozen to IST-local). Always deriving from ET means the
+// day a pick belongs to is independent of where the user submits it from.
+function toETDateStr(d) {
+  const dt = new Date(d);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year:  'numeric',
+    month: '2-digit',
+    day:   '2-digit',
+  }).format(dt); // en-CA produces YYYY-MM-DD
+}
+
 // Parse spread string like "DET -1.5" or "Guardians -1.5" → { awayLine, homeLine }
 function parseSpread(spreadStr, awayAbbr, homeAbbr) {
   if (!spreadStr) return null;
@@ -215,7 +233,9 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const homeAbbr  = home.team?.abbreviation || 'HME';
   const awayLogo  = away.team?.logo || null;
   const homeLogo  = home.team?.logo || null;
-  const gameDate  = date ? toLocalDateStr(date) : toLocalDateStr(new Date());
+  // Anchor the game's calendar day on ET, not the user's browser. See
+  // toETDateStr above for the full rationale.
+  const gameDate  = date ? toETDateStr(date) : toETDateStr(new Date());
   const betTypes  = SPORT_BET_TYPES[sport] || DEFAULT_BET_TYPES;
   // Detect if the game has already started — odds shown are closing line (last pre-game snapshot)
   const gameStarted = date && new Date(date).getTime() <= Date.now();

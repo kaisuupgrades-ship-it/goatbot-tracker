@@ -180,8 +180,11 @@ export async function GET(req) {
     return NextResponse.json({ props: [], categories: [], note: 'THE_ODDS_API_KEY not configured' });
   }
 
-  // If no eventId was passed (odds_api_event_id missing on ESPN event), try to find it
-  // by matching team names against The Odds API /events endpoint.
+  // Event ID resolution — happy path: use the eventId the client passed (ESPN
+  // tags its events with odds_api_event_id from the /scores match). Only hit
+  // the /events endpoint (which costs a credit) when we genuinely don't have
+  // one. The downstream fetch below has its own retry-on-404 that will fall
+  // back to team-name resolution if the ESPN-supplied id turns out stale.
   if (!eventId && homeTeam && awayTeam) {
     console.log(`[/api/props] No eventId for ${awayTeam} @ ${homeTeam} — attempting lookup by team name`);
     eventId = await resolveEventId(sportKey, homeTeam, awayTeam);
@@ -189,7 +192,10 @@ export async function GET(req) {
       console.log(`[/api/props] Resolved eventId: ${eventId}`);
     } else {
       console.warn(`[/api/props] Could not resolve event for ${awayTeam} @ ${homeTeam}`);
-      return NextResponse.json({ props: [], categories: [], note: `Event not found for ${awayTeam} @ ${homeTeam} — props may not be available yet` });
+      return NextResponse.json({
+        props: [], categories: [],
+        note: `Event not found for ${awayTeam} @ ${homeTeam} — props may not be available yet`,
+      });
     }
   }
 
@@ -216,30 +222,55 @@ export async function GET(req) {
   const allMarkets = groups.flatMap(g => g.markets).join(',');
   if (!allMarkets) return NextResponse.json({ props: [], categories: [] });
 
-  try {
-    const url = new URL(`${THE_ODDS_BASE}/sports/${sportKey}/events/${eventId}/odds`);
+  // Helper: fetch odds for a given eventId. Returns { ok: true, data } or
+  // { ok: false, status, message }. Kept as a named step so the retry path
+  // below can reuse it without duplicating the URL construction.
+  async function fetchOddsForEvent(eid) {
+    const url = new URL(`${THE_ODDS_BASE}/sports/${sportKey}/events/${eid}/odds`);
     url.searchParams.set('apiKey', THE_ODDS_KEY);
     url.searchParams.set('regions', 'us');
     url.searchParams.set('markets', allMarkets);
     url.searchParams.set('oddsFormat', 'american');
-    url.searchParams.set('bookmakers', 'draftkings,fanduel,betmgm'); // top 3 books
-
+    url.searchParams.set('bookmakers', 'draftkings,fanduel,betmgm');
     const reqUrl = url.toString();
     console.log('[/api/props] Fetching:', reqUrl.replace(THE_ODDS_KEY, '***'));
     const res = await fetch(reqUrl, { signal: AbortSignal.timeout(10000) });
-
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
-      const errMsg = errBody?.message || `HTTP ${res.status}`;
-      console.error('[/api/props] Odds API error:', res.status, errMsg, {
+      return { ok: false, status: res.status, message: errBody?.message || `HTTP ${res.status}` };
+    }
+    return { ok: true, data: await res.json() };
+  }
+
+  try {
+    let result = await fetchOddsForEvent(eventId);
+
+    // Retry-on-stale-id: The Odds API sometimes reissues an event's id (most
+    // commonly on postponements/reschedules). ESPN's scoreboard can still
+    // carry the old id for up to a few hours, so the direct hit above 404s.
+    // If we have team names, re-resolve the current id via /events and try
+    // once more before giving up. This costs 1 credit ONLY on the retry path
+    // — the happy path stays 1 credit total.
+    if (!result.ok && (result.status === 404 || /not found/i.test(result.message)) && homeTeam && awayTeam) {
+      console.warn(`[/api/props] Primary fetch failed (${result.status}) for ${awayTeam} @ ${homeTeam}; re-resolving eventId`);
+      const freshId = await resolveEventId(sportKey, homeTeam, awayTeam);
+      if (freshId && freshId !== eventId) {
+        console.log(`[/api/props] Retrying with resolved eventId ${freshId} (was ${eventId})`);
+        eventId = freshId;
+        result = await fetchOddsForEvent(eventId);
+      }
+    }
+
+    if (!result.ok) {
+      console.error('[/api/props] Odds API error:', result.status, result.message, {
         sport, sportKey, eventId,
         keyPresent: !!THE_ODDS_KEY,
         keyLength: THE_ODDS_KEY?.length,
       });
-      return NextResponse.json({ props: [], categories: [], note: errMsg });
+      return NextResponse.json({ props: [], categories: [], note: result.message });
     }
 
-    const data = await res.json();
+    const data = result.data;
     const bookmakers = data?.bookmakers || [];
 
     // Collect all markets across bookmakers, prefer DraftKings → FanDuel → BetMGM
