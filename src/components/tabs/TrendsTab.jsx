@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { playTick, playAnalysisReady } from '@/lib/sounds';
+import { supabase } from '@/lib/supabase';
 
 // ── Scan steps for the fake-but-real animated progress bar ───────────────────
 const SCAN_STEPS = [
@@ -363,12 +364,21 @@ export default function TrendsTab({ picks, user, onNavigateToTracker }) {
       // Fetch real odds from The Odds API + ESPN schedule in parallel
       const SPORT_EMOJI = { mlb: '⚾', nba: '🏀', nhl: '🏒', nfl: '🏈' };
 
+      // /api/odds requires a valid session — grab the token once and reuse
+      // for every per-sport fan-out below. Demo/unauth users just see empty
+      // odds data, which Trends degrades to "ESPN-only" scan.
+      const { data: { session } } = await supabase.auth.getSession();
+      const oddsHeaders = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : null;
+
       const [oddsResults, espnResults] = await Promise.all([
         // Real bookmaker odds via our /api/odds route (already caches 3 min)
         Promise.allSettled(
           sportsToFetch.map(async sp => {
+            if (!oddsHeaders) return { sport: sp, data: [] };
             try {
-              const res = await fetch(`/api/odds?sport=${sp}`);
+              const res = await fetch(`/api/odds?sport=${sp}`, { headers: oddsHeaders });
               if (!res.ok) return { sport: sp, data: [] };
               const d = await res.json();
               return { sport: sp, data: d.data || [] };

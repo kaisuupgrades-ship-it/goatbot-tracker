@@ -7,7 +7,7 @@ import { getUserPrefs, formatGameTime, getTzAbbr } from '@/lib/userPrefs';
 import GolfLeaderboard from '@/components/GolfLeaderboard';
 import TennisScoreboard from '@/components/TennisScoreboard';
 import SoccerScoreboard from '@/components/SoccerScoreboard';
-import { submitParlay } from '@/lib/supabase';
+import { submitParlay, supabase } from '@/lib/supabase';
 import { validML, validSpreadJuice, validTotal, SPORT_KEY_MAP } from '@/lib/odds';
 
 // ── Module-level caches ───────────────────────────────────────────────────────
@@ -2369,16 +2369,22 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
     setNewsLoading(false);
   }, []);
 
-  // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill
+  // Fetch real bookmaker odds (The Odds API) for bet-slip pre-fill.
+  // /api/odds now requires a valid session (Bearer JWT) — we grab the
+  // current token once and reuse it for all parallel per-sport calls below.
   const loadRealOdds = useCallback(async (s) => {
     if (DEDICATED_VIEW_SPORTS.has(s)) return;
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return; // demo/unauth: real odds are a bonus, skip silently
+      const authHeaders = { Authorization: `Bearer ${session.access_token}` };
+
       if (s === 'all') {
         // Combined view: fetch odds for every standard sport in parallel and merge into one lookup.
         // The /api/odds endpoint reads from the 15-min Supabase cache first, so this burns zero API credits.
         const results = await Promise.allSettled(
           ALL_SPORTS_KEYS.map(key =>
-            fetch(`/api/odds?sport=${key}`)
+            fetch(`/api/odds?sport=${key}`, { headers: authHeaders })
               .then(r => r.ok ? r.json() : { data: [], cached: false })
           )
         );
@@ -2398,7 +2404,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
         return;
       }
       const url = `/api/odds?sport=${s}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: authHeaders });
       if (!res.ok) return;
       const d = await res.json();
       const lookup = {};

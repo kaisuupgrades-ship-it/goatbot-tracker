@@ -536,6 +536,34 @@ async function fetchFromLegacy(sportKey) {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 export async function GET(req) {
+  // ── Session gate (inline, pre-security-refactor) ─────────────────────────
+  // Paid Odds API passthrough. Without auth, any external process can drain
+  // our quota for free. Accept either a valid Supabase Bearer JWT (logged-in
+  // browser session) or the internal CRON_SECRET (cache-warming cron). Any
+  // other caller gets 401.
+  //
+  // This is intentionally inline and duplicates the token-extract pattern
+  // found in /api/admin/api-usage. A subsequent commit in the security block
+  // will extract this to lib/auth.js and have every gated route call a
+  // shared requireSession() helper — keeping the check inline here avoids
+  // coupling this hotfix to infrastructure that doesn't exist yet.
+  {
+    const authHeader = req.headers.get('authorization') || '';
+    const cronSecret = process.env.CRON_SECRET;
+    const isServerCall = cronSecret && authHeader === `Bearer ${cronSecret}`;
+
+    if (!isServerCall) {
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+      if (!token) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const { data: { user } = {}, error: authErr } = await supabase.auth.getUser(token);
+      if (authErr || !user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+  }
+
   const { searchParams } = new URL(req.url);
   const sportKey = (searchParams.get('sport') || 'mlb').toLowerCase();
 

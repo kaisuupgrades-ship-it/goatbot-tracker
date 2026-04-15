@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { validSpreadJuice } from '@/lib/odds';
+import { supabase } from '@/lib/supabase';
 
 const SPORTS = [
   { key: 'mlb',   label: 'MLB',   emoji: '⚾' },
@@ -608,8 +609,19 @@ export default function OddsTab({ onAnalyze, activeSport, onSportChange }) {
     setLoading(true);
     setError('');
     try {
+      // /api/odds requires a valid session — pass the Bearer JWT. Show a
+      // "sign in for live odds" state if we don't have one (demo/unauth).
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setConfigured(false);
+        setError('Sign in to view live odds');
+        setLoading(false);
+        return;
+      }
       const dateParam = dateOff !== 0 ? `&date=${getDateStr(dateOff)}` : '';
-      const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}`);
+      const res  = await fetch(`/api/odds?sport=${s}&market=all${dateParam}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
       const data = await res.json();
       if (data.configured === false) { setConfigured(false); setLoading(false); return; }
       if (data.error) throw new Error(data.message || (typeof data.error === 'string' ? data.error : 'Odds data temporarily unavailable'));
