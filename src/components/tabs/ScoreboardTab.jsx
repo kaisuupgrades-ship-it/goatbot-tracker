@@ -10,6 +10,76 @@ import SoccerScoreboard from '@/components/SoccerScoreboard';
 import { submitParlay } from '@/lib/supabase';
 import { validML, validSpreadJuice, validTotal, SPORT_KEY_MAP } from '@/lib/odds';
 
+// ── Module-level caches ───────────────────────────────────────────────────────
+// These persist across card re-renders (live score refreshes cause the whole
+// scoreboard to re-render every 20s, which unmounts+remounts GameCards — local
+// useState was being thrown away and each expand re-fetched). Keeping caches at
+// module scope survives re-renders without needing a React context.
+//
+// H2H: keyed by `${sport}_${homeTeamId}_${awayTeamId}`. No TTL — a team's
+// historical head-to-head record doesn't change until a new game is played,
+// and a browser reload clears this cache anyway.
+//
+// Weather: keyed by `${lat}_${lon}_${gameDate}`. 30-min TTL — forecasts
+// update on that cadence and game-time weather rarely swings materially.
+//
+// In-flight dedupe: concurrent calls for the same key (e.g. hover-prefetch
+// fires, then user clicks before the first returns) share a single promise
+// instead of double-firing the API.
+const h2hCache          = new Map(); // key → { record, games }
+const h2hInFlight       = new Map(); // key → Promise
+const WEATHER_TTL_MS    = 30 * 60 * 1000; // 30 minutes
+const weatherCache      = new Map(); // key → { data, time }
+const weatherInFlight   = new Map(); // key → Promise
+
+function fetchH2H({ sport, homeTeamId, awayTeamId, homeAbbr, awayAbbr }) {
+  const key = `${sport}_${homeTeamId}_${awayTeamId}`;
+  const cached = h2hCache.get(key);
+  if (cached) return Promise.resolve(cached);
+  const pending = h2hInFlight.get(key);
+  if (pending) return pending;
+
+  const url = `/api/h2h?sport=${sport}&team1=${homeTeamId}&team2=${awayTeamId}`
+    + `&abbrHome=${homeAbbr || 'HM'}&abbrAway=${awayAbbr || 'AW'}`;
+
+  const promise = fetch(url)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (d && d.record) h2hCache.set(key, d);
+      return d;
+    })
+    .catch(() => null)
+    .finally(() => { h2hInFlight.delete(key); });
+
+  h2hInFlight.set(key, promise);
+  return promise;
+}
+
+function fetchWeather({ lat, lon, gameDate }) {
+  if (!lat) return Promise.resolve(null);
+  const key = `${lat}_${lon}_${gameDate || ''}`;
+  const cached = weatherCache.get(key);
+  if (cached && Date.now() - cached.time < WEATHER_TTL_MS) {
+    return Promise.resolve(cached.data);
+  }
+  const pending = weatherInFlight.get(key);
+  if (pending) return pending;
+
+  const params = new URLSearchParams({ lat, lon, ...(gameDate ? { gameTime: gameDate } : {}) });
+  const promise = fetch(`/api/weather?${params}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      const data = d && !d.error ? d : null;
+      if (data) weatherCache.set(key, { data, time: Date.now() });
+      return data;
+    })
+    .catch(() => null)
+    .finally(() => { weatherInFlight.delete(key); });
+
+  weatherInFlight.set(key, promise);
+  return promise;
+}
+
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
 
@@ -432,20 +502,31 @@ const INDOOR_SPORTS = new Set(['nba', 'nhl', 'ncaab', 'wnba']);
 
 // ── WeatherWidget ────────────────────────────────────────────────────────────
 function WeatherWidget({ stadium, gameDate, sport }) {
-  const [wx, setWx]     = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Seed from the module-level cache (30-min TTL lookup happens inside
+  // fetchWeather on refetch). This eliminates the "Loading game-time forecast…"
+  // flash when a card re-mounts during the 20-second live score refresh cycle.
+  const cacheKey = stadium?.lat ? `${stadium.lat}_${stadium.lon}_${gameDate || ''}`: null;
+  const cachedWx = (() => {
+    if (!cacheKey) return null;
+    const entry = weatherCache.get(cacheKey);
+    if (!entry) return null;
+    return Date.now() - entry.time < WEATHER_TTL_MS ? entry.data : null;
+  })();
+  const [wx, setWx]     = useState(cachedWx);
+  const [loading, setLoading] = useState(!cachedWx);
 
   useEffect(() => {
     if (!stadium?.lat) { setLoading(false); return; }
-    const params = new URLSearchParams({
-      lat: stadium.lat,
-      lon: stadium.lon,
-      ...(gameDate ? { gameTime: gameDate } : {}),
-    });
-    fetch(`/api/weather?${params}`)
-      .then(r => r.json())
-      .then(d => { setWx(d.error ? null : d); setLoading(false); })
-      .catch(() => setLoading(false));
+    // If cache is fresh, fetchWeather resolves synchronously (same tick) with
+    // the cached value, so no network round-trip.
+    let cancelled = false;
+    fetchWeather({ lat: stadium.lat, lon: stadium.lon, gameDate })
+      .then(d => {
+        if (cancelled) return;
+        setWx(d);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [stadium?.lat, stadium?.lon, gameDate]);
 
   if (stadium?.dome) {
@@ -966,9 +1047,12 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
   const [expanded, setExpanded] = useState(false);
   const [parlayPickerOpen, setParlayPickerOpen] = useState(false);
   const isExpanded = suppressHeader ? (externalExpanded ?? false) : expanded;
-  const [h2hData,  setH2hData]  = useState(null);   // { record, games } or null
-  const [h2hLoad,  setH2hLoad]  = useState(false);
   const { away, home } = getCompetitors(event);
+  // Seed H2H from the module-level cache so re-mounted cards (triggered by
+  // live score refresh) don't flash "Loading history…" for data we already have.
+  const h2hKey = `${sport}_${home.team?.id}_${away.team?.id}`;
+  const [h2hData,  setH2hData]  = useState(() => h2hCache.get(h2hKey) || null);
+  const [h2hLoad,  setH2hLoad]  = useState(false);
   const gameState  = getGameState(event);
   const odds       = getOdds(event);
   const broadcast  = getBroadcast(event);
@@ -1006,17 +1090,42 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
   const awayInjuries = (injuries && awayTeamId) ? (injuries[awayTeamId] || []) : [];
   const homeInjuries = (injuries && homeTeamId) ? (injuries[homeTeamId] || []) : [];
 
-  // Load H2H history when card first expands
+  // Load H2H history when card expands (or on hover-prefetch via prefetchH2H).
+  // Goes through the shared fetchH2H helper which hits the module-level cache
+  // first, so expanding a card whose H2H has already been fetched (by this
+  // session, another card with the same matchup, or a prior hover) is instant.
   useEffect(() => {
     if (!expanded || h2hData || h2hLoad) return;
     if (!awayTeamId || !homeTeamId) return;
     setH2hLoad(true);
-    fetch(`/api/h2h?sport=${sport}&team1=${homeTeamId}&team2=${awayTeamId}&abbrHome=${home.team?.abbreviation || 'HM'}&abbrAway=${away.team?.abbreviation || 'AW'}`)
-      .then(r => r.json())
-      .then(d => { if (d.record) setH2hData(d); })
-      .catch(() => {})
+    fetchH2H({
+      sport,
+      homeTeamId,
+      awayTeamId,
+      homeAbbr: home.team?.abbreviation,
+      awayAbbr: away.team?.abbreviation,
+    })
+      .then(d => { if (d && d.record) setH2hData(d); })
       .finally(() => setH2hLoad(false));
   }, [expanded, h2hData, h2hLoad, awayTeamId, homeTeamId, sport, home.team?.abbreviation, away.team?.abbreviation]);
+
+  // Fire-and-forget prefetch, wired to the card's onMouseEnter. Only runs when
+  // the data isn't already cached — safe to call on every hover.
+  const prefetchH2H = () => {
+    if (!awayTeamId || !homeTeamId) return;
+    if (h2hCache.has(h2hKey)) return;
+    fetchH2H({
+      sport,
+      homeTeamId,
+      awayTeamId,
+      homeAbbr: home.team?.abbreviation,
+      awayAbbr: away.team?.abbreviation,
+    }).then(d => {
+      // If the card is currently rendering (but hadn't expanded yet), surface
+      // the data into local state so expand is instant, no re-render gap.
+      if (d && d.record) setH2hData(prev => prev || d);
+    });
+  };
 
   return (
     <div
@@ -1044,7 +1153,12 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           cursor: 'pointer',
           userSelect: 'none',
         }}
-        onMouseEnter={e => { if (!expanded) e.currentTarget.parentElement.style.borderColor = 'rgba(255,184,0,0.25)'; }}
+        onMouseEnter={e => {
+          if (!expanded) e.currentTarget.parentElement.style.borderColor = 'rgba(255,184,0,0.25)';
+          // Warm the H2H cache while the user is still deciding whether to
+          // expand — by the time they click, data is typically already there.
+          prefetchH2H();
+        }}
         onMouseLeave={e => { if (!expanded) e.currentTarget.parentElement.style.borderColor = expanded ? 'rgba(255,184,0,0.35)' : isStarred ? 'rgba(255,184,0,0.2)' : 'var(--border)'; }}
       >
         {/* Status bar */}
