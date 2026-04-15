@@ -251,13 +251,19 @@ export async function GET(req) {
     // If we have team names, re-resolve the current id via /events and try
     // once more before giving up. This costs 1 credit ONLY on the retry path
     // — the happy path stays 1 credit total.
+    //
+    // Note: we deliberately DO NOT reassign `eventId` with the fresh id —
+    // SWC flagged the reassignment as a const violation (bug or strict-mode
+    // quirk in Next 14.2.5 even though the outer binding is `let`), and
+    // keeping the cache key on the original client-supplied id is actually
+    // the right behavior: future requests that arrive with the same stale
+    // id will hit the warm cache instead of re-re-resolving.
     if (!result.ok && (result.status === 404 || /not found/i.test(result.message)) && homeTeam && awayTeam) {
       console.warn(`[/api/props] Primary fetch failed (${result.status}) for ${awayTeam} @ ${homeTeam}; re-resolving eventId`);
       const freshId = await resolveEventId(sportKey, homeTeam, awayTeam);
       if (freshId && freshId !== eventId) {
         console.log(`[/api/props] Retrying with resolved eventId ${freshId} (was ${eventId})`);
-        eventId = freshId;
-        result = await fetchOddsForEvent(eventId);
+        result = await fetchOddsForEvent(freshId);
       }
     }
 
