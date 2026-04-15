@@ -20,29 +20,40 @@ export async function GET(req) {
 
   const { data, error } = await supabase
     .from('game_analyses')
-    .select('id, sport, away_team, home_team, game_date, updated_at, analysis')
+    .select('id, sport, away_team, home_team, game_date, updated_at, analysis, prediction_pick, prediction_conf, prediction_edge')
     .eq('game_date', date)
     .order('updated_at', { ascending: false });
 
   if (error) return NextResponse.json({ analyses: [] });
 
-  // Parse just the key fields from each analysis — keeps payload small
+  // Prefer the structured DB columns (prediction_pick / prediction_conf /
+  // prediction_edge) — the pregenerate cron writes directly into these so
+  // the frontend doesn't have to regex-scrape the narrative text. The regex
+  // path remains as a fallback for legacy rows that predate the structured
+  // columns being populated, and for the numeric EDGE SCORE which isn't
+  // stored in its own column.
   const analyses = (data || []).map(row => {
-    const pickM  = row.analysis?.match(/(?:^|\n)\*{0,2}THE PICK\*{0,2}\s*:\s*([^\n]{5,120})/im);
-    const pick   = pickM?.[1]?.replace(/\*+/g, '').trim() || null;
-    const confM  = row.analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
-    const edgeM  = row.analysis?.match(/EDGE SCORE[:\s]+([\d.]+)/i);
-    const edgeBM = row.analysis?.match(/EDGE BREAKDOWN[:\s]*([^\n]{10,200})/i);
+    const pickRegex = row.analysis?.match(/(?:^|\n)\*{0,2}THE PICK\*{0,2}\s*:\s*([^\n]{5,120})/im);
+    const pickFromText = pickRegex?.[1]?.replace(/\*+/g, '').trim() || null;
+
+    const confRegex = row.analysis?.match(/CONFIDENCE[:\s]+(ELITE|HIGH|MEDIUM|LOW)/i);
+    const confFromText = confRegex?.[1]?.trim() || null;
+
+    const edgeNumRegex   = row.analysis?.match(/EDGE SCORE[:\s]+([\d.]+)/i);
+    const edgeBreakRegex = row.analysis?.match(/EDGE BREAKDOWN[:\s]*([^\n]{10,200})/i);
+
     return {
-      id:        row.id,
-      sport:     row.sport,
-      away_team: row.away_team,
-      home_team: row.home_team,
+      id:         row.id,
+      sport:      row.sport,
+      away_team:  row.away_team,
+      home_team:  row.home_team,
       updated_at: row.updated_at,
-      pick,
-      conf:      confM?.[1]?.trim()  || null,
-      edge:      edgeM?.[1]?.trim()  || null,
-      edge_breakdown: edgeBM?.[1]?.trim() || null,
+      pick:       row.prediction_pick || pickFromText,
+      conf:       row.prediction_conf || confFromText,
+      edge:       edgeNumRegex?.[1]?.trim() || null,
+      // prediction_edge stores the rationale text; fall back to a narrative
+      // "EDGE BREAKDOWN:" section if present.
+      edge_breakdown: row.prediction_edge || edgeBreakRegex?.[1]?.trim() || null,
     };
   });
 
