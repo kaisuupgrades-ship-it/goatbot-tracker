@@ -26,16 +26,40 @@ import { validML, validSpreadJuice, validTotal, SPORT_KEY_MAP } from '@/lib/odds
 // In-flight dedupe: concurrent calls for the same key (e.g. hover-prefetch
 // fires, then user clicks before the first returns) share a single promise
 // instead of double-firing the API.
-const h2hCache          = new Map(); // key → { record, games }
+const H2H_NEG_TTL_MS    = 5 * 60 * 1000; // 5 min for failed/empty responses
+const h2hCache          = new Map(); // key → { data: {record,games}|null, time, ok: boolean }
 const h2hInFlight       = new Map(); // key → Promise
+
 const WEATHER_TTL_MS    = 30 * 60 * 1000; // 30 minutes
 const weatherCache      = new Map(); // key → { data, time }
 const weatherInFlight   = new Map(); // key → Promise
 
+// Sports the /api/h2h endpoint actually supports. Anything else (incl. 'all')
+// would return 400 — short-circuit instead of spamming the server on every
+// hover while the user is in the All-sports view.
+const H2H_VALID_SPORTS = new Set(['mlb','nfl','nba','nhl','ncaaf','ncaab','mls','wnba']);
+
+function h2hCacheLookup(key) {
+  const entry = h2hCache.get(key);
+  if (!entry) return undefined; // cache miss
+  if (entry.ok) return entry.data; // positive hit
+  // Negative hit — respect the short TTL so a transient failure clears itself.
+  if (Date.now() - entry.time < H2H_NEG_TTL_MS) return null;
+  h2hCache.delete(key);
+  return undefined;
+}
+
 function fetchH2H({ sport, homeTeamId, awayTeamId, homeAbbr, awayAbbr }) {
+  // Invalid input — don't fire the request. Cached null avoids re-entry on
+  // every re-render/hover. Use a short-lived marker so a corrected caller
+  // (e.g. filter changes from 'all' to 'mlb') eventually retries.
+  if (!sport || !homeTeamId || !awayTeamId || !H2H_VALID_SPORTS.has(sport)) {
+    return Promise.resolve(null);
+  }
+
   const key = `${sport}_${homeTeamId}_${awayTeamId}`;
-  const cached = h2hCache.get(key);
-  if (cached) return Promise.resolve(cached);
+  const cached = h2hCacheLookup(key);
+  if (cached !== undefined) return Promise.resolve(cached);
   const pending = h2hInFlight.get(key);
   if (pending) return pending;
 
@@ -45,10 +69,20 @@ function fetchH2H({ sport, homeTeamId, awayTeamId, homeAbbr, awayAbbr }) {
   const promise = fetch(url)
     .then(r => r.ok ? r.json() : null)
     .then(d => {
-      if (d && d.record) h2hCache.set(key, d);
-      return d;
+      // Positive cache: successful response with a record. Keep forever.
+      // Negative cache: any failure (400, timeout, empty body). 5-min TTL so
+      // we stop retrying every hover, but recover from transient errors.
+      if (d && d.record) {
+        h2hCache.set(key, { data: d, time: Date.now(), ok: true });
+        return d;
+      }
+      h2hCache.set(key, { data: null, time: Date.now(), ok: false });
+      return null;
     })
-    .catch(() => null)
+    .catch(() => {
+      h2hCache.set(key, { data: null, time: Date.now(), ok: false });
+      return null;
+    })
     .finally(() => { h2hInFlight.delete(key); });
 
   h2hInFlight.set(key, promise);
@@ -1049,9 +1083,14 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
   const isExpanded = suppressHeader ? (externalExpanded ?? false) : expanded;
   const { away, home } = getCompetitors(event);
   // Seed H2H from the module-level cache so re-mounted cards (triggered by
-  // live score refresh) don't flash "Loading history…" for data we already have.
+  // live score refresh) don't flash "Loading history…" for data we already
+  // have. h2hCacheLookup returns undefined on miss and null on negative-cache
+  // hit — either way we start with null data.
   const h2hKey = `${sport}_${home.team?.id}_${away.team?.id}`;
-  const [h2hData,  setH2hData]  = useState(() => h2hCache.get(h2hKey) || null);
+  const [h2hData,  setH2hData]  = useState(() => {
+    const cached = h2hCacheLookup(h2hKey);
+    return cached !== undefined ? cached : null;
+  });
   const [h2hLoad,  setH2hLoad]  = useState(false);
   const gameState  = getGameState(event);
   const odds       = getOdds(event);
@@ -1109,11 +1148,13 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
       .finally(() => setH2hLoad(false));
   }, [expanded, h2hData, h2hLoad, awayTeamId, homeTeamId, sport, home.team?.abbreviation, away.team?.abbreviation]);
 
-  // Fire-and-forget prefetch, wired to the card's onMouseEnter. Only runs when
-  // the data isn't already cached — safe to call on every hover.
+  // Fire-and-forget prefetch, wired to the card's onMouseEnter. Cheap to call
+  // repeatedly — fetchH2H checks the cache (incl. negative-cache TTL) and the
+  // in-flight map before firing any request. Refuses silently when sport is
+  // 'all' or otherwise invalid, so this can't spam /api/h2h with 400s.
   const prefetchH2H = () => {
     if (!awayTeamId || !homeTeamId) return;
-    if (h2hCache.has(h2hKey)) return;
+    if (h2hCacheLookup(h2hKey) !== undefined) return;
     fetchH2H({
       sport,
       homeTeamId,
@@ -2925,7 +2966,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
           <div className="game-cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: '10px', alignItems: 'start' }}>
             {sortedFilteredGames.map(event => (
               <div
-                key={`${event._sport || sport}-${event.id}`}
+                key={`${event._sport || (sport !== 'all' ? sport : 'mixed')}-${event.id}`}
                 ref={el => { if (el) gameCardRefs.current[event.id] = el; }}
                 style={highlightedEventId === event.id ? {
                   borderRadius: '14px',
@@ -2935,7 +2976,12 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
               >
                 <GameCard
                   event={event}
-                  sport={event._sport || sport}
+                  // Never pass 'all' as a card's sport — downstream APIs
+                  // (/api/h2h, /api/weather) expect a real sport key. In All
+                  // mode, events from the parallel fetch are tagged with
+                  // _sport. Fall back to null for any stray untagged event
+                  // (e.g. starred-games from localStorage predating the tag).
+                  sport={event._sport || (sport !== 'all' ? sport : null)}
                   onAnalyze={onAnalyze}
                   onAddBet={(ev, sp) => setBetSlipGame({ event: ev, sport: sp })}
                   starred={starred}
