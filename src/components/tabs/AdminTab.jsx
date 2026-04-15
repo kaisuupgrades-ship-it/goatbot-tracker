@@ -684,6 +684,143 @@ function EditPickModal({ pick, userEmail, onClose, onSaved }) {
   );
 }
 
+// ── STUCK PICKS WIDGET ────────────────────────────────────────────────────────
+// Surfaces any pick with result IS NULL / 'PENDING' whose game date is before
+// today (ET). These should be zero in a healthy system; when they're non-zero
+// something upstream has failed (malformed sport value, team-match failure,
+// cron error). Admin can force-grade any of them inline without having to
+// navigate into the individual pick-edit flow.
+function StuckPicksWidget({ userEmail, onNavigate }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [gradingId, setGradingId] = useState(null);
+  const [error, setError]     = useState('');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch('/api/admin?action=stuck_picks')
+      .then(r => r.json())
+      .then(d => { if (d.error) setError(d.error); else setRows(d.stuck_picks || []); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [userEmail]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function forceGrade(id, result) {
+    if (!confirm(`Force-grade this pick as ${result}? Profit will be recomputed from the stored odds/units. Audit note will be appended.`)) return;
+    setGradingId(id);
+    try {
+      const res = await adminFetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'force_grade_pick',
+          targetId: id,
+          result,
+          reason: 'Manual admin resolution via Stuck Picks widget',
+        }),
+      });
+      const d = await res.json();
+      if (d.error) { setError(d.error); return; }
+      setRows(prev => prev.filter(r => r.id !== id));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGradingId(null);
+    }
+  }
+
+  if (loading) return null;
+  if (error) return <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>Stuck picks: {error}</div>;
+  if (rows.length === 0) return null; // quiet when healthy
+
+  return (
+    <div style={{
+      marginBottom: '1.25rem',
+      padding: '0.9rem 1.1rem',
+      background: 'rgba(248,113,113,0.04)',
+      border: '1px solid rgba(248,113,113,0.28)',
+      borderRadius: '10px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.65rem' }}>
+        <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+        <div style={{ fontWeight: 800, color: '#ffb3bd', fontSize: '0.92rem' }}>
+          Stuck Picks — {rows.length} row{rows.length > 1 ? 's' : ''} past game date with no result
+        </div>
+        <button onClick={load}
+          style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: '5px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem' }}>
+          ↻ Refresh
+        </button>
+      </div>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.7rem' }}>
+        These picks survived every auto-grading pass. Verify the result manually, then click W / L / P to resolve.
+        The profit field recomputes from the stored odds + units.
+      </div>
+      <div style={{ display: 'grid', gap: '6px' }}>
+        {rows.map(r => (
+          <div key={r.id} style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: '10px',
+            padding: '0.55rem 0.8rem',
+            background: 'rgba(0,0,0,0.22)',
+            borderRadius: '7px',
+            border: '1px solid rgba(255,255,255,0.04)',
+            alignItems: 'center',
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <span style={{ color: '#93c5fd' }}>@{r.username}</span>
+                {' · '}
+                <span style={{ color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.72rem' }}>{r.date}</span>
+                {' · '}
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{r.sport || '—'}</span>
+                {' · '}
+                <span style={{ color: 'var(--gold)' }}>{r.team}</span>
+                {' '}
+                <span style={{ color: 'var(--text-secondary)' }}>{r.bet_type}{r.line ? ` ${r.line}` : ''}</span>
+                {' @ '}
+                <span style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{r.odds > 0 ? '+' : ''}{r.odds}</span>
+                {' · '}
+                <span style={{ color: 'var(--text-muted)' }}>{r.units}u</span>
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {r.matchup || '—'}
+                {r.days_stuck != null && <> · stuck <strong style={{ color: '#f87171' }}>{r.days_stuck}d</strong></>}
+                {(!r.home_team || !r.commence_time) && <> · <span style={{ color: '#fbbf24' }}>missing structured fields</span></>}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '5px' }}>
+              {[
+                { label: 'W', result: 'WIN',  color: '#4ade80' },
+                { label: 'L', result: 'LOSS', color: '#f87171' },
+                { label: 'P', result: 'PUSH', color: '#60a5fa' },
+              ].map(btn => (
+                <button key={btn.result}
+                  disabled={gradingId === r.id}
+                  onClick={() => forceGrade(r.id, btn.result)}
+                  title={`Grade as ${btn.result}`}
+                  style={{
+                    width: '30px', height: '30px',
+                    borderRadius: '6px',
+                    border: `1px solid ${btn.color}`,
+                    background: `${btn.color}22`,
+                    color: btn.color,
+                    cursor: gradingId === r.id ? 'wait' : 'pointer',
+                    fontWeight: 800, fontSize: '0.82rem',
+                    fontFamily: 'inherit',
+                  }}>
+                  {gradingId === r.id ? '…' : btn.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── PICKS AUDIT TAB ───────────────────────────────────────────────────────────
 function PicksAuditPanel({ userEmail, onNavigate, externalSport }) {
   const [picks, setPicks]       = useState([]);
@@ -765,6 +902,8 @@ function PicksAuditPanel({ userEmail, onNavigate, externalSport }) {
       {showAddPick && <AddPickModal userEmail={userEmail} onClose={() => setShowAddPick(false)} onAdded={handleAdded} />}
       {error && <div style={{ color: '#f87171', padding: '0.75rem', background: 'rgba(248,113,113,0.05)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)', marginBottom: '1rem' }}>⚠ {error}</div>}
       {actionMsg && <div style={{ color: '#4ade80', padding: '0.5rem 0.75rem', background: 'rgba(74,222,128,0.05)', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.8rem' }}>{actionMsg}</div>}
+
+      <StuckPicksWidget userEmail={userEmail} onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {['', 'MLB', 'NFL', 'NBA', 'NHL', 'NCAAF', 'NCAAB', 'Soccer', 'Other'].map(s => (

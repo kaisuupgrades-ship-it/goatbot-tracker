@@ -173,6 +173,38 @@ export async function GET(req) {
       return NextResponse.json({ picks: enrichedPicks });
     }
 
+    if (action === 'stuck_picks') {
+      // Any non-parlay pick with result IS NULL or 'PENDING' where the game
+      // date is older than today. In a healthy system this should be empty
+      // (today's in-progress games don't count — they still have time to
+      // grade). Attached to the admin Stuck Picks widget.
+      const todayET = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(new Date());
+      const { data: picks, error } = await supabaseAdmin
+        .from('picks')
+        .select('id, user_id, date, sport, team, bet_type, line, odds, units, matchup, home_team, away_team, commence_time, game_id, result, created_at, admin_edited_at')
+        .or('result.is.null,result.eq.PENDING')
+        .lt('date', todayET)
+        .eq('is_parlay', false)
+        .order('date', { ascending: true });
+      if (error) throw error;
+
+      const userIds = [...new Set((picks || []).map(p => p.user_id).filter(Boolean))];
+      let usernameMap = {};
+      if (userIds.length > 0) {
+        const { data: profileRows } = await supabaseAdmin
+          .from('profiles').select('id, username').in('id', userIds);
+        (profileRows || []).forEach(p => { usernameMap[p.id] = p.username; });
+      }
+      const enriched = (picks || []).map(p => ({
+        ...p,
+        username: usernameMap[p.user_id] || 'Unknown',
+        days_stuck: Math.floor((Date.now() - new Date(p.date + 'T12:00:00Z').getTime()) / 86400000),
+      }));
+      return NextResponse.json({ stuck_picks: enriched, checked_at: new Date().toISOString() });
+    }
+
     if (action === 'cron_settings') {
       // Fetch all cron-related settings: enabled flags + last-run summaries
       const { data: rows } = await supabaseAdmin
@@ -522,6 +554,48 @@ export async function POST(req) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === 'force_grade_pick') {
+      // Manually grade a stuck pick. Admin supplies the result and (optionally)
+      // the final scores; profit is recomputed from the stored odds + units.
+      // Auto-writes audit fields so we can track who forced it and when.
+      const { result, home_score = null, away_score = null, reason = null } = body;
+      if (!['WIN', 'LOSS', 'PUSH', 'VOID', 'N/A'].includes(result)) {
+        return NextResponse.json({ error: 'result must be WIN | LOSS | PUSH | VOID | N/A' }, { status: 400 });
+      }
+
+      const { data: row, error: readErr } = await supabaseAdmin
+        .from('picks').select('odds, units, notes').eq('id', targetId).maybeSingle();
+      if (readErr || !row) return NextResponse.json({ error: 'Pick not found' }, { status: 404 });
+
+      const odds  = parseFloat(row.odds);
+      const units = parseFloat(row.units);
+      let profit = 0;
+      if (result === 'WIN' && !isNaN(odds) && !isNaN(units)) {
+        profit = odds > 0
+          ? Math.round(units * odds / 100 * 1000) / 1000
+          : Math.round(units * 100 / Math.abs(odds) * 1000) / 1000;
+      } else if (result === 'LOSS' && !isNaN(units)) {
+        profit = -units;
+      }
+
+      const auditNote = `[admin-force-grade ${new Date().toISOString().slice(0, 10)}: ${result}${reason ? ' — ' + reason : ''}]`;
+      const { error } = await supabaseAdmin
+        .from('picks')
+        .update({
+          result,
+          profit,
+          graded_at:         new Date().toISOString(),
+          graded_home_score: home_score != null ? String(home_score) : null,
+          graded_away_score: away_score != null ? String(away_score) : null,
+          admin_edited_at:   new Date().toISOString(),
+          admin_edited_by:   adminEmail,
+          notes:             row.notes ? `${row.notes} | ${auditNote}` : auditNote,
+        })
+        .eq('id', targetId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true, result, profit });
+    }
+
     if (action === 'reset_pick') {
       // Reset a pick back to PENDING — clears result, profit, and graded timestamps
       const { error } = await supabaseAdmin
@@ -615,11 +689,44 @@ export async function POST(req) {
         }
       }
 
+      // Auto-recompute profit when result is being changed but profit wasn't
+      // supplied by the admin. Previously, an admin flipping LOSS→WIN without
+      // also editing the profit field left the stale -Nu value in place —
+      // exactly how the hodgins OKC pick ended up as WIN with -5u profit.
+      // Recompute from the final odds + units for WIN/LOSS; zero for PUSH/VOID.
+      if (updates.result !== undefined && updates.profit === undefined) {
+        // Need current odds/units to recompute; read the row if not being
+        // updated in the same request.
+        let oddsVal   = updates.odds;
+        let unitsVal  = updates.units;
+        if (oddsVal === undefined || unitsVal === undefined) {
+          const { data: existing } = await supabaseAdmin
+            .from('picks').select('odds, units').eq('id', targetId).maybeSingle();
+          if (existing) {
+            if (oddsVal  === undefined) oddsVal  = existing.odds;
+            if (unitsVal === undefined) unitsVal = existing.units;
+          }
+        }
+        const oddsNum  = oddsVal  != null ? parseFloat(oddsVal)  : null;
+        const unitsNum = unitsVal != null ? parseFloat(unitsVal) : null;
+        if (oddsNum != null && unitsNum != null && !isNaN(oddsNum) && !isNaN(unitsNum)) {
+          if (updates.result === 'WIN') {
+            updates.profit = oddsNum > 0
+              ? Math.round(unitsNum * oddsNum / 100 * 1000) / 1000
+              : Math.round(unitsNum * 100 / Math.abs(oddsNum) * 1000) / 1000;
+          } else if (updates.result === 'LOSS') {
+            updates.profit = -unitsNum;
+          } else if (updates.result === 'PUSH' || updates.result === 'VOID' || updates.result === 'N/A') {
+            updates.profit = 0;
+          }
+        }
+      }
+
       updates.admin_edited_at = new Date().toISOString();
       updates.admin_edited_by = adminEmail;
       const { error } = await supabaseAdmin.from('picks').update(updates).eq('id', targetId);
       if (error) throw error;
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, computed_profit: updates.profit });
     }
 
     if (action === 'set_role') {

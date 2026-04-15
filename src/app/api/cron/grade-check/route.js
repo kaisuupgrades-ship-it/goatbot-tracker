@@ -318,11 +318,44 @@ export async function GET(req) {
     console.error('[cron/grade-check] AI analysis grading error:', aiErr.message);
   }
 
+  // ── Completeness assertion ────────────────────────────────────────────────
+  // Sportsbook-grade invariant: any non-parlay pick whose game date is more
+  // than 48h in the past MUST have a terminal result. If it doesn't, something
+  // upstream is broken (unknown sport, malformed row, team-match failure,
+  // silent API error — all of which have happened before). Count how many
+  // rows violate the invariant and log a visible alert to the error_log table
+  // so the admin dashboard can surface it. Avoids the "silent accumulation"
+  // failure mode where stuck picks pile up for weeks before anyone notices.
+  let stuckCount = 0;
+  try {
+    const cutoffDate = new Date(Date.now() - 48 * 3600_000).toISOString().slice(0, 10);
+    const { count } = await supabase
+      .from('picks')
+      .select('id', { count: 'exact', head: true })
+      .or('result.is.null,result.eq.PENDING')
+      .lt('date', cutoffDate)
+      .eq('is_parlay', false);
+    stuckCount = count || 0;
+    if (stuckCount > 0) {
+      await supabase.from('error_log').insert({
+        level:    'warning',
+        source:   'cron/grade-check',
+        endpoint: '/api/cron/grade-check',
+        message:  `Completeness alert: ${stuckCount} non-parlay pick(s) stuck PENDING past date < ${cutoffDate}`,
+        metadata: { stuck_count: stuckCount, cutoff_date: cutoffDate, checked_at: new Date().toISOString() },
+      });
+      console.warn(`[cron/grade-check] STUCK PICKS DETECTED: ${stuckCount} row(s) past ${cutoffDate}`);
+    }
+  } catch (assertErr) {
+    console.warn('[cron/grade-check] Completeness assertion failed (non-fatal):', assertErr?.message);
+  }
+
   // ── Persist run summary to settings for admin observability ───────────────
   const summary = {
     found:       picks.length,
     graded:      gradedCount,
     flagged:     flaggedCount,
+    stuck_picks: stuckCount,
     ai_analyses: { graded: aiGraded, skipped: aiSkipped, noScore: aiNoScore },
     duration_ms: Date.now() - started,
     run_at:      new Date().toISOString(),

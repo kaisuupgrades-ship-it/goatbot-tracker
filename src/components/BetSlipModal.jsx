@@ -355,6 +355,7 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
   const [showConfirm, setShowConfirm] = useState(false); // Contest confirmation dialog
   const [aiChecking,  setAiChecking]  = useState(false); // AI pre-save audit in progress
   const [aiCheckResult, setAiCheckResult] = useState(null); // { ok, reason } from AI
+  const [dupWarning,  setDupWarning]  = useState(null);  // { existing: [picks] } when user is about to save a duplicate
 
   // Mount flag for portal rendering (avoids SSR mismatch)
   useEffect(() => { setMounted(true); }, []);
@@ -559,6 +560,30 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
     const oddsNum = parseInt(oddsValue);
     if (!oddsValue || isNaN(oddsNum)) { setSaveError('Enter valid American odds (e.g. -110 or +133).'); return; }
     if (!validML(oddsNum)) { setSaveError(`Odds ${oddsNum > 0 ? '+' : ''}${oddsNum} look off — valid range is -1500 to +1500. Double-check before submitting.`); return; }
+
+    // ── Duplicate-pick soft-guard ────────────────────────────────────────────
+    // Warn (don't block) if the same user already has a pick for the same
+    // matchup + team + bet_type + line on this date. Users legitimately add
+    // follow-on stakes (e.g. adjusting exposure after a line move), but the
+    // audit found several accidental double-submits with identical fields.
+    // Gate on !dupWarning so this only fires once — after the user clicks
+    // through the warning, we clear it and proceed straight to save.
+    const normalizedLine = selectedBet?.line ?? (customBetType?.includes('Spread') || customBetType?.includes('Total') ? null : null);
+    if (!dupWarning && Array.isArray(picks)) {
+      const matchupStr = `${awayAbbr} @ ${homeAbbr}`;
+      const existing = picks.filter(p =>
+        p.user_id === (user?.id || 'demo') &&
+        p.date === gameDate &&
+        p.matchup === matchupStr &&
+        (p.team || '').trim().toLowerCase() === teamValue.trim().toLowerCase() &&
+        (p.bet_type || '') === betTypeValue &&
+        String(p.line ?? '') === String(normalizedLine ?? '')
+      );
+      if (existing.length > 0) {
+        setDupWarning({ existing, teamValue, betTypeValue, oddsNum });
+        return; // caller re-invokes save after confirm
+      }
+    }
 
     // Contest picks: show confirmation dialog first (if not already confirmed)
     if (isContest && contestResult?.eligible && !showConfirm) {
@@ -1191,6 +1216,60 @@ export default function BetSlipModal({ game, sport, user, picks, setPicks, isDem
                 </span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Duplicate-pick Warning ───────────────────────────────────────── */}
+        {dupWarning && (
+          <div style={{
+            margin: '0.5rem 1.1rem',
+            padding: '1rem 1.1rem',
+            background: 'rgba(96,165,250,0.06)',
+            border: '1px solid rgba(96,165,250,0.35)',
+            borderRadius: '10px',
+          }}>
+            <div style={{ fontWeight: 800, color: '#60a5fa', fontSize: '0.88rem', marginBottom: '6px' }}>
+              ⚠️ Duplicate pick?
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '12px' }}>
+              You already have <strong>{dupWarning.existing.length}</strong> pick{dupWarning.existing.length > 1 ? 's' : ''} on
+              <strong> {dupWarning.teamValue} {dupWarning.betTypeValue}</strong> for this game on {gameDate}.
+              If you're intentionally adding another stake (e.g. line move, sharp move), continue. Otherwise, go back.
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setDupWarning(null)}
+                style={{
+                  flex: 1, padding: '0.5rem', borderRadius: '7px', border: '1px solid var(--border)',
+                  background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.82rem',
+                  fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Go Back
+              </button>
+              <button
+                onClick={() => {
+                  // Clear the warning and re-invoke save. Because dupWarning is
+                  // now null, the guard in handleSave will let this call through.
+                  const { teamValue, betTypeValue, oddsNum } = dupWarning;
+                  setDupWarning(null);
+                  // Contest flow needs the confirm dialog next; non-contest goes direct.
+                  if (isContest && contestResult?.eligible) {
+                    setShowConfirm(true);
+                  } else {
+                    executeSave(teamValue, betTypeValue, oddsNum);
+                  }
+                }}
+                style={{
+                  flex: 1, padding: '0.5rem', borderRadius: '7px', border: 'none',
+                  background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
+                  color: '#fff', fontSize: '0.82rem', fontWeight: 800,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Yes, add another
+              </button>
+            </div>
           </div>
         )}
 
