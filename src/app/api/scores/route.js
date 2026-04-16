@@ -22,6 +22,7 @@
  * }
  */
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 15;
 
@@ -219,6 +220,9 @@ function mergeScores(oddsApiGames, espnGames) {
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const sport = (searchParams.get('sport') || 'mlb').toLowerCase();
   const date  = searchParams.get('date') || '';

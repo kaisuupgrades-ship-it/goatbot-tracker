@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 15;
 
@@ -76,6 +77,9 @@ function verifyPick(pick) {
 
 // ── GET: Verify pick by ID + check contest lock status ──────────────────────
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const pickId = searchParams.get('pickId');
   const userId = searchParams.get('userId');
@@ -128,6 +132,9 @@ export async function GET(req) {
 
 // ── POST: Pre-save validation + daily limit check ───────────────────────────
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const body = await req.json();
   const { pick, userId, contestEntry } = body;
 

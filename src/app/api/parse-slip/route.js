@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { normalizeParsedPick } from '@/lib/teamNormalizer';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 60;
 
@@ -250,6 +251,9 @@ async function parseText(text) {
 }
 
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   if (!process.env.XAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'No AI API key configured' }, { status: 500 });
   }

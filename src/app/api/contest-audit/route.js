@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callAI } from '@/lib/ai';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 60;
 
@@ -290,6 +291,9 @@ export async function GET(req) {
 
 // ── POST: Run audit on a pick, or admin override ────────────────────────────
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const body = await req.json();
   const { action, pickId, overrideStatus, overrideReason } = body;
 

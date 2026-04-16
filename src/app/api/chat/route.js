@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/auth';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -78,6 +79,10 @@ export async function GET(req) {
       return NextResponse.json({ settings: {} });
     }
   }
+
+  // All other GET paths require auth
+  const { user: authUser, error: authError } = await requireAuth(req);
+  if (authError) return authError;
 
   // ── Chat status for a user (muted/banned) ─────────────────────────────────
   if (searchParams.get('chatStatus') === '1') {

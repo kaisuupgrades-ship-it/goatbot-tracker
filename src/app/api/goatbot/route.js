@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 300;
 
@@ -630,8 +631,11 @@ async function cacheAnalysis(sport, homeTeam, awayTeam, gameDate, analysis, mode
 }
 
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   // Rate limiting check
-  const userId = req.headers.get('x-user-id') || req.ip || 'anonymous';
+  const userId = user.id;
   if (!checkRateLimit(userId)) {
     return NextResponse.json({ error: 'Rate limit exceeded. Please wait a minute.' }, { status: 429 });
   }

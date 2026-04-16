@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 30;
 
@@ -65,6 +66,9 @@ async function logConcern(message, userId, username) {
 }
 
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   try {
     const { messages, userId, username } = await req.json();
     if (!messages || !Array.isArray(messages)) {

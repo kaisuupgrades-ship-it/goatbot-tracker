@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { teamsMatch } from '@/lib/teamNormalizer';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 15;
 
@@ -161,6 +162,9 @@ async function resolveEventId(sportKey, homeTeam, awayTeam) {
 }
 
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const sport     = searchParams.get('sport');     // e.g. 'nfl'
   let   eventId   = searchParams.get('eventId');   // The Odds API event UUID (may be empty)

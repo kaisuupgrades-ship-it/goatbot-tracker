@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 30;
 
@@ -10,6 +11,9 @@ export const maxDuration = 30;
  * and news about a specific player's injury/availability status.
  */
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const player = searchParams.get('player')?.trim();
   const team   = searchParams.get('team')?.trim() || '';

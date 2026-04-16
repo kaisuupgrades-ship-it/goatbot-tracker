@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 15;
 
@@ -43,6 +44,9 @@ async function fetchESPN(path) {
 }
 
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const sportParam = searchParams.get('sport') || 'mlb';
   const sport = sportParam === 'all' ? 'mlb' : sportParam;

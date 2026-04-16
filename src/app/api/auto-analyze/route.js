@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callAI } from '@/lib/ai';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 120;
 
@@ -131,6 +132,9 @@ async function saveAnalysis(pickId, analysis, model) {
  * OR: { action: 'batch-all' } to analyze all unanalyzed picks (admin)
  */
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
 
@@ -251,6 +255,9 @@ async function runBatchAll() {
  * GET /api/auto-analyze?pickId=xxx or ?pickId=xxx,yyy,zzz (comma-separated for batch)
  */
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   try {
     const { searchParams } = new URL(req.url);
     const pickIdParam = searchParams.get('pickId');

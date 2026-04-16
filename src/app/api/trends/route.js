@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { callAI } from '@/lib/ai';
 import { fetchOddsForSports, buildOddsLookup } from '@/lib/odds';
 import { fetchWeatherForGames } from '@/lib/weather';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 60;
 
@@ -176,6 +177,9 @@ Return ONLY the JSON array, no other text.`;
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action') || 'usage';
   const userId = searchParams.get('userId') || '';
@@ -230,6 +234,9 @@ export async function GET(req) {
 
 // ── POST ──────────────────────────────────────────────────────────────────────
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const body = await req.json();
 
   // ── Admin: Push today's edges site-wide ──────────────────────────────────

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 30;
 
@@ -10,6 +11,9 @@ const SUPPORTED_TYPES = [
 ];
 
 export async function POST(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
   if (!GROQ_API_KEY) {

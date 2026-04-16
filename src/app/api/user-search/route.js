@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 15;
 
@@ -107,6 +108,9 @@ const SORTERS = {
 };
 
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const isDemo   = searchParams.get('demo') === '1';
   const sort     = searchParams.get('sort')  || 'hot';

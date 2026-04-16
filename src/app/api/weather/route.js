@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 15;
 
@@ -62,6 +63,9 @@ function closestIndex(hours, targetMs) {
 }
 
 export async function GET(req) {
+  const { user, error } = await requireAuth(req);
+  if (error) return error;
+
   const { searchParams } = new URL(req.url);
   const lat      = parseFloat(searchParams.get('lat'));
   const lon      = parseFloat(searchParams.get('lon'));
