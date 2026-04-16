@@ -1,0 +1,14 @@
+# No-op pre-commit hook.
+#
+# Intentionally empty. We deliberately do NOT run `npm test`, `npm run lint`,
+# or `npm run build` here because:
+#   - `npm test` has no corresponding package.json script (was the bug that
+#     blocked every commit tonight until this was fixed)
+#   - `npm run lint` on this codebase is noisy on legacy files and would
+#     encourage `--no-verify` bypasses
+#   - `npm run build` takes ~45s and is too slow for per-commit; it runs
+#     pre-push instead (see .husky/pre-push)
+#
+# Build verification lives in .husky/pre-push. This hook is the right place
+# for eventual fast checks (type-check a staged subset, secret-scan, etc.)
+# if we want them later — but today, nothing is safer than something slow.
