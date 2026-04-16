@@ -362,7 +362,7 @@ export async function GET(req) {
   };
   try {
     await supabase.from('settings').upsert(
-      [{ key: 'cron_grade_check_last_run', value: JSON.stringify(summary), updated_at: new Date().toISOString() }],
+      [{ key: 'cron_grade_check_last_run', value: JSON.stringify(summary) }],
       { onConflict: 'key' }
     );
   } catch { /* non-critical */ }

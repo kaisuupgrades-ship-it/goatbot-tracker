@@ -22,8 +22,8 @@ async function getAuthUser(req) {
 // ── GET /api/messages?userId=X&withUser=Y    → get thread with a specific user
 // ── GET /api/messages?userId=X&unreadCount=1 → just return unread count
 export async function GET(req) {
-  const { user, error } = await requireAuth(req);
-  if (error) return error;
+  const { user, error: authError } = await requireAuth(req);
+  if (authError) return authError;
 
   const { searchParams } = new URL(req.url);
   const userId     = searchParams.get('userId');

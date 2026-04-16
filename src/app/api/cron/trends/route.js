@@ -197,6 +197,16 @@ async function runTrendsPipeline() {
   // 1. Fetch games
   const gameList = await fetchTodaysGames();
   if (gameList.length === 0) {
+    // Log the run even when skipping so admin sees it ran (previously never wrote the key)
+    await supabase.from('settings').upsert(
+      [{ key: CRON_LOG_KEY, value: JSON.stringify({
+        run_at:     new Date().toISOString(),
+        status:     'skipped',
+        reason:     'No games found for today',
+        duration_ms: Date.now() - startTime,
+      }) }],
+      { onConflict: 'key' }
+    );
     return { success: false, error: 'No games found for today', games: 0 };
   }
   console.log(`[cron/trends] Found ${gameList.length} games across all sports`);

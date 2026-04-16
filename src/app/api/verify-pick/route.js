@@ -77,8 +77,8 @@ function verifyPick(pick) {
 
 // ── GET: Verify pick by ID + check contest lock status ──────────────────────
 export async function GET(req) {
-  const { user, error } = await requireAuth(req);
-  if (error) return error;
+  const { user, error: authError } = await requireAuth(req);
+  if (authError) return authError;
 
   const { searchParams } = new URL(req.url);
   const pickId = searchParams.get('pickId');
