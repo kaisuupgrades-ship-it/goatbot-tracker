@@ -204,7 +204,9 @@ Unit Sizing: [0.5u–3u] — [brief justification based on edge and confidence]
 
 ${disclaimer}
 
-Be decisive. Cite specific numbers. Never fabricate stats. Build the intelligence layer — not just the pick.`;
+Be decisive. Cite specific numbers. Never fabricate stats. Build the intelligence layer — not just the pick.
+
+MANDATORY FORMAT: Your entire response MUST use the section headers above (=== DATA FRESHNESS ===, === MATCHUP ANALYSIS ===, etc.). Begin with "=== DATA FRESHNESS ===" and end with "=== RED FLAGS ===". The === BEST PLAY === section MUST include the line "Edge: X% | Confidence: LEVEL | Edge Score: X/10". Plain prose without these headers is invalid output.`;
 }
 
 // No-search fallback system prompt — used when web search version times out.
@@ -963,7 +965,9 @@ ${propsSection}
 ${injurySection}
 ${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
 
-Search ONLY for: confirmed starters/lineups, any injury updates beyond the ESPN data above, recent form (last 5 games). Odds are already provided above.`;
+Search ONLY for: confirmed starters/lineups, any injury updates beyond the ESPN data above, recent form (last 5 games). Odds are already provided above.
+
+REMINDER: Use ALL section headers from the system prompt. Start with === DATA FRESHNESS === and include === BEST PLAY === with the exact "Edge: X% | Confidence: LEVEL | Edge Score: X/10" line.`;
 
   const hasVerifiedOdds = !isRefresh && !!(oddsContext && oddsContext.includes('The Odds API'));
 
@@ -1127,9 +1131,14 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
   if (!result) throw new Error(`All AI tiers failed for ${label}`);
   const latency_ms = Date.now() - t0;
 
-  // Parse structured fields from output (confM targets Best Play line to avoid Spread section mismatch)
+  // Parse structured fields from output.
+  // confM is scoped to the BEST PLAY section to avoid false matches from
+  // SPREAD/MONEYLINE/TOTAL sections that also contain "Confidence: LEVEL" lines.
   const pickM = result.text.match(/THE PICK[:\s]+([^\n]{5,200})/i);
-  const confM = result.text.match(/Edge:\s*[\d.]+%\s*\|\s*Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i);
+  const _bestPlayBlock = result.text.match(/===\s*BEST PLAY\s*===([\s\S]*?)(?=\n===|$)/i)?.[1] ?? '';
+  const confM = _bestPlayBlock
+    ? _bestPlayBlock.match(/Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i)
+    : result.text.match(/Edge:\s*[\d.]+%\s*\|\s*Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i);
   const edgeM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
   const altM  = result.text.match(/ALTERNATE ANGLES[:\s]+([^\n]{5,300})/i);
   const lineM = result.text.match(/LINE MOVEMENT[:\s]+([^\n]{5,300})/i);
