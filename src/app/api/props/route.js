@@ -243,40 +243,45 @@ export async function GET(req) {
   }
 
   try {
-    let result = await fetchOddsForEvent(eventId);
-
-    // Retry-on-stale-id: The Odds API sometimes reissues an event's id (most
-    // commonly on postponements/reschedules). ESPN's scoreboard can still
-    // carry the old id for up to a few hours, so the direct hit above 404s.
-    // If we have team names, re-resolve the current id via /events and try
-    // once more before giving up. This costs 1 credit ONLY on the retry path
-    // — the happy path stays 1 credit total.
+    // Primary fetch + optional retry-on-stale-id rolled into a single const
+    // assignment via IIFE. Named `oddsResponse` (not `result`) to avoid
+    // colliding with the `const result = { categories, ... }` declaration
+    // further down in this block — a same-scope redeclaration is the real
+    // reason the build was failing (SWC phrases it as "cannot reassign to
+    // a variable declared with const" / "result redefined here", which
+    // reads like a reassignment error but is actually a TDZ collision).
     //
-    // Note: we deliberately DO NOT reassign `eventId` with the fresh id —
-    // SWC flagged the reassignment as a const violation (bug or strict-mode
-    // quirk in Next 14.2.5 even though the outer binding is `let`), and
-    // keeping the cache key on the original client-supplied id is actually
-    // the right behavior: future requests that arrive with the same stale
-    // id will hit the warm cache instead of re-re-resolving.
-    if (!result.ok && (result.status === 404 || /not found/i.test(result.message)) && homeTeam && awayTeam) {
-      console.warn(`[/api/props] Primary fetch failed (${result.status}) for ${awayTeam} @ ${homeTeam}; re-resolving eventId`);
-      const freshId = await resolveEventId(sportKey, homeTeam, awayTeam);
-      if (freshId && freshId !== eventId) {
-        console.log(`[/api/props] Retrying with resolved eventId ${freshId} (was ${eventId})`);
-        result = await fetchOddsForEvent(freshId);
-      }
-    }
+    // Retry semantics: The Odds API sometimes reissues an event's id on
+    // postponement/reschedule. ESPN's scoreboard can carry the old id for
+    // hours. If the primary fetch 404s and we have team names, re-resolve
+    // via /events and retry once. Cache key stays keyed on the original
+    // client-supplied id — future requests arriving with the same stale id
+    // hit warm cache instead of re-re-resolving.
+    const oddsResponse = await (async () => {
+      const primary = await fetchOddsForEvent(eventId);
+      if (primary.ok) return primary;
 
-    if (!result.ok) {
-      console.error('[/api/props] Odds API error:', result.status, result.message, {
+      const looksStale = primary.status === 404 || /not found/i.test(primary.message);
+      if (!looksStale || !homeTeam || !awayTeam) return primary;
+
+      console.warn(`[/api/props] Primary fetch failed (${primary.status}) for ${awayTeam} @ ${homeTeam}; re-resolving eventId`);
+      const freshId = await resolveEventId(sportKey, homeTeam, awayTeam);
+      if (!freshId || freshId === eventId) return primary;
+
+      console.log(`[/api/props] Retrying with resolved eventId ${freshId} (was ${eventId})`);
+      return fetchOddsForEvent(freshId);
+    })();
+
+    if (!oddsResponse.ok) {
+      console.error('[/api/props] Odds API error:', oddsResponse.status, oddsResponse.message, {
         sport, sportKey, eventId,
         keyPresent: !!THE_ODDS_KEY,
         keyLength: THE_ODDS_KEY?.length,
       });
-      return NextResponse.json({ props: [], categories: [], note: result.message });
+      return NextResponse.json({ props: [], categories: [], note: oddsResponse.message });
     }
 
-    const data = result.data;
+    const data = oddsResponse.data;
     const bookmakers = data?.bookmakers || [];
 
     // Collect all markets across bookmakers, prefer DraftKings → FanDuel → BetMGM
