@@ -1669,7 +1669,7 @@ async function _getImpl(req) {
   console.log(`[pregenerate] Dispatching ${allGamesToDispatch.length} game worker(s) in parallel (runId=${runId})`);
 
   const dispatchResults = await Promise.allSettled(
-    allGamesToDispatch.map(({ sport, homeTeam, awayTeam, gameDate: gd, triggerSource: ts }) => {
+    allGamesToDispatch.map(({ sport, homeTeam, awayTeam, gameDate: gd, triggerSource: ts, forceSingle }) => {
       const url = new URL(selfBase);
       url.searchParams.set('sport', sport);
       url.searchParams.set('homeTeam', homeTeam);
@@ -1678,7 +1678,7 @@ async function _getImpl(req) {
       url.searchParams.set('gameDate', gd || todayStr);
       url.searchParams.set('runId', runId);
       url.searchParams.set('triggerSource', ts || 'dispatcher');
-      if (force || g.forceSingle) url.searchParams.set('force', 'true');
+      if (force || forceSingle) url.searchParams.set('force', 'true');
       return fetch(url.toString(), {
         headers: { authorization: `Bearer ${cronSecret}` },
         signal: AbortSignal.timeout(400_000), // 400s per game max
