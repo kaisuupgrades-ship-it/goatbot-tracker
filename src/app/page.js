@@ -11,7 +11,7 @@ export default function Home() {
       if (session) {
         router.replace('/dashboard');
       } else {
-        window.location.replace('/landing.html');
+        router.replace('/auth');
       }
     });
   }, [router]);
