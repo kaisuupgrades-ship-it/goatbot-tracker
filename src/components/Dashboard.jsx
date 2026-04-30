@@ -16,6 +16,7 @@ import UserSearchTab     from './tabs/UserSearchTab';
 import FollowingTab      from './tabs/FollowingTab';
 import ChatRoomTab       from './tabs/ChatRoomTab';
 import FeaturedGamesTab  from './tabs/FeaturedGamesTab';
+import BotPerformanceTab from './tabs/BotPerformanceTab';
 import PropBuilderTab   from './tabs/PropBuilderTab';
 import AdminTab          from './tabs/AdminTab';
 import ProfileModal      from './ProfileModal';
@@ -444,6 +445,9 @@ export default function Dashboard({ user, initialPicks, initialContest, isDemo }
               activeSport={activeSport}
               onSportChange={setActiveSport}
             />
+          </div>
+          <div style={{ display: activeTab === 'botperformance' ? 'block' : 'none' }}>
+            <BotPerformanceTab />
           </div>
           <div style={{ display: activeTab === 'history'    ? 'block' : 'none' }}>
             <HistoryTab picks={picks} setPicks={setPicks} user={user} contest={contest} setContest={setContest} isDemo={isDemo} onViewGame={onViewGame} onLeaderboardRefresh={() => setLeaderboardRefreshKey(k => k + 1)} isActive={activeTab === 'history'} />

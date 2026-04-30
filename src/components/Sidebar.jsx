@@ -109,6 +109,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'scoreboard', label: 'Scoreboard', Icon: Icons.Scoreboard, desc: 'Live scores, all sports', live: true },
       { id: 'odds',       label: 'Odds Board', Icon: Icons.Odds,       desc: 'Lines across all books' },
+      { id: 'botperformance', label: 'Bot Performance', Icon: Icons.SharpBoard, desc: 'BetOS AI track record & ROI' },
     ],
   },
   {
