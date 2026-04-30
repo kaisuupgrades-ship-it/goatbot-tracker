@@ -66,7 +66,15 @@ function fetchH2H({ sport, homeTeamId, awayTeamId, homeAbbr, awayAbbr }) {
   const url = `/api/h2h?sport=${sport}&team1=${homeTeamId}&team2=${awayTeamId}`
     + `&abbrHome=${homeAbbr || 'HM'}&abbrAway=${awayAbbr || 'AW'}`;
 
-  const promise = fetch(url)
+  // /api/h2h is auth-gated server-side (requireAuth). Pull the access token
+  // from the current Supabase session and attach it as a Bearer header so the
+  // request isn't 401'd on logged-in users.
+  const promise = supabase.auth.getSession()
+    .then(({ data: { session } }) => {
+      const headers = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      return fetch(url, { headers });
+    })
     .then(r => r.ok ? r.json() : null)
     .then(d => {
       // Positive cache: successful response with a record. Keep forever.
@@ -100,7 +108,15 @@ function fetchWeather({ lat, lon, gameDate }) {
   if (pending) return pending;
 
   const params = new URLSearchParams({ lat, lon, ...(gameDate ? { gameTime: gameDate } : {}) });
-  const promise = fetch(`/api/weather?${params}`)
+
+  // /api/weather is auth-gated server-side (requireAuth). Pull the access token
+  // from the current Supabase session and attach it as a Bearer header.
+  const promise = supabase.auth.getSession()
+    .then(({ data: { session } }) => {
+      const headers = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      return fetch(`/api/weather?${params}`, { headers });
+    })
     .then(r => r.ok ? r.json() : null)
     .then(d => {
       const data = d && !d.error ? d : null;
@@ -1076,6 +1092,173 @@ function parseSpreadLine(spreadStr, awayAbbr, awayName, homeAbbr, homeName) {
   return { awayLine: isAway ? line : -line, homeLine: isAway ? -line : line };
 }
 
+// ── BetOS AI Lean Badge ───────────────────────────────────────────────────────
+// Confidence-colored card showing the AI's pick + edge + optional full
+// analysis narrative behind a "Show full analysis" toggle.
+function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans }) {
+  const [showFull, setShowFull] = useState(false);
+
+  const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
+  const lean = gameLeans[leanKey]
+    || Object.values(gameLeans).find(a =>
+         a.sport === sport &&
+         homeName.toLowerCase().includes(a.home_team.toLowerCase().split(' ').pop()) &&
+         awayName.toLowerCase().includes(a.away_team.toLowerCase().split(' ').pop())
+       );
+  if (!lean?.pick) return null;
+
+  const confColors = { ELITE: '#FFB800', HIGH: '#4ade80', MEDIUM: '#60a5fa', LOW: '#9ca3af' };
+  const confColor = confColors[lean.conf] || '#9ca3af';
+  const isPass = /^pass\b/i.test(lean.pick.trim());
+  const accent = isPass ? '#9ca3af' : confColor;
+
+  // Strip leading whitespace consistently, then split on real paragraph breaks
+  const fullText = (lean.analysis || '').trim();
+
+  return (
+    <div style={{
+      margin: '0.6rem 0 0.85rem',
+      padding: '0.85rem 1rem 0.9rem 0.95rem',
+      background: isPass
+        ? 'rgba(156,163,175,0.04)'
+        : `linear-gradient(180deg, ${accent}14 0%, ${accent}08 100%)`,
+      borderLeft: `3px solid ${accent}`,
+      borderTop: `1px solid ${accent}33`,
+      borderRight: `1px solid ${accent}33`,
+      borderBottom: `1px solid ${accent}33`,
+      borderRadius: '8px',
+      opacity: isPass ? 0.78 : 1,
+    }}>
+      {/* Header row: label + conf pill + edge pill */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+        <span style={{
+          fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.08em',
+          color: accent, textTransform: 'uppercase',
+        }}>
+          🤖 BetOS AI Lean
+        </span>
+        {lean.conf && (
+          <span style={{
+            fontSize: '0.6rem', fontWeight: 800, padding: '2px 7px', borderRadius: '4px',
+            background: accent + '26',
+            color: accent,
+            border: `1px solid ${accent}55`,
+            letterSpacing: '0.06em',
+          }}>
+            {lean.conf}
+          </span>
+        )}
+        {lean.edge && (
+          <span style={{
+            fontSize: '0.65rem',
+            fontWeight: 700,
+            color: accent,
+            fontFamily: 'IBM Plex Mono, monospace',
+            marginLeft: 'auto',
+            padding: '2px 7px',
+            borderRadius: '4px',
+            background: accent + '14',
+          }}>
+            EDGE {lean.edge}
+          </span>
+        )}
+      </div>
+
+      {/* The pick — bigger, bolder, the visual anchor */}
+      <div style={{
+        fontSize: '1.02rem',
+        fontWeight: 700,
+        letterSpacing: '-0.01em',
+        color: 'var(--text-primary)',
+        fontFamily: isPass ? 'inherit' : 'IBM Plex Mono, monospace',
+        fontStyle: isPass ? 'italic' : 'normal',
+        lineHeight: 1.3,
+      }}>
+        {lean.pick}
+      </div>
+
+      {/* Edge breakdown (one-line summary) */}
+      {lean.edge_breakdown && (
+        <div style={{
+          fontSize: '0.72rem',
+          color: 'var(--text-muted)',
+          marginTop: '6px',
+          lineHeight: 1.55,
+        }}>
+          {lean.edge_breakdown}
+        </div>
+      )}
+
+      {/* Structured side notes — alternate angles / line movement / unit sizing / win prob */}
+      {(lean.alternate_angles || lean.line_movement || lean.unit_sizing || lean.win_probability) && (
+        <div style={{
+          marginTop: '8px',
+          paddingTop: '8px',
+          borderTop: `1px dashed ${accent}33`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          fontSize: '0.68rem',
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5,
+        }}>
+          {lean.alternate_angles && (
+            <div><span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.6rem', fontWeight: 700, marginRight: '6px' }}>Angles</span>{lean.alternate_angles}</div>
+          )}
+          {lean.line_movement && (
+            <div><span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.6rem', fontWeight: 700, marginRight: '6px' }}>Line</span>{lean.line_movement}</div>
+          )}
+          {lean.unit_sizing && (
+            <div><span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.6rem', fontWeight: 700, marginRight: '6px' }}>Stake</span>{lean.unit_sizing}</div>
+          )}
+          {lean.win_probability && (
+            <div><span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.6rem', fontWeight: 700, marginRight: '6px' }}>Win prob</span>{lean.win_probability}</div>
+          )}
+        </div>
+      )}
+
+      {/* Full analysis narrative — toggled */}
+      {fullText && fullText.length > 100 && (
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowFull(v => !v); }}
+            style={{
+              marginTop: '10px',
+              background: 'transparent',
+              border: 'none',
+              color: accent,
+              fontSize: '0.66rem',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            {showFull ? '▲ Hide full analysis' : '▼ Show full analysis'}
+          </button>
+          {showFull && (
+            <div style={{
+              marginTop: '8px',
+              padding: '10px 12px',
+              background: 'rgba(0,0,0,0.18)',
+              borderRadius: '6px',
+              fontSize: '0.74rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.65,
+              whiteSpace: 'pre-wrap',
+              maxHeight: '420px',
+              overflowY: 'auto',
+            }}>
+              {fullText}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Game Card ─────────────────────────────────────────────────────────────────
 export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York', gameLeans = {}, parlayMode = false, parlayLegs = [], onAddParlayLeg }) {
   const [expanded, setExpanded] = useState(false);
@@ -1953,7 +2136,13 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
           )}
 
           {/* BetOS AI Lean badge — confidence-colored, prominent */}
-          {(() => {
+          <BetOSAILeanBadge
+            sport={sport}
+            awayName={awayName}
+            homeName={homeName}
+            gameLeans={gameLeans}
+          />
+          {false && (() => {
             const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
             const lean = gameLeans[leanKey]
               || Object.values(gameLeans).find(a =>

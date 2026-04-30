@@ -20,7 +20,7 @@ export async function GET(req) {
 
   const { data, error } = await supabase
     .from('game_analyses')
-    .select('id, sport, away_team, home_team, game_date, updated_at, analysis, prediction_pick, prediction_conf, prediction_edge')
+    .select('id, sport, away_team, home_team, game_date, updated_at, analysis, prediction_pick, prediction_conf, prediction_edge, alternate_angles, line_movement, unit_sizing, win_probability')
     .eq('game_date', date)
     .order('updated_at', { ascending: false });
 
@@ -53,7 +53,15 @@ export async function GET(req) {
       edge:       edgeNumRegex?.[1]?.trim() || null,
       // prediction_edge stores the rationale text; fall back to a narrative
       // "EDGE BREAKDOWN:" section if present.
-      edge_breakdown: row.prediction_edge || edgeBreakRegex?.[1]?.trim() || null,
+      edge_breakdown:   row.prediction_edge || edgeBreakRegex?.[1]?.trim() || null,
+      // Full long-form analysis text for the scoreboard "Read full analysis"
+      // expander. Capped to 6000 chars to keep the wire payload reasonable
+      // when many games are loaded at once.
+      analysis:         (row.analysis || '').slice(0, 6000),
+      alternate_angles: row.alternate_angles || null,
+      line_movement:    row.line_movement   || null,
+      unit_sizing:      row.unit_sizing     || null,
+      win_probability:  row.win_probability || null,
     };
   });
 
