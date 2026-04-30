@@ -81,12 +81,27 @@ export async function POST(req) {
     return bad('analysis text exceeds 50,000 char limit');
   }
 
-  // ── Optional fields with sensible defaults ────────────────────────────────
-  const conf = body.prediction_conf
-    ? String(body.prediction_conf).toUpperCase().trim()
-    : null;
-  if (conf && !ALLOWED_CONF.has(conf)) {
+  // ── Required structured fields for the badge UI ───────────────────────────
+  // prediction_pick + prediction_conf + prediction_edge power the AI Lean
+  // badge on the scoreboard. They must always be present and well-formed —
+  // an empty pick or null confidence means the badge silently disappears,
+  // which is the failure mode we're designing this contract to prevent.
+  const pick = String(body.prediction_pick || '').trim();
+  if (!pick) return bad('Missing required field: prediction_pick');
+  if (pick.length < 3 || pick.length > 200) {
+    return bad('prediction_pick must be 3–200 chars');
+  }
+
+  const conf = String(body.prediction_conf || '').toUpperCase().trim();
+  if (!conf) return bad('Missing required field: prediction_conf');
+  if (!ALLOWED_CONF.has(conf)) {
     return bad(`prediction_conf must be one of ${[...ALLOWED_CONF].join('/')}`);
+  }
+
+  const edge = String(body.prediction_edge || '').trim();
+  if (!edge) return bad('Missing required field: prediction_edge');
+  if (edge.length > 20) {
+    return bad('prediction_edge must be ≤20 chars (e.g. "4.2%")');
   }
 
   const row = {
@@ -104,9 +119,9 @@ export async function POST(req) {
     prompt_version:   body.prompt_version   || null,
     trigger_source:   body.trigger_source   || 'scheduled_task',
     run_id:           body.run_id           || null,
-    prediction_pick:  body.prediction_pick  || null,
+    prediction_pick:  pick,
     prediction_conf:  conf,
-    prediction_edge:  body.prediction_edge  || null,
+    prediction_edge:  edge,
     alternate_angles: body.alternate_angles || null,
     line_movement:    body.line_movement    || null,
     unit_sizing:      body.unit_sizing      || null,
