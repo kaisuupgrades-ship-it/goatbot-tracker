@@ -1952,7 +1952,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             </div>
           )}
 
-          {/* BetOS AI Lean */}
+          {/* BetOS AI Lean badge — confidence-colored, prominent */}
           {(() => {
             const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
             const lean = gameLeans[leanKey]
@@ -1964,38 +1964,77 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             if (!lean?.pick) return null;
             const confColors = { ELITE: '#FFB800', HIGH: '#4ade80', MEDIUM: '#60a5fa', LOW: '#9ca3af' };
             const confColor = confColors[lean.conf] || '#9ca3af';
+            // "Pass" picks render muted — they're not actionable bets
+            const isPass = /^pass\b/i.test(lean.pick.trim());
+            const accent = isPass ? '#9ca3af' : confColor;
+
             return (
               <div style={{
-                margin: '0.5rem 0 0.75rem',
-                padding: '0.7rem 1rem',
-                background: 'rgba(255,184,0,0.05)',
-                border: '1px solid rgba(255,184,0,0.18)',
+                margin: '0.6rem 0 0.85rem',
+                padding: '0.85rem 1rem 0.9rem 0.95rem',
+                background: isPass
+                  ? 'rgba(156,163,175,0.04)'
+                  : `linear-gradient(180deg, ${accent}14 0%, ${accent}08 100%)`,
+                borderLeft: `3px solid ${accent}`,
+                borderTop: `1px solid ${accent}33`,
+                borderRight: `1px solid ${accent}33`,
+                borderBottom: `1px solid ${accent}33`,
                 borderRadius: '8px',
+                opacity: isPass ? 0.78 : 1,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                  <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.07em', color: '#FFB800', textTransform: 'uppercase' }}>
+                {/* Header row: label + conf pill + edge pill */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{
+                    fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.08em',
+                    color: accent, textTransform: 'uppercase',
+                  }}>
                     🤖 BetOS AI Lean
                   </span>
                   {lean.conf && (
                     <span style={{
-                      fontSize: '0.58rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
-                      background: confColor + '22', color: confColor, border: `1px solid ${confColor}44`,
-                      letterSpacing: '0.04em',
+                      fontSize: '0.6rem', fontWeight: 800, padding: '2px 7px', borderRadius: '4px',
+                      background: accent + '26',
+                      color: accent,
+                      border: `1px solid ${accent}55`,
+                      letterSpacing: '0.06em',
                     }}>
                       {lean.conf}
                     </span>
                   )}
                   {lean.edge && (
-                    <span style={{ fontSize: '0.63rem', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginLeft: 'auto' }}>
-                      Edge {lean.edge}
+                    <span style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      color: accent,
+                      fontFamily: 'IBM Plex Mono, monospace',
+                      marginLeft: 'auto',
+                      padding: '2px 7px',
+                      borderRadius: '4px',
+                      background: accent + '14',
+                    }}>
+                      EDGE {lean.edge}
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                {/* The pick — bigger, bolder, the visual anchor */}
+                <div style={{
+                  fontSize: '1.02rem',
+                  fontWeight: 700,
+                  letterSpacing: '-0.01em',
+                  color: 'var(--text-primary)',
+                  fontFamily: isPass ? 'inherit' : 'IBM Plex Mono, monospace',
+                  fontStyle: isPass ? 'italic' : 'normal',
+                  lineHeight: 1.3,
+                }}>
                   {lean.pick}
                 </div>
                 {lean.edge_breakdown && (
-                  <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5 }}>
+                  <div style={{
+                    fontSize: '0.72rem',
+                    color: 'var(--text-muted)',
+                    marginTop: '6px',
+                    lineHeight: 1.55,
+                  }}>
                     {lean.edge_breakdown}
                   </div>
                 )}
