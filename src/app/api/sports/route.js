@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { teamsMatch } from '@/lib/teamNormalizer';
+import { getH2HData, getWeatherData } from '@/lib/enrichment';
+import { getStadiumInfo, INDOOR_SPORTS } from '@/lib/stadiums';
 
-export const maxDuration = 15;
+export const maxDuration = 25;
 
 // ESPN unofficial API — free, no key needed
 const ESPN_BASE          = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -123,6 +125,57 @@ function enrichWithOddsApiScores(espnData, oddsApiScores) {
   return { ...espnData, events: enrichedEvents };
 }
 
+// ── Per-event H2H + weather enrichment ─────────────────────────────────────
+// Runs in parallel for all events, never blocks longer than ~6s wall-clock,
+// and any individual failure leaves the event un-enriched (client falls back
+// to its own /api/h2h or /api/weather call). Memoized in-process — repeated
+// scoreboard hits within 60 min reuse the same data.
+async function enrichEvents(sport, events) {
+  if (!Array.isArray(events) || events.length === 0) return events;
+  const indoor = INDOOR_SPORTS.has(sport);
+
+  const enriched = await Promise.all(events.map(async (ev) => {
+    const comp = ev.competitions?.[0];
+    if (!comp) return ev;
+    const home = comp.competitors?.find(c => c.homeAway === 'home');
+    const away = comp.competitors?.find(c => c.homeAway === 'away');
+    if (!home?.team?.id || !away?.team?.id) return ev;
+
+    const homeAbbr = home.team?.abbreviation;
+    const awayAbbr = away.team?.abbreviation;
+    const stadium  = (!indoor && ['mlb', 'nfl'].includes(sport))
+      ? getStadiumInfo(sport, homeAbbr)
+      : null;
+
+    // Don't bother fetching weather for domes — UI shows "Domed stadium" anyway
+    const wantWeather = stadium?.lat && !stadium.dome;
+
+    const [h2hRes, wxRes] = await Promise.allSettled([
+      getH2HData({
+        sport,
+        team1: home.team.id,
+        team2: away.team.id,
+        abbrHome: homeAbbr,
+        abbrAway: awayAbbr,
+      }),
+      wantWeather
+        ? getWeatherData({ lat: stadium.lat, lon: stadium.lon, gameTime: ev.date })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      ...ev,
+      enrichment: {
+        h2h:     h2hRes.status === 'fulfilled' ? h2hRes.value : null,
+        weather: wxRes.status  === 'fulfilled' ? wxRes.value  : null,
+        stadium: stadium ? { name: stadium.name, dome: !!stadium.dome, retractable: !!stadium.retractable } : null,
+      },
+    };
+  }));
+
+  return enriched;
+}
+
 async function espnFetch(path, base = ESPN_BASE, { timeout } = {}) {
   const key = `${base}/${path}`;
   const cached = getCached(key);
@@ -146,6 +199,7 @@ export async function GET(req) {
   const sport    = searchParams.get('sport') || 'mlb';
   const endpoint = searchParams.get('endpoint') || 'scoreboard'; // scoreboard | news | standings | injuries | teams
   const date     = searchParams.get('date') || '';
+  const enrich   = searchParams.get('enrich') === '1';
 
   const sportPath = SPORT_PATHS[sport];
   if (!sportPath) {
@@ -308,8 +362,23 @@ export async function GET(req) {
       ]);
 
       // Enrich ESPN data with Odds API event IDs
-      const enriched = oddsApiScores ? enrichWithOddsApiScores(espnData, oddsApiScores) : espnData;
-      return NextResponse.json({ ...enriched, _oddsApiConnected: !!oddsApiScores?.length });
+      let enriched = oddsApiScores ? enrichWithOddsApiScores(espnData, oddsApiScores) : espnData;
+
+      // Bake H2H + weather into each event so the scoreboard renders instantly
+      // with no per-card client fetches. Behind ?enrich=1 because this adds
+      // latency to the response (~1-3s on a cold cache). Cached aggressively.
+      if (enrich && Array.isArray(enriched.events) && enriched.events.length > 0) {
+        const events = await enrichEvents(sport, enriched.events);
+        enriched = { ...enriched, events };
+      }
+
+      const body = { ...enriched, _oddsApiConnected: !!oddsApiScores?.length };
+      // Edge-cache the enriched scoreboard for 60s so all users hitting the
+      // same (sport, date) share one upstream fetch. SWR keeps it warm.
+      const headers = enrich
+        ? { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=600' }
+        : undefined;
+      return NextResponse.json(body, headers ? { headers } : undefined);
     }
 
     const data = await espnFetch(path);
