@@ -198,24 +198,19 @@ export default function BotPerformanceTab() {
         <StatTile
           label="Record"
           value={`${summary.wins}–${summary.losses}`}
-          sub={`${summary.pushes} push${summary.pushes === 1 ? '' : 'es'} · ${summary.passes} pass${summary.passes === 1 ? '' : 'es'}`}
+          sub={`${summary.total} graded picks`}
         />
         <StatTile
           label="Win Rate"
           value={fmtPct(summary.win_pct, 1)}
-          sub={`${wlTotal} graded picks (excl. push & pass)`}
+          sub="W / (W + L)"
           color={winColor}
         />
         <StatTile
           label="ROI"
           value={fmtPct(summary.roi.roi_pct, 1)}
-          sub={`${fmtUnits(summary.roi.net_units)} on ${summary.roi.picks} picks with parseable odds`}
+          sub={`${fmtUnits(summary.roi.net_units)} on ${summary.roi.picks} picks`}
           color={roiColor}
-        />
-        <StatTile
-          label="Coverage"
-          value={`${summary.total}`}
-          sub={`${summary.ungraded} ungraded · ${summary.passes} no-bet`}
         />
       </div>
 
@@ -231,10 +226,9 @@ export default function BotPerformanceTab() {
           ℹ️ How to read this page
         </summary>
         <ul style={{ marginTop: '10px', paddingLeft: '18px', color: 'var(--text-secondary)', fontSize: '0.78rem', lineHeight: 1.6 }}>
-          <li><strong>Record</strong> excludes pushes (real ties) and "no-bet" passes. The AI reviewed many more games than appear here — it just declined to bet some.</li>
-          <li><strong>Win rate</strong> is W / (W + L). Pushes never count as either.</li>
-          <li><strong>ROI</strong> only includes picks where odds were clearly parseable from the pick text (e.g. "NYY ML -150"). It's a representative sample, not the full slate.</li>
-          <li><strong>Coverage</strong> total is every analysis the AI generated. Ungraded means the game finished but the grader couldn't determine a result yet.</li>
+          <li><strong>Record</strong> shows only graded W/L bets. Games where the AI declined to bet, or where the result couldn't be determined, are excluded entirely.</li>
+          <li><strong>Win rate</strong> is W / (W + L).</li>
+          <li><strong>ROI</strong> only includes picks where odds were clearly parseable from the pick text (e.g. "NYY ML -150"). It's a representative sample of all bets.</li>
         </ul>
       </details>
 

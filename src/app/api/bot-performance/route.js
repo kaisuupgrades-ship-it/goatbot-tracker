@@ -94,7 +94,10 @@ export async function GET(req) {
   const all = rows || [];
 
   // ── Top-line counts ────────────────────────────────────────────────────────
-  const totals = { total: all.length, wins: 0, losses: 0, pushes: 0, passes: 0, ungraded: 0 };
+  // We deliberately ONLY surface graded W/L picks — passes (AI declined to bet),
+  // unparseable PUSHes, and ungraded analyses are all dropped from the stats so
+  // the displayed record is the AI's actual betting decisions.
+  const totals = { wins: 0, losses: 0 };
   // by sport
   const bySportMap = new Map();
   // by confidence
@@ -111,13 +114,11 @@ export async function GET(req) {
     const result = r.prediction_result || null;
     const pass = isPassPick(r.prediction_pick, result);
 
-    if (pass) totals.passes++;
-    else if (result === 'WIN') totals.wins++;
-    else if (result === 'LOSS') totals.losses++;
-    else if (result === 'PUSH') totals.pushes++;
-    else totals.ungraded++;
+    // Only WIN/LOSS picks count toward record — pushes (mostly unparseable),
+    // passes (AI declined to bet), and ungraded analyses are dropped.
+    if (!pass && result === 'WIN')  totals.wins++;
+    if (!pass && result === 'LOSS') totals.losses++;
 
-    // Skip passes from sport / conf / weekly aggregates — they're not bets
     if (!pass && (result === 'WIN' || result === 'LOSS')) {
       const sport = r.sport || 'unknown';
       if (!bySportMap.has(sport)) bySportMap.set(sport, { wins: 0, losses: 0 });
@@ -144,8 +145,8 @@ export async function GET(req) {
       }
     }
 
-    // Recent picks (any graded, including pass)
-    if (result && recent.length < 30) {
+    // Recent picks (only the picks that count — exclude passes/pushes/ungraded)
+    if (!pass && (result === 'WIN' || result === 'LOSS') && recent.length < 30) {
       recent.push({
         sport:        r.sport,
         game_date:    r.game_date,
@@ -206,12 +207,9 @@ export async function GET(req) {
     range,
     generated_at: new Date().toISOString(),
     summary: {
-      total: totals.total,
+      total: wlTotal, // W + L; matches the record exactly
       wins: totals.wins,
       losses: totals.losses,
-      pushes: totals.pushes,
-      passes: totals.passes,
-      ungraded: totals.ungraded,
       win_pct: winPct,
       roi: {
         picks: roiPicks,
