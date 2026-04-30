@@ -146,7 +146,7 @@ export default function BotPerformanceTab() {
 
   if (!data) return null;
 
-  const { summary, by_sport, by_conf, weekly, recent } = data;
+  const { summary, by_sport, by_conf, weekly, recent, pending = [] } = data;
   const wlTotal = summary.wins + summary.losses;
   const winColor = summary.win_pct === null ? 'var(--text-primary)'
                   : summary.win_pct >= 55 ? '#4ade80'
@@ -337,6 +337,54 @@ export default function BotPerformanceTab() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Pending picks (open positions: today + future, not yet graded) */}
+      {pending.length > 0 && (
+        <div style={{
+          background: 'rgba(255,184,0,0.05)',
+          border: '1px solid rgba(255,184,0,0.32)',
+          borderRadius: '10px',
+          padding: '14px 16px',
+          marginBottom: '20px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#FFB800', letterSpacing: '0.04em' }}>
+              🟡 Pending Picks ({pending.length})
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              Open positions — games haven't been played / graded yet
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+              <thead>
+                <tr style={{ color: 'var(--text-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'left' }}>
+                  <th style={{ padding: '8px 6px', fontWeight: 600 }}>Date</th>
+                  <th style={{ padding: '8px 6px', fontWeight: 600 }}>Sport</th>
+                  <th style={{ padding: '8px 6px', fontWeight: 600 }}>Matchup</th>
+                  <th style={{ padding: '8px 6px', fontWeight: 600 }}>Pick</th>
+                  <th style={{ padding: '8px 6px', fontWeight: 600 }}>Conf</th>
+                  <th style={{ padding: '8px 6px', fontWeight: 600 }}>Edge</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((p, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid rgba(255,184,0,0.12)' }}>
+                    <td style={{ padding: '8px 6px', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>{fmtDate(p.game_date)}</td>
+                    <td style={{ padding: '8px 6px', color: 'var(--text-secondary)' }}>{(SPORT_LABELS[p.sport] || p.sport || '').toUpperCase()}</td>
+                    <td style={{ padding: '8px 6px', color: 'var(--text-primary)' }}>{p.matchup}</td>
+                    <td style={{ padding: '8px 6px', color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono, monospace', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.pick}>
+                      {p.pick || '—'}
+                    </td>
+                    <td style={{ padding: '8px 6px' }}><ConfPill conf={p.conf} /></td>
+                    <td style={{ padding: '8px 6px', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono, monospace' }}>{p.edge || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

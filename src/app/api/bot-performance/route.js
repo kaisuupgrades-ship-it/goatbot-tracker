@@ -109,6 +109,9 @@ export async function GET(req) {
 
   // recent picks (latest 30 graded)
   const recent = [];
+  // pending picks (today + future, not yet graded)
+  const pending = [];
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   for (const r of all) {
     const result = r.prediction_result || null;
@@ -158,7 +161,29 @@ export async function GET(req) {
         final_score:  r.final_score,
       });
     }
+
+    // Pending picks: today + future, has a real pick, not yet graded, not a pass.
+    // These are the AI's open positions — what we're "currently betting on".
+    if (
+      !pass &&
+      !result &&
+      r.game_date &&
+      r.game_date >= todayStr &&
+      r.prediction_pick
+    ) {
+      pending.push({
+        sport:     r.sport,
+        game_date: r.game_date,
+        matchup:   `${r.away_team} @ ${r.home_team}`,
+        pick:      r.prediction_pick,
+        conf:      r.prediction_conf,
+        edge:      r.prediction_edge,
+      });
+    }
   }
+
+  // Soonest games first
+  pending.sort((a, b) => (a.game_date || '').localeCompare(b.game_date || ''));
 
   // Convert maps to sorted arrays
   const SPORT_ORDER = ['mlb', 'nba', 'nhl', 'nfl', 'ncaaf', 'ncaab', 'wnba', 'mls', 'soccer', 'tennis', 'ufc', 'mma', 'golf'];
@@ -220,6 +245,7 @@ export async function GET(req) {
     by_sport: bySport,
     by_conf: byConf,
     weekly,
+    pending,
     recent,
   });
 }

@@ -1351,6 +1351,17 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
     });
   };
 
+  // Eager prefetch: warm H2H + weather caches as soon as the card mounts so
+  // expanding it is instant. Both helpers hit module-level caches first, so
+  // remounts are free. Weather is skipped for indoor / non-stadium sports.
+  useEffect(() => {
+    prefetchH2H();
+    if (stadium?.lat && !isIndoorSport) {
+      fetchWeather({ lat: stadium.lat, lon: stadium.lon, gameDate: event.date });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awayTeamId, homeTeamId, sport, stadium?.lat, stadium?.lon, event.date]);
+
   return (
     <div
       style={suppressHeader ? {
