@@ -156,6 +156,13 @@ function parsePick(analysis) {
     }
   }
 
+  // Decimal spread WITHOUT trailing odds (e.g., "Orlando Magic +10.5").
+  // Must come before the ML fallback so the fallback doesn't grab it as ML.
+  const spreadNoOddsMatch = pickLine.match(/^(.+?)\s+([+-]\d+\.\d+)\s*$/);
+  if (spreadNoOddsMatch) {
+    return { team: spreadNoOddsMatch[1].trim(), type: 'spread', spread: parseFloat(spreadNoOddsMatch[2]), raw: pickLine, conf };
+  }
+
   // Fallback: try to find a team name in the first few words (assume ML if we see a team)
   const fallbackMatch = pickLine.match(/^([A-Z][a-zA-Z\s]+?)(?:\s+ML|\s+[+-]?\d)/i);
   if (fallbackMatch) return { team: fallbackMatch[1].trim(), type: 'ml', raw: pickLine, conf };
