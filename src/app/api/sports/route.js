@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { teamsMatch } from '@/lib/teamNormalizer';
-import { getH2HData, getWeatherData } from '@/lib/enrichment';
-import { getStadiumInfo, INDOOR_SPORTS } from '@/lib/stadiums';
 
-export const maxDuration = 25;
+export const maxDuration = 15;
+
+// Supabase client for reading enrichment that the cron writes
+const supabaseEnrich = (process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY))
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    )
+  : null;
 
 // ESPN unofficial API — free, no key needed
 const ESPN_BASE          = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -125,55 +132,49 @@ function enrichWithOddsApiScores(espnData, oddsApiScores) {
   return { ...espnData, events: enrichedEvents };
 }
 
-// ── Per-event H2H + weather enrichment ─────────────────────────────────────
-// Runs in parallel for all events, never blocks longer than ~6s wall-clock,
-// and any individual failure leaves the event un-enriched (client falls back
-// to its own /api/h2h or /api/weather call). Memoized in-process — repeated
-// scoreboard hits within 60 min reuse the same data.
+// ── Per-event H2H + weather enrichment (DB-backed) ─────────────────────────
+// Reads pre-computed enrichment from the game_enrichment Supabase table —
+// written by /api/cron/refresh-enrichment on a schedule. Single SELECT per
+// scoreboard request, no upstream API calls in the hot path.
+//
+// Failed cron fetches don't poison the cache: the cron only overwrites a
+// piece (h2h/weather/stadium) when it successfully fetched a non-null value,
+// so a transient ESPN/Open-Meteo blip leaves the previous good data in place.
+//
+// If a game isn't in the table yet (brand-new event the cron hasn't seen),
+// the event comes back without enrichment and the client's existing per-card
+// fetchH2H/fetchWeather fallback kicks in. So this is purely additive — old
+// behavior remains as a safety net.
 async function enrichEvents(sport, events) {
   if (!Array.isArray(events) || events.length === 0) return events;
-  const indoor = INDOOR_SPORTS.has(sport);
+  if (!supabaseEnrich) return events;
 
-  const enriched = await Promise.all(events.map(async (ev) => {
-    const comp = ev.competitions?.[0];
-    if (!comp) return ev;
-    const home = comp.competitors?.find(c => c.homeAway === 'home');
-    const away = comp.competitors?.find(c => c.homeAway === 'away');
-    if (!home?.team?.id || !away?.team?.id) return ev;
+  const gameIds = events.map(e => e.id).filter(Boolean);
+  if (!gameIds.length) return events;
 
-    const homeAbbr = home.team?.abbreviation;
-    const awayAbbr = away.team?.abbreviation;
-    const stadium  = (!indoor && ['mlb', 'nfl'].includes(sport))
-      ? getStadiumInfo(sport, homeAbbr)
-      : null;
+  const { data: rows, error } = await supabaseEnrich
+    .from('game_enrichment')
+    .select('game_id, h2h, weather, stadium')
+    .eq('sport', sport)
+    .in('game_id', gameIds);
+  if (error || !rows) {
+    console.warn('[enrichEvents] DB read failed:', error?.message);
+    return events; // safe fallback — client per-card fetch still works
+  }
 
-    // Don't bother fetching weather for domes — UI shows "Domed stadium" anyway
-    const wantWeather = stadium?.lat && !stadium.dome;
-
-    const [h2hRes, wxRes] = await Promise.allSettled([
-      getH2HData({
-        sport,
-        team1: home.team.id,
-        team2: away.team.id,
-        abbrHome: homeAbbr,
-        abbrAway: awayAbbr,
-      }),
-      wantWeather
-        ? getWeatherData({ lat: stadium.lat, lon: stadium.lon, gameTime: ev.date })
-        : Promise.resolve(null),
-    ]);
-
+  const byGameId = new Map(rows.map(r => [r.game_id, r]));
+  return events.map(ev => {
+    const row = byGameId.get(ev.id);
+    if (!row) return ev;
     return {
       ...ev,
       enrichment: {
-        h2h:     h2hRes.status === 'fulfilled' ? h2hRes.value : null,
-        weather: wxRes.status  === 'fulfilled' ? wxRes.value  : null,
-        stadium: stadium ? { name: stadium.name, dome: !!stadium.dome, retractable: !!stadium.retractable } : null,
+        h2h:     row.h2h     || null,
+        weather: row.weather || null,
+        stadium: row.stadium || null,
       },
     };
-  }));
-
-  return enriched;
+  });
 }
 
 async function espnFetch(path, base = ESPN_BASE, { timeout } = {}) {

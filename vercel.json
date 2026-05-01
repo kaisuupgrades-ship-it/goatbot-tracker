@@ -21,7 +21,8 @@
     { "path": "/api/cron/pregenerate-analysis",            "schedule": "0 14 * * *" },
     { "path": "/api/cron/pregenerate-analysis",            "schedule": "0 16 * * *" },
     { "path": "/api/cron/pregenerate-analysis?retry=true", "schedule": "5 16 * * *" },
-    { "path": "/api/cron/grade-check",                     "schedule": "0 */2 * * *" }
+    { "path": "/api/cron/grade-check",                     "schedule": "0 */2 * * *" },
+    { "path": "/api/cron/refresh-enrichment",              "schedule": "*/5 * * * *" }
   ],
   "redirects": [
     {
