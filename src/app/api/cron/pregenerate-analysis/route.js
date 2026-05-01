@@ -1139,7 +1139,15 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
   const confM = _bestPlayBlock
     ? _bestPlayBlock.match(/Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i)
     : result.text.match(/Edge:\s*[\d.]+%\s*\|\s*Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i);
-  const edgeM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
+  // Prefer the explicit percentage from "Edge: X%" (matches the Pro Max task's
+  // format and what users actually want to read). Fall back to the X/10 Edge
+  // Score format from older prompt revisions if no % is found, and append "%"
+  // so both representations end up consistent on the wire.
+  const edgePctM = (_bestPlayBlock || result.text).match(/Edge:\s*([\d.]+)\s*%/i);
+  const edgeScoreM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
+  const edgeValue = edgePctM
+    ? `${edgePctM[1].trim()}%`
+    : (edgeScoreM ? edgeScoreM[1].trim() : null);
   const altM  = result.text.match(/ALTERNATE ANGLES[:\s]+([^\n]{5,300})/i);
   const lineM = result.text.match(/LINE MOVEMENT[:\s]+([^\n]{5,300})/i);
   const unitM = result.text.match(/UNIT SIZING[:\s]+([^\n]{5,200})/i);
@@ -1163,7 +1171,7 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
       run_id:           runId,
       prediction_pick:  pickM?.[1]?.trim() || null,
       prediction_conf:  confM?.[1]?.trim() || null,
-      prediction_edge:  edgeM?.[1]?.trim() || null,
+      prediction_edge:  edgeValue,
       alternate_angles: altM?.[1]?.trim() || null,
       line_movement:    lineM?.[1]?.trim() || null,
       unit_sizing:      unitM?.[1]?.trim() || null,
@@ -1198,7 +1206,7 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
     latency_ms:      result.latency_ms,
     parsed_pick:     pickM?.[1]?.trim() || null,
     parsed_conf:     confM?.[1]?.trim() || null,
-    parsed_edge:     edgeM?.[1]?.trim() || null,
+    parsed_edge:     edgeValue,
     trigger_source:  triggerSource,
     run_id:          runId,
   }]).then(({ error: auditErr }) => {
