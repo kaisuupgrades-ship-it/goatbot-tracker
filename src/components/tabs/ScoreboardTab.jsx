@@ -1019,12 +1019,24 @@ function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans }) {
          homeName.toLowerCase().includes(a.home_team.toLowerCase().split(' ').pop()) &&
          awayName.toLowerCase().includes(a.away_team.toLowerCase().split(' ').pop())
        );
-  if (!lean?.pick) return null;
+  // Render the badge whenever we have ANY analysis or pick data — including
+  // the "AI looked at this game and declined to pick" case (pick is null but
+  // analysis text exists). That's important context for the user; hiding it
+  // makes it look like the AI didn't analyze the game at all.
+  if (!lean || (!lean.pick && !lean.analysis)) return null;
 
   const confColors = { ELITE: '#FFB800', HIGH: '#4ade80', MEDIUM: '#60a5fa', LOW: '#9ca3af' };
   const confColor = confColors[lean.conf] || '#9ca3af';
-  const isPass = /^pass\b/i.test(lean.pick.trim());
+  // Three states:
+  //   1. Explicit "Pass" pick (pick text starts with "pass")
+  //   2. No-pick analysis (pick is null/empty, but analysis text exists — AI
+  //      declined silently because data was insufficient)
+  //   3. Real pick (everything else)
+  const isExplicitPass  = !!lean.pick && /^pass\b/i.test(lean.pick.trim());
+  const isNoPickAnalysis = !lean.pick && !!lean.analysis;
+  const isPass = isExplicitPass || isNoPickAnalysis;
   const accent = isPass ? '#9ca3af' : confColor;
+  const displayPick = lean.pick || 'PASS — AI declined to pick (see analysis)';
 
   // Strip leading whitespace consistently, then split on real paragraph breaks
   const fullText = (lean.analysis || '').trim();
@@ -1088,7 +1100,7 @@ function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans }) {
         fontStyle: isPass ? 'italic' : 'normal',
         lineHeight: 1.3,
       }}>
-        {lean.pick}
+        {displayPick}
       </div>
 
       {/* Edge breakdown (one-line summary) */}
