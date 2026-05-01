@@ -29,15 +29,30 @@ function isPassPick(pick, result) {
   return /^pass\b/i.test(trimmed) || /insufficient/i.test(trimmed);
 }
 
-// Pull American odds out of "(-150)" / "(+120)" / "(-110 at DraftKings)" patterns.
+// Pull American odds out of pick text. Handles:
+//   "(-150)" / "(+120)"             — parens
+//   "ML -150 FanDuel"               — keyword + number
+//   "Celtics -5.5 -115 DraftKings"  — last odds-shaped number (the trailing
+//                                     "-115" is the price; "-5.5" is the
+//                                     spread point and is filtered out by
+//                                     the |n| ≥ 100 check)
+//   "Royals ML +109 BetOnline"      — last odds-shaped number works here too
+// Heuristic: find every signed integer in the string, keep ones with
+// |n| ∈ [100, 1500] (American-odds range), return the LAST one — the price
+// reliably comes after the line in conventional pick syntax.
 function parseOdds(pickText) {
   if (!pickText) return null;
-  // Look for an explicit American odds number, e.g. (+120) or (-150) or "ML -150 FanDuel"
+  // Parens win — they're an unambiguous odds delimiter
   const paren = pickText.match(/\(([+\-]?\d{2,4})\b/);
-  if (paren) return parseInt(paren[1], 10);
-  // Fall back to "ML +123" or "spread -110" style
-  const inline = pickText.match(/(?:ML|moneyline|spread|over|under|o|u|line)[\s:]*([+\-]?\d{2,4})\b/i);
-  if (inline) return parseInt(inline[1], 10);
+  if (paren) {
+    const n = parseInt(paren[1], 10);
+    if (Math.abs(n) >= 100 && Math.abs(n) <= 1500) return n;
+  }
+  // Sweep for ALL signed integers, keep American-odds-shaped ones, take last.
+  const candidates = [...pickText.matchAll(/[+\-]\d{2,4}\b/g)]
+    .map(m => parseInt(m[0], 10))
+    .filter(n => Number.isFinite(n) && Math.abs(n) >= 100 && Math.abs(n) <= 1500);
+  if (candidates.length > 0) return candidates[candidates.length - 1];
   return null;
 }
 
