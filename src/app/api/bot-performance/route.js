@@ -13,6 +13,8 @@
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { teamsMatch } from '@/lib/teamNormalizer';
+import { extractClosingOdds } from '@/lib/clv';
 
 export const maxDuration = 15;
 
@@ -66,6 +68,76 @@ function profitFor(odds, result) {
   return -1; // LOSS
 }
 
+// Detect which side the AI picked by stripping bet-type words ("ML", spread
+// number, book name) and matching the remainder against home/away team names
+// using the sport-aware teamsMatch helper.
+function detectPickedSide(pickText, homeTeam, awayTeam, sport) {
+  if (!pickText || !homeTeam || !awayTeam) return null;
+  const sportUpper = (sport || '').toUpperCase();
+  // Strip everything that isn't the team name: "ML", "moneyline",
+  // "(G2)" doubleheader markers, leading/trailing whitespace.
+  const cleaned = pickText
+    .replace(/\bmoneyline\b/i, '')
+    .replace(/\bml\b/i, '')
+    .replace(/\(g\d+\)/i, '')
+    .trim();
+  if (teamsMatch(cleaned, homeTeam, sportUpper)) return 'home';
+  if (teamsMatch(cleaned, awayTeam, sportUpper)) return 'away';
+  // Try the first 4 words (handles "Tampa Bay Rays ML extra noise")
+  const firstChunk = cleaned.split(/\s+/).slice(0, 4).join(' ');
+  if (teamsMatch(firstChunk, homeTeam, sportUpper)) return 'home';
+  if (teamsMatch(firstChunk, awayTeam, sportUpper)) return 'away';
+  return null;
+}
+
+// Load odds_cache rows for the (sport, date) combos in our analyses set, so
+// when the AI's pick text didn't include odds (e.g. "Tampa Bay Rays ML") we
+// can still compute ROI from the Pinnacle closing line. One batched query
+// per sport keeps this O(1) DB hits regardless of how many picks we have.
+async function loadOddsForAnalyses(supabase, analyses) {
+  const bySport = new Map(); // sport → Set<game_date>
+  for (const r of analyses) {
+    if (!r.sport || !r.game_date) continue;
+    if (!bySport.has(r.sport)) bySport.set(r.sport, new Set());
+    bySport.get(r.sport).add(r.game_date);
+  }
+  if (bySport.size === 0) return [];
+
+  const tasks = [];
+  for (const [sport, dates] of bySport) {
+    const dateList = [...dates].sort();
+    const minDate = dateList[0];
+    const maxDate = dateList[dateList.length - 1];
+    // commence_time is a timestamptz — convert dates to a wide ISO range that
+    // covers the full UTC days
+    const minIso = `${minDate}T00:00:00Z`;
+    const maxIso = `${maxDate}T23:59:59Z`;
+    tasks.push(
+      supabase.from('odds_cache')
+        .select('sport, home_team, away_team, commence_time, odds_data')
+        .eq('sport', sport)
+        .gte('commence_time', minIso)
+        .lte('commence_time', maxIso)
+        .then(r => r.data || [])
+    );
+  }
+  const chunks = await Promise.all(tasks);
+  return chunks.flat();
+}
+
+// Match a single game_analyses row to an odds_cache row.
+function findOddsRow(oddsRows, analysis) {
+  if (!analysis.sport || !analysis.game_date) return null;
+  const sportUpper = analysis.sport.toUpperCase();
+  return oddsRows.find(o =>
+    o.sport === analysis.sport &&
+    typeof o.commence_time === 'string' &&
+    o.commence_time.slice(0, 10) === analysis.game_date &&
+    teamsMatch(o.home_team, analysis.home_team, sportUpper) &&
+    teamsMatch(o.away_team, analysis.away_team, sportUpper)
+  ) || null;
+}
+
 function isoWeek(dateStr) {
   if (!dateStr) return null;
   const d = new Date(dateStr + 'T12:00:00Z');
@@ -107,6 +179,17 @@ export async function GET(req) {
   }
 
   const all = rows || [];
+
+  // Load odds_cache once for the date range covering all analyses so we can
+  // fall back to Pinnacle closing-line odds when the AI's pick text didn't
+  // include odds (e.g. "Tampa Bay Rays ML" with no number). This makes ROI
+  // share the SAME denominator as Record — no more "9-11 record but ROI on
+  // only 6 picks" disparity. Failures are non-fatal: if odds_cache is empty
+  // for some games (older picks before the cron started), we just skip them.
+  const gradedAnalyses = all.filter(r =>
+    r.prediction_result === 'WIN' || r.prediction_result === 'LOSS'
+  );
+  const oddsRows = await loadOddsForAnalyses(supabase, gradedAnalyses).catch(() => []);
 
   // ── Top-line counts ────────────────────────────────────────────────────────
   // We deliberately ONLY surface graded W/L picks — passes (AI declined to bet),
@@ -155,9 +238,24 @@ export async function GET(req) {
         if (result === 'WIN') w.wins++; else w.losses++;
       }
 
-      // ROI
-      const odds = parseOdds(r.prediction_pick);
-      if (odds !== null && Number.isFinite(odds) && Math.abs(odds) <= 1500) {
+      // ROI — prefer odds parsed from the pick text (that's the line the
+      // user/AI actually saw at pick time), fall back to Pinnacle closing
+      // line from odds_cache when text didn't include odds. Both numbers
+      // are American, both produce honest ROI; the fallback just lets us
+      // include picks like "Tampa Bay Rays ML" that have no odds in text.
+      let odds = parseOdds(r.prediction_pick);
+      if (odds == null || !Number.isFinite(odds) || Math.abs(odds) > 1500) {
+        const oddsRow = findOddsRow(oddsRows, r);
+        if (oddsRow) {
+          const closing = extractClosingOdds(oddsRow.odds_data, oddsRow.home_team, oddsRow.away_team);
+          if (closing?.ml) {
+            const side = detectPickedSide(r.prediction_pick, r.home_team, r.away_team, r.sport);
+            if (side === 'home') odds = closing.ml.home;
+            else if (side === 'away') odds = closing.ml.away;
+          }
+        }
+      }
+      if (odds != null && Number.isFinite(odds) && Math.abs(odds) <= 1500) {
         roiPicks++;
         roiNetUnits += profitFor(odds, result);
       }
