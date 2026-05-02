@@ -13,6 +13,12 @@ import {
   getStadiumInfo as libGetStadiumInfo,
   INDOOR_SPORTS as LIB_INDOOR_SPORTS,
 } from '@/lib/stadiums';
+import {
+  h2hCache, weatherCache, h2hCacheLookup,
+  fetchH2H, fetchWeather,
+} from '@/lib/scoreboardCaches';
+import WeatherWidget from '@/components/scoreboard/WeatherWidget';
+import BetOSAILeanBadge from '@/components/scoreboard/BetOSAILeanBadge';
 
 // ── Module-level caches ───────────────────────────────────────────────────────
 // These persist across card re-renders (live score refreshes cause the whole
@@ -30,109 +36,7 @@ import {
 // In-flight dedupe: concurrent calls for the same key (e.g. hover-prefetch
 // fires, then user clicks before the first returns) share a single promise
 // instead of double-firing the API.
-const H2H_NEG_TTL_MS    = 5 * 60 * 1000; // 5 min for failed/empty responses
-const h2hCache          = new Map(); // key → { data: {record,games}|null, time, ok: boolean }
-const h2hInFlight       = new Map(); // key → Promise
-
-const WEATHER_TTL_MS    = 30 * 60 * 1000; // 30 minutes
-const weatherCache      = new Map(); // key → { data, time }
-const weatherInFlight   = new Map(); // key → Promise
-
-// Sports the /api/h2h endpoint actually supports. Anything else (incl. 'all')
-// would return 400 — short-circuit instead of spamming the server on every
-// hover while the user is in the All-sports view.
-const H2H_VALID_SPORTS = new Set(['mlb','nfl','nba','nhl','ncaaf','ncaab','mls','wnba']);
-
-function h2hCacheLookup(key) {
-  const entry = h2hCache.get(key);
-  if (!entry) return undefined; // cache miss
-  if (entry.ok) return entry.data; // positive hit
-  // Negative hit — respect the short TTL so a transient failure clears itself.
-  if (Date.now() - entry.time < H2H_NEG_TTL_MS) return null;
-  h2hCache.delete(key);
-  return undefined;
-}
-
-function fetchH2H({ sport, homeTeamId, awayTeamId, homeAbbr, awayAbbr }) {
-  // Invalid input — don't fire the request. Cached null avoids re-entry on
-  // every re-render/hover. Use a short-lived marker so a corrected caller
-  // (e.g. filter changes from 'all' to 'mlb') eventually retries.
-  if (!sport || !homeTeamId || !awayTeamId || !H2H_VALID_SPORTS.has(sport)) {
-    return Promise.resolve(null);
-  }
-
-  const key = `${sport}_${homeTeamId}_${awayTeamId}`;
-  const cached = h2hCacheLookup(key);
-  if (cached !== undefined) return Promise.resolve(cached);
-  const pending = h2hInFlight.get(key);
-  if (pending) return pending;
-
-  const url = `/api/h2h?sport=${sport}&team1=${homeTeamId}&team2=${awayTeamId}`
-    + `&abbrHome=${homeAbbr || 'HM'}&abbrAway=${awayAbbr || 'AW'}`;
-
-  // /api/h2h is auth-gated server-side (requireAuth). Pull the access token
-  // from the current Supabase session and attach it as a Bearer header so the
-  // request isn't 401'd on logged-in users.
-  const promise = supabase.auth.getSession()
-    .then(({ data: { session } }) => {
-      const headers = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      return fetch(url, { headers });
-    })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      // Positive cache: successful response with a record. Keep forever.
-      // Negative cache: any failure (400, timeout, empty body). 5-min TTL so
-      // we stop retrying every hover, but recover from transient errors.
-      if (d && d.record) {
-        h2hCache.set(key, { data: d, time: Date.now(), ok: true });
-        return d;
-      }
-      h2hCache.set(key, { data: null, time: Date.now(), ok: false });
-      return null;
-    })
-    .catch(() => {
-      h2hCache.set(key, { data: null, time: Date.now(), ok: false });
-      return null;
-    })
-    .finally(() => { h2hInFlight.delete(key); });
-
-  h2hInFlight.set(key, promise);
-  return promise;
-}
-
-function fetchWeather({ lat, lon, gameDate }) {
-  if (!lat) return Promise.resolve(null);
-  const key = `${lat}_${lon}_${gameDate || ''}`;
-  const cached = weatherCache.get(key);
-  if (cached && Date.now() - cached.time < WEATHER_TTL_MS) {
-    return Promise.resolve(cached.data);
-  }
-  const pending = weatherInFlight.get(key);
-  if (pending) return pending;
-
-  const params = new URLSearchParams({ lat, lon, ...(gameDate ? { gameTime: gameDate } : {}) });
-
-  // /api/weather is auth-gated server-side (requireAuth). Pull the access token
-  // from the current Supabase session and attach it as a Bearer header.
-  const promise = supabase.auth.getSession()
-    .then(({ data: { session } }) => {
-      const headers = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      return fetch(`/api/weather?${params}`, { headers });
-    })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      const data = d && !d.error ? d : null;
-      if (data) weatherCache.set(key, { data, time: Date.now() });
-      return data;
-    })
-    .catch(() => null)
-    .finally(() => { weatherInFlight.delete(key); });
-
-  weatherInFlight.set(key, promise);
-  return promise;
-}
+// Caches and fetch helpers extracted to @/lib/scoreboardCaches (imported above).
 
 // ── Star/Favorite persistence ──────────────────────────────────────────────────
 const STARRED_KEY = 'betos_starred_games';
@@ -464,8 +368,9 @@ function getSeries(event) {
 const getStadiumInfo = libGetStadiumInfo;
 const INDOOR_SPORTS  = LIB_INDOOR_SPORTS;
 
-// ── WeatherWidget ────────────────────────────────────────────────────────────
-function WeatherWidget({ stadium, gameDate, sport }) {
+// WeatherWidget extracted to @/components/scoreboard/WeatherWidget (imported above).
+// Stub remains to make subsequent removal reviewable — actual component is the import.
+function _RemovedWeatherWidget({ stadium, gameDate, sport }) {
   // Seed from the module-level cache (30-min TTL lookup happens inside
   // fetchWeather on refetch). This eliminates the "Loading game-time forecast…"
   // flash when a card re-mounts during the 20-second live score refresh cycle.
@@ -1009,7 +914,9 @@ function parseSpreadLine(spreadStr, awayAbbr, awayName, homeAbbr, homeName) {
 // ── BetOS AI Lean Badge ───────────────────────────────────────────────────────
 // Confidence-colored card showing the AI's pick + edge + optional full
 // analysis narrative behind a "Show full analysis" toggle.
-function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans }) {
+// BetOSAILeanBadge extracted to @/components/scoreboard/BetOSAILeanBadge (imported above).
+// Stub kept inline so the diff is reviewable — actual component is the import.
+function _RemovedBetOSAILeanBadge({ sport, awayName, homeName, gameLeans }) {
   const [showFull, setShowFull] = useState(false);
 
   const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
