@@ -14,7 +14,8 @@
     },
     { "path": "/api/cron/grade-picks", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/grade-check",                     "schedule": "0 */2 * * *" },
-    { "path": "/api/cron/refresh-enrichment",              "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/refresh-enrichment",              "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/refresh-elo-mlb",                "schedule": "0 7 * * *"   }
   ],
   "redirects": [
     {

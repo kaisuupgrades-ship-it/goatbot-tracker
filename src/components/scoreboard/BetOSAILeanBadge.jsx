@@ -29,7 +29,58 @@ export default function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans,
   // the "AI looked at this game and declined to pick" case (pick is null but
   // analysis text exists). That's important context for the user; hiding it
   // makes it look like the AI didn't analyze the game at all.
-  if (!lean || (!lean.pick && !lean.analysis)) return null;
+  //
+  // Quant-only mode: no AI lean at all but quant data is available (e.g. today's
+  // games before the pregenerate cron has run). Render a minimal Elo badge so
+  // the user can still see the quant signal.
+  if (!lean || (!lean.pick && !lean.analysis)) {
+    if (!quant?.available) return null;
+
+    // ── Quant-only minimal badge ─────────────────────────────────────────────
+    const QUANT_COLOR = '#a78bfa';
+    const hasPick = quant.hasPick;
+    const accent  = hasPick ? '#4ade80' : QUANT_COLOR;
+    return (
+      <div style={{
+        margin: '0.6rem 0 0.85rem',
+        padding: '0.7rem 1rem 0.75rem 0.95rem',
+        background: `linear-gradient(180deg, ${accent}12 0%, ${accent}06 100%)`,
+        borderLeft: `3px solid ${accent}`,
+        borderTop: `1px solid ${accent}33`,
+        borderRight: `1px solid ${accent}33`,
+        borderBottom: `1px solid ${accent}33`,
+        borderRadius: '8px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: hasPick ? '6px' : 0 }}>
+          <span style={{ fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.08em', color: QUANT_COLOR, textTransform: 'uppercase' }}>📊 Elo Quant</span>
+          {hasPick && (
+            <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', background: accent + '26', color: accent, border: `1px solid ${accent}55`, letterSpacing: '0.06em' }}>
+              EDGE +{quant.edgePct}%
+            </span>
+          )}
+          <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginLeft: 'auto', opacity: 0.7 }}>
+            {quant.homeAbbr} {Math.round((quant.eloHomeProb ?? 0) * 100)}% / {quant.awayAbbr} {Math.round((quant.eloAwayProb ?? 0) * 100)}%
+          </span>
+        </div>
+        {hasPick && (
+          <div style={{
+            fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.01em',
+            color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono, monospace',
+          }}>
+            {quant.pick} {quant.pickOdds > 0 ? `+${quant.pickOdds}` : quant.pickOdds}
+          </div>
+        )}
+        {!hasPick && (
+          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '2px' }}>
+            No AI analysis yet — Elo within market margin (no edge ≥ {quant.minEdgePct}%)
+          </div>
+        )}
+        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '6px', opacity: 0.55 }}>
+          AI analysis pending — check back after picks are generated
+        </div>
+      </div>
+    );
+  }
 
   const confColors = { ELITE: '#FFB800', HIGH: '#4ade80', MEDIUM: '#60a5fa', LOW: '#9ca3af' };
   const confColor = confColors[lean.conf] || '#9ca3af';
