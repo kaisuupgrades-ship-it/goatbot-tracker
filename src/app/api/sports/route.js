@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { teamsMatch } from '@/lib/teamNormalizer';
+import { quantEnrichEvents } from '@/lib/quantPick';
 
 export const maxDuration = 15;
 
@@ -369,7 +370,15 @@ export async function GET(req) {
       // with no per-card client fetches. Behind ?enrich=1 because this adds
       // latency to the response (~1-3s on a cold cache). Cached aggressively.
       if (enrich && Array.isArray(enriched.events) && enriched.events.length > 0) {
-        const events = await enrichEvents(sport, enriched.events);
+        let events = await enrichEvents(sport, enriched.events);
+
+        // MLB-only: attach quant pick (Elo vs market edge) to each event.
+        // quantEnrichEvents is safe to call for all sports — it no-ops for non-MLB.
+        // Runs after enrichEvents so quant data doesn't block H2H/weather enrichment.
+        if (supabaseEnrich) {
+          events = await quantEnrichEvents({ supabase: supabaseEnrich, events, sport });
+        }
+
         enriched = { ...enriched, events };
       }
 

@@ -15,7 +15,7 @@
 'use client';
 import { useState } from 'react';
 
-export default function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans }) {
+export default function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans, quant = null }) {
   const [showFull, setShowFull] = useState(false);
 
   const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
@@ -143,6 +143,71 @@ export default function BetOSAILeanBadge({ sport, awayName, homeName, gameLeans 
           )}
         </>
       )}
+
+      {/* ── Quant engine section ─────────────────────────────────────────────
+          Shown when MLB Elo data is available. Three states:
+            1. hasPick + matches LLM:    📊 Quant confirms: +X.X% Elo edge
+            2. hasPick + disagrees:      📊 Quant leans opposite: X ML (+X.X% edge)
+            3. available + no edge:      📊 Quant: within market margin (X.X%)
+          Not shown when quant unavailable (non-MLB, team not mapped, etc.).
+      ─────────────────────────────────────────────────────────────────────── */}
+      {quant?.available && (() => {
+        const QUANT_COLOR = '#a78bfa'; // purple — distinct from AI lean accent color
+        const llmPick = lean?.pick || '';
+        const quantPick = quant.pick || '';
+
+        // Does the quant pick agree with the LLM pick?
+        // Match on team abbreviation in either pick string (e.g. "NYY ML" ↔ "NYY ML -148")
+        let quantLabel = '';
+        let quantColor = QUANT_COLOR;
+
+        if (quant.hasPick) {
+          const quantAbbr = quant.edgeSide === 'home' ? quant.homeAbbr : quant.awayAbbr;
+          const llmMentionsQuant = llmPick && quantAbbr && llmPick.toUpperCase().includes(quantAbbr);
+          if (llmMentionsQuant || (!llmPick && !isPass)) {
+            quantLabel = `Quant confirms: +${quant.edgePct}% Elo edge`;
+            quantColor = '#4ade80'; // green — agreement
+          } else if (isPass) {
+            quantLabel = `Quant sees edge: ${quantPick} +${quant.edgePct}%`;
+            quantColor = QUANT_COLOR;
+          } else {
+            quantLabel = `Quant leans opposite: ${quantPick} (+${quant.edgePct}% edge)`;
+            quantColor = '#f59e0b'; // amber — disagreement is noteworthy
+          }
+        } else {
+          // Show the largest edge even if below threshold (transparency)
+          const maxEdge = Math.max(
+            Math.abs(quant.homeEdgePct ?? 0),
+            Math.abs(quant.awayEdgePct ?? 0),
+          );
+          if (maxEdge < 0.1) {
+            quantLabel = 'Quant: no market edge detected';
+          } else {
+            const dir = (quant.homeEdgePct ?? 0) > 0 ? quant.homeAbbr : quant.awayAbbr;
+            quantLabel = `Quant: ${dir} +${maxEdge.toFixed(1)}% — below ${quant.minEdgePct}% threshold`;
+          }
+          quantColor = 'var(--text-muted)';
+        }
+
+        return (
+          <div style={{
+            marginTop: '8px',
+            paddingTop: '7px',
+            borderTop: `1px dashed ${QUANT_COLOR}22`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}>
+            <span style={{ fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.07em', color: QUANT_COLOR, textTransform: 'uppercase' }}>📊 Elo</span>
+            <span style={{ fontSize: '0.66rem', color: quantColor, fontFamily: 'IBM Plex Mono, monospace' }}>
+              {quantLabel}
+            </span>
+            <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginLeft: 'auto', opacity: 0.6 }}>
+              {quant.homeAbbr} {Math.round((quant.eloHomeProb ?? 0) * 100)}% / {quant.awayAbbr} {Math.round((quant.eloAwayProb ?? 0) * 100)}%
+            </span>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -619,7 +619,7 @@ function parseSpreadLine(spreadStr, awayAbbr, awayName, homeAbbr, homeName) {
 
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
-export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York', gameLeans = {}, parlayMode = false, parlayLegs = [], onAddParlayLeg }) {
+export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, injuries, injuriesChecked, isAllMode, suppressHeader = false, externalExpanded = null, oddsFormat = 'american', timezone = 'America/New_York', gameLeans = {}, parlayMode = false, parlayLegs = [], onAddParlayLeg, quant = null }) {
   const [expanded, setExpanded] = useState(false);
   const [parlayPickerOpen, setParlayPickerOpen] = useState(false);
   const isExpanded = suppressHeader ? (externalExpanded ?? false) : expanded;
@@ -1529,6 +1529,7 @@ export function GameCard({ event, sport, onAnalyze, onAddBet, starred, onStar, i
             awayName={awayName}
             homeName={homeName}
             gameLeans={gameLeans}
+            quant={quant ?? event?.quant ?? null}
           />
           {false && (() => {
             const leanKey = `${sport}_${awayName.toLowerCase()}_${homeName.toLowerCase()}`;
@@ -2617,6 +2618,7 @@ export default function ScoreboardTab({ onAnalyze, user, picks, setPicks, isDemo
                   parlayMode={parlayMode}
                   parlayLegs={parlayLegs}
                   onAddParlayLeg={addParlayLeg}
+                  quant={event?.quant ?? null}
                 />
               </div>
             ))}
