@@ -13,6 +13,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { buildPerformanceContext } from '@/lib/feedbackLoop';
+import { parsePickFromAnalysis, PICK_JSON_INSTRUCTION } from '@/lib/aiPickSchema';
+import { getCurrentMLBRatings, predictMLBProb, renderModelAnchorBlock, mlbAbbrFromName } from '@/lib/eloRatings';
 
 export const maxDuration = 800; // 13+ min — admin runs need full time per game
 
@@ -206,7 +208,9 @@ ${disclaimer}
 
 Be decisive. Cite specific numbers. Never fabricate stats. Build the intelligence layer — not just the pick.
 
-MANDATORY FORMAT: Your entire response MUST use the section headers above (=== DATA FRESHNESS ===, === MATCHUP ANALYSIS ===, etc.). Begin with "=== DATA FRESHNESS ===" and end with "=== RED FLAGS ===". The === BEST PLAY === section MUST include the line "Edge: X% | Confidence: LEVEL | Edge Score: X/10". Plain prose without these headers is invalid output.`;
+MANDATORY FORMAT: Your entire response MUST use the section headers above (=== DATA FRESHNESS ===, === MATCHUP ANALYSIS ===, etc.). Begin with "=== DATA FRESHNESS ===" and end with "=== RED FLAGS ===". The === BEST PLAY === section MUST include the line "Edge: X% | Confidence: LEVEL | Edge Score: X/10". Plain prose without these headers is invalid output.
+
+${PICK_JSON_INSTRUCTION}`;
 }
 
 // No-search fallback system prompt — used when web search version times out.
@@ -289,7 +293,9 @@ Unit Sizing: [0.5u–3u] — [brief justification]
 
 ⚠️ NOTE: Generated without live web search. ${injuryData ? 'ESPN injury data included.' : 'No injury data available.'} Confirm starters and line moves before betting.
 
-Be decisive. Use only the provided data. Never fabricate.`;
+Be decisive. Use only the provided data. Never fabricate.
+
+${PICK_JSON_INSTRUCTION}`;
 }
 
 // includeAll=true: return every game on that date regardless of state (used for
@@ -458,7 +464,9 @@ Unit Sizing: [0.5u–2u — never exceed 2u on a single outright bet due to high
 
 ⚠️ ODDS DISCLAIMER: Tournament outright odds shift frequently. Verify current odds on your sportsbook before placing any bets. Futures/outrights carry higher variance than game lines — size accordingly.
 
-Be decisive. Cite specific numbers. Never fabricate stats.`;
+Be decisive. Cite specific numbers. Never fabricate stats.
+
+${PICK_JSON_INSTRUCTION}`;
 }
 
 // User prompt for tournament analyses.
@@ -954,6 +962,26 @@ async function generateAnalysis(sport, homeTeam, awayTeam, gameDate, oddsContext
   const injurySection = injuryData ? `\n${injuryData}` : '';
   const propsSection  = propsData  ? `\n\n${propsData}` : '';
 
+  // ── Elo MODEL ANCHOR for MLB ──────────────────────────────────────────
+  // Pulls current Elo ratings from mlb_elo_ratings (cached, refreshed daily)
+  // and injects a quantitative probability prior into the prompt. The LLM
+  // is asked to defer to this number unless context justifies deviation —
+  // moves the system from "free-form vibes" to "model-anchored reasoning".
+  let modelAnchorBlock = '';
+  if (sport === 'mlb' && !isRefresh) {
+    try {
+      const homeAbbr = mlbAbbrFromName(homeTeam);
+      const awayAbbr = mlbAbbrFromName(awayTeam);
+      if (homeAbbr && awayAbbr) {
+        const ratings = await getCurrentMLBRatings({ supabase });
+        const prediction = predictMLBProb(ratings.ratings, homeAbbr, awayAbbr);
+        modelAnchorBlock = '\n\n' + renderModelAnchorBlock({ homeAbbr, awayAbbr, prediction });
+      }
+    } catch (e) {
+      console.warn(`[pregenerate] Elo anchor unavailable for ${awayTeam}@${homeTeam}: ${e.message}`);
+    }
+  }
+
   const userPrompt = isRefresh
     ? `Quick freshness check — ${sport.toUpperCase()} on ${gameDate}: ${awayTeam} @ ${homeTeam}${oddsContext ? `\nCurrent odds reference: ${oddsContext.split('\n')[0]}` : ''}\n\nAny lineup changes, significant line movement, or major news in the last 4 hours?`
     : `Analyze this ${sport.toUpperCase()} matchup on ${gameDate}:
@@ -963,7 +991,7 @@ DATE: ${gameDate}
 ${oddsContext ? `\nKNOWN ODDS (pre-fetched from The Odds API — use these, do NOT search for odds):\n${oddsContext}` : ''}
 ${propsSection}
 ${injurySection}
-${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
+${performanceContext ? `\nBetOS HISTORICAL PERFORMANCE:\n${performanceContext}` : ''}${modelAnchorBlock}
 
 Search ONLY for: confirmed starters/lineups, any injury updates beyond the ESPN data above, recent form (last 5 games). Odds are already provided above.
 
@@ -981,7 +1009,7 @@ DATE: ${gameDate}
 ${oddsContext ? `\nODDS DATA:\n${oddsContext}` : '\nNo odds data available.'}
 ${propsSection}
 ${injurySection}
-${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}
+${performanceContext ? `\nHISTORICAL PERFORMANCE:\n${performanceContext}` : ''}${modelAnchorBlock}
 
 Produce a complete BetOS analysis using only this data. Note any limitations.`;
 
@@ -1132,22 +1160,35 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
   const latency_ms = Date.now() - t0;
 
   // Parse structured fields from output.
-  // confM is scoped to the BEST PLAY section to avoid false matches from
-  // SPREAD/MONEYLINE/TOTAL sections that also contain "Confidence: LEVEL" lines.
+  // ── Structured output: JSON-first, regex-fallback ─────────────────────
+  // Newer prompts include a fenced ```json block at the end with all the
+  // structured fields. parsePickFromAnalysis extracts + validates it. If
+  // present, those values win — they're typed and schema-validated, no
+  // regex brittleness. If missing (e.g. older Pro Max task analyses), we
+  // fall back to scraping the narrative the way we used to.
+  const { normalized: jsonPick, warnings: jsonWarnings } = parsePickFromAnalysis(result.text);
+  if (jsonWarnings?.length) {
+    console.warn(`[pregenerate] JSON parse warnings for ${awayTeam}@${homeTeam}:`, jsonWarnings.join(' | '));
+  }
+
+  // Regex fallbacks (still computed in case JSON parse failed)
   const pickM = result.text.match(/THE PICK[:\s]+([^\n]{5,200})/i);
   const _bestPlayBlock = result.text.match(/===\s*BEST PLAY\s*===([\s\S]*?)(?=\n===|$)/i)?.[1] ?? '';
   const confM = _bestPlayBlock
     ? _bestPlayBlock.match(/Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i)
     : result.text.match(/Edge:\s*[\d.]+%\s*\|\s*Confidence:\s*(ELITE|HIGH|MEDIUM|LOW)/i);
-  // Prefer the explicit percentage from "Edge: X%" (matches the Pro Max task's
-  // format and what users actually want to read). Fall back to the X/10 Edge
-  // Score format from older prompt revisions if no % is found, and append "%"
-  // so both representations end up consistent on the wire.
   const edgePctM = (_bestPlayBlock || result.text).match(/Edge:\s*([\d.]+)\s*%/i);
   const edgeScoreM = result.text.match(/EDGE SCORE[:\s]+(\d+\/\d+|\d+)/i);
-  const edgeValue = edgePctM
+  const regexEdgeValue = edgePctM
     ? `${edgePctM[1].trim()}%`
     : (edgeScoreM ? edgeScoreM[1].trim() : null);
+
+  // Final values — JSON wins where available
+  const finalPick = jsonPick?.pick_text || pickM?.[1]?.trim() || null;
+  const finalConf = jsonPick?.confidence || confM?.[1]?.trim() || null;
+  const edgeValue = jsonPick?.edge_pct != null
+    ? `${jsonPick.edge_pct}%`
+    : regexEdgeValue;
   const altM  = result.text.match(/ALTERNATE ANGLES[:\s]+([^\n]{5,300})/i);
   const lineM = result.text.match(/LINE MOVEMENT[:\s]+([^\n]{5,300})/i);
   const unitM = result.text.match(/UNIT SIZING[:\s]+([^\n]{5,200})/i);
@@ -1169,8 +1210,8 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
       prompt_version:   result.prompt_version,
       trigger_source:   triggerSource,
       run_id:           runId,
-      prediction_pick:  pickM?.[1]?.trim() || null,
-      prediction_conf:  confM?.[1]?.trim() || null,
+      prediction_pick:  finalPick,
+      prediction_conf:  finalConf,
       prediction_edge:  edgeValue,
       alternate_angles: altM?.[1]?.trim() || null,
       line_movement:    lineM?.[1]?.trim() || null,
@@ -1204,8 +1245,8 @@ async function processSingleGame({ sport, homeTeam, awayTeam, gameDate, force, i
     tokens_in:       result.tokens_in,
     tokens_out:      result.tokens_out,
     latency_ms:      result.latency_ms,
-    parsed_pick:     pickM?.[1]?.trim() || null,
-    parsed_conf:     confM?.[1]?.trim() || null,
+    parsed_pick:     finalPick,
+    parsed_conf:     finalConf,
     parsed_edge:     edgeValue,
     trigger_source:  triggerSource,
     run_id:          runId,
